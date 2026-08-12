@@ -10,33 +10,63 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as CheckInRouteImport } from './routes/check-in'
+import { Route as ProgressRouteImport } from './routes/progress'
+import { Route as TrainingRouteImport } from './routes/training'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CheckInRoute = CheckInRouteImport.update({
+  id: '/check-in',
+  path: '/check-in',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProgressRoute = ProgressRouteImport.update({
+  id: '/progress',
+  path: '/progress',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TrainingRoute = TrainingRouteImport.update({
+  id: '/training',
+  path: '/training',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/check-in': typeof CheckInRoute
+  '/progress': typeof ProgressRoute
+  '/training': typeof TrainingRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/check-in': typeof CheckInRoute
+  '/progress': typeof ProgressRoute
+  '/training': typeof TrainingRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/check-in': typeof CheckInRoute
+  '/progress': typeof ProgressRoute
+  '/training': typeof TrainingRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/' | '/check-in' | '/progress' | '/training'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/' | '/check-in' | '/progress' | '/training'
+  id: '__root__' | '/' | '/check-in' | '/progress' | '/training'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  CheckInRoute: typeof CheckInRoute
+  ProgressRoute: typeof ProgressRoute
+  TrainingRoute: typeof TrainingRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,22 +78,36 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/check-in': {
+      id: '/check-in'
+      path: '/check-in'
+      fullPath: '/check-in'
+      preLoaderRoute: typeof CheckInRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/progress': {
+      id: '/progress'
+      path: '/progress'
+      fullPath: '/progress'
+      preLoaderRoute: typeof ProgressRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/training': {
+      id: '/training'
+      path: '/training'
+      fullPath: '/training'
+      preLoaderRoute: typeof TrainingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  CheckInRoute: CheckInRoute,
+  ProgressRoute: ProgressRoute,
+  TrainingRoute: TrainingRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
