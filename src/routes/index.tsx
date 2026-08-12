@@ -85,7 +85,7 @@ function TodayPage() {
               <NumInput value={day?.sleepHours} onChange={(v) => set({ sleepHours: v })} placeholder="8" />
             </Field>
             <Field label="Sleep quality">
-              <div className="mt-1 flex gap-1.5">
+              <div className="mt-1 grid grid-cols-5 gap-1">
                 {[1, 2, 3, 4, 5].map((n) => (
                   <Chip key={n} active={day?.sleepQuality === n} onClick={() => set({ sleepQuality: n })}>
                     {n}
@@ -189,7 +189,7 @@ function TodayPage() {
           </div>
         </Card>
 
-        <div className="card-surface sticky bottom-24 p-4">
+        <div className="card-surface p-4">
           <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
             <span>Day completion</span>
             <span className="num font-semibold text-foreground">{completion}%</span>
