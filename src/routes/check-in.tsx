@@ -1,10 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { addDays, addMonths, endOfMonth, format, parseISO, startOfMonth } from "date-fns";
+import { addDays, endOfMonth, format, parseISO, startOfMonth } from "date-fns";
 import { useMemo, useState } from "react";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { Card, Chip, SectionTitle, Stat } from "@/components/ui-kit";
 import {
-  avg7,
   buildWeekSummary,
   fmt,
   fmt0,
@@ -452,5 +451,3 @@ function ShareMonth({ data, onClose }: { data: AppData; onClose: () => void }) {
     </ShareWrap>
   );
 }
-
-export const _unused = { addMonths, avg7 };

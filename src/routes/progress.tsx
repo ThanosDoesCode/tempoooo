@@ -18,7 +18,6 @@ import { AppShell, PageHeader } from "@/components/AppShell";
 import { Card, Chip, Note, SectionTitle, Stat } from "@/components/ui-kit";
 import {
   avg7,
-  buildWeekSummary,
   exerciseHistory,
   fmt,
   fmt0,
