@@ -2,30 +2,30 @@ export type WorkoutType = "Chest & Back" | "Legs" | "Arms & Shoulders" | "Rest";
 
 export type DailyLog = {
   date: string; // yyyy-MM-dd
-  weight?: number;
-  waist?: number;
-  sleepHours?: number;
-  sleepQuality?: number;
-  calories?: number;
-  protein?: number;
-  carbs?: number;
-  fat?: number;
-  creatine?: boolean;
-  water?: number;
-  steps?: number;
-  cyclingKm?: number;
-  runningKm?: number;
-  cardioMin?: number;
-  note?: string;
-  gym?: boolean;
-  workoutType?: WorkoutType;
+  weight?: number | undefined;
+  waist?: number | undefined;
+  sleepHours?: number | undefined;
+  sleepQuality?: number | undefined;
+  calories?: number | undefined;
+  protein?: number | undefined;
+  carbs?: number | undefined;
+  fat?: number | undefined;
+  creatine?: boolean | undefined;
+  water?: number | undefined;
+  steps?: number | undefined;
+  cyclingKm?: number | undefined;
+  runningKm?: number | undefined;
+  cardioMin?: number | undefined;
+  note?: string | undefined;
+  gym?: boolean | undefined;
+  workoutType?: WorkoutType | undefined;
 };
 
 export type ExerciseEntry = {
   exercise: string;
-  weight?: number;
+  weight?: number | undefined;
   reps: (number | undefined)[]; // 3 sets
-  notes?: string;
+  notes?: string | undefined;
 };
 
 export type Workout = {
@@ -37,10 +37,10 @@ export type Workout = {
 export type PhotoSet = {
   id: string;
   date: string;
-  weight?: number;
-  front?: string;
-  side?: string;
-  back?: string;
+  weight?: number | undefined;
+  front?: string | undefined;
+  side?: string | undefined;
+  back?: string | undefined;
 };
 
 export type Targets = {

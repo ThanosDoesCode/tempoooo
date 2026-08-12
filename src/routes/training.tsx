@@ -37,8 +37,6 @@ export const Route = createFileRoute("/training")({
 type SplitType = Exclude<WorkoutType, "Rest">;
 const SPLITS: SplitType[] = ["Chest & Back", "Legs", "Arms & Shoulders"];
 
-export default function noop() {}
-
 function TrainingPage() {
   const data = useAppData();
   const { saveWorkout } = useActions();
