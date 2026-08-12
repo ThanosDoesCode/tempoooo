@@ -46,7 +46,7 @@ export function buildWeekSummary(data: AppData, weekStart: Date) {
     days.map(sel).filter((v): v is number => typeof v === "number");
 
   const weights = days.filter((d) => typeof d.weight === "number");
-  const endDate = dates[6];
+  const endDate = dates[6] as string;
   const prevEnd = iso(addDays(weekStart, -1));
 
   const currentAvg = avg7(data, endDate) ?? avg7(data, iso(addDays(weekStart, 6)));
@@ -61,7 +61,7 @@ export function buildWeekSummary(data: AppData, weekStart: Date) {
     }
     return null;
   })();
-  const waist = waistVals.length ? waistVals[waistVals.length - 1] : null;
+  const waist = waistVals.length ? (waistVals[waistVals.length - 1] as number) : null;
 
   const cals = num((d) => d.calories);
   const target = data.targets.calories;
@@ -73,8 +73,8 @@ export function buildWeekSummary(data: AppData, weekStart: Date) {
   return {
     weekStart,
     label: `${format(weekStart, "MMMM d")} to ${format(addDays(weekStart, 6), "MMMM d")}`,
-    startWeight: weights.length ? (weights[0].weight as number) : null,
-    endWeight: weights.length ? (weights[weights.length - 1].weight as number) : null,
+    startWeight: weights.length ? (weights[0]!.weight as number) : null,
+    endWeight: weights.length ? (weights[weights.length - 1]!.weight as number) : null,
     currentAvg,
     prevAvg,
     change,
