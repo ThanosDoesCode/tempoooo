@@ -52,14 +52,18 @@ export function Bar({
   target,
   label,
   unit,
+  range,
 }: {
   value: number | undefined;
   target: number;
   label: string;
   unit: string;
+  range?: readonly [number, number];
 }) {
   const pct = Math.min(100, Math.round(((value ?? 0) / target) * 100));
-  const over = (value ?? 0) > target * 1.1;
+  const v = value ?? 0;
+  const inRange = range ? v >= range[0] && v <= range[1] : Math.abs(v - target) <= target * 0.05;
+  const over = range ? v > range[1] * 1.05 : v > target * 1.1;
   return (
     <div>
       <div className="mb-1 flex items-baseline justify-between text-xs">
@@ -68,7 +72,7 @@ export function Bar({
           {value ?? 0}
           <span className="text-muted-foreground">
             {" "}
-            / {target} {unit}
+            / {range ? `${range[0]} to ${range[1]}` : target} {unit}
           </span>
         </span>
       </div>
@@ -76,7 +80,7 @@ export function Bar({
         <div
           className={cn(
             "h-full rounded-full transition-all duration-500",
-            over ? "bg-warn" : "bg-primary",
+            over ? "bg-warn" : value != null && inRange ? "bg-good" : "bg-primary",
           )}
           style={{ width: `${pct}%` }}
         />
@@ -84,6 +88,7 @@ export function Bar({
     </div>
   );
 }
+
 
 export function Field({
   label,
