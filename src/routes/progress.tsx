@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { addMonths, format, isWithinInterval, parseISO, startOfMonth, endOfMonth } from "date-fns";
+import { addMonths, format, parseISO, endOfMonth } from "date-fns";
 import { useMemo, useRef, useState } from "react";
 import {
+  Area,
   Bar as RBar,
   BarChart,
   CartesianGrid,
@@ -14,22 +15,28 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { Card, Chip, Note, SectionTitle, Stat } from "@/components/ui-kit";
 import {
   avg7,
+  bulkStatus,
   exerciseHistory,
   fmt,
   fmt0,
   iso,
   latestWeight,
   mean,
+  pctSigned,
   signed,
   sortedDays,
+  strengthChange,
+  waistChange,
   weekStartOf,
 } from "@/lib/calc";
 import { setData, useAppData } from "@/lib/store";
-import { EXERCISES, type AppData, type PhotoSet } from "@/lib/types";
+import { ALL_EXERCISES, type AppData, type PhotoSet } from "@/lib/types";
+
 
 export const Route = createFileRoute("/progress")({
   head: () => ({
@@ -68,9 +75,8 @@ function ProgressPage() {
   }
 
   const month = MONTHS[monthIdx] as Date;
-  const interval = { start: startOfMonth(month), end: endOfMonth(month) };
   const all = sortedDays(data);
-  const inMonth = all.filter((d) => isWithinInterval(parseISO(d.date), interval));
+
 
   const latest = latestWeight(data);
   const rolling = latest ? avg7(data, latest.date) : null;
@@ -90,15 +96,27 @@ function ProgressPage() {
         )
       : null;
 
-  const weightSeries = inMonth.map((d) => ({
-    date: d.date,
-    weight: d.weight ?? null,
-    avg: avg7(data, d.date),
+  const status = bulkStatus(data);
+  const monthDays = Array.from(
+    { length: endOfMonth(month).getDate() },
+    (_, i) => iso(new Date(month.getFullYear(), month.getMonth(), i + 1)),
+  );
+  const firstAvg =
+    monthDays.map((d) => avg7(data, d)).find((v): v is number => v != null) ?? null;
+
+  const weightSeries = monthDays.map((d, i) => ({
+    date: d,
+    weight: data.days[d]?.weight ?? null,
+    avg: avg7(data, d),
+    bandLow: firstAvg == null ? null : firstAvg + (0.2 * i) / 7,
+    bandHigh: firstAvg == null ? null : firstAvg + (0.3 * i) / 7,
   }));
 
   const waistSeries = all
     .filter((d) => d.waist != null)
     .map((d) => ({ date: d.date, waist: d.waist as number }));
+  const waist4w = waistChange(data, 28);
+
 
   return (
     <AppShell>
@@ -140,6 +158,28 @@ function ProgressPage() {
         />
       </div>
 
+      <div className="mt-2">
+        <Card>
+          <SectionTitle>Projection</SectionTitle>
+          <div className="divide-y divide-border text-sm">
+            {[
+              ["Current 7-day average", fmt(status.currentAvg, 1, " kg")],
+              ["Current pace", signed(status.rate, 2, " kg/week")],
+              ["Projected Sep 2027", fmt(status.projected, 1, " kg")],
+              [
+                `Projected ${target} kg date`,
+                status.projectedDate ? format(parseISO(status.projectedDate), "MMM yyyy") : "—",
+              ],
+            ].map(([k, v]) => (
+              <div key={k} className="flex items-center justify-between gap-3 py-2">
+                <span className="text-muted-foreground">{k}</span>
+                <span className="num font-semibold">{v}</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+
       <div className="mt-4 space-y-4">
         <Card>
           <SectionTitle>Weight · {format(month, "MMMM yyyy")}</SectionTitle>
@@ -150,8 +190,27 @@ function ProgressPage() {
               <YAxis domain={["auto", "auto"]} {...axis} />
               <Tooltip {...tooltip} />
               <ReferenceLine y={start} stroke="var(--color-chart-5)" strokeDasharray="4 4" />
-              <ReferenceLine y={target} stroke="var(--color-chart-2)" strokeDasharray="4 4" />
-              <Scatter dataKey="weight" fill="var(--color-chart-5)" opacity={0.5} />
+              <Area
+                type="monotone"
+                dataKey="bandHigh"
+                stroke="none"
+                fill="var(--color-good)"
+                fillOpacity={0.14}
+                connectNulls
+                name="+0.30 kg/wk"
+                activeDot={false}
+              />
+              <Area
+                type="monotone"
+                dataKey="bandLow"
+                stroke="none"
+                fill="var(--color-card)"
+                fillOpacity={1}
+                connectNulls
+                name="+0.20 kg/wk"
+                activeDot={false}
+              />
+              <Scatter dataKey="weight" fill="var(--color-chart-5)" opacity={0.45} />
               <Line
                 type="monotone"
                 dataKey="avg"
@@ -163,10 +222,32 @@ function ProgressPage() {
               />
             </ComposedChart>
           </ChartBox>
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            Faint points are daily weigh-ins. The line is the 7-day average. The shaded band is the
+            +0.2 to +0.3 kg/week target zone from the start of the month.
+          </p>
         </Card>
 
         <Card>
-          <SectionTitle>Waist</SectionTitle>
+          <SectionTitle
+            right={
+              <span
+                className={`num text-xs font-semibold ${
+                  waist4w == null
+                    ? "text-muted-foreground"
+                    : waist4w > 1.5
+                      ? "text-danger"
+                      : waist4w > 0.8
+                        ? "text-warn"
+                        : "text-good"
+                }`}
+              >
+                {signed(waist4w, 1, " cm / 4 weeks")}
+              </span>
+            }
+          >
+            Waist
+          </SectionTitle>
           <ChartBox>
             <ComposedChart data={waistSeries} margin={{ top: 8, right: 8, left: -22, bottom: 0 }}>
               <CartesianGrid stroke="var(--color-border)" vertical={false} />
@@ -176,7 +257,11 @@ function ProgressPage() {
               <Line type="monotone" dataKey="waist" stroke="var(--color-chart-3)" strokeWidth={2.5} dot />
             </ComposedChart>
           </ChartBox>
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            Some waist growth is normal while gaining. Only excessive growth matters.
+          </p>
         </Card>
+
 
         <Card>
           <SectionTitle>Calories by week</SectionTitle>
@@ -214,31 +299,33 @@ function ProgressPage() {
 
         <Card>
           <SectionTitle>Strength trend</SectionTitle>
+          <p className="mb-2 text-[11px] text-muted-foreground">
+            Volume change from your first logged session to the latest.
+          </p>
           <div className="space-y-2">
-            {Object.values(EXERCISES)
-              .flat()
-              .map((ex) => {
-                const h = exerciseHistory(data, ex);
-                const first = h[0];
-                const last = h[h.length - 1];
-                const delta = first && last ? last.volume - first.volume : null;
-                return (
-                  <div key={ex} className="flex items-center justify-between gap-3 text-sm">
-                    <span className="min-w-0 truncate text-muted-foreground">{ex}</span>
-                    <span
-                      className={`num shrink-0 font-semibold ${
-                        delta == null ? "text-muted-foreground" : delta > 0 ? "text-good" : delta === 0 ? "text-warn" : "text-danger"
-                      }`}
-                    >
-                      {delta == null
-                        ? "—"
-                        : `${delta > 0 ? "↑" : delta === 0 ? "→" : "↓"} ${last?.weight ?? 0}kg × ${last?.bestReps ?? 0}`}
-                    </span>
-                  </div>
-                );
-              })}
+            {ALL_EXERCISES.map((def) => {
+              const s = strengthChange(data, def.name);
+              const arrow = s == null ? "•" : s.pct > 2 ? "↑" : s.pct < -2 ? "↓" : "→";
+              const tone =
+                s == null
+                  ? "text-muted-foreground"
+                  : s.pct > 2
+                    ? "text-good"
+                    : s.pct < -2
+                      ? "text-danger"
+                      : "text-warn";
+              return (
+                <div key={def.name} className="flex items-center justify-between gap-3 text-sm">
+                  <span className="min-w-0 truncate text-muted-foreground">{def.name}</span>
+                  <span className={`num shrink-0 font-semibold ${tone}`}>
+                    {s == null ? "—" : `${arrow} ${pctSigned(s.pct)} · ${s.latest}`}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </Card>
+
 
         <PhotosSection data={data} />
       </div>
@@ -295,8 +382,12 @@ function weeklySeries(data: AppData) {
 
 function PhotosSection({ data }: { data: AppData }) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const importRef = useRef<HTMLInputElement>(null);
   const [pending, setPending] = useState<{ id: string; slot: "front" | "side" | "back" } | null>(null);
   const [compare, setCompare] = useState(false);
+  const [slot, setSlot] = useState<"front" | "side" | "back">("front");
+  const [aId, setAId] = useState<string | null>(null);
+  const [bId, setBId] = useState<string | null>(null);
 
   const photos = useMemo(
     () => [...data.photos].sort((a, b) => a.date.localeCompare(b.date)),
@@ -304,6 +395,8 @@ function PhotosSection({ data }: { data: AppData }) {
   );
   const first = photos[0];
   const last = photos[photos.length - 1];
+  const a = photos.find((p) => p.id === aId) ?? first;
+  const b = photos.find((p) => p.id === bId) ?? last;
 
   const addSet = () => {
     const latest = latestWeight(data);
@@ -325,6 +418,26 @@ function PhotosSection({ data }: { data: AppData }) {
     setPending(null);
   };
 
+  const exportBackup = () => {
+    const blob = new Blob([JSON.stringify(data)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `lean-bulk-backup-${iso(new Date())}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const importBackup = async (file: File) => {
+    try {
+      const parsed = JSON.parse(await file.text()) as AppData;
+      if (!parsed.days) return;
+      setData(() => parsed);
+    } catch {
+      /* invalid file */
+    }
+  };
+
   return (
     <Card>
       <SectionTitle
@@ -337,37 +450,77 @@ function PhotosSection({ data }: { data: AppData }) {
         Progress photos
       </SectionTitle>
       <Note>
-        Take every 4 weeks in the same location, lighting, distance and pose. Photos stay on this
-        device only.
+        Take every 4 weeks in the same location, lighting, distance and pose. Photos live on this
+        device, so export a backup file regularly to keep them safe.
       </Note>
 
-      {first && last && first.id !== last.id ? (
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <button
+          onClick={exportBackup}
+          className="rounded-xl border border-border bg-elevated py-2 text-sm font-medium"
+        >
+          Export backup
+        </button>
+        <button
+          onClick={() => importRef.current?.click()}
+          className="rounded-xl border border-border bg-elevated py-2 text-sm font-medium"
+        >
+          Restore backup
+        </button>
+      </div>
+      <input
+        ref={importRef}
+        type="file"
+        accept="application/json"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) void importBackup(f);
+          e.target.value = "";
+        }}
+      />
+
+      {photos.length > 1 ? (
         <button
           onClick={() => setCompare((c) => !c)}
           className="mt-3 w-full rounded-xl border border-border bg-elevated py-2 text-sm font-medium"
         >
-          {compare ? "Hide comparison" : "Compare start vs now"}
+          {compare ? "Hide comparison" : "Compare two dates"}
         </button>
       ) : null}
 
-      {compare && first && last ? (
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          {[first, last].map((p, i) => (
-            <div key={p.id} className="rounded-xl border border-border p-2">
-              <p className="mb-1 text-[11px] text-muted-foreground">
-                {i === 0 ? "Start" : "Now"} · {format(parseISO(p.date), "d MMM yy")} · {fmt(p.weight, 1)} kg
-              </p>
-              {p.front ? (
-                <img src={p.front} alt="Progress front view" className="w-full rounded-lg" />
-              ) : (
-                <div className="grid h-32 place-items-center rounded-lg bg-elevated text-[11px] text-muted-foreground">
-                  No front photo
-                </div>
-              )}
-            </div>
-          ))}
+      {compare && a && b ? (
+        <div className="mt-3">
+          <div className="mb-2 flex gap-1.5">
+            {(["front", "side", "back"] as const).map((s) => (
+              <Chip key={s} active={slot === s} onClick={() => setSlot(s)}>
+                <span className="capitalize">{s}</span>
+              </Chip>
+            ))}
+          </div>
+          <div className="mb-2 grid grid-cols-2 gap-2">
+            <PhotoSelect photos={photos} value={a.id} onChange={setAId} />
+            <PhotoSelect photos={photos} value={b.id} onChange={setBId} />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {[a, b].map((p, i) => (
+              <div key={`${p.id}-${i}`} className="rounded-xl border border-border p-2">
+                <p className="mb-1 text-[11px] text-muted-foreground">
+                  {format(parseISO(p.date), "d MMM yy")} · {fmt(p.weight, 1)} kg
+                </p>
+                {p[slot] ? (
+                  <img src={p[slot]} alt={`${slot} progress`} className="w-full rounded-lg" />
+                ) : (
+                  <div className="grid h-32 place-items-center rounded-lg bg-elevated text-[11px] capitalize text-muted-foreground">
+                    No {slot} photo
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       ) : null}
+
 
       <div className="mt-3 space-y-3">
         {photos.length === 0 ? (
@@ -428,4 +581,28 @@ async function downscale(file: File): Promise<string> {
   const ctx = canvas.getContext("2d");
   ctx?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
   return canvas.toDataURL("image/jpeg", 0.72);
+}
+
+function PhotoSelect({
+  photos,
+  value,
+  onChange,
+}: {
+  photos: PhotoSet[];
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="w-full rounded-xl border border-input bg-elevated px-2 py-2 text-xs outline-none focus:border-ring"
+    >
+      {photos.map((p) => (
+        <option key={p.id} value={p.id}>
+          {format(parseISO(p.date), "d MMM yyyy")}
+        </option>
+      ))}
+    </select>
+  );
 }

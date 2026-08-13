@@ -3,9 +3,10 @@ import { format } from "date-fns";
 import { useMemo, useState } from "react";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { Bar, Card, Chip, Field, Note, NumInput, SectionTitle, Stat } from "@/components/ui-kit";
-import { avg7, dayCompletion, fmt, iso, weekDays, weekStartOf } from "@/lib/calc";
+import { bulkStatus, dayCompletion, fmt, iso, signed, weekDays, weekStartOf } from "@/lib/calc";
+import { MEAL_PLANS, mealPlan } from "@/lib/meals";
 import { useActions, useAppData } from "@/lib/store";
-import type { WorkoutType } from "@/lib/types";
+import { RANGES, type MealPlanId, type WorkoutType } from "@/lib/types";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -42,7 +43,9 @@ function TodayPage() {
     return weekDays(weekStartOf(new Date())).filter((d) => data.days[d]?.gym).length;
   }, [data]);
 
-  if (!data || !targets) {
+  const status = useMemo(() => (data ? bulkStatus(data) : null), [data]);
+
+  if (!data || !targets || !status) {
     return (
       <AppShell>
         <div className="h-40 animate-pulse rounded-2xl bg-card" />
@@ -55,8 +58,31 @@ function TodayPage() {
     setSaved(false);
   };
 
-  const completion = dayCompletion({ ...day, date: today });
-  const rolling = avg7(data, today);
+  const pickPlan = (id: MealPlanId) => {
+    const plan = mealPlan(id);
+    if (!plan?.macros) {
+      set({ mealPlan: id });
+      return;
+    }
+    set({
+      mealPlan: id,
+      calories: plan.macros.calories,
+      protein: plan.macros.protein,
+      carbs: plan.macros.carbs,
+      fat: plan.macros.fat,
+    });
+  };
+
+  const plan = mealPlan(day?.mealPlan);
+  const completion = dayCompletion({ ...day, date: today }, !!data.workouts[today]);
+  const toneClass =
+    status.tone === "good"
+      ? "text-good"
+      : status.tone === "warn"
+        ? "text-warn"
+        : status.tone === "danger"
+          ? "text-danger"
+          : "text-muted-foreground";
 
   return (
     <AppShell>
@@ -65,10 +91,28 @@ function TodayPage() {
         subtitle="Log the day in under a minute."
       />
 
+      <div className="card-surface fade-up mb-2 flex items-center justify-between gap-3 p-4">
+        <div>
+          <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+            Bulk status
+          </p>
+          <p className={`mt-1 text-2xl font-semibold ${toneClass}`}>{status.label}</p>
+        </div>
+        <div className="text-right">
+          <p className={`num text-2xl font-semibold ${toneClass}`}>{signed(status.rate, 2)}</p>
+          <p className="text-[11px] text-muted-foreground">kg/week · target +0.20 to +0.30</p>
+        </div>
+      </div>
+
       <div className="grid grid-cols-3 gap-2">
-        <Stat label="7-day avg" value={fmt(rolling, 1)} hint="kg" />
+        <Stat label="7-day avg" value={fmt(status.currentAvg, 1)} hint="kg" />
         <Stat label="Cal target" value={targets.calories} hint="kcal/day" />
-        <Stat label="Gym" value={`${weekCount}/5`} hint="this week" tone={weekCount >= 5 ? "good" : "default"} />
+        <Stat
+          label="Gym"
+          value={`${weekCount}/5`}
+          hint="this week"
+          tone={weekCount >= 5 ? "good" : "default"}
+        />
       </div>
 
       <div className="mt-4 space-y-4">
@@ -84,15 +128,25 @@ function TodayPage() {
             <Field label="Sleep (hours)">
               <NumInput value={day?.sleepHours} onChange={(v) => set({ sleepHours: v })} placeholder="8" />
             </Field>
-            <Field label="Sleep quality">
-              <div className="mt-1 grid grid-cols-5 gap-1">
-                {[1, 2, 3, 4, 5].map((n) => (
-                  <Chip key={n} active={day?.sleepQuality === n} onClick={() => set({ sleepQuality: n })}>
-                    {n}
-                  </Chip>
-                ))}
-              </div>
+            <Field label="Resting HR (optional)">
+              <NumInput
+                value={day?.restingHr}
+                onChange={(v) => set({ restingHr: v })}
+                step="1"
+                placeholder="54"
+              />
             </Field>
+            <div className="col-span-2">
+              <Field label="Sleep quality">
+                <div className="mt-1 grid grid-cols-5 gap-1">
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <Chip key={n} active={day?.sleepQuality === n} onClick={() => set({ sleepQuality: n })}>
+                      {n}
+                    </Chip>
+                  ))}
+                </div>
+              </Field>
+            </div>
           </div>
           <div className="mt-3 space-y-2">
             <Note>
@@ -104,21 +158,63 @@ function TodayPage() {
         </Card>
 
         <Card>
+          <SectionTitle>Today&apos;s meal plan</SectionTitle>
+          <div className="flex flex-wrap gap-1.5">
+            {MEAL_PLANS.map((m) => (
+              <Chip key={m.id} active={day?.mealPlan === m.id} onClick={() => pickPlan(m.id)}>
+                {m.short}
+              </Chip>
+            ))}
+          </div>
+          {plan ? (
+            <div className="mt-3 rounded-xl bg-elevated/70 p-3 text-xs leading-relaxed">
+              <p className="text-sm font-semibold">{plan.name}</p>
+              {plan.base.length ? (
+                <>
+                  <p className="mt-2 text-[10px] uppercase tracking-wider text-muted-foreground">
+                    Daily base
+                  </p>
+                  <ul className="mt-0.5 space-y-0.5 text-muted-foreground">
+                    {plan.base.map((b) => (
+                      <li key={b}>· {b}</li>
+                    ))}
+                  </ul>
+                </>
+              ) : null}
+              <p className="mt-2 text-[10px] uppercase tracking-wider text-muted-foreground">
+                Main meals
+              </p>
+              <ul className="mt-0.5 space-y-0.5 text-muted-foreground">
+                {plan.meals.map((b) => (
+                  <li key={b}>· {b}</li>
+                ))}
+              </ul>
+              {plan.macros ? (
+                <p className="num mt-2 font-medium">
+                  Pre-filled: {plan.macros.calories} kcal · {plan.macros.protein} P ·{" "}
+                  {plan.macros.carbs} C · {plan.macros.fat} F
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+        </Card>
+
+        <Card>
           <SectionTitle>Nutrition</SectionTitle>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Calories (kcal)">
+            <Field label="Calories (kcal)" hint="target 2,900">
               <NumInput value={day?.calories} onChange={(v) => set({ calories: v })} step="10" placeholder="2900" />
             </Field>
-            <Field label="Protein (g)">
+            <Field label="Protein (g)" hint="125 to 140 g">
               <NumInput value={day?.protein} onChange={(v) => set({ protein: v })} step="1" placeholder="130" />
             </Field>
-            <Field label="Carbs (g)">
+            <Field label="Carbs (g)" hint="around 380 g">
               <NumInput value={day?.carbs} onChange={(v) => set({ carbs: v })} step="1" placeholder="380" />
             </Field>
-            <Field label="Fat (g)">
-              <NumInput value={day?.fat} onChange={(v) => set({ fat: v })} step="1" placeholder="85" />
+            <Field label="Fat (g)" hint="80 to 90 g">
+              <NumInput value={day?.fat} onChange={(v) => set({ fat: v })} step="1" placeholder="88" />
             </Field>
-            <Field label="Water (L)">
+            <Field label="Water (L)" hint="3 L">
               <NumInput value={day?.water} onChange={(v) => set({ water: v })} placeholder="3" />
             </Field>
             <Field label="Creatine (5 g)">
@@ -133,9 +229,10 @@ function TodayPage() {
             </Field>
           </div>
           <div className="mt-4 space-y-2.5">
-            <Bar label="Calories" value={day?.calories} target={targets.calories} unit="kcal" />
-            <Bar label="Protein" value={day?.protein} target={targets.protein} unit="g" />
-            <Bar label="Fat" value={day?.fat} target={targets.fat} unit="g" />
+            <Bar label="Calories" value={day?.calories} target={targets.calories} unit="kcal" range={RANGES.calories} />
+            <Bar label="Protein" value={day?.protein} target={targets.protein} unit="g" range={RANGES.protein} />
+            <Bar label="Carbs" value={day?.carbs} target={targets.carbs} unit="g" range={RANGES.carbs} />
+            <Bar label="Fat" value={day?.fat} target={targets.fat} unit="g" range={RANGES.fat} />
             <Bar label="Water" value={day?.water} target={targets.water} unit="L" />
           </div>
         </Card>

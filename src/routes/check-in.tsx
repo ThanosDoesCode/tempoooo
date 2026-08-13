@@ -4,6 +4,11 @@ import { useMemo, useState } from "react";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { Card, Chip, SectionTitle, Stat } from "@/components/ui-kit";
 import {
+  ALL_EXERCISES,
+} from "@/lib/types";
+import {
+  bulkStatus,
+  strengthChange,
   buildWeekSummary,
   fmt,
   fmt0,
@@ -107,10 +112,30 @@ function CheckInPage() {
             <p className={`mt-1 text-sm font-semibold tracking-wide ${toneText(tone)}`}>
               {s.status.label}
             </p>
-            <p className="mt-2 text-[11px] text-muted-foreground">
-              Review with ChatGPT before adjusting calorie intake.
-            </p>
           </div>
+
+          <div className="mb-4">
+            <Card>
+              <SectionTitle>Decision</SectionTitle>
+              <p className={`text-base font-semibold ${toneText(s.advice.tone)}`}>
+                {s.advice.decision}
+              </p>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{s.advice.detail}</p>
+              {s.focus.length ? (
+                <>
+                  <p className="mt-3 text-[10px] uppercase tracking-wider text-muted-foreground">
+                    Focus next week
+                  </p>
+                  <ul className="mt-1 space-y-0.5 text-sm">
+                    {s.focus.map((f) => (
+                      <li key={f}>· {f}</li>
+                    ))}
+                  </ul>
+                </>
+              ) : null}
+            </Card>
+          </div>
+
 
           <Card>
             <SectionTitle>Body</SectionTitle>
@@ -261,6 +286,14 @@ function ShareWrap({
   );
 }
 
+function ShareHead({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="pt-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
+      {children}
+    </p>
+  );
+}
+
 function ShareWeek({
   data,
   s,
@@ -276,64 +309,65 @@ function ShareWeek({
   return (
     <ShareWrap title="Lean Bulk Check-In" subtitle={s.label} onClose={onClose}>
       <div className="pb-2">
+        <ShareHead>Weight</ShareHead>
+        <ShareLine
+          label="Weekly change"
+          value={signed(s.change, 2, " kg/week")}
+          mark={trend(s.change, (n) => n >= 0.2 && n <= 0.3)}
+        />
+        <ShareLine label="7-day avg" value={fmt(s.currentAvg, 2, " kg")} />
         <ShareLine label="Current weight" value={fmt(latest?.weight, 1, " kg")} />
-        <ShareLine
-          label="7-day avg"
-          value={fmt(s.currentAvg, 2, " kg")}
-          mark={trend(s.change, (n) => n > 0)}
-        />
-        <ShareLine label="Previous 7-day avg" value={fmt(s.prevAvg, 2, " kg")} />
-        <ShareLine label="Weekly change" value={signed(s.change, 2, " kg")} />
-        <ShareLine label="Waist" value={fmt(s.waist, 1, " cm")} />
-        <ShareLine
-          label="Waist change"
-          value={signed(s.waistChange, 1, " cm")}
-          mark={s.waistChange == null ? "" : s.waistChange <= 0 ? "▼" : "▲"}
-        />
+        <ShareLine label="Waist (4 weeks)" value={signed(s.waist4w, 1, " cm")} />
+        <p className={`mt-1 text-[15px] font-semibold ${toneText(s.status.tone)}`}>
+          {s.status.label}
+        </p>
       </div>
       <div className="py-2">
-        <ShareLine
-          label="Avg calories"
-          value={fmt0(s.avgCalories, " kcal")}
-          mark={s.avgCalories == null ? "" : s.avgCalories >= data.targets.calories ? "▲" : "▼"}
-        />
-        <ShareLine label="Avg protein" value={fmt0(s.avgProtein, " g")} />
-        <ShareLine label="Avg carbs" value={fmt0(s.avgCarbs, " g")} />
-        <ShareLine label="Avg fat" value={fmt0(s.avgFat, " g")} />
+        <ShareHead>Nutrition</ShareHead>
+        <ShareLine label="Average" value={fmt0(s.avgCalories, " kcal")} />
+        <ShareLine label="Days within target" value={`${s.daysOnTarget}/7`} />
+        <ShareLine label="Protein / carbs / fat" value={`${fmt0(s.avgProtein)} / ${fmt0(s.avgCarbs)} / ${fmt0(s.avgFat)} g`} />
       </div>
       <div className="py-2">
-        <ShareLine
-          label="Gym sessions"
-          value={`${s.gymSessions} / 5`}
-          mark={s.progressed > s.regressed ? "▲" : s.regressed > s.progressed ? "▼" : ""}
-        />
-        <ShareLine label="Exercises progressed" value={String(s.progressed)} />
+        <ShareHead>Training</ShareHead>
+        <ShareLine label="Sessions" value={`${s.gymSessions}/5`} />
+        <ShareLine label="Progressed" value={String(s.progressed)} />
+        <ShareLine label="Unchanged" value={String(s.same)} />
+        <ShareLine label="Regressed" value={String(s.regressed)} />
         <ShareLine label="PRs" value={s.prs.length ? String(s.prs.length) : "0"} />
       </div>
       <div className="py-2">
-        <ShareLine label="Cycling" value={`${s.cyclingKm.toFixed(1)} km`} />
-        <ShareLine label="Running" value={`${s.runningKm.toFixed(1)} km`} />
-        <ShareLine label="Avg steps" value={fmt0(s.avgSteps)} />
+        <ShareHead>Recovery</ShareHead>
+        <ShareLine label="Average sleep" value={fmt(s.avgSleep, 1, " hours")} />
+        <ShareLine label="Steps/day" value={fmt0(s.avgSteps)} />
+        <ShareLine label="Resting HR" value={fmt0(s.avgRestingHr, " bpm")} />
+        <ShareLine label="Cycling / running" value={`${s.cyclingKm.toFixed(1)} / ${s.runningKm.toFixed(1)} km`} />
       </div>
       <div className="py-2">
-        <ShareLine label="Avg sleep" value={fmt(s.avgSleep, 1, " h")} />
-      </div>
-      <div className="py-2">
-        <p className="text-[15px] text-muted-foreground">Notes</p>
-        <p className="mt-1 text-[16px] leading-snug">{s.note || "—"}</p>
-      </div>
-      <div className="py-2">
-        <ShareLine label="Current calorie target" value={`${data.targets.calories} kcal`} />
-        <p className={`num mt-2 text-center text-[19px] font-semibold ${toneText(s.status.tone)}`}>
-          {s.status.label}
+        <ShareHead>Decision</ShareHead>
+        <p className={`mt-1 text-[17px] font-semibold ${toneText(s.advice.tone)}`}>
+          {s.advice.decision}
         </p>
-        <p className="mt-1 text-center text-[13px] text-muted-foreground">
-          Review with ChatGPT before adjusting calorie intake.
-        </p>
+        <p className="mt-1 text-[13px] leading-snug text-muted-foreground">{s.advice.detail}</p>
       </div>
+      <div className="py-2">
+        <ShareHead>Focus next week</ShareHead>
+        <ul className="mt-1 space-y-0.5 text-[15px]">
+          {(s.focus.length ? s.focus : ["Keep logging and repeat the plan"]).map((f) => (
+            <li key={f}>· {f}</li>
+          ))}
+        </ul>
+      </div>
+      {s.note ? (
+        <div className="py-2">
+          <ShareHead>Notes</ShareHead>
+          <p className="mt-1 text-[15px] leading-snug">{s.note}</p>
+        </div>
+      ) : null}
     </ShareWrap>
   );
 }
+
 
 function monthlyStats(data: AppData, month: Date) {
   const start = startOfMonth(month);
@@ -374,7 +408,38 @@ function monthlyStats(data: AppData, month: Date) {
       return dt >= start && dt <= end;
     }),
     status: statusOf(gained == null ? null : gained / weeks),
+    overall: overallStatus(
+      gained == null ? null : gained / weeks,
+      waists.length > 1 ? (waists[waists.length - 1] as number) - (waists[0] as number) : null,
+      prog.progressed,
+      prog.regressed,
+    ),
+    bulk: bulkStatus(data, end),
+    strength: ALL_EXERCISES.map((d) => ({ name: d.name, s: strengthChange(data, d.name) })).filter(
+      (x) => x.s != null,
+    ),
   };
+}
+
+function overallStatus(
+  rate: number | null,
+  waist: number | null,
+  progressed: number,
+  regressed: number,
+) {
+  if (rate == null) return { icon: "⚪", text: "Not enough data yet", tone: "muted" as const };
+  if (rate < 0.15) return { icon: "🔵", text: "Weight gain too slow", tone: "warn" as const };
+  if (rate > 0.45 || (rate > 0.35 && (waist ?? 0) > 1.5))
+    return { icon: "🔴", text: "Calories likely too high", tone: "danger" as const };
+  if (rate > 0.3)
+    return {
+      icon: "🟡",
+      text: "Muscle gain good, but weight gain slightly fast",
+      tone: "warn" as const,
+    };
+  if (progressed >= regressed)
+    return { icon: "🟢", text: "Lean bulk progressing well", tone: "good" as const };
+  return { icon: "🟡", text: "Weight on target, strength stalling", tone: "warn" as const };
 }
 
 function MonthlyPreview({ data }: { data: AppData }) {
@@ -382,15 +447,23 @@ function MonthlyPreview({ data }: { data: AppData }) {
   return (
     <Card>
       <SectionTitle>{m.label}</SectionTitle>
+      <p className={`mb-2 text-base font-semibold ${toneText(m.overall.tone)}`}>
+        {m.overall.icon} {m.overall.text}
+      </p>
       <Rows
         rows={[
           ["Start weight", fmt(m.startWeight, 1, " kg")],
-          ["End weight", fmt(m.endWeight, 1, " kg")],
-          ["Monthly average", fmt(m.avgWeight, 2, " kg")],
+          ["Current 7-day avg", fmt(m.bulk.currentAvg, 2, " kg")],
           ["Total gained", signed(m.gained, 2, " kg")],
           ["Avg weekly gain", signed(m.avgWeeklyGain, 2, " kg")],
           ["Waist change", signed(m.waistChange, 1, " cm")],
+          ["Avg calories", fmt0(m.avgCalories, " kcal")],
           ["Gym sessions", String(m.gymSessions)],
+          ["Avg sleep", fmt(m.avgSleep, 1, " h")],
+          [
+            "Projected 75 kg",
+            m.bulk.projectedDate ? format(parseISO(m.bulk.projectedDate), "MMM yyyy") : "—",
+          ],
         ]}
       />
     </Card>
@@ -399,8 +472,8 @@ function MonthlyPreview({ data }: { data: AppData }) {
 
 function ShareMonth({ data, onClose }: { data: AppData; onClose: () => void }) {
   const m = monthlyStats(data, new Date());
-  const decision =
-    m.status.label === "ON TARGET" ? "Keep calories unchanged" : "Review calories";
+  const decision = m.status.label === "ON TARGET" ? "Keep calories unchanged" : "Review calories";
+
   return (
     <ShareWrap title="Lean Bulk Monthly" subtitle={m.label} onClose={onClose}>
       <div className="pb-2">
