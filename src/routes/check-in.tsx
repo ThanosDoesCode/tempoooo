@@ -4,6 +4,11 @@ import { useMemo, useState } from "react";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { Card, Chip, SectionTitle, Stat } from "@/components/ui-kit";
 import {
+  ALL_EXERCISES,
+} from "@/lib/types";
+import {
+  bulkStatus,
+  strengthChange,
   buildWeekSummary,
   fmt,
   fmt0,
