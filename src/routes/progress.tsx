@@ -95,15 +95,27 @@ function ProgressPage() {
         )
       : null;
 
-  const weightSeries = inMonth.map((d) => ({
-    date: d.date,
-    weight: d.weight ?? null,
-    avg: avg7(data, d.date),
+  const status = bulkStatus(data);
+  const monthDays = Array.from(
+    { length: endOfMonth(month).getDate() },
+    (_, i) => iso(new Date(month.getFullYear(), month.getMonth(), i + 1)),
+  );
+  const firstAvg =
+    monthDays.map((d) => avg7(data, d)).find((v): v is number => v != null) ?? null;
+
+  const weightSeries = monthDays.map((d, i) => ({
+    date: d,
+    weight: data.days[d]?.weight ?? null,
+    avg: avg7(data, d),
+    bandLow: firstAvg == null ? null : firstAvg + (0.2 * i) / 7,
+    bandHigh: firstAvg == null ? null : firstAvg + (0.3 * i) / 7,
   }));
 
   const waistSeries = all
     .filter((d) => d.waist != null)
     .map((d) => ({ date: d.date, waist: d.waist as number }));
+  const waist4w = waistChange(data, 28);
+
 
   return (
     <AppShell>
