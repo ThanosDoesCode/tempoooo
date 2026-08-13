@@ -156,6 +156,28 @@ function ProgressPage() {
         />
       </div>
 
+      <div className="mt-2">
+        <Card>
+          <SectionTitle>Projection</SectionTitle>
+          <div className="divide-y divide-border text-sm">
+            {[
+              ["Current 7-day average", fmt(status.currentAvg, 1, " kg")],
+              ["Current pace", signed(status.rate, 2, " kg/week")],
+              ["Projected Sep 2027", fmt(status.projected, 1, " kg")],
+              [
+                `Projected ${target} kg date`,
+                status.projectedDate ? format(parseISO(status.projectedDate), "MMM yyyy") : "—",
+              ],
+            ].map(([k, v]) => (
+              <div key={k} className="flex items-center justify-between gap-3 py-2">
+                <span className="text-muted-foreground">{k}</span>
+                <span className="num font-semibold">{v}</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+
       <div className="mt-4 space-y-4">
         <Card>
           <SectionTitle>Weight · {format(month, "MMMM yyyy")}</SectionTitle>
@@ -166,8 +188,27 @@ function ProgressPage() {
               <YAxis domain={["auto", "auto"]} {...axis} />
               <Tooltip {...tooltip} />
               <ReferenceLine y={start} stroke="var(--color-chart-5)" strokeDasharray="4 4" />
-              <ReferenceLine y={target} stroke="var(--color-chart-2)" strokeDasharray="4 4" />
-              <Scatter dataKey="weight" fill="var(--color-chart-5)" opacity={0.5} />
+              <Area
+                type="monotone"
+                dataKey="bandHigh"
+                stroke="none"
+                fill="var(--color-good)"
+                fillOpacity={0.14}
+                connectNulls
+                name="+0.30 kg/wk"
+                activeDot={false}
+              />
+              <Area
+                type="monotone"
+                dataKey="bandLow"
+                stroke="none"
+                fill="var(--color-card)"
+                fillOpacity={1}
+                connectNulls
+                name="+0.20 kg/wk"
+                activeDot={false}
+              />
+              <Scatter dataKey="weight" fill="var(--color-chart-5)" opacity={0.45} />
               <Line
                 type="monotone"
                 dataKey="avg"
@@ -179,10 +220,32 @@ function ProgressPage() {
               />
             </ComposedChart>
           </ChartBox>
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            Faint points are daily weigh-ins. The line is the 7-day average. The shaded band is the
+            +0.2 to +0.3 kg/week target zone from the start of the month.
+          </p>
         </Card>
 
         <Card>
-          <SectionTitle>Waist</SectionTitle>
+          <SectionTitle
+            right={
+              <span
+                className={`num text-xs font-semibold ${
+                  waist4w == null
+                    ? "text-muted-foreground"
+                    : waist4w > 1.5
+                      ? "text-danger"
+                      : waist4w > 0.8
+                        ? "text-warn"
+                        : "text-good"
+                }`}
+              >
+                {signed(waist4w, 1, " cm / 4 weeks")}
+              </span>
+            }
+          >
+            Waist
+          </SectionTitle>
           <ChartBox>
             <ComposedChart data={waistSeries} margin={{ top: 8, right: 8, left: -22, bottom: 0 }}>
               <CartesianGrid stroke="var(--color-border)" vertical={false} />
@@ -192,7 +255,11 @@ function ProgressPage() {
               <Line type="monotone" dataKey="waist" stroke="var(--color-chart-3)" strokeWidth={2.5} dot />
             </ComposedChart>
           </ChartBox>
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            Some waist growth is normal while gaining. Only excessive growth matters.
+          </p>
         </Card>
+
 
         <Card>
           <SectionTitle>Calories by week</SectionTitle>
