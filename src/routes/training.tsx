@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { format, parseISO } from "date-fns";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CartesianGrid,
   Line,
@@ -12,9 +12,9 @@ import {
 } from "recharts";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { Card, Chip, Note, SectionTitle } from "@/components/ui-kit";
-import { exerciseHistory, iso, previousEntry } from "@/lib/calc";
+import { exerciseHistory, iso, progressionFor, totalReps } from "@/lib/calc";
 import { useActions, useAppData } from "@/lib/store";
-import { EXERCISES, type ExerciseEntry, type WorkoutType } from "@/lib/types";
+import { EXERCISES, type ExerciseEntry, type SplitType } from "@/lib/types";
 
 export const Route = createFileRoute("/training")({
   head: () => ({
@@ -34,7 +34,6 @@ export const Route = createFileRoute("/training")({
   component: TrainingPage,
 });
 
-type SplitType = Exclude<WorkoutType, "Rest">;
 const SPLITS: SplitType[] = ["Chest & Back", "Legs", "Arms & Shoulders"];
 
 function TrainingPage() {
@@ -44,10 +43,12 @@ function TrainingPage() {
   const existing = data?.workouts[today];
   const [split, setSplit] = useState<SplitType>(existing?.type ?? "Chest & Back");
   const [graphFor, setGraphFor] = useState<string | null>(null);
+  const [restKey, setRestKey] = useState(0);
+  const [restRunning, setRestRunning] = useState(false);
 
   const entries: ExerciseEntry[] = useMemo(() => {
-    const base = EXERCISES[split].map<ExerciseEntry>((exercise) => ({
-      exercise,
+    const base = EXERCISES[split].map<ExerciseEntry>((def) => ({
+      exercise: def.name,
       reps: [undefined, undefined, undefined],
     }));
     if (existing?.type !== split) return base;
@@ -67,6 +68,11 @@ function TrainingPage() {
     saveWorkout({ date: today, type: split, entries: next });
   };
 
+  const startRest = () => {
+    setRestKey((k) => k + 1);
+    setRestRunning(true);
+  };
+
   return (
     <AppShell>
       <PageHeader title="Training" subtitle={format(new Date(), "EEEE, d MMMM")} />
@@ -80,34 +86,39 @@ function TrainingPage() {
       </div>
 
       <div className="space-y-3">
-        {entries.map((entry) => {
-          const prev = previousEntry(data, entry.exercise, today);
-          const status = compare(entry, prev);
+        {EXERCISES[split].map((def) => {
+          const entry = entries.find((e) => e.exercise === def.name) as ExerciseEntry;
+          const p = progressionFor(data, entry, today);
+          const prev = p.prev;
           return (
-            <Card key={entry.exercise}>
-              <div className="mb-3 flex items-start justify-between gap-2">
+            <Card key={def.name}>
+              <div className="mb-2 flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <h3 className="truncate text-base font-semibold">{entry.exercise}</h3>
+                  <h3 className="truncate text-base font-semibold">{def.name}</h3>
                   <p className="mt-0.5 text-[11px] text-muted-foreground">
-                    {prev
-                      ? `Last ${format(parseISO(prev.date), "d MMM")}: ${prev.weight ?? "—"}kg · ${prev.reps
-                          .map((r) => r ?? "—")
-                          .join(" / ")}`
-                      : "No previous session"}
+                    Target: {def.min} to {def.max} reps
                   </p>
                 </div>
                 <span
-                  className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-wider ${status.cls}`}
+                  className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-wider ${toneCls(p.tone)}`}
                 >
-                  {status.label}
+                  {p.label}
                 </span>
               </div>
+
+              <p className="mb-2 text-[11px] text-muted-foreground">
+                {prev
+                  ? `Previous ${format(parseISO(prev.date), "d MMM")}: ${prev.weight ?? "—"} kg | ${prev.reps
+                      .map((r) => r ?? "—")
+                      .join(", ")} (${totalReps(prev.reps)} reps)`
+                  : "No previous session"}
+              </p>
 
               <div className="grid grid-cols-4 gap-2">
                 <SmallInput
                   label="kg"
                   value={entry.weight}
-                  onChange={(v) => update(entry.exercise, { weight: v })}
+                  onChange={(v) => update(def.name, { weight: v })}
                 />
                 {[0, 1, 2].map((i) => (
                   <SmallInput
@@ -118,28 +129,53 @@ function TrainingPage() {
                     onChange={(v) => {
                       const reps = [...entry.reps];
                       reps[i] = v;
-                      update(entry.exercise, { reps });
+                      update(def.name, { reps });
+                      if (v != null) startRest();
                     }}
                   />
                 ))}
               </div>
 
+              {p.prs.length ? (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {p.prs.map((pr) => (
+                    <span
+                      key={pr}
+                      className="rounded-full bg-good/15 px-2 py-1 text-[11px] font-semibold text-good"
+                    >
+                      {pr}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+
+              {p.hint ? (
+                <p
+                  className={`mt-2 rounded-xl px-3 py-2 text-[12px] font-semibold ${
+                    p.readyForWeight ? "bg-primary/15 text-primary" : "bg-elevated text-muted-foreground"
+                  }`}
+                >
+                  {p.readyForWeight ? "⬆ " : ""}
+                  {p.hint}
+                </p>
+              ) : null}
+
               <input
                 value={entry.notes ?? ""}
-                onChange={(e) => update(entry.exercise, { notes: e.target.value })}
+                onChange={(e) => update(def.name, { notes: e.target.value })}
                 placeholder="Notes (form, RPE, tempo)"
                 className="mt-2 w-full rounded-xl border border-input bg-elevated px-3 py-2 text-sm outline-none focus:border-ring"
               />
 
               <button
-                onClick={() => setGraphFor(graphFor === entry.exercise ? null : entry.exercise)}
+                onClick={() => setGraphFor(graphFor === def.name ? null : def.name)}
                 className="mt-2 text-xs font-medium text-primary"
               >
-                {graphFor === entry.exercise ? "Hide history" : "History"}
+                {graphFor === def.name ? "Hide history" : "History"}
               </button>
 
-              {graphFor === entry.exercise ? (
-                <ExerciseGraph history={exerciseHistory(data, entry.exercise)} />
+              {graphFor === def.name ? (
+                <ExerciseGraph history={exerciseHistory(data, def.name)} />
               ) : null}
             </Card>
           );
@@ -148,11 +184,74 @@ function TrainingPage() {
 
       <div className="mt-4">
         <Note>
-          Progression rule: increase reps within your target range first. Once you hit the top of the
-          range with good form, add weight and start again at the bottom of the range.
+          Progression rule: add reps inside the target range first. Once every set hits the top of
+          the range, add weight and rebuild reps from the bottom.
         </Note>
       </div>
+
+      <RestTimer
+        key={restKey}
+        running={restRunning}
+        onStart={startRest}
+        onStop={() => setRestRunning(false)}
+      />
     </AppShell>
+  );
+}
+
+const toneCls = (t: string) =>
+  t === "good"
+    ? "bg-good/15 text-good"
+    : t === "warn"
+      ? "bg-warn/15 text-warn"
+      : t === "danger"
+        ? "bg-danger/15 text-danger"
+        : "bg-secondary text-muted-foreground";
+
+function RestTimer({
+  running,
+  onStart,
+  onStop,
+}: {
+  running: boolean;
+  onStart: () => void;
+  onStop: () => void;
+}) {
+  const [left, setLeft] = useState(120);
+  const ref = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (!running) return;
+    setLeft(120);
+    ref.current = setInterval(() => {
+      setLeft((l) => {
+        if (l <= 1) {
+          if (ref.current) clearInterval(ref.current);
+          return 0;
+        }
+        return l - 1;
+      });
+    }, 1000);
+    return () => {
+      if (ref.current) clearInterval(ref.current);
+    };
+  }, [running]);
+
+  const mm = Math.floor(left / 60);
+  const ss = String(left % 60).padStart(2, "0");
+
+  return (
+    <div className="pointer-events-none fixed inset-x-0 bottom-20 z-20 flex justify-center px-4">
+      <div className="pointer-events-auto flex items-center gap-3 rounded-full border border-border bg-card/95 px-4 py-2 shadow-lg backdrop-blur">
+        <span className="text-[11px] uppercase tracking-wider text-muted-foreground">Rest</span>
+        <span className={`num text-lg font-semibold ${left === 0 ? "text-good" : ""}`}>
+          {mm}:{ss}
+        </span>
+        <button onClick={running ? onStop : onStart} className="text-xs font-medium text-primary">
+          {running ? "Stop" : "Start 2:00"}
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -180,21 +279,6 @@ function SmallInput({
       />
     </label>
   );
-}
-
-function compare(entry: ExerciseEntry, prev: ReturnType<typeof previousEntry>) {
-  const s = (w: number | undefined, r: (number | undefined)[]) =>
-    (w ?? 1) * r.reduce<number>((a, b) => a + (b ?? 0), 0);
-  const logged = entry.weight != null || entry.reps.some((r) => r != null);
-  if (!logged) return { label: "Not logged", cls: "bg-secondary text-muted-foreground" };
-  if (!prev) return { label: "Baseline", cls: "bg-secondary text-muted-foreground" };
-  const cur = s(entry.weight, entry.reps);
-  const old = s(prev.weight, prev.reps);
-  if ((entry.weight ?? 0) > (prev.weight ?? 0) && cur >= old)
-    return { label: "Weight PR", cls: "bg-good/15 text-good" };
-  if (cur > old) return { label: "Rep PR", cls: "bg-good/15 text-good" };
-  if (cur === old) return { label: "Same", cls: "bg-warn/15 text-warn" };
-  return { label: "Down", cls: "bg-danger/15 text-danger" };
 }
 
 function ExerciseGraph({
