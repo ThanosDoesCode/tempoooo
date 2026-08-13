@@ -403,7 +403,38 @@ function monthlyStats(data: AppData, month: Date) {
       return dt >= start && dt <= end;
     }),
     status: statusOf(gained == null ? null : gained / weeks),
+    overall: overallStatus(
+      gained == null ? null : gained / weeks,
+      waists.length > 1 ? (waists[waists.length - 1] as number) - (waists[0] as number) : null,
+      prog.progressed,
+      prog.regressed,
+    ),
+    bulk: bulkStatus(data, end),
+    strength: ALL_EXERCISES.map((d) => ({ name: d.name, s: strengthChange(data, d.name) })).filter(
+      (x) => x.s != null,
+    ),
   };
+}
+
+function overallStatus(
+  rate: number | null,
+  waist: number | null,
+  progressed: number,
+  regressed: number,
+) {
+  if (rate == null) return { icon: "⚪", text: "Not enough data yet", tone: "muted" as const };
+  if (rate < 0.15) return { icon: "🔵", text: "Weight gain too slow", tone: "warn" as const };
+  if (rate > 0.45 || (rate > 0.35 && (waist ?? 0) > 1.5))
+    return { icon: "🔴", text: "Calories likely too high", tone: "danger" as const };
+  if (rate > 0.3)
+    return {
+      icon: "🟡",
+      text: "Muscle gain good, but weight gain slightly fast",
+      tone: "warn" as const,
+    };
+  if (progressed >= regressed)
+    return { icon: "🟢", text: "Lean bulk progressing well", tone: "good" as const };
+  return { icon: "🟡", text: "Weight on target, strength stalling", tone: "warn" as const };
 }
 
 function MonthlyPreview({ data }: { data: AppData }) {
@@ -411,15 +442,23 @@ function MonthlyPreview({ data }: { data: AppData }) {
   return (
     <Card>
       <SectionTitle>{m.label}</SectionTitle>
+      <p className={`mb-2 text-base font-semibold ${toneText(m.overall.tone)}`}>
+        {m.overall.icon} {m.overall.text}
+      </p>
       <Rows
         rows={[
           ["Start weight", fmt(m.startWeight, 1, " kg")],
-          ["End weight", fmt(m.endWeight, 1, " kg")],
-          ["Monthly average", fmt(m.avgWeight, 2, " kg")],
+          ["Current 7-day avg", fmt(m.bulk.currentAvg, 2, " kg")],
           ["Total gained", signed(m.gained, 2, " kg")],
           ["Avg weekly gain", signed(m.avgWeeklyGain, 2, " kg")],
           ["Waist change", signed(m.waistChange, 1, " cm")],
+          ["Avg calories", fmt0(m.avgCalories, " kcal")],
           ["Gym sessions", String(m.gymSessions)],
+          ["Avg sleep", fmt(m.avgSleep, 1, " h")],
+          [
+            "Projected 75 kg",
+            m.bulk.projectedDate ? format(parseISO(m.bulk.projectedDate), "MMM yyyy") : "—",
+          ],
         ]}
       />
     </Card>
@@ -428,8 +467,8 @@ function MonthlyPreview({ data }: { data: AppData }) {
 
 function ShareMonth({ data, onClose }: { data: AppData; onClose: () => void }) {
   const m = monthlyStats(data, new Date());
-  const decision =
-    m.status.label === "ON TARGET" ? "Keep calories unchanged" : "Review calories";
+  const decision = m.status.label === "ON TARGET" ? "Keep calories unchanged" : "Review calories";
+
   return (
     <ShareWrap title="Lean Bulk Monthly" subtitle={m.label} onClose={onClose}>
       <div className="pb-2">
