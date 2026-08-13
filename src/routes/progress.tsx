@@ -73,9 +73,8 @@ function ProgressPage() {
   }
 
   const month = MONTHS[monthIdx] as Date;
-  const interval = { start: startOfMonth(month), end: endOfMonth(month) };
   const all = sortedDays(data);
-  const inMonth = all.filter((d) => isWithinInterval(parseISO(d.date), interval));
+
 
   const latest = latestWeight(data);
   const rolling = latest ? avg7(data, latest.date) : null;
