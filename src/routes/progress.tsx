@@ -582,3 +582,27 @@ async function downscale(file: File): Promise<string> {
   ctx?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
   return canvas.toDataURL("image/jpeg", 0.72);
 }
+
+function PhotoSelect({
+  photos,
+  value,
+  onChange,
+}: {
+  photos: PhotoSet[];
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="w-full rounded-xl border border-input bg-elevated px-2 py-2 text-xs outline-none focus:border-ring"
+    >
+      {photos.map((p) => (
+        <option key={p.id} value={p.id}>
+          {format(parseISO(p.date), "d MMM yyyy")}
+        </option>
+      ))}
+    </select>
+  );
+}
