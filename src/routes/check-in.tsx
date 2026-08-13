@@ -107,10 +107,30 @@ function CheckInPage() {
             <p className={`mt-1 text-sm font-semibold tracking-wide ${toneText(tone)}`}>
               {s.status.label}
             </p>
-            <p className="mt-2 text-[11px] text-muted-foreground">
-              Review with ChatGPT before adjusting calorie intake.
-            </p>
           </div>
+
+          <div className="mb-4">
+            <Card>
+              <SectionTitle>Decision</SectionTitle>
+              <p className={`text-base font-semibold ${toneText(s.advice.tone)}`}>
+                {s.advice.decision}
+              </p>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{s.advice.detail}</p>
+              {s.focus.length ? (
+                <>
+                  <p className="mt-3 text-[10px] uppercase tracking-wider text-muted-foreground">
+                    Focus next week
+                  </p>
+                  <ul className="mt-1 space-y-0.5 text-sm">
+                    {s.focus.map((f) => (
+                      <li key={f}>· {f}</li>
+                    ))}
+                  </ul>
+                </>
+              ) : null}
+            </Card>
+          </div>
+
 
           <Card>
             <SectionTitle>Body</SectionTitle>
