@@ -219,31 +219,33 @@ function ProgressPage() {
 
         <Card>
           <SectionTitle>Strength trend</SectionTitle>
+          <p className="mb-2 text-[11px] text-muted-foreground">
+            Volume change from your first logged session to the latest.
+          </p>
           <div className="space-y-2">
-            {Object.values(EXERCISES)
-              .flat()
-              .map((ex) => {
-                const h = exerciseHistory(data, ex);
-                const first = h[0];
-                const last = h[h.length - 1];
-                const delta = first && last ? last.volume - first.volume : null;
-                return (
-                  <div key={ex} className="flex items-center justify-between gap-3 text-sm">
-                    <span className="min-w-0 truncate text-muted-foreground">{ex}</span>
-                    <span
-                      className={`num shrink-0 font-semibold ${
-                        delta == null ? "text-muted-foreground" : delta > 0 ? "text-good" : delta === 0 ? "text-warn" : "text-danger"
-                      }`}
-                    >
-                      {delta == null
-                        ? "—"
-                        : `${delta > 0 ? "↑" : delta === 0 ? "→" : "↓"} ${last?.weight ?? 0}kg × ${last?.bestReps ?? 0}`}
-                    </span>
-                  </div>
-                );
-              })}
+            {ALL_EXERCISES.map((def) => {
+              const s = strengthChange(data, def.name);
+              const arrow = s == null ? "•" : s.pct > 2 ? "↑" : s.pct < -2 ? "↓" : "→";
+              const tone =
+                s == null
+                  ? "text-muted-foreground"
+                  : s.pct > 2
+                    ? "text-good"
+                    : s.pct < -2
+                      ? "text-danger"
+                      : "text-warn";
+              return (
+                <div key={def.name} className="flex items-center justify-between gap-3 text-sm">
+                  <span className="min-w-0 truncate text-muted-foreground">{def.name}</span>
+                  <span className={`num shrink-0 font-semibold ${tone}`}>
+                    {s == null ? "—" : `${arrow} ${pctSigned(s.pct)} · ${s.latest}`}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </Card>
+
 
         <PhotosSection data={data} />
       </div>
