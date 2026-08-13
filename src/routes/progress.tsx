@@ -18,18 +18,23 @@ import { AppShell, PageHeader } from "@/components/AppShell";
 import { Card, Chip, Note, SectionTitle, Stat } from "@/components/ui-kit";
 import {
   avg7,
+  bulkStatus,
   exerciseHistory,
   fmt,
   fmt0,
   iso,
   latestWeight,
   mean,
+  pctSigned,
   signed,
   sortedDays,
+  strengthChange,
+  waistChange,
   weekStartOf,
 } from "@/lib/calc";
 import { setData, useAppData } from "@/lib/store";
-import { EXERCISES, type AppData, type PhotoSet } from "@/lib/types";
+import { ALL_EXERCISES, type AppData, type PhotoSet } from "@/lib/types";
+
 
 export const Route = createFileRoute("/progress")({
   head: () => ({
