@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { addMonths, format, isWithinInterval, parseISO, startOfMonth, endOfMonth } from "date-fns";
+import { addMonths, format, parseISO, endOfMonth } from "date-fns";
 import { useMemo, useRef, useState } from "react";
 import {
+  Area,
   Bar as RBar,
   BarChart,
   CartesianGrid,
@@ -14,6 +15,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { Card, Chip, Note, SectionTitle, Stat } from "@/components/ui-kit";
 import {
