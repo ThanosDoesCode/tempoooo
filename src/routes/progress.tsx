@@ -382,8 +382,12 @@ function weeklySeries(data: AppData) {
 
 function PhotosSection({ data }: { data: AppData }) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const importRef = useRef<HTMLInputElement>(null);
   const [pending, setPending] = useState<{ id: string; slot: "front" | "side" | "back" } | null>(null);
   const [compare, setCompare] = useState(false);
+  const [slot, setSlot] = useState<"front" | "side" | "back">("front");
+  const [aId, setAId] = useState<string | null>(null);
+  const [bId, setBId] = useState<string | null>(null);
 
   const photos = useMemo(
     () => [...data.photos].sort((a, b) => a.date.localeCompare(b.date)),
@@ -391,6 +395,8 @@ function PhotosSection({ data }: { data: AppData }) {
   );
   const first = photos[0];
   const last = photos[photos.length - 1];
+  const a = photos.find((p) => p.id === aId) ?? first;
+  const b = photos.find((p) => p.id === bId) ?? last;
 
   const addSet = () => {
     const latest = latestWeight(data);
@@ -412,6 +418,26 @@ function PhotosSection({ data }: { data: AppData }) {
     setPending(null);
   };
 
+  const exportBackup = () => {
+    const blob = new Blob([JSON.stringify(data)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `lean-bulk-backup-${iso(new Date())}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const importBackup = async (file: File) => {
+    try {
+      const parsed = JSON.parse(await file.text()) as AppData;
+      if (!parsed.days) return;
+      setData(() => parsed);
+    } catch {
+      /* invalid file */
+    }
+  };
+
   return (
     <Card>
       <SectionTitle
@@ -424,37 +450,77 @@ function PhotosSection({ data }: { data: AppData }) {
         Progress photos
       </SectionTitle>
       <Note>
-        Take every 4 weeks in the same location, lighting, distance and pose. Photos stay on this
-        device only.
+        Take every 4 weeks in the same location, lighting, distance and pose. Photos live on this
+        device, so export a backup file regularly to keep them safe.
       </Note>
 
-      {first && last && first.id !== last.id ? (
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <button
+          onClick={exportBackup}
+          className="rounded-xl border border-border bg-elevated py-2 text-sm font-medium"
+        >
+          Export backup
+        </button>
+        <button
+          onClick={() => importRef.current?.click()}
+          className="rounded-xl border border-border bg-elevated py-2 text-sm font-medium"
+        >
+          Restore backup
+        </button>
+      </div>
+      <input
+        ref={importRef}
+        type="file"
+        accept="application/json"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) void importBackup(f);
+          e.target.value = "";
+        }}
+      />
+
+      {photos.length > 1 ? (
         <button
           onClick={() => setCompare((c) => !c)}
           className="mt-3 w-full rounded-xl border border-border bg-elevated py-2 text-sm font-medium"
         >
-          {compare ? "Hide comparison" : "Compare start vs now"}
+          {compare ? "Hide comparison" : "Compare two dates"}
         </button>
       ) : null}
 
-      {compare && first && last ? (
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          {[first, last].map((p, i) => (
-            <div key={p.id} className="rounded-xl border border-border p-2">
-              <p className="mb-1 text-[11px] text-muted-foreground">
-                {i === 0 ? "Start" : "Now"} · {format(parseISO(p.date), "d MMM yy")} · {fmt(p.weight, 1)} kg
-              </p>
-              {p.front ? (
-                <img src={p.front} alt="Progress front view" className="w-full rounded-lg" />
-              ) : (
-                <div className="grid h-32 place-items-center rounded-lg bg-elevated text-[11px] text-muted-foreground">
-                  No front photo
-                </div>
-              )}
-            </div>
-          ))}
+      {compare && a && b ? (
+        <div className="mt-3">
+          <div className="mb-2 flex gap-1.5">
+            {(["front", "side", "back"] as const).map((s) => (
+              <Chip key={s} active={slot === s} onClick={() => setSlot(s)}>
+                <span className="capitalize">{s}</span>
+              </Chip>
+            ))}
+          </div>
+          <div className="mb-2 grid grid-cols-2 gap-2">
+            <PhotoSelect photos={photos} value={a.id} onChange={setAId} />
+            <PhotoSelect photos={photos} value={b.id} onChange={setBId} />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {[a, b].map((p, i) => (
+              <div key={`${p.id}-${i}`} className="rounded-xl border border-border p-2">
+                <p className="mb-1 text-[11px] text-muted-foreground">
+                  {format(parseISO(p.date), "d MMM yy")} · {fmt(p.weight, 1)} kg
+                </p>
+                {p[slot] ? (
+                  <img src={p[slot]} alt={`${slot} progress`} className="w-full rounded-lg" />
+                ) : (
+                  <div className="grid h-32 place-items-center rounded-lg bg-elevated text-[11px] capitalize text-muted-foreground">
+                    No {slot} photo
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       ) : null}
+
 
       <div className="mt-3 space-y-3">
         {photos.length === 0 ? (
