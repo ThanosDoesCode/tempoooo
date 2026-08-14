@@ -264,6 +264,7 @@ function ChallengeHome() {
                               {a.note}
                             </p>
                           ) : null}
+                          <EvidenceViewer path={a.evidence_path} />
                           <div className="mt-2 flex items-center justify-between gap-2">
                             {a.external_activity_url ? (
                               <a
@@ -275,10 +276,9 @@ function ChallengeHome() {
                                 <LinkIcon className="h-3 w-3" /> Strava
                               </a>
                             ) : (
-                              <span className="text-[11px] text-muted-foreground">
-                                Evidence attached
-                              </span>
+                              <span />
                             )}
+
                             {canDelete ? (
                               <button
                                 onClick={() => {
