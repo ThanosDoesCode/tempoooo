@@ -10,6 +10,7 @@ import { finalizeChallenge } from "@/lib/privileged-rpcs.functions";
 import {
   eur,
   hoursLeft,
+  leaveChallenge,
   km,
   penaltyFor,
   sumWeek,
@@ -51,6 +52,24 @@ function ChallengeHome() {
   const { data: activities } = useActivities(challenge?.id);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [leaveArmed, setLeaveArmed] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const [leaveError, setLeaveError] = useState<string | null>(null);
+
+  const doLeave = async () => {
+    if (!challenge) return;
+    setLeaving(true);
+    setLeaveError(null);
+    try {
+      await leaveChallenge(challenge.id);
+      await qc.invalidateQueries();
+      setLeaveArmed(false);
+    } catch (e) {
+      setLeaveError((e as Error).message);
+    } finally {
+      setLeaving(false);
+    }
+  };
 
   const removeActivity = async (id: string) => {
     setConfirmId(null);
@@ -154,14 +173,20 @@ function ChallengeHome() {
             </Card>
           );
         })}
-        {(members?.length ?? 0) < 2 ? (
+        {(members?.length ?? 0) < (challenge.max_members ?? 2) ? (
           <>
-            <Note>Waiting for your opponent to accept the invitation.</Note>
+            <Note>
+              There is still a free spot. Send an invitation link to add another person.
+            </Note>
             {challenge.created_by === user?.id ? (
               <ChallengeInviteCard challengeId={challenge.id} />
-            ) : null}
+            ) : (
+              <Note>Only the person who created the challenge can send invitations.</Note>
+            )}
           </>
         ) : null}
+
+
 
       </div>
 
@@ -224,6 +249,35 @@ function ChallengeHome() {
 
         </div>
       </div>
+
+      <div className="mt-6">
+        <SectionTitle>Leave challenge</SectionTitle>
+        <Card>
+          <p className="text-xs text-muted-foreground">
+            Leaving removes you from {challenge.name}. Your logged activities stay in the record and
+            you can create a brand new challenge with someone else straight away.
+          </p>
+          <button
+            onClick={() => {
+              if (!leaveArmed) {
+                setLeaveArmed(true);
+                return;
+              }
+              void doLeave();
+            }}
+            disabled={leaving}
+            className={`mt-3 w-full rounded-xl py-2.5 text-sm font-semibold disabled:opacity-60 ${
+              leaveArmed
+                ? "bg-danger text-primary-foreground"
+                : "border border-danger/40 text-danger"
+            }`}
+          >
+            {leaving ? "Leaving…" : leaveArmed ? "Confirm and leave" : "Leave this challenge"}
+          </button>
+          {leaveError ? <p className="mt-2 text-xs text-danger">{leaveError}</p> : null}
+        </Card>
+      </div>
     </AppShell>
+
   );
 }

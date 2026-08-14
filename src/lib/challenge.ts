@@ -88,21 +88,47 @@ export function hoursLeft(challenge: Challenge, weekNumber: number) {
   return Math.max(0, (endOfWeek.getTime() - nowLocal.getTime()) / 3_600_000);
 }
 
+/** Only challenges the signed-in user is still a member of. Leaving frees them to start a new one. */
 export function useMyChallenge() {
   return useQuery({
     queryKey: ["challenge"],
     queryFn: async () => {
+      const { data: auth } = await supabase.auth.getUser();
+      const uid = auth.user?.id;
+      if (!uid) return null;
+      const memberships = await supabase
+        .from("challenge_members")
+        .select("challenge_id, joined_at")
+        .eq("user_id", uid)
+        .order("joined_at", { ascending: false });
+      if (memberships.error) throw memberships.error;
+      const ids = (memberships.data ?? []).map((m) => m.challenge_id);
+      if (ids.length === 0) return null;
       const { data, error } = await supabase
         .from("challenges")
         .select(
           "id, created_by, name, start_date, duration_weeks, timezone, weekly_target_km, running_ratio, cycling_ratio, max_members, status",
         )
-        .order("created_at")
+        .in("id", ids)
+        .order("created_at", { ascending: false })
         .limit(1);
       if (error) throw error;
       return (data?.[0] as Challenge | undefined) ?? null;
     },
   });
+}
+
+/** Removes the signed-in user from a challenge. Their logged activities stay in the record. */
+export async function leaveChallenge(challengeId: string) {
+  const { data: auth } = await supabase.auth.getUser();
+  const uid = auth.user?.id;
+  if (!uid) throw new Error("Not signed in");
+  const { error } = await supabase
+    .from("challenge_members")
+    .delete()
+    .eq("challenge_id", challengeId)
+    .eq("user_id", uid);
+  if (error) throw error;
 }
 
 export function useChallengeMembers(challengeId: string | undefined) {
