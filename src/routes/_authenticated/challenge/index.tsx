@@ -10,6 +10,7 @@ import { finalizeChallenge } from "@/lib/privileged-rpcs.functions";
 import {
   eur,
   hoursLeft,
+  leaveChallenge,
   km,
   penaltyFor,
   sumWeek,
