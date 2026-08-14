@@ -58,6 +58,18 @@ function ChallengeHome() {
   const [leaving, setLeaving] = useState(false);
   const [leaveError, setLeaveError] = useState<string | null>(null);
 
+  const groupedActivities = useMemo(() => {
+    const map = new Map<string, typeof activities>();
+    for (const a of (activities ?? []).slice(0, 20)) {
+      const list = map.get(a.activity_date) ?? [];
+      list.push(a);
+      map.set(a.activity_date, list);
+    }
+    return [...map.entries()] as [string, NonNullable<typeof activities>][];
+  }, [activities]);
+
+
+
   const doLeave = async () => {
     if (!challenge) return;
     setLeaving(true);
