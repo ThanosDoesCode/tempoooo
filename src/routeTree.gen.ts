@@ -23,6 +23,7 @@ import { Route as AuthenticatedChallengeHistoryRouteImport } from './routes/_aut
 import { Route as AuthenticatedChallengeLogRouteImport } from './routes/_authenticated/challenge/log'
 import { Route as AuthenticatedChallengeNewRouteImport } from './routes/_authenticated/challenge/new'
 import { Route as AuthenticatedChallengePaymentsRouteImport } from './routes/_authenticated/challenge/payments'
+import { Route as AuthenticatedInviteBulkTokenRouteImport } from './routes/_authenticated/invite.bulk.$token'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -101,6 +102,12 @@ const AuthenticatedChallengePaymentsRoute =
     path: '/challenge/payments',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedInviteBulkTokenRoute =
+  AuthenticatedInviteBulkTokenRouteImport.update({
+    id: '/invite/bulk/$token',
+    path: '/invite/bulk/$token',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -116,6 +123,7 @@ export interface FileRoutesByFullPath {
   '/challenge/payments': typeof AuthenticatedChallengePaymentsRoute
   '/bulk/': typeof AuthenticatedBulkIndexRoute
   '/challenge/': typeof AuthenticatedChallengeIndexRoute
+  '/invite/bulk/$token': typeof AuthenticatedInviteBulkTokenRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -130,6 +138,7 @@ export interface FileRoutesByTo {
   '/challenge/payments': typeof AuthenticatedChallengePaymentsRoute
   '/bulk': typeof AuthenticatedBulkIndexRoute
   '/challenge': typeof AuthenticatedChallengeIndexRoute
+  '/invite/bulk/$token': typeof AuthenticatedInviteBulkTokenRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -147,6 +156,7 @@ export interface FileRoutesById {
   '/_authenticated/challenge/payments': typeof AuthenticatedChallengePaymentsRoute
   '/_authenticated/bulk/': typeof AuthenticatedBulkIndexRoute
   '/_authenticated/challenge/': typeof AuthenticatedChallengeIndexRoute
+  '/_authenticated/invite/bulk/$token': typeof AuthenticatedInviteBulkTokenRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -164,6 +174,7 @@ export interface FileRouteTypes {
     | '/challenge/payments'
     | '/bulk/'
     | '/challenge/'
+    | '/invite/bulk/$token'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -178,6 +189,7 @@ export interface FileRouteTypes {
     | '/challenge/payments'
     | '/bulk'
     | '/challenge'
+    | '/invite/bulk/$token'
   id:
     | '__root__'
     | '/'
@@ -194,6 +206,7 @@ export interface FileRouteTypes {
     | '/_authenticated/challenge/payments'
     | '/_authenticated/bulk/'
     | '/_authenticated/challenge/'
+    | '/_authenticated/invite/bulk/$token'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -302,6 +315,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedChallengePaymentsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/invite/bulk/$token': {
+      id: '/_authenticated/invite/bulk/$token'
+      path: '/invite/bulk/$token'
+      fullPath: '/invite/bulk/$token'
+      preLoaderRoute: typeof AuthenticatedInviteBulkTokenRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
   }
 }
 
@@ -334,6 +354,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedChallengeNewRoute: typeof AuthenticatedChallengeNewRoute
   AuthenticatedChallengePaymentsRoute: typeof AuthenticatedChallengePaymentsRoute
   AuthenticatedChallengeIndexRoute: typeof AuthenticatedChallengeIndexRoute
+  AuthenticatedInviteBulkTokenRoute: typeof AuthenticatedInviteBulkTokenRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
@@ -343,6 +364,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedChallengeNewRoute: AuthenticatedChallengeNewRoute,
   AuthenticatedChallengePaymentsRoute: AuthenticatedChallengePaymentsRoute,
   AuthenticatedChallengeIndexRoute: AuthenticatedChallengeIndexRoute,
+  AuthenticatedInviteBulkTokenRoute: AuthenticatedInviteBulkTokenRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
