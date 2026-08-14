@@ -180,9 +180,15 @@ function LogActivity() {
         <Field label="Strava URL (optional)">
           <input value={url} onChange={(e) => setUrl(e.target.value)} className={inputCls} />
         </Field>
-        <Field label="Note (optional)">
-          <input value={note} onChange={(e) => setNote(e.target.value)} className={inputCls} />
+        <Field label="Note (shared with both members)">
+          <input
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="e.g. easy pace, hilly route"
+            className={inputCls}
+          />
         </Field>
+
 
         {dist > 0 ? (
           <div className="rounded-xl border border-border bg-elevated px-3 py-2 text-sm">
