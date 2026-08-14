@@ -521,9 +521,26 @@ function PhotosSection({ data }: { data: AppData }) {
         ) : null}
         {photos.map((p) => (
           <div key={p.id} className="rounded-xl border border-border p-3">
-            <div className="mb-2 flex items-center justify-between text-xs">
+            <div className="mb-2 flex items-center justify-between gap-2 text-xs">
               <span className="font-medium">{format(parseISO(p.date), "d MMM yyyy")}</span>
-              <span className="num text-muted-foreground">{fmt(p.weight, 1)} kg</span>
+              <div className="flex items-center gap-3">
+                <span className="num text-muted-foreground">{fmt(p.weight, 1)} kg</span>
+                {owner ? (
+                  <button
+                    onClick={() => {
+                      if (confirmDelete === p.id) void removeSet(p.id);
+                      else setConfirmDelete(p.id);
+                    }}
+                    className={`rounded-lg px-2 py-1 text-[11px] font-medium ${
+                      confirmDelete === p.id
+                        ? "bg-danger text-primary-foreground"
+                        : "text-danger hover:bg-danger/10"
+                    }`}
+                  >
+                    {confirmDelete === p.id ? "Confirm delete" : "Delete"}
+                  </button>
+                ) : null}
+              </div>
             </div>
             <div className="grid grid-cols-3 gap-2">
               {(["front", "side", "back"] as const).map((slot) => (
@@ -547,6 +564,7 @@ function PhotosSection({ data }: { data: AppData }) {
             </div>
           </div>
         ))}
+
       </div>
 
       <input
