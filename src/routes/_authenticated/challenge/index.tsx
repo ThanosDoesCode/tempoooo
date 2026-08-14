@@ -51,6 +51,24 @@ function ChallengeHome() {
   const { data: activities } = useActivities(challenge?.id);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [leaveArmed, setLeaveArmed] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const [leaveError, setLeaveError] = useState<string | null>(null);
+
+  const doLeave = async () => {
+    if (!challenge) return;
+    setLeaving(true);
+    setLeaveError(null);
+    try {
+      await leaveChallenge(challenge.id);
+      await qc.invalidateQueries();
+      setLeaveArmed(false);
+    } catch (e) {
+      setLeaveError((e as Error).message);
+    } finally {
+      setLeaving(false);
+    }
+  };
 
   const removeActivity = async (id: string) => {
     setConfirmId(null);
