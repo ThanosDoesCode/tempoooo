@@ -1,10 +1,14 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { LogOut, Mail, Plus } from "lucide-react";
+import { LogOut, Mail, Plus, RotateCcw } from "lucide-react";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { Card, Note, SectionTitle } from "@/components/ui-kit";
+import { ChallengeInviteCard } from "@/components/ChallengeInvite";
 import { useAuth, signOut } from "@/lib/auth";
 import { createBulkProfile, useMemberships } from "@/lib/bulk-access";
+import { useChallengeMembers, useMyChallenge } from "@/lib/challenge";
+import { useActions, useBulkMeta } from "@/lib/store";
+
 
 export const Route = createFileRoute("/_authenticated/profile")({
   head: () => ({
