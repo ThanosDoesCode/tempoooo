@@ -1,8 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { Card, Note, SectionTitle } from "@/components/ui-kit";
+import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
+
 import { finalizeChallenge } from "@/lib/privileged-rpcs.functions";
 import {
   eur,
@@ -18,6 +21,8 @@ import {
   weekNumberOf,
 } from "@/lib/challenge";
 import { RulesCard } from "@/components/challenge-rules";
+import { ChallengeInviteCard } from "@/components/ChallengeInvite";
+
 
 export const Route = createFileRoute("/_authenticated/challenge/")({
   head: () => ({
@@ -40,9 +45,21 @@ export const Route = createFileRoute("/_authenticated/challenge/")({
 
 function ChallengeHome() {
   const { user } = useAuth();
+  const qc = useQueryClient();
   const { data: challenge, isLoading } = useMyChallenge();
   const { data: members } = useChallengeMembers(challenge?.id);
   const { data: activities } = useActivities(challenge?.id);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const removeActivity = async (id: string) => {
+    setConfirmId(null);
+    setDeleteError(null);
+    const { error } = await supabase.from("challenge_activities").delete().eq("id", id);
+    if (error) setDeleteError(error.message);
+    await qc.invalidateQueries({ queryKey: ["challenge-activities"] });
+  };
+
 
   // Lazy, deterministic server-side finalization of any closed weeks.
   useEffect(() => {
@@ -138,8 +155,14 @@ function ChallengeHome() {
           );
         })}
         {(members?.length ?? 0) < 2 ? (
-          <Note>Waiting for your opponent to accept the invitation.</Note>
+          <>
+            <Note>Waiting for your opponent to accept the invitation.</Note>
+            {challenge.created_by === user?.id ? (
+              <ChallengeInviteCard challengeId={challenge.id} />
+            ) : null}
+          </>
         ) : null}
+
       </div>
 
       <div className="mt-4">
@@ -168,14 +191,37 @@ function ChallengeHome() {
                   </p>
                   <span className="num text-xs text-muted-foreground">{a.activity_date}</span>
                 </div>
-                <p className="mt-1 text-[11px] text-muted-foreground">
-                  Equivalent {Number(a.equivalent_km).toFixed(2)} km · Evidence attached
-                  {a.edited ? " · Edited" : ""}
-                </p>
+                <div className="mt-1 flex items-center justify-between gap-2">
+                  <p className="text-[11px] text-muted-foreground">
+                    Equivalent {Number(a.equivalent_km).toFixed(2)} km · Evidence attached
+                    {a.edited ? " · Edited" : ""}
+                  </p>
+                  {a.user_id === user?.id &&
+                  week &&
+                  a.activity_date >= week.start &&
+                  a.activity_date <= week.end ? (
+                    <button
+                      onClick={() => {
+                        if (confirmId === a.id) void removeActivity(a.id);
+                        else setConfirmId(a.id);
+                      }}
+                      className={`shrink-0 rounded-lg px-2 py-1 text-[11px] font-medium ${
+                        confirmId === a.id
+                          ? "bg-danger text-primary-foreground"
+                          : "text-danger hover:bg-danger/10"
+                      }`}
+                    >
+                      {confirmId === a.id ? "Confirm delete" : "Delete"}
+                    </button>
+                  ) : null}
+                </div>
               </Card>
+
             );
           })}
+          {deleteError ? <p className="text-xs text-danger">{deleteError}</p> : null}
           {(activities?.length ?? 0) === 0 ? <Note>No activities logged yet.</Note> : null}
+
         </div>
       </div>
     </AppShell>
