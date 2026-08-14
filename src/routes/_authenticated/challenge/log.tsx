@@ -224,7 +224,7 @@ function LogActivity() {
         ) : null}
         {error ? <p className="text-xs text-danger">{error}</p> : null}
         <button
-          disabled={busy || !file || !dist}
+          disabled={busy || files.length === 0 || !dist}
           onClick={() => void submit()}
           className="w-full rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground disabled:opacity-60"
         >
