@@ -39,8 +39,20 @@ function LogActivity() {
   const [url, setUrl] = useState("");
   const [note, setNote] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!file) {
+      setPreview(null);
+      return;
+    }
+    const objectUrl = URL.createObjectURL(file);
+    setPreview(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [file]);
+
 
   const dist = Number(distance);
   const equivalent = type === "run" ? dist : dist / 3;
