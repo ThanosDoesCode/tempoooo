@@ -1,0 +1,1 @@
+CREATE POLICY "challenges read creator" ON public.challenges FOR SELECT TO authenticated USING (created_by = auth.uid());
