@@ -1,11 +1,13 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { Check, ImageUp } from "lucide-react";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { Card, Note, SectionTitle } from "@/components/ui-kit";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { todayIn, useMyChallenge } from "@/lib/challenge";
+
 
 export const Route = createFileRoute("/_authenticated/challenge/log")({
   head: () => ({
@@ -37,8 +39,20 @@ function LogActivity() {
   const [url, setUrl] = useState("");
   const [note, setNote] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!file) {
+      setPreview(null);
+      return;
+    }
+    const objectUrl = URL.createObjectURL(file);
+    setPreview(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [file]);
+
 
   const dist = Number(distance);
   const equivalent = type === "run" ? dist : dist / 3;
@@ -121,13 +135,39 @@ function LogActivity() {
           />
         </Field>
         <Field label="Strava screenshot (required)">
-          <input
-            type="file"
-            accept="image/*"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            className="w-full text-xs text-muted-foreground"
-          />
+          <label
+            className={`flex cursor-pointer items-center gap-3 rounded-xl border border-dashed px-3 py-3 transition-colors ${
+              file ? "border-good/60 bg-good/5" : "border-border bg-elevated hover:border-ring"
+            }`}
+          >
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary">
+              <ImageUp className="h-5 w-5" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-medium">
+                {file ? file.name : "Attach a screenshot"}
+              </span>
+              <span className="block text-[11px] text-muted-foreground">
+                {file ? "Tap to choose a different image" : "PNG or JPG from your camera roll"}
+              </span>
+            </span>
+            {file ? <Check className="h-4 w-4 shrink-0 text-good" /> : null}
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            />
+          </label>
+          {preview ? (
+            <img
+              src={preview}
+              alt="Selected evidence preview"
+              className="mt-2 max-h-56 w-full rounded-xl border border-border object-cover"
+            />
+          ) : null}
         </Field>
+
         <Field label="Duration in minutes (optional)">
           <input
             type="number"
