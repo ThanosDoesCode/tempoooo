@@ -32,6 +32,8 @@ function AuthPage() {
   const [msg, setMsg] = useState<string | null>(null);
 
   useEffect(() => {
+    const saved = localStorage.getItem("last-email");
+    if (saved) setEmail(saved);
     void supabase.auth.getSession().then(async ({ data }) => {
       if (data.session?.user) {
         await syncProfile(data.session.user);
@@ -41,6 +43,20 @@ function AuthPage() {
       }
     });
   }, []);
+
+  /** Lets the browser / iOS keychain offer to store the credentials. */
+  const offerToSaveCredentials = async () => {
+    localStorage.setItem("last-email", email);
+    try {
+      const C = (window as unknown as { PasswordCredential?: new (d: unknown) => Credential })
+        .PasswordCredential;
+      if (C && navigator.credentials?.store) {
+        await navigator.credentials.store(new C({ id: email, password, name: email }));
+      }
+    } catch {
+      /* credential storage is a best-effort browser feature */
+    }
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,8 +75,13 @@ function AuthPage() {
     if (error) return setMsg(error.message);
     if (data.user && data.session) {
       await syncProfile(data.user);
-      window.location.href = "/";
+      await offerToSaveCredentials();
+      // small delay so the browser can show its save-password prompt
+      setTimeout(() => {
+        window.location.href = "/";
+      }, 400);
     } else {
+      await offerToSaveCredentials();
       setMsg("Check your email to confirm your account, then sign in.");
     }
   };
