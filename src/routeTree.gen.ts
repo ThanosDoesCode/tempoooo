@@ -14,6 +14,7 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedBulkRouteRouteImport } from './routes/_authenticated/bulk/route'
 import { Route as AuthenticatedBulkIndexRouteImport } from './routes/_authenticated/bulk/index'
+import { Route as AuthenticatedBulkAccessRouteImport } from './routes/_authenticated/bulk/access'
 import { Route as AuthenticatedBulkCheckInRouteImport } from './routes/_authenticated/bulk/check-in'
 import { Route as AuthenticatedBulkProgressRouteImport } from './routes/_authenticated/bulk/progress'
 import { Route as AuthenticatedBulkTrainingRouteImport } from './routes/_authenticated/bulk/training'
@@ -45,6 +46,11 @@ const AuthenticatedBulkRouteRoute = AuthenticatedBulkRouteRouteImport.update({
 const AuthenticatedBulkIndexRoute = AuthenticatedBulkIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AuthenticatedBulkRouteRoute,
+} as any)
+const AuthenticatedBulkAccessRoute = AuthenticatedBulkAccessRouteImport.update({
+  id: '/access',
+  path: '/access',
   getParentRoute: () => AuthenticatedBulkRouteRoute,
 } as any)
 const AuthenticatedBulkCheckInRoute =
@@ -100,6 +106,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/bulk': typeof AuthenticatedBulkRouteRouteWithChildren
+  '/bulk/access': typeof AuthenticatedBulkAccessRoute
   '/bulk/check-in': typeof AuthenticatedBulkCheckInRoute
   '/bulk/progress': typeof AuthenticatedBulkProgressRoute
   '/bulk/training': typeof AuthenticatedBulkTrainingRoute
@@ -113,6 +120,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/bulk/access': typeof AuthenticatedBulkAccessRoute
   '/bulk/check-in': typeof AuthenticatedBulkCheckInRoute
   '/bulk/progress': typeof AuthenticatedBulkProgressRoute
   '/bulk/training': typeof AuthenticatedBulkTrainingRoute
@@ -129,6 +137,7 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
   '/_authenticated/bulk': typeof AuthenticatedBulkRouteRouteWithChildren
+  '/_authenticated/bulk/access': typeof AuthenticatedBulkAccessRoute
   '/_authenticated/bulk/check-in': typeof AuthenticatedBulkCheckInRoute
   '/_authenticated/bulk/progress': typeof AuthenticatedBulkProgressRoute
   '/_authenticated/bulk/training': typeof AuthenticatedBulkTrainingRoute
@@ -145,6 +154,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/bulk'
+    | '/bulk/access'
     | '/bulk/check-in'
     | '/bulk/progress'
     | '/bulk/training'
@@ -158,6 +168,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
+    | '/bulk/access'
     | '/bulk/check-in'
     | '/bulk/progress'
     | '/bulk/training'
@@ -173,6 +184,7 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/auth'
     | '/_authenticated/bulk'
+    | '/_authenticated/bulk/access'
     | '/_authenticated/bulk/check-in'
     | '/_authenticated/bulk/progress'
     | '/_authenticated/bulk/training'
@@ -225,6 +237,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/bulk/'
       preLoaderRoute: typeof AuthenticatedBulkIndexRouteImport
+      parentRoute: typeof AuthenticatedBulkRouteRoute
+    }
+    '/_authenticated/bulk/access': {
+      id: '/_authenticated/bulk/access'
+      path: '/access'
+      fullPath: '/bulk/access'
+      preLoaderRoute: typeof AuthenticatedBulkAccessRouteImport
       parentRoute: typeof AuthenticatedBulkRouteRoute
     }
     '/_authenticated/bulk/check-in': {
@@ -287,6 +306,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedBulkRouteRouteChildren {
+  AuthenticatedBulkAccessRoute: typeof AuthenticatedBulkAccessRoute
   AuthenticatedBulkCheckInRoute: typeof AuthenticatedBulkCheckInRoute
   AuthenticatedBulkProgressRoute: typeof AuthenticatedBulkProgressRoute
   AuthenticatedBulkTrainingRoute: typeof AuthenticatedBulkTrainingRoute
@@ -295,6 +315,7 @@ interface AuthenticatedBulkRouteRouteChildren {
 
 const AuthenticatedBulkRouteRouteChildren: AuthenticatedBulkRouteRouteChildren =
   {
+    AuthenticatedBulkAccessRoute: AuthenticatedBulkAccessRoute,
     AuthenticatedBulkCheckInRoute: AuthenticatedBulkCheckInRoute,
     AuthenticatedBulkProgressRoute: AuthenticatedBulkProgressRoute,
     AuthenticatedBulkTrainingRoute: AuthenticatedBulkTrainingRoute,
