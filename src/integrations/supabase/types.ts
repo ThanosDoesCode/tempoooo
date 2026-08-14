@@ -688,12 +688,6 @@ export type Database = {
         Args: { _caller: string; _email: string; _token: string }
         Returns: string
       }
-      bulk_role_of: {
-        Args: { _bulk: string }
-        Returns: Database["public"]["Enums"]["bulk_role"]
-      }
-      can_read_bulk: { Args: { _bulk: string }; Returns: boolean }
-      can_write_bulk: { Args: { _bulk: string }; Returns: boolean }
       challenge_today: { Args: { _c: string }; Returns: string }
       challenge_week_of: { Args: { _c: string; _d: string }; Returns: number }
       challenge_week_open: {
@@ -705,8 +699,6 @@ export type Database = {
         Args: { _c: string; _caller: string }
         Returns: number
       }
-      is_bulk_owner: { Args: { _bulk: string }; Returns: boolean }
-      is_challenge_member: { Args: { _c: string }; Returns: boolean }
       penalty_for: { Args: { _km: number }; Returns: number }
       related_profiles: {
         Args: { _caller: string }
