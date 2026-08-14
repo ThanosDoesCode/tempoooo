@@ -178,11 +178,8 @@ function ChallengeHome() {
             <Note>
               There is still a free spot. Send an invitation link to add another person.
             </Note>
-            {challenge.created_by === user?.id ? (
-              <ChallengeInviteCard challengeId={challenge.id} />
-            ) : (
-              <Note>Only the person who created the challenge can send invitations.</Note>
-            )}
+            <ChallengeInviteCard challengeId={challenge.id} />
+
           </>
         ) : null}
 
