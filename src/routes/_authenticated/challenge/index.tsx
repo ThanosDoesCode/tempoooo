@@ -340,3 +340,7 @@ function ChallengeHome() {
 
   );
 }
+
+function formatDay(day: string) {
+  return format(parseISO(day), "EEEE d MMM");
+}
