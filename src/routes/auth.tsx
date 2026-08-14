@@ -127,6 +127,12 @@ function AuthPage() {
 
         {msg ? <p className="mt-3 text-xs text-warn">{msg}</p> : null}
 
+        <p className="mt-3 text-[11px] text-muted-foreground">
+          You stay signed in on this device, and your browser or keychain can save the password so
+          you never type it again.
+        </p>
+
+
         <button
           onClick={() => setMode(mode === "signin" ? "signup" : "signin")}
           className="mt-4 w-full text-xs text-muted-foreground"
