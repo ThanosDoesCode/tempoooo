@@ -42,9 +42,21 @@ export const Route = createFileRoute("/_authenticated/challenge/")({
 
 function ChallengeHome() {
   const { user } = useAuth();
+  const qc = useQueryClient();
   const { data: challenge, isLoading } = useMyChallenge();
   const { data: members } = useChallengeMembers(challenge?.id);
   const { data: activities } = useActivities(challenge?.id);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const removeActivity = async (id: string) => {
+    setConfirmId(null);
+    setDeleteError(null);
+    const { error } = await supabase.from("challenge_activities").delete().eq("id", id);
+    if (error) setDeleteError(error.message);
+    await qc.invalidateQueries({ queryKey: ["challenge-activities"] });
+  };
+
 
   // Lazy, deterministic server-side finalization of any closed weeks.
   useEffect(() => {
