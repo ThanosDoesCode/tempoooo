@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate, useParams } from "@tanstack/react-router"
 import { useEffect, useState } from "react";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { Card, Note } from "@/components/ui-kit";
-import { supabase } from "@/integrations/supabase/client";
+import { acceptChallengeInvitation } from "@/lib/privileged-rpcs.functions";
 
 export const Route = createFileRoute("/_authenticated/invite/challenge/$token")({
   head: () => ({
@@ -27,9 +27,12 @@ function AcceptChallenge() {
 
   useEffect(() => {
     void (async () => {
-      const { error } = await supabase.rpc("accept_challenge_invitation", { _token: token });
-      if (error) setError(error.message);
-      else void navigate({ to: "/challenge" });
+      try {
+        await acceptChallengeInvitation({ data: { token } });
+        void navigate({ to: "/challenge" });
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : "Could not accept invitation");
+      }
     })();
   }, [token, navigate]);
 

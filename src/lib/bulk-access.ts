@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { BulkRole } from "./store";
+import { ensureBulkProfile } from "./privileged-rpcs.functions";
 
 export type Membership = {
   bulk_profile_id: string;
@@ -28,7 +29,5 @@ export function useMemberships() {
 }
 
 export async function createBulkProfile() {
-  const { data, error } = await supabase.rpc("ensure_bulk_profile");
-  if (error) throw error;
-  return data as string;
+  return ensureBulkProfile();
 }

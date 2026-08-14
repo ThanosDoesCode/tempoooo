@@ -6,6 +6,7 @@ import { Card, Note, SectionTitle } from "@/components/ui-kit";
 import { supabase } from "@/integrations/supabase/client";
 import { randomToken, sha256Hex, useAuth } from "@/lib/auth";
 import { useBulkMeta } from "@/lib/store";
+import { getRelatedProfiles, setBulkEditor } from "@/lib/privileged-rpcs.functions";
 
 export const Route = createFileRoute("/_authenticated/bulk/access")({
   head: () => ({
@@ -43,10 +44,10 @@ function Access() {
     queryFn: async () => {
       const [{ data: rows }, { data: profiles }] = await Promise.all([
         supabase.from("bulk_members").select("id,user_id,role").eq("bulk_profile_id", bulkId!),
-        supabase.rpc("related_profiles"),
+        getRelatedProfiles(),
       ]);
       const names = new Map(
-        (profiles ?? []).map((p) => [p.id, p.display_name || p.email || "Member"]),
+        profiles.map((p) => [p.id, p.display_name || p.email || "Member"]),
       );
       return ((rows ?? []) as Member[]).map((m) => ({
         ...m,
@@ -95,7 +96,7 @@ function Access() {
 
   const toggleEditor = async (userId: string, editor: boolean) => {
     if (!bulkId) return;
-    await supabase.rpc("set_bulk_editor", { _bulk: bulkId, _user: userId, _editor: editor });
+    await setBulkEditor({ data: { bulk: bulkId, user: userId, editor } });
     await qc.invalidateQueries({ queryKey: ["bulk-members"] });
   };
 
