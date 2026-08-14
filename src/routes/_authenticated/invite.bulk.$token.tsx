@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate, useParams } from "@tanstack/react-router"
 import { useEffect, useState } from "react";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { Card, Note } from "@/components/ui-kit";
-import { supabase } from "@/integrations/supabase/client";
+import { acceptBulkInvitation } from "@/lib/privileged-rpcs.functions";
 
 export const Route = createFileRoute("/_authenticated/invite/bulk/$token")({
   head: () => ({
@@ -26,9 +26,12 @@ function AcceptBulk() {
 
   useEffect(() => {
     void (async () => {
-      const { error } = await supabase.rpc("accept_bulk_invitation", { _token: token });
-      if (error) setError(error.message);
-      else void navigate({ to: "/bulk" });
+      try {
+        await acceptBulkInvitation({ data: { token } });
+        void navigate({ to: "/bulk" });
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : "Could not accept invitation");
+      }
     })();
   }, [token, navigate]);
 

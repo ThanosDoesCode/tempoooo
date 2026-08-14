@@ -2,8 +2,8 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo } from "react";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { Card, Note, SectionTitle } from "@/components/ui-kit";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
+import { finalizeChallenge } from "@/lib/privileged-rpcs.functions";
 import {
   eur,
   hoursLeft,
@@ -46,7 +46,7 @@ function ChallengeHome() {
 
   // Lazy, deterministic server-side finalization of any closed weeks.
   useEffect(() => {
-    if (challenge) void supabase.rpc("finalize_challenge", { _c: challenge.id });
+    if (challenge) void finalizeChallenge({ data: { challenge: challenge.id } });
   }, [challenge]);
 
   const week = useMemo(() => {

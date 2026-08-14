@@ -680,8 +680,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      accept_bulk_invitation: { Args: { _token: string }; Returns: string }
-      accept_challenge_invitation: { Args: { _token: string }; Returns: string }
+      accept_bulk_invitation: {
+        Args: { _caller: string; _email: string; _token: string }
+        Returns: string
+      }
+      accept_challenge_invitation: {
+        Args: { _caller: string; _email: string; _token: string }
+        Returns: string
+      }
       bulk_role_of: {
         Args: { _bulk: string }
         Returns: Database["public"]["Enums"]["bulk_role"]
@@ -694,13 +700,16 @@ export type Database = {
         Args: { _c: string; _d: string }
         Returns: boolean
       }
-      ensure_bulk_profile: { Args: never; Returns: string }
-      finalize_challenge: { Args: { _c: string }; Returns: number }
+      ensure_bulk_profile: { Args: { _caller: string }; Returns: string }
+      finalize_challenge: {
+        Args: { _c: string; _caller: string }
+        Returns: number
+      }
       is_bulk_owner: { Args: { _bulk: string }; Returns: boolean }
       is_challenge_member: { Args: { _c: string }; Returns: boolean }
       penalty_for: { Args: { _km: number }; Returns: number }
       related_profiles: {
-        Args: never
+        Args: { _caller: string }
         Returns: {
           display_name: string
           email: string
@@ -709,7 +718,12 @@ export type Database = {
       }
       safe_uuid: { Args: { _t: string }; Returns: string }
       set_bulk_editor: {
-        Args: { _bulk: string; _editor: boolean; _user: string }
+        Args: {
+          _bulk: string
+          _caller: string
+          _editor: boolean
+          _user: string
+        }
         Returns: undefined
       }
     }
