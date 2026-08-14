@@ -425,7 +425,7 @@ function PhotosSection({ data }: { data: AppData }) {
     try {
       const parsed = JSON.parse(await file.text()) as AppData;
       if (!parsed.days) return;
-      setData(() => parsed);
+      await restoreBackup(parsed);
     } catch {
       /* invalid file */
     }
