@@ -176,11 +176,32 @@ function ChallengeHome() {
                   </p>
                   <span className="num text-xs text-muted-foreground">{a.activity_date}</span>
                 </div>
-                <p className="mt-1 text-[11px] text-muted-foreground">
-                  Equivalent {Number(a.equivalent_km).toFixed(2)} km · Evidence attached
-                  {a.edited ? " · Edited" : ""}
-                </p>
+                <div className="mt-1 flex items-center justify-between gap-2">
+                  <p className="text-[11px] text-muted-foreground">
+                    Equivalent {Number(a.equivalent_km).toFixed(2)} km · Evidence attached
+                    {a.edited ? " · Edited" : ""}
+                  </p>
+                  {a.user_id === user?.id &&
+                  week &&
+                  a.activity_date >= week.start &&
+                  a.activity_date <= week.end ? (
+                    <button
+                      onClick={() => {
+                        if (confirmId === a.id) void removeActivity(a.id);
+                        else setConfirmId(a.id);
+                      }}
+                      className={`shrink-0 rounded-lg px-2 py-1 text-[11px] font-medium ${
+                        confirmId === a.id
+                          ? "bg-danger text-primary-foreground"
+                          : "text-danger hover:bg-danger/10"
+                      }`}
+                    >
+                      {confirmId === a.id ? "Confirm delete" : "Delete"}
+                    </button>
+                  ) : null}
+                </div>
               </Card>
+
             );
           })}
           {(activities?.length ?? 0) === 0 ? <Note>No activities logged yet.</Note> : null}
