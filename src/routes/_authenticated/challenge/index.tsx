@@ -138,8 +138,14 @@ function ChallengeHome() {
           );
         })}
         {(members?.length ?? 0) < 2 ? (
-          <Note>Waiting for your opponent to accept the invitation.</Note>
+          <>
+            <Note>Waiting for your opponent to accept the invitation.</Note>
+            {challenge.created_by === user?.id ? (
+              <ChallengeInviteCard challengeId={challenge.id} />
+            ) : null}
+          </>
         ) : null}
+
       </div>
 
       <div className="mt-4">
