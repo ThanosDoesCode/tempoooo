@@ -38,34 +38,38 @@ function LogActivity() {
   const [duration, setDuration] = useState("");
   const [url, setUrl] = useState("");
   const [note, setNote] = useState("");
-  const [file, setFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
+  const [previews, setPreviews] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!file) {
-      setPreview(null);
+    if (files.length === 0) {
+      setPreviews([]);
       return;
     }
-    const objectUrl = URL.createObjectURL(file);
-    setPreview(objectUrl);
-    return () => URL.revokeObjectURL(objectUrl);
-  }, [file]);
+    const urls = files.map((f) => URL.createObjectURL(f));
+    setPreviews(urls);
+    return () => urls.forEach((u) => URL.revokeObjectURL(u));
+  }, [files]);
 
 
   const dist = Number(distance);
   const equivalent = type === "run" ? dist : dist / 3;
 
   const submit = async () => {
-    if (!challenge || !user || !file || !dist) return;
+    if (!challenge || !user || files.length === 0 || !dist) return;
     setBusy(true);
     setError(null);
     try {
-      const ext = file.name.split(".").pop() ?? "jpg";
-      const path = `${challenge.id}/${user.id}/${crypto.randomUUID()}.${ext}`;
-      const up = await supabase.storage.from("challenge-evidence").upload(path, file);
-      if (up.error) throw up.error;
+      const paths: string[] = [];
+      for (const f of files) {
+        const ext = f.name.split(".").pop() ?? "jpg";
+        const path = `${challenge.id}/${user.id}/${crypto.randomUUID()}.${ext}`;
+        const up = await supabase.storage.from("challenge-evidence").upload(path, f);
+        if (up.error) throw up.error;
+        paths.push(path);
+      }
       const { error } = await supabase.from("challenge_activities").insert({
         challenge_id: challenge.id,
         user_id: user.id,
@@ -73,7 +77,8 @@ function LogActivity() {
         distance_km: dist,
         activity_date: date,
         duration_seconds: duration ? Math.round(Number(duration) * 60) : null,
-        evidence_path: path,
+        evidence_path: paths[0]!,
+        extra_evidence_paths: paths.slice(1),
         external_activity_url: url || null,
         note: note || null,
         verification_source: "manual_strava_screenshot",
