@@ -1,6 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
+import { format, parseISO } from "date-fns";
+import { Bike, Footprints, Link as LinkIcon } from "lucide-react";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { Card, Note, SectionTitle } from "@/components/ui-kit";
 import { supabase } from "@/integrations/supabase/client";
