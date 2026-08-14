@@ -154,14 +154,20 @@ function ChallengeHome() {
             </Card>
           );
         })}
-        {(members?.length ?? 0) < 2 ? (
+        {(members?.length ?? 0) < (challenge.max_members ?? 2) ? (
           <>
-            <Note>Waiting for your opponent to accept the invitation.</Note>
+            <Note>
+              There is still a free spot. Send an invitation link to add another person.
+            </Note>
             {challenge.created_by === user?.id ? (
               <ChallengeInviteCard challengeId={challenge.id} />
-            ) : null}
+            ) : (
+              <Note>Only the person who created the challenge can send invitations.</Note>
+            )}
           </>
         ) : null}
+
+
 
       </div>
 
