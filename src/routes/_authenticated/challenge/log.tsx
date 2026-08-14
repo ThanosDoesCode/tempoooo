@@ -139,10 +139,10 @@ function LogActivity() {
             className={inputCls}
           />
         </Field>
-        <Field label="Strava screenshot (required)">
+        <Field label="Strava screenshots (at least one)">
           <label
             className={`flex cursor-pointer items-center gap-3 rounded-xl border border-dashed px-3 py-3 transition-colors ${
-              file ? "border-good/60 bg-good/5" : "border-border bg-elevated hover:border-ring"
+              files.length ? "border-good/60 bg-good/5" : "border-border bg-elevated hover:border-ring"
             }`}
           >
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary">
@@ -150,26 +150,48 @@ function LogActivity() {
             </span>
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-medium">
-                {file ? file.name : "Attach a screenshot"}
+                {files.length
+                  ? `${files.length} screenshot${files.length > 1 ? "s" : ""} attached`
+                  : "Attach screenshots"}
               </span>
               <span className="block text-[11px] text-muted-foreground">
-                {file ? "Tap to choose a different image" : "PNG or JPG from your camera roll"}
+                {files.length
+                  ? "Tap to add more images"
+                  : "PNG or JPG, you can pick several at once"}
               </span>
             </span>
-            {file ? <Check className="h-4 w-4 shrink-0 text-good" /> : null}
+            {files.length ? <Check className="h-4 w-4 shrink-0 text-good" /> : null}
             <input
               type="file"
               accept="image/*"
+              multiple
               className="hidden"
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              onChange={(e) => {
+                const picked = [...(e.target.files ?? [])];
+                if (picked.length) setFiles((prev) => [...prev, ...picked]);
+                e.target.value = "";
+              }}
             />
           </label>
-          {preview ? (
-            <img
-              src={preview}
-              alt="Selected evidence preview"
-              className="mt-2 max-h-56 w-full rounded-xl border border-border object-cover"
-            />
+          {previews.length ? (
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              {previews.map((p, i) => (
+                <div key={p} className="relative">
+                  <img
+                    src={p}
+                    alt={`Selected evidence preview ${i + 1}`}
+                    className="h-32 w-full rounded-xl border border-border object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setFiles((prev) => prev.filter((_, j) => j !== i))}
+                    className="absolute right-1.5 top-1.5 rounded-lg bg-danger px-2 py-0.5 text-[11px] font-medium text-primary-foreground"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
           ) : null}
         </Field>
 
