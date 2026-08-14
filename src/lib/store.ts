@@ -107,6 +107,16 @@ export async function loadBulk(id: string, r: BulkRole) {
       .order("taken_on"),
   ]);
 
+  const failed = [targets.error, days.error, workouts.error, notes.error, photos.error].find(
+    (error) => error !== null,
+  );
+  if (failed) {
+    bulkId = null;
+    state = null;
+    emit();
+    throw new Error(failed.message);
+  }
+
   const next: AppData = {
     days: {},
     workouts: {},

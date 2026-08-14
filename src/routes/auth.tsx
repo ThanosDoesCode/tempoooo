@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { syncProfile } from "@/lib/auth";
 
 export const Route = createFileRoute("/auth")({
+  ssr: false,
   head: () => ({
     meta: [
       { title: "Sign in — Lean Bulk Tracker" },
@@ -39,7 +40,7 @@ function AuthPage() {
         window.location.href = next ?? "/";
       }
     });
-  }, [navigate]);
+  }, []);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();

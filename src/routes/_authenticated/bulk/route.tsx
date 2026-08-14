@@ -16,7 +16,7 @@ function BulkLayout() {
   useEffect(() => {
     if (!memberships) return;
     if (memberships.length === 0) {
-      void navigate({ to: "/challenge" });
+      void navigate({ to: "/profile" });
       return;
     }
     const preferred =
@@ -31,7 +31,7 @@ function BulkLayout() {
   if (error) {
     return <div className="p-6 text-sm text-danger">{error}</div>;
   }
-  if (isLoading || !bulkId) {
+  if (isLoading || (!memberships && !error) || (!!memberships?.length && !bulkId)) {
     return (
       <div className="mx-auto w-full max-w-lg space-y-3 p-4">
         <div className="h-24 animate-pulse rounded-2xl bg-card" />
