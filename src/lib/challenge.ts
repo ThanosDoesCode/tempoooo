@@ -27,6 +27,7 @@ export type Activity = {
   activity_date: string;
   duration_seconds: number | null;
   evidence_path: string;
+  extra_evidence_paths: string[] | null;
   external_activity_url: string | null;
   note: string | null;
   edited: boolean;
