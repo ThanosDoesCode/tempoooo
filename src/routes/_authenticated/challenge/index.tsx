@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { format, parseISO } from "date-fns";
-import { Bike, Footprints, Link as LinkIcon } from "lucide-react";
+import { Bike, Footprints, Image as ImageIcon, Link as LinkIcon } from "lucide-react";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { Card, Note, SectionTitle } from "@/components/ui-kit";
 import { supabase } from "@/integrations/supabase/client";
@@ -343,4 +343,56 @@ function ChallengeHome() {
 
 function formatDay(day: string) {
   return format(parseISO(day), "EEEE d MMM");
+}
+
+/** Evidence screenshots are visible to both members so neither can cheat. */
+function EvidenceViewer({ path }: { path: string }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const show = async () => {
+    setOpen(true);
+    if (url) return;
+    const { data, error: e } = await supabase.storage
+      .from("challenge-evidence")
+      .createSignedUrl(path, 300);
+    if (e) setError(e.message);
+    else setUrl(data.signedUrl);
+  };
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => void show()}
+        className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-border bg-elevated px-2.5 py-1.5 text-[11px] font-medium"
+      >
+        <ImageIcon className="h-3.5 w-3.5 text-muted-foreground" /> View evidence
+      </button>
+    );
+  }
+
+  return (
+    <div className="mt-2">
+      {error ? (
+        <p className="text-[11px] text-danger">{error}</p>
+      ) : url ? (
+        <a href={url} target="_blank" rel="noreferrer">
+          <img
+            src={url}
+            alt="Activity evidence screenshot"
+            className="max-h-72 w-full rounded-xl border border-border object-contain bg-elevated"
+          />
+        </a>
+      ) : (
+        <div className="h-24 animate-pulse rounded-xl bg-elevated" />
+      )}
+      <button
+        onClick={() => setOpen(false)}
+        className="mt-1 text-[11px] font-medium text-muted-foreground"
+      >
+        Hide evidence
+      </button>
+    </div>
+  );
 }
