@@ -307,6 +307,7 @@ export type Database = {
           equivalent_km: number | null
           evidence_path: string
           external_activity_url: string | null
+          extra_evidence_paths: string[]
           id: string
           note: string | null
           strava_activity_id: string | null
@@ -326,6 +327,7 @@ export type Database = {
           equivalent_km?: number | null
           evidence_path: string
           external_activity_url?: string | null
+          extra_evidence_paths?: string[]
           id?: string
           note?: string | null
           strava_activity_id?: string | null
@@ -345,6 +347,7 @@ export type Database = {
           equivalent_km?: number | null
           evidence_path?: string
           external_activity_url?: string | null
+          extra_evidence_paths?: string[]
           id?: string
           note?: string | null
           strava_activity_id?: string | null
