@@ -56,6 +56,11 @@ function metaSnapshot() {
 export const getBulkId = () => bulkId;
 export const getBulkRole = () => role;
 export const canWrite = () => role === "owner" || role === "editor";
+export const isOwner = () => role === "owner";
+
+/** Storage object paths per photo set, needed to clean up files on delete. */
+const photoPaths = new Map<string, string[]>();
+
 
 async function signPhotos(rows: PhotoRow[]): Promise<PhotoSet[]> {
   const paths = rows.flatMap((r) =>
