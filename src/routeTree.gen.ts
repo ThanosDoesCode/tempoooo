@@ -10,63 +10,171 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as CheckInRouteImport } from './routes/check-in'
-import { Route as ProgressRouteImport } from './routes/progress'
-import { Route as TrainingRouteImport } from './routes/training'
+import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
+import { Route as AuthRouteImport } from './routes/auth'
+import { Route as AuthenticatedBulkRouteRouteImport } from './routes/_authenticated/bulk/route'
+import { Route as AuthenticatedBulkIndexRouteImport } from './routes/_authenticated/bulk/index'
+import { Route as AuthenticatedBulkCheckInRouteImport } from './routes/_authenticated/bulk/check-in'
+import { Route as AuthenticatedBulkProgressRouteImport } from './routes/_authenticated/bulk/progress'
+import { Route as AuthenticatedBulkTrainingRouteImport } from './routes/_authenticated/bulk/training'
+import { Route as AuthenticatedChallengeIndexRouteImport } from './routes/_authenticated/challenge/index'
+import { Route as AuthenticatedChallengeHistoryRouteImport } from './routes/_authenticated/challenge/history'
+import { Route as AuthenticatedChallengeLogRouteImport } from './routes/_authenticated/challenge/log'
+import { Route as AuthenticatedChallengeNewRouteImport } from './routes/_authenticated/challenge/new'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const CheckInRoute = CheckInRouteImport.update({
-  id: '/check-in',
-  path: '/check-in',
+const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
+  id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ProgressRoute = ProgressRouteImport.update({
-  id: '/progress',
-  path: '/progress',
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
-const TrainingRoute = TrainingRouteImport.update({
-  id: '/training',
-  path: '/training',
-  getParentRoute: () => rootRouteImport,
+const AuthenticatedBulkRouteRoute = AuthenticatedBulkRouteRouteImport.update({
+  id: '/bulk',
+  path: '/bulk',
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedBulkIndexRoute = AuthenticatedBulkIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AuthenticatedBulkRouteRoute,
+} as any)
+const AuthenticatedBulkCheckInRoute =
+  AuthenticatedBulkCheckInRouteImport.update({
+    id: '/check-in',
+    path: '/check-in',
+    getParentRoute: () => AuthenticatedBulkRouteRoute,
+  } as any)
+const AuthenticatedBulkProgressRoute =
+  AuthenticatedBulkProgressRouteImport.update({
+    id: '/progress',
+    path: '/progress',
+    getParentRoute: () => AuthenticatedBulkRouteRoute,
+  } as any)
+const AuthenticatedBulkTrainingRoute =
+  AuthenticatedBulkTrainingRouteImport.update({
+    id: '/training',
+    path: '/training',
+    getParentRoute: () => AuthenticatedBulkRouteRoute,
+  } as any)
+const AuthenticatedChallengeIndexRoute =
+  AuthenticatedChallengeIndexRouteImport.update({
+    id: '/challenge/',
+    path: '/challenge/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedChallengeHistoryRoute =
+  AuthenticatedChallengeHistoryRouteImport.update({
+    id: '/challenge/history',
+    path: '/challenge/history',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedChallengeLogRoute =
+  AuthenticatedChallengeLogRouteImport.update({
+    id: '/challenge/log',
+    path: '/challenge/log',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedChallengeNewRoute =
+  AuthenticatedChallengeNewRouteImport.update({
+    id: '/challenge/new',
+    path: '/challenge/new',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/check-in': typeof CheckInRoute
-  '/progress': typeof ProgressRoute
-  '/training': typeof TrainingRoute
+  '/auth': typeof AuthRoute
+  '/bulk': typeof AuthenticatedBulkRouteRouteWithChildren
+  '/bulk/check-in': typeof AuthenticatedBulkCheckInRoute
+  '/bulk/progress': typeof AuthenticatedBulkProgressRoute
+  '/bulk/training': typeof AuthenticatedBulkTrainingRoute
+  '/challenge/history': typeof AuthenticatedChallengeHistoryRoute
+  '/challenge/log': typeof AuthenticatedChallengeLogRoute
+  '/challenge/new': typeof AuthenticatedChallengeNewRoute
+  '/bulk/': typeof AuthenticatedBulkIndexRoute
+  '/challenge/': typeof AuthenticatedChallengeIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/check-in': typeof CheckInRoute
-  '/progress': typeof ProgressRoute
-  '/training': typeof TrainingRoute
+  '/auth': typeof AuthRoute
+  '/bulk/check-in': typeof AuthenticatedBulkCheckInRoute
+  '/bulk/progress': typeof AuthenticatedBulkProgressRoute
+  '/bulk/training': typeof AuthenticatedBulkTrainingRoute
+  '/challenge/history': typeof AuthenticatedChallengeHistoryRoute
+  '/challenge/log': typeof AuthenticatedChallengeLogRoute
+  '/challenge/new': typeof AuthenticatedChallengeNewRoute
+  '/bulk': typeof AuthenticatedBulkIndexRoute
+  '/challenge': typeof AuthenticatedChallengeIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/check-in': typeof CheckInRoute
-  '/progress': typeof ProgressRoute
-  '/training': typeof TrainingRoute
+  '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
+  '/auth': typeof AuthRoute
+  '/_authenticated/bulk': typeof AuthenticatedBulkRouteRouteWithChildren
+  '/_authenticated/bulk/check-in': typeof AuthenticatedBulkCheckInRoute
+  '/_authenticated/bulk/progress': typeof AuthenticatedBulkProgressRoute
+  '/_authenticated/bulk/training': typeof AuthenticatedBulkTrainingRoute
+  '/_authenticated/challenge/history': typeof AuthenticatedChallengeHistoryRoute
+  '/_authenticated/challenge/log': typeof AuthenticatedChallengeLogRoute
+  '/_authenticated/challenge/new': typeof AuthenticatedChallengeNewRoute
+  '/_authenticated/bulk/': typeof AuthenticatedBulkIndexRoute
+  '/_authenticated/challenge/': typeof AuthenticatedChallengeIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/check-in' | '/progress' | '/training'
+  fullPaths:
+    | '/'
+    | '/auth'
+    | '/bulk'
+    | '/bulk/check-in'
+    | '/bulk/progress'
+    | '/bulk/training'
+    | '/challenge/history'
+    | '/challenge/log'
+    | '/challenge/new'
+    | '/bulk/'
+    | '/challenge/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/check-in' | '/progress' | '/training'
-  id: '__root__' | '/' | '/check-in' | '/progress' | '/training'
+  to:
+    | '/'
+    | '/auth'
+    | '/bulk/check-in'
+    | '/bulk/progress'
+    | '/bulk/training'
+    | '/challenge/history'
+    | '/challenge/log'
+    | '/challenge/new'
+    | '/bulk'
+    | '/challenge'
+  id:
+    | '__root__'
+    | '/'
+    | '/_authenticated'
+    | '/auth'
+    | '/_authenticated/bulk'
+    | '/_authenticated/bulk/check-in'
+    | '/_authenticated/bulk/progress'
+    | '/_authenticated/bulk/training'
+    | '/_authenticated/challenge/history'
+    | '/_authenticated/challenge/log'
+    | '/_authenticated/challenge/new'
+    | '/_authenticated/bulk/'
+    | '/_authenticated/challenge/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  CheckInRoute: typeof CheckInRoute
-  ProgressRoute: typeof ProgressRoute
-  TrainingRoute: typeof TrainingRoute
+  AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
+  AuthRoute: typeof AuthRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -78,35 +186,129 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/check-in': {
-      id: '/check-in'
+    '/_authenticated': {
+      id: '/_authenticated'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/bulk': {
+      id: '/_authenticated/bulk'
+      path: '/bulk'
+      fullPath: '/bulk'
+      preLoaderRoute: typeof AuthenticatedBulkRouteRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/bulk/': {
+      id: '/_authenticated/bulk/'
+      path: '/'
+      fullPath: '/bulk/'
+      preLoaderRoute: typeof AuthenticatedBulkIndexRouteImport
+      parentRoute: typeof AuthenticatedBulkRouteRoute
+    }
+    '/_authenticated/bulk/check-in': {
+      id: '/_authenticated/bulk/check-in'
       path: '/check-in'
-      fullPath: '/check-in'
-      preLoaderRoute: typeof CheckInRouteImport
-      parentRoute: typeof rootRouteImport
+      fullPath: '/bulk/check-in'
+      preLoaderRoute: typeof AuthenticatedBulkCheckInRouteImport
+      parentRoute: typeof AuthenticatedBulkRouteRoute
     }
-    '/progress': {
-      id: '/progress'
+    '/_authenticated/bulk/progress': {
+      id: '/_authenticated/bulk/progress'
       path: '/progress'
-      fullPath: '/progress'
-      preLoaderRoute: typeof ProgressRouteImport
-      parentRoute: typeof rootRouteImport
+      fullPath: '/bulk/progress'
+      preLoaderRoute: typeof AuthenticatedBulkProgressRouteImport
+      parentRoute: typeof AuthenticatedBulkRouteRoute
     }
-    '/training': {
-      id: '/training'
+    '/_authenticated/bulk/training': {
+      id: '/_authenticated/bulk/training'
       path: '/training'
-      fullPath: '/training'
-      preLoaderRoute: typeof TrainingRouteImport
-      parentRoute: typeof rootRouteImport
+      fullPath: '/bulk/training'
+      preLoaderRoute: typeof AuthenticatedBulkTrainingRouteImport
+      parentRoute: typeof AuthenticatedBulkRouteRoute
+    }
+    '/_authenticated/challenge/': {
+      id: '/_authenticated/challenge/'
+      path: '/challenge'
+      fullPath: '/challenge/'
+      preLoaderRoute: typeof AuthenticatedChallengeIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/challenge/history': {
+      id: '/_authenticated/challenge/history'
+      path: '/challenge/history'
+      fullPath: '/challenge/history'
+      preLoaderRoute: typeof AuthenticatedChallengeHistoryRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/challenge/log': {
+      id: '/_authenticated/challenge/log'
+      path: '/challenge/log'
+      fullPath: '/challenge/log'
+      preLoaderRoute: typeof AuthenticatedChallengeLogRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/challenge/new': {
+      id: '/_authenticated/challenge/new'
+      path: '/challenge/new'
+      fullPath: '/challenge/new'
+      preLoaderRoute: typeof AuthenticatedChallengeNewRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
   }
 }
 
+interface AuthenticatedBulkRouteRouteChildren {
+  AuthenticatedBulkCheckInRoute: typeof AuthenticatedBulkCheckInRoute
+  AuthenticatedBulkProgressRoute: typeof AuthenticatedBulkProgressRoute
+  AuthenticatedBulkTrainingRoute: typeof AuthenticatedBulkTrainingRoute
+  AuthenticatedBulkIndexRoute: typeof AuthenticatedBulkIndexRoute
+}
+
+const AuthenticatedBulkRouteRouteChildren: AuthenticatedBulkRouteRouteChildren =
+  {
+    AuthenticatedBulkCheckInRoute: AuthenticatedBulkCheckInRoute,
+    AuthenticatedBulkProgressRoute: AuthenticatedBulkProgressRoute,
+    AuthenticatedBulkTrainingRoute: AuthenticatedBulkTrainingRoute,
+    AuthenticatedBulkIndexRoute: AuthenticatedBulkIndexRoute,
+  }
+
+const AuthenticatedBulkRouteRouteWithChildren =
+  AuthenticatedBulkRouteRoute._addFileChildren(
+    AuthenticatedBulkRouteRouteChildren,
+  )
+
+interface AuthenticatedRouteRouteChildren {
+  AuthenticatedBulkRouteRoute: typeof AuthenticatedBulkRouteRouteWithChildren
+  AuthenticatedChallengeHistoryRoute: typeof AuthenticatedChallengeHistoryRoute
+  AuthenticatedChallengeLogRoute: typeof AuthenticatedChallengeLogRoute
+  AuthenticatedChallengeNewRoute: typeof AuthenticatedChallengeNewRoute
+  AuthenticatedChallengeIndexRoute: typeof AuthenticatedChallengeIndexRoute
+}
+
+const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedBulkRouteRoute: AuthenticatedBulkRouteRouteWithChildren,
+  AuthenticatedChallengeHistoryRoute: AuthenticatedChallengeHistoryRoute,
+  AuthenticatedChallengeLogRoute: AuthenticatedChallengeLogRoute,
+  AuthenticatedChallengeNewRoute: AuthenticatedChallengeNewRoute,
+  AuthenticatedChallengeIndexRoute: AuthenticatedChallengeIndexRoute,
+}
+
+const AuthenticatedRouteRouteWithChildren =
+  AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  CheckInRoute: CheckInRoute,
-  ProgressRoute: ProgressRoute,
-  TrainingRoute: TrainingRoute,
+  AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
+  AuthRoute: AuthRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
