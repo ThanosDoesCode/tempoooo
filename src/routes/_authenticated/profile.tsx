@@ -7,7 +7,7 @@ import { ChallengeInviteCard } from "@/components/ChallengeInvite";
 import { useAuth, signOut } from "@/lib/auth";
 import { createBulkProfile, useMemberships } from "@/lib/bulk-access";
 import { useChallengeMembers, useMyChallenge } from "@/lib/challenge";
-import { useActions, useBulkMeta } from "@/lib/store";
+import { resetBulkData } from "@/lib/store";
 
 
 export const Route = createFileRoute("/_authenticated/profile")({
