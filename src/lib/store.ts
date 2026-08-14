@@ -150,7 +150,45 @@ export async function loadBulk(id: string, r: BulkRole) {
   emit();
 }
 
+/**
+ * Owner-only wipe of a plan's logged data. Usable even when the plan is not
+ * the one currently loaded in the store (for example from the profile page).
+ */
+export async function resetBulkData(
+  id: string,
+  opts: { photos: boolean; targets: boolean } = { photos: true, targets: false },
+) {
+  for (const table of ["bulk_days", "bulk_workouts", "bulk_week_notes"] as const) {
+    const { error } = await supabase.from(table).delete().eq("bulk_profile_id", id);
+    if (error) throw new Error(error.message);
+  }
+  if (opts.photos) {
+    const { data: rows } = await supabase
+      .from("bulk_photos")
+      .select("front_path,side_path,back_path")
+      .eq("bulk_profile_id", id);
+    const all = (rows ?? []).flatMap((r) =>
+      [r.front_path, r.side_path, r.back_path].filter((p): p is string => !!p),
+    );
+    if (all.length) await supabase.storage.from("bulk-progress-photos").remove(all);
+    const { error } = await supabase.from("bulk_photos").delete().eq("bulk_profile_id", id);
+    if (error) throw new Error(error.message);
+    photoPaths.clear();
+  }
+  if (opts.targets) {
+    const { error } = await supabase
+      .from("bulk_targets")
+      .upsert(
+        { bulk_profile_id: id, payload: json(DEFAULT_DATA.targets) },
+        { onConflict: "bulk_profile_id" },
+      );
+    if (error) throw new Error(error.message);
+  }
+  if (bulkId === id) await loadBulk(id, role);
+}
+
 export function clearBulk() {
+
   bulkId = null;
   state = null;
   emit();
