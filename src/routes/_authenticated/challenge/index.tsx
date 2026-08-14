@@ -18,6 +18,8 @@ import {
   weekNumberOf,
 } from "@/lib/challenge";
 import { RulesCard } from "@/components/challenge-rules";
+import { ChallengeInviteCard } from "@/components/ChallengeInvite";
+
 
 export const Route = createFileRoute("/_authenticated/challenge/")({
   head: () => ({
