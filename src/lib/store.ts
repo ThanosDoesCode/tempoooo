@@ -272,6 +272,71 @@ export function useActions() {
     await loadBulk(id, role);
   }, []);
 
+  const deletePhotoSet = useCallback(async (photoId: string) => {
+    if (!state || !bulkId || !isOwner()) return;
+    const paths = photoPaths.get(photoId) ?? [];
+    if (paths.length) await supabase.storage.from("bulk-progress-photos").remove(paths);
+    const { error } = await supabase.from("bulk_photos").delete().eq("id", photoId);
+    if (error) throw new Error(error.message);
+    photoPaths.delete(photoId);
+    state.photos = state.photos.filter((p) => p.id !== photoId);
+    emit();
+  }, []);
+
+  const deleteDay = useCallback(async (date: string) => {
+    if (!state || !bulkId || !isOwner()) return;
+    const { error } = await supabase
+      .from("bulk_days")
+      .delete()
+      .eq("bulk_profile_id", bulkId)
+      .eq("day", date);
+    if (error) throw new Error(error.message);
+    delete state.days[date];
+    emit();
+  }, []);
+
+  const deleteWorkout = useCallback(async (date: string) => {
+    if (!state || !bulkId || !isOwner()) return;
+    const { error } = await supabase
+      .from("bulk_workouts")
+      .delete()
+      .eq("bulk_profile_id", bulkId)
+      .eq("day", date);
+    if (error) throw new Error(error.message);
+    delete state.workouts[date];
+    emit();
+  }, []);
+
+  /** Owner-only wipe. Keeps the plan and its people, removes the logged data. */
+  const resetBulkPlan = useCallback(
+    async (opts: { photos: boolean; targets: boolean } = { photos: true, targets: false }) => {
+      if (!bulkId || !isOwner()) return;
+      const id = bulkId;
+      for (const table of ["bulk_days", "bulk_workouts", "bulk_week_notes"] as const) {
+        const { error } = await supabase.from(table).delete().eq("bulk_profile_id", id);
+        if (error) throw new Error(error.message);
+      }
+      if (opts.photos) {
+        const all = [...photoPaths.values()].flat();
+        if (all.length) await supabase.storage.from("bulk-progress-photos").remove(all);
+        const { error } = await supabase.from("bulk_photos").delete().eq("bulk_profile_id", id);
+        if (error) throw new Error(error.message);
+        photoPaths.clear();
+      }
+      if (opts.targets) {
+        const { error } = await supabase
+          .from("bulk_targets")
+          .upsert(
+            { bulk_profile_id: id, payload: json(DEFAULT_DATA.targets) },
+            { onConflict: "bulk_profile_id" },
+          );
+        if (error) throw new Error(error.message);
+      }
+      await loadBulk(id, role);
+    },
+    [],
+  );
+
   return {
     saveDay,
     saveWorkout,
@@ -280,5 +345,10 @@ export function useActions() {
     addPhotoSet,
     setPhotoImage,
     importBackup,
+    deletePhotoSet,
+    deleteDay,
+    deleteWorkout,
+    resetBulkPlan,
   };
+
 }
