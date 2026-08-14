@@ -42,7 +42,7 @@ function Access() {
     enabled: !!bulkId,
     queryKey: ["bulk-members", bulkId],
     queryFn: async () => {
-      const [{ data: rows }, { data: profiles }] = await Promise.all([
+      const [{ data: rows }, profiles] = await Promise.all([
         supabase.from("bulk_members").select("id,user_id,role").eq("bulk_profile_id", bulkId!),
         getRelatedProfiles(),
       ]);
