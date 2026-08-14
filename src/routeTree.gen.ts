@@ -21,6 +21,7 @@ import { Route as AuthenticatedChallengeIndexRouteImport } from './routes/_authe
 import { Route as AuthenticatedChallengeHistoryRouteImport } from './routes/_authenticated/challenge/history'
 import { Route as AuthenticatedChallengeLogRouteImport } from './routes/_authenticated/challenge/log'
 import { Route as AuthenticatedChallengeNewRouteImport } from './routes/_authenticated/challenge/new'
+import { Route as AuthenticatedChallengePaymentsRouteImport } from './routes/_authenticated/challenge/payments'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -88,6 +89,12 @@ const AuthenticatedChallengeNewRoute =
     path: '/challenge/new',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedChallengePaymentsRoute =
+  AuthenticatedChallengePaymentsRouteImport.update({
+    id: '/challenge/payments',
+    path: '/challenge/payments',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -99,6 +106,7 @@ export interface FileRoutesByFullPath {
   '/challenge/history': typeof AuthenticatedChallengeHistoryRoute
   '/challenge/log': typeof AuthenticatedChallengeLogRoute
   '/challenge/new': typeof AuthenticatedChallengeNewRoute
+  '/challenge/payments': typeof AuthenticatedChallengePaymentsRoute
   '/bulk/': typeof AuthenticatedBulkIndexRoute
   '/challenge/': typeof AuthenticatedChallengeIndexRoute
 }
@@ -111,6 +119,7 @@ export interface FileRoutesByTo {
   '/challenge/history': typeof AuthenticatedChallengeHistoryRoute
   '/challenge/log': typeof AuthenticatedChallengeLogRoute
   '/challenge/new': typeof AuthenticatedChallengeNewRoute
+  '/challenge/payments': typeof AuthenticatedChallengePaymentsRoute
   '/bulk': typeof AuthenticatedBulkIndexRoute
   '/challenge': typeof AuthenticatedChallengeIndexRoute
 }
@@ -126,6 +135,7 @@ export interface FileRoutesById {
   '/_authenticated/challenge/history': typeof AuthenticatedChallengeHistoryRoute
   '/_authenticated/challenge/log': typeof AuthenticatedChallengeLogRoute
   '/_authenticated/challenge/new': typeof AuthenticatedChallengeNewRoute
+  '/_authenticated/challenge/payments': typeof AuthenticatedChallengePaymentsRoute
   '/_authenticated/bulk/': typeof AuthenticatedBulkIndexRoute
   '/_authenticated/challenge/': typeof AuthenticatedChallengeIndexRoute
 }
@@ -141,6 +151,7 @@ export interface FileRouteTypes {
     | '/challenge/history'
     | '/challenge/log'
     | '/challenge/new'
+    | '/challenge/payments'
     | '/bulk/'
     | '/challenge/'
   fileRoutesByTo: FileRoutesByTo
@@ -153,6 +164,7 @@ export interface FileRouteTypes {
     | '/challenge/history'
     | '/challenge/log'
     | '/challenge/new'
+    | '/challenge/payments'
     | '/bulk'
     | '/challenge'
   id:
@@ -167,6 +179,7 @@ export interface FileRouteTypes {
     | '/_authenticated/challenge/history'
     | '/_authenticated/challenge/log'
     | '/_authenticated/challenge/new'
+    | '/_authenticated/challenge/payments'
     | '/_authenticated/bulk/'
     | '/_authenticated/challenge/'
   fileRoutesById: FileRoutesById
@@ -263,6 +276,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedChallengeNewRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/challenge/payments': {
+      id: '/_authenticated/challenge/payments'
+      path: '/challenge/payments'
+      fullPath: '/challenge/payments'
+      preLoaderRoute: typeof AuthenticatedChallengePaymentsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
   }
 }
 
@@ -291,6 +311,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedChallengeHistoryRoute: typeof AuthenticatedChallengeHistoryRoute
   AuthenticatedChallengeLogRoute: typeof AuthenticatedChallengeLogRoute
   AuthenticatedChallengeNewRoute: typeof AuthenticatedChallengeNewRoute
+  AuthenticatedChallengePaymentsRoute: typeof AuthenticatedChallengePaymentsRoute
   AuthenticatedChallengeIndexRoute: typeof AuthenticatedChallengeIndexRoute
 }
 
@@ -299,6 +320,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedChallengeHistoryRoute: AuthenticatedChallengeHistoryRoute,
   AuthenticatedChallengeLogRoute: AuthenticatedChallengeLogRoute,
   AuthenticatedChallengeNewRoute: AuthenticatedChallengeNewRoute,
+  AuthenticatedChallengePaymentsRoute: AuthenticatedChallengePaymentsRoute,
   AuthenticatedChallengeIndexRoute: AuthenticatedChallengeIndexRoute,
 }
 
