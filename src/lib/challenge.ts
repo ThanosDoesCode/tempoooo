@@ -160,5 +160,63 @@ export function sumWeek(activities: Activity[], userId: string, start: string, e
   return { running, cycling, equivalent: running + cycling / 3, rows };
 }
 
+export type WeekRow = {
+  id: string;
+  challenge_id: string;
+  user_id: string;
+  week_number: number;
+  week_start: string;
+  week_end: string;
+  running_km: number;
+  cycling_km: number;
+  equivalent_km: number;
+  target_km: number;
+  completed: boolean;
+  penalty_eur: number;
+};
+
+export type PaymentRow = {
+  id: string;
+  challenge_id: string;
+  week_id: string;
+  payer_id: string;
+  recipient_id: string;
+  amount_eur: number;
+  status: "unpaid" | "marked_paid" | "confirmed_paid";
+  payment_evidence_path: string | null;
+};
+
+export function useWeeks(challengeId: string | undefined) {
+  return useQuery({
+    enabled: !!challengeId,
+    queryKey: ["challenge-weeks", challengeId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("challenge_weeks")
+        .select("*")
+        .eq("challenge_id", challengeId!)
+        .order("week_number", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as unknown as WeekRow[];
+    },
+  });
+}
+
+export function usePayments(challengeId: string | undefined) {
+  return useQuery({
+    enabled: !!challengeId,
+    queryKey: ["challenge-payments", challengeId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("challenge_payments")
+        .select("*")
+        .eq("challenge_id", challengeId!)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as unknown as PaymentRow[];
+    },
+  });
+}
+
 export const eur = (n: number) => `€${n.toFixed(0)}`;
 export const km = (n: number) => `${n.toFixed(1)} km`;
