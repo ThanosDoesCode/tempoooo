@@ -34,10 +34,18 @@ function ProfilePage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { data: memberships, isLoading, refetch } = useMemberships();
+  const { data: challenge } = useMyChallenge();
+  const { data: challengeMembers } = useChallengeMembers(challenge?.id);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [resetStep, setResetStep] = useState<0 | 1>(0);
+  const [resetTargets, setResetTargets] = useState(false);
+  const [resetDone, setResetDone] = useState(false);
 
   const hasBulk = (memberships?.length ?? 0) > 0;
+  const ownedPlan = memberships?.find((m) => m.role === "owner");
+  const canInvite =
+    !!challenge && challenge.created_by === user?.id && (challengeMembers?.length ?? 0) < 2;
 
   const create = async () => {
     setBusy(true);
@@ -52,6 +60,22 @@ function ProfilePage() {
       setBusy(false);
     }
   };
+
+  const reset = async () => {
+    if (!ownedPlan) return;
+    setBusy(true);
+    setError(null);
+    setResetStep(0);
+    try {
+      await resetBulkData(ownedPlan.bulk_profile_id, { photos: true, targets: resetTargets });
+      setResetDone(true);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
 
   return (
     <AppShell>
