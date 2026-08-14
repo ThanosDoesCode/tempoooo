@@ -264,7 +264,9 @@ function ChallengeHome() {
                               {a.note}
                             </p>
                           ) : null}
-                          <EvidenceViewer path={a.evidence_path} />
+                          <EvidenceViewer
+                            paths={[a.evidence_path, ...(a.extra_evidence_paths ?? [])]}
+                          />
                           <div className="mt-2 flex items-center justify-between gap-2">
                             {a.external_activity_url ? (
                               <a
