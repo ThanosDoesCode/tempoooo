@@ -24,7 +24,7 @@ import {
 import { useActions, useAppData } from "@/lib/store";
 import type { AppData, Workout } from "@/lib/types";
 
-export const Route = createFileRoute("/check-in")({
+export const Route = createFileRoute("/_authenticated/bulk/check-in")({
   head: () => ({
     meta: [
       { title: "Check-In — Lean Bulk Tracker" },

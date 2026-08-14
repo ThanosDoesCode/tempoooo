@@ -38,7 +38,7 @@ import { setData, useAppData } from "@/lib/store";
 import { ALL_EXERCISES, type AppData, type PhotoSet } from "@/lib/types";
 
 
-export const Route = createFileRoute("/progress")({
+export const Route = createFileRoute("/_authenticated/bulk/progress")({
   head: () => ({
     meta: [
       { title: "Progress — Lean Bulk Tracker" },
