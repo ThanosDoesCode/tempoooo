@@ -198,54 +198,102 @@ function ChallengeHome() {
 
       <div className="mt-5">
         <SectionTitle>Recent activity</SectionTitle>
-        <div className="space-y-2">
-          {(activities ?? []).slice(0, 12).map((a) => {
-            const who = members?.find((m) => m.userId === a.user_id);
-            return (
-              <Card key={a.id} className="p-3">
-                <div className="flex items-baseline justify-between gap-2">
-                  <p className="text-sm">
-                    <span className="font-semibold">
-                      {a.user_id === user?.id ? "Me" : (who?.name ?? "Athlete")}
-                    </span>{" "}
-                    {a.activity_type === "run" ? "ran" : "cycled"} {Number(a.distance_km).toFixed(1)}{" "}
-                    km
-                  </p>
-                  <span className="num text-xs text-muted-foreground">{a.activity_date}</span>
-                </div>
-                <div className="mt-1 flex items-center justify-between gap-2">
-                  <p className="text-[11px] text-muted-foreground">
-                    Equivalent {Number(a.equivalent_km).toFixed(2)} km · Evidence attached
-                    {a.edited ? " · Edited" : ""}
-                  </p>
-                  {a.user_id === user?.id &&
-                  week &&
-                  a.activity_date >= week.start &&
-                  a.activity_date <= week.end ? (
-                    <button
-                      onClick={() => {
-                        if (confirmId === a.id) void removeActivity(a.id);
-                        else setConfirmId(a.id);
-                      }}
-                      className={`shrink-0 rounded-lg px-2 py-1 text-[11px] font-medium ${
-                        confirmId === a.id
-                          ? "bg-danger text-primary-foreground"
-                          : "text-danger hover:bg-danger/10"
-                      }`}
-                    >
-                      {confirmId === a.id ? "Confirm delete" : "Delete"}
-                    </button>
-                  ) : null}
-                </div>
-              </Card>
-
-            );
-          })}
+        <div className="space-y-4">
+          {groupedActivities.map(([day, rows]) => (
+            <div key={day}>
+              <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                {formatDay(day)}
+              </p>
+              <div className="space-y-2">
+                {rows.map((a) => {
+                  const who = members?.find((m) => m.userId === a.user_id);
+                  const mine = a.user_id === user?.id;
+                  const canDelete =
+                    mine && week && a.activity_date >= week.start && a.activity_date <= week.end;
+                  return (
+                    <Card key={a.id} className="p-3">
+                      <div className="flex items-start gap-3">
+                        <span
+                          className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${
+                            a.activity_type === "run"
+                              ? "bg-primary/15 text-primary"
+                              : "bg-chart-2/15 text-[color:var(--chart-2)]"
+                          }`}
+                        >
+                          {a.activity_type === "run" ? (
+                            <Footprints className="h-4 w-4" />
+                          ) : (
+                            <Bike className="h-4 w-4" />
+                          )}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-baseline justify-between gap-2">
+                            <p className="num text-base font-semibold">
+                              {Number(a.distance_km).toFixed(1)} km
+                              <span className="ml-1.5 text-xs font-normal capitalize text-muted-foreground">
+                                {a.activity_type === "run" ? "run" : "ride"}
+                              </span>
+                            </p>
+                            <span className="num shrink-0 text-xs font-medium text-muted-foreground">
+                              = {Number(a.equivalent_km).toFixed(2)} eq
+                            </span>
+                          </div>
+                          <p className="mt-0.5 text-[11px] text-muted-foreground">
+                            {mine ? "Me" : (who?.name ?? "Athlete")}
+                            {a.duration_seconds
+                              ? ` · ${Math.round(a.duration_seconds / 60)} min`
+                              : ""}
+                            {a.edited ? " · Edited" : ""}
+                          </p>
+                          {a.note ? (
+                            <p className="mt-2 rounded-lg bg-elevated px-2.5 py-1.5 text-xs leading-relaxed text-foreground/90">
+                              {a.note}
+                            </p>
+                          ) : null}
+                          <div className="mt-2 flex items-center justify-between gap-2">
+                            {a.external_activity_url ? (
+                              <a
+                                href={a.external_activity_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 text-[11px] font-medium text-primary"
+                              >
+                                <LinkIcon className="h-3 w-3" /> Strava
+                              </a>
+                            ) : (
+                              <span className="text-[11px] text-muted-foreground">
+                                Evidence attached
+                              </span>
+                            )}
+                            {canDelete ? (
+                              <button
+                                onClick={() => {
+                                  if (confirmId === a.id) void removeActivity(a.id);
+                                  else setConfirmId(a.id);
+                                }}
+                                className={`shrink-0 rounded-lg px-2 py-1 text-[11px] font-medium ${
+                                  confirmId === a.id
+                                    ? "bg-danger text-primary-foreground"
+                                    : "text-danger hover:bg-danger/10"
+                                }`}
+                              >
+                                {confirmId === a.id ? "Confirm delete" : "Delete"}
+                              </button>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
           {deleteError ? <p className="text-xs text-danger">{deleteError}</p> : null}
           {(activities?.length ?? 0) === 0 ? <Note>No activities logged yet.</Note> : null}
-
         </div>
       </div>
+
 
       <div className="mt-6">
         <SectionTitle>Leave challenge</SectionTitle>
