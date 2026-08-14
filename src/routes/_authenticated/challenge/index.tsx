@@ -230,6 +230,35 @@ function ChallengeHome() {
 
         </div>
       </div>
+
+      <div className="mt-6">
+        <SectionTitle>Leave challenge</SectionTitle>
+        <Card>
+          <p className="text-xs text-muted-foreground">
+            Leaving removes you from {challenge.name}. Your logged activities stay in the record and
+            you can create a brand new challenge with someone else straight away.
+          </p>
+          <button
+            onClick={() => {
+              if (!leaveArmed) {
+                setLeaveArmed(true);
+                return;
+              }
+              void doLeave();
+            }}
+            disabled={leaving}
+            className={`mt-3 w-full rounded-xl py-2.5 text-sm font-semibold disabled:opacity-60 ${
+              leaveArmed
+                ? "bg-danger text-primary-foreground"
+                : "border border-danger/40 text-danger"
+            }`}
+          >
+            {leaving ? "Leaving…" : leaveArmed ? "Confirm and leave" : "Leave this challenge"}
+          </button>
+          {leaveError ? <p className="mt-2 text-xs text-danger">{leaveError}</p> : null}
+        </Card>
+      </div>
     </AppShell>
+
   );
 }
