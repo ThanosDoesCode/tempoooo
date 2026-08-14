@@ -348,20 +348,22 @@ function formatDay(day: string) {
 }
 
 /** Evidence screenshots are visible to both members so neither can cheat. */
-function EvidenceViewer({ path }: { path: string }) {
-  const [url, setUrl] = useState<string | null>(null);
+function EvidenceViewer({ paths }: { paths: string[] }) {
+  const [urls, setUrls] = useState<string[] | null>(null);
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const show = async () => {
     setOpen(true);
-    if (url) return;
+    if (urls) return;
     const { data, error: e } = await supabase.storage
       .from("challenge-evidence")
-      .createSignedUrl(path, 300);
+      .createSignedUrls(paths, 300);
     if (e) setError(e.message);
-    else setUrl(data.signedUrl);
+    else setUrls((data ?? []).map((d) => d.signedUrl).filter(Boolean) as string[]);
   };
+
+  if (paths.length === 0) return null;
 
   if (!open) {
     return (
@@ -370,6 +372,7 @@ function EvidenceViewer({ path }: { path: string }) {
         className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-border bg-elevated px-2.5 py-1.5 text-[11px] font-medium"
       >
         <ImageIcon className="h-3.5 w-3.5 text-muted-foreground" /> View evidence
+        {paths.length > 1 ? ` (${paths.length})` : ""}
       </button>
     );
   }
@@ -378,14 +381,18 @@ function EvidenceViewer({ path }: { path: string }) {
     <div className="mt-2">
       {error ? (
         <p className="text-[11px] text-danger">{error}</p>
-      ) : url ? (
-        <a href={url} target="_blank" rel="noreferrer">
-          <img
-            src={url}
-            alt="Activity evidence screenshot"
-            className="max-h-72 w-full rounded-xl border border-border object-contain bg-elevated"
-          />
-        </a>
+      ) : urls ? (
+        <div className="space-y-2">
+          {urls.map((u, i) => (
+            <a key={u} href={u} target="_blank" rel="noreferrer">
+              <img
+                src={u}
+                alt={`Activity evidence screenshot ${i + 1}`}
+                className="max-h-72 w-full rounded-xl border border-border bg-elevated object-contain"
+              />
+            </a>
+          ))}
+        </div>
       ) : (
         <div className="h-24 animate-pulse rounded-xl bg-elevated" />
       )}
