@@ -75,7 +75,14 @@ async function signPhotos(rows: PhotoRow[]): Promise<PhotoSet[]> {
       if (s.path && s.signedUrl) map.set(s.path, s.signedUrl);
     });
   }
+  rows.forEach((r) =>
+    photoPaths.set(
+      r.id,
+      [r.front_path, r.side_path, r.back_path].filter((p): p is string => !!p),
+    ),
+  );
   return rows.map((r) => ({
+
     id: r.id,
     date: r.taken_on,
     ...(r.weight != null ? { weight: Number(r.weight) } : {}),
