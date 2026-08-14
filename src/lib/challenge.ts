@@ -1,6 +1,7 @@
 import { addDays, format, parseISO } from "date-fns";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { getRelatedProfiles } from "./privileged-rpcs.functions";
 
 export type Challenge = {
   id: string;
@@ -114,11 +115,11 @@ export function useChallengeMembers(challengeId: string | undefined) {
           "challenge_id",
           challengeId!,
         ),
-        supabase.rpc("related_profiles"),
+        getRelatedProfiles(),
       ]);
       if (members.error) throw members.error;
       const names = new Map(
-        ((profiles.data ?? []) as { id: string; display_name: string | null; email: string | null }[]).map(
+        (profiles ?? []).map(
           (p) => [p.id, p.display_name || p.email || "Athlete"],
         ),
       );
