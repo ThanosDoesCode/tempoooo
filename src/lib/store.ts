@@ -311,31 +311,11 @@ export function useActions() {
   const resetBulkPlan = useCallback(
     async (opts: { photos: boolean; targets: boolean } = { photos: true, targets: false }) => {
       if (!bulkId || !isOwner()) return;
-      const id = bulkId;
-      for (const table of ["bulk_days", "bulk_workouts", "bulk_week_notes"] as const) {
-        const { error } = await supabase.from(table).delete().eq("bulk_profile_id", id);
-        if (error) throw new Error(error.message);
-      }
-      if (opts.photos) {
-        const all = [...photoPaths.values()].flat();
-        if (all.length) await supabase.storage.from("bulk-progress-photos").remove(all);
-        const { error } = await supabase.from("bulk_photos").delete().eq("bulk_profile_id", id);
-        if (error) throw new Error(error.message);
-        photoPaths.clear();
-      }
-      if (opts.targets) {
-        const { error } = await supabase
-          .from("bulk_targets")
-          .upsert(
-            { bulk_profile_id: id, payload: json(DEFAULT_DATA.targets) },
-            { onConflict: "bulk_profile_id" },
-          );
-        if (error) throw new Error(error.message);
-      }
-      await loadBulk(id, role);
+      await resetBulkData(bulkId, opts);
     },
     [],
   );
+
 
   return {
     saveDay,
