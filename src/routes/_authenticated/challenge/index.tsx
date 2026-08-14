@@ -219,7 +219,9 @@ function ChallengeHome() {
 
             );
           })}
+          {deleteError ? <p className="text-xs text-danger">{deleteError}</p> : null}
           {(activities?.length ?? 0) === 0 ? <Note>No activities logged yet.</Note> : null}
+
         </div>
       </div>
     </AppShell>
