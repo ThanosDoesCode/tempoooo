@@ -9,8 +9,10 @@ import {
   LogOut,
   PlusCircle,
   Trophy,
+  User,
   Users,
 } from "lucide-react";
+
 import type { ReactNode } from "react";
 import { signOut } from "@/lib/auth";
 import { useMemberships } from "@/lib/bulk-access";
@@ -75,15 +77,19 @@ export function AppShell({ children }: { children: ReactNode }) {
               View only
             </span>
           ) : null}
+          <Link to="/profile" aria-label="Profile" className="ml-auto text-muted-foreground">
+            <User className="h-4 w-4" />
+          </Link>
           <button
             onClick={() => void signOut()}
             aria-label="Sign out"
-            className="ml-auto text-muted-foreground"
+            className="text-muted-foreground"
           >
             <LogOut className="h-4 w-4" />
           </button>
         </div>
       </div>
+
 
       <main className="mx-auto w-full max-w-lg px-4 pb-28 pt-6">
         {viewerLock ? (
