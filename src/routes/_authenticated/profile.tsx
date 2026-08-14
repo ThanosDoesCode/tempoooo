@@ -119,6 +119,60 @@ function ProfilePage() {
         {error ? <p className="mt-2 text-xs text-danger">{error}</p> : null}
       </Card>
 
+      {canInvite ? (
+        <div className="mt-3">
+          <ChallengeInviteCard challengeId={challenge.id} />
+        </div>
+      ) : null}
+
+      {ownedPlan ? (
+        <Card className="mt-3">
+          <SectionTitle>Danger zone</SectionTitle>
+          <Note>
+            Resetting clears every daily log, workout, weekly note and progress photo on your plan.
+            The plan itself and the people you shared it with stay in place. This cannot be undone.
+          </Note>
+          <label className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={resetTargets}
+              onChange={(e) => setResetTargets(e.target.checked)}
+              className="h-4 w-4 accent-primary"
+            />
+            Also restore the default targets
+          </label>
+          {resetStep === 0 ? (
+            <button
+              onClick={() => {
+                setResetDone(false);
+                setResetStep(1);
+              }}
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-danger/50 py-3 text-sm font-semibold text-danger"
+            >
+              <RotateCcw className="h-4 w-4" /> Reset my bulk plan
+            </button>
+          ) : (
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <button
+                onClick={() => setResetStep(0)}
+                className="rounded-xl border border-border py-3 text-sm font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void reset()}
+                disabled={busy}
+                className="rounded-xl bg-danger py-3 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+              >
+                {busy ? "Resetting…" : "Yes, erase it"}
+              </button>
+            </div>
+          )}
+          {resetDone ? <p className="mt-2 text-xs text-good">Your bulk plan is now empty.</p> : null}
+        </Card>
+      ) : null}
+
+
       <Card className="mt-3">
         <SectionTitle>Session</SectionTitle>
         <button
