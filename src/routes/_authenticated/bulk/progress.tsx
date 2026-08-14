@@ -34,11 +34,11 @@ import {
   waistChange,
   weekStartOf,
 } from "@/lib/calc";
-import { setData, useAppData } from "@/lib/store";
+import { useActions, useAppData } from "@/lib/store";
 import { ALL_EXERCISES, type AppData, type PhotoSet } from "@/lib/types";
 
 
-export const Route = createFileRoute("/progress")({
+export const Route = createFileRoute("/_authenticated/bulk/progress")({
   head: () => ({
     meta: [
       { title: "Progress — Lean Bulk Tracker" },
@@ -381,6 +381,7 @@ function weeklySeries(data: AppData) {
 }
 
 function PhotosSection({ data }: { data: AppData }) {
+  const { addPhotoSet, setPhotoImage, importBackup: restoreBackup } = useActions();
   const fileRef = useRef<HTMLInputElement>(null);
   const importRef = useRef<HTMLInputElement>(null);
   const [pending, setPending] = useState<{ id: string; slot: "front" | "side" | "back" } | null>(null);
@@ -400,21 +401,13 @@ function PhotosSection({ data }: { data: AppData }) {
 
   const addSet = () => {
     const latest = latestWeight(data);
-    const entry: PhotoSet = {
-      id: crypto.randomUUID(),
-      date: iso(new Date()),
-      ...(latest ? { weight: latest.weight } : {}),
-    };
-    setData((prev) => ({ ...prev, photos: [...prev.photos, entry] }));
+    void addPhotoSet(iso(new Date()), latest?.weight);
   };
 
   const onFile = async (file: File) => {
     if (!pending) return;
     const dataUrl = await downscale(file);
-    setData((prev) => ({
-      ...prev,
-      photos: prev.photos.map((p) => (p.id === pending.id ? { ...p, [pending.slot]: dataUrl } : p)),
-    }));
+    await setPhotoImage(pending.id, pending.slot, dataUrl);
     setPending(null);
   };
 
@@ -432,7 +425,7 @@ function PhotosSection({ data }: { data: AppData }) {
     try {
       const parsed = JSON.parse(await file.text()) as AppData;
       if (!parsed.days) return;
-      setData(() => parsed);
+      await restoreBackup(parsed);
     } catch {
       /* invalid file */
     }
