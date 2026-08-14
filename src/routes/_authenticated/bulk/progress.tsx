@@ -401,21 +401,13 @@ function PhotosSection({ data }: { data: AppData }) {
 
   const addSet = () => {
     const latest = latestWeight(data);
-    const entry: PhotoSet = {
-      id: crypto.randomUUID(),
-      date: iso(new Date()),
-      ...(latest ? { weight: latest.weight } : {}),
-    };
-    setData((prev) => ({ ...prev, photos: [...prev.photos, entry] }));
+    void addPhotoSet(iso(new Date()), latest?.weight);
   };
 
   const onFile = async (file: File) => {
     if (!pending) return;
     const dataUrl = await downscale(file);
-    setData((prev) => ({
-      ...prev,
-      photos: prev.photos.map((p) => (p.id === pending.id ? { ...p, [pending.slot]: dataUrl } : p)),
-    }));
+    await setPhotoImage(pending.id, pending.slot, dataUrl);
     setPending(null);
   };
 
