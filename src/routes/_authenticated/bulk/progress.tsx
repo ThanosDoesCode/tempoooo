@@ -452,9 +452,10 @@ function PhotosSection({ data }: { data: AppData }) {
         Progress photos
       </SectionTitle>
       <Note>
-        Take every 4 weeks in the same location, lighting, distance and pose. Photos live on this
-        device, so export a backup file regularly to keep them safe.
+        Take every 4 weeks in the same location, lighting, distance and pose. Photos are stored
+        privately in your account, and you can still export a backup file of your logs.
       </Note>
+
 
       <div className="mt-3 grid grid-cols-2 gap-2">
         <button
