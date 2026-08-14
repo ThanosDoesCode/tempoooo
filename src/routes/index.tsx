@@ -30,7 +30,8 @@ function Entry() {
         return;
       }
       const { data: members } = await supabase.from("bulk_members").select("bulk_profile_id");
-      window.location.href = members && members.length > 0 ? "/bulk" : "/challenge";
+      window.location.href = members && members.length > 0 ? "/bulk" : "/profile";
+
     })();
   }, []);
 
