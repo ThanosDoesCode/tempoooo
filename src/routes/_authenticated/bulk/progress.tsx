@@ -34,7 +34,7 @@ import {
   waistChange,
   weekStartOf,
 } from "@/lib/calc";
-import { useActions, useAppData } from "@/lib/store";
+import { useActions, useAppData, useBulkMeta } from "@/lib/store";
 import { ALL_EXERCISES, type AppData, type PhotoSet } from "@/lib/types";
 
 
