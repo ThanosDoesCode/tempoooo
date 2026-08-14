@@ -16,7 +16,7 @@ import { exerciseHistory, iso, progressionFor, totalReps } from "@/lib/calc";
 import { useActions, useAppData } from "@/lib/store";
 import { EXERCISES, type ExerciseEntry, type SplitType } from "@/lib/types";
 
-export const Route = createFileRoute("/training")({
+export const Route = createFileRoute("/_authenticated/bulk/training")({
   head: () => ({
     meta: [
       { title: "Training — Lean Bulk Tracker" },
