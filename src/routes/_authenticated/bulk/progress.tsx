@@ -381,7 +381,9 @@ function weeklySeries(data: AppData) {
 }
 
 function PhotosSection({ data }: { data: AppData }) {
-  const { addPhotoSet, setPhotoImage, importBackup: restoreBackup } = useActions();
+  const { addPhotoSet, setPhotoImage, importBackup: restoreBackup, deletePhotoSet } = useActions();
+  const { role } = useBulkMeta();
+  const owner = role === "owner";
   const fileRef = useRef<HTMLInputElement>(null);
   const importRef = useRef<HTMLInputElement>(null);
   const [pending, setPending] = useState<{ id: string; slot: "front" | "side" | "back" } | null>(null);
@@ -389,6 +391,13 @@ function PhotosSection({ data }: { data: AppData }) {
   const [slot, setSlot] = useState<"front" | "side" | "back">("front");
   const [aId, setAId] = useState<string | null>(null);
   const [bId, setBId] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+
+  const removeSet = async (id: string) => {
+    setConfirmDelete(null);
+    await deletePhotoSet(id);
+  };
+
 
   const photos = useMemo(
     () => [...data.photos].sort((a, b) => a.date.localeCompare(b.date)),
