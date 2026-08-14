@@ -77,14 +77,18 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
+      { title: "Lean Bulk Tracker — bulk and challenge" },
+      { name: "description", content: "A private lean bulk tracker plus a two-person 52-week running and cycling challenge with weekly targets and penalties." },
       { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { property: "og:title", content: "Lean Bulk Tracker — bulk and challenge" },
+      { property: "og:description", content: "A private lean bulk tracker plus a two-person 52-week running and cycling challenge with weekly targets and penalties." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:site", content: "@Lovable" },
+      { name: "twitter:title", content: "Lean Bulk Tracker — bulk and challenge" },
+      { name: "twitter:description", content: "A private lean bulk tracker plus a two-person 52-week running and cycling challenge with weekly targets and penalties." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/a29b8f53c2549838b1fe8ea97b3d4e14/id-preview-e7988efe--a8577b6d-afee-4ca9-8d73-3a09d120aad8.lovable.app-1786718131610.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/a29b8f53c2549838b1fe8ea97b3d4e14/id-preview-e7988efe--a8577b6d-afee-4ca9-8d73-3a09d120aad8.lovable.app-1786718131610.png" },
     ],
     links: [
       {

@@ -14,7 +14,7 @@ export const Route = createFileRoute("/")({
       { property: "og:title", content: "Lean Bulk Tracker — bulk and challenge" },
       {
         property: "og:description",
-        content: "Private bulk tracking and a shared 52-week endurance challenge.",
+        content: "A private lean bulk tracker plus a two-person 52-week running and cycling challenge with weekly targets and penalties.",
       },
     ],
   }),
