@@ -44,8 +44,7 @@ function ProfilePage() {
 
   const hasBulk = (memberships?.length ?? 0) > 0;
   const ownedPlan = memberships?.find((m) => m.role === "owner");
-  const canInvite =
-    !!challenge && challenge.created_by === user?.id && (challengeMembers?.length ?? 0) < 2;
+  const canInvite = !!challenge && (challengeMembers?.length ?? 0) < 2;
 
   const create = async () => {
     setBusy(true);
