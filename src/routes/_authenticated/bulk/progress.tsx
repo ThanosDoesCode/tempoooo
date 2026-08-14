@@ -381,6 +381,7 @@ function weeklySeries(data: AppData) {
 }
 
 function PhotosSection({ data }: { data: AppData }) {
+  const { addPhotoSet, setPhotoImage, importBackup: restoreBackup } = useActions();
   const fileRef = useRef<HTMLInputElement>(null);
   const importRef = useRef<HTMLInputElement>(null);
   const [pending, setPending] = useState<{ id: string; slot: "front" | "side" | "back" } | null>(null);
