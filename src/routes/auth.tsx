@@ -72,9 +72,11 @@ function AuthPage() {
           Private bulk tracking and your 52-week endurance challenge.
         </p>
 
-        <form onSubmit={submit} className="space-y-3">
+        <form onSubmit={submit} method="post" className="space-y-3">
           <input
             type="email"
+            name="email"
+            autoComplete="username"
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -83,6 +85,8 @@ function AuthPage() {
           />
           <input
             type="password"
+            name="password"
+            autoComplete={mode === "signin" ? "current-password" : "new-password"}
             required
             minLength={6}
             value={password}
@@ -90,6 +94,7 @@ function AuthPage() {
             placeholder="Password"
             className="w-full rounded-xl border border-border bg-elevated px-3 py-3 text-sm outline-none"
           />
+
           <button
             disabled={busy}
             className="w-full rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground disabled:opacity-60"

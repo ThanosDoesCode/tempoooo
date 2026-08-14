@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedBulkRouteRouteImport } from './routes/_authenticated/bulk/route'
+import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated/profile'
 import { Route as AuthenticatedBulkIndexRouteImport } from './routes/_authenticated/bulk/index'
 import { Route as AuthenticatedBulkAccessRouteImport } from './routes/_authenticated/bulk/access'
 import { Route as AuthenticatedBulkCheckInRouteImport } from './routes/_authenticated/bulk/check-in'
@@ -43,6 +44,11 @@ const AuthRoute = AuthRouteImport.update({
 const AuthenticatedBulkRouteRoute = AuthenticatedBulkRouteRouteImport.update({
   id: '/bulk',
   path: '/bulk',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedProfileRoute = AuthenticatedProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedBulkIndexRoute = AuthenticatedBulkIndexRouteImport.update({
@@ -120,6 +126,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/bulk': typeof AuthenticatedBulkRouteRouteWithChildren
+  '/profile': typeof AuthenticatedProfileRoute
   '/bulk/access': typeof AuthenticatedBulkAccessRoute
   '/bulk/check-in': typeof AuthenticatedBulkCheckInRoute
   '/bulk/progress': typeof AuthenticatedBulkProgressRoute
@@ -136,6 +143,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/profile': typeof AuthenticatedProfileRoute
   '/bulk/access': typeof AuthenticatedBulkAccessRoute
   '/bulk/check-in': typeof AuthenticatedBulkCheckInRoute
   '/bulk/progress': typeof AuthenticatedBulkProgressRoute
@@ -155,6 +163,7 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
   '/_authenticated/bulk': typeof AuthenticatedBulkRouteRouteWithChildren
+  '/_authenticated/profile': typeof AuthenticatedProfileRoute
   '/_authenticated/bulk/access': typeof AuthenticatedBulkAccessRoute
   '/_authenticated/bulk/check-in': typeof AuthenticatedBulkCheckInRoute
   '/_authenticated/bulk/progress': typeof AuthenticatedBulkProgressRoute
@@ -174,6 +183,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/bulk'
+    | '/profile'
     | '/bulk/access'
     | '/bulk/check-in'
     | '/bulk/progress'
@@ -190,6 +200,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
+    | '/profile'
     | '/bulk/access'
     | '/bulk/check-in'
     | '/bulk/progress'
@@ -208,6 +219,7 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/auth'
     | '/_authenticated/bulk'
+    | '/_authenticated/profile'
     | '/_authenticated/bulk/access'
     | '/_authenticated/bulk/check-in'
     | '/_authenticated/bulk/progress'
@@ -256,6 +268,13 @@ declare module '@tanstack/react-router' {
       path: '/bulk'
       fullPath: '/bulk'
       preLoaderRoute: typeof AuthenticatedBulkRouteRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/profile': {
+      id: '/_authenticated/profile'
+      path: '/profile'
+      fullPath: '/profile'
+      preLoaderRoute: typeof AuthenticatedProfileRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/bulk/': {
@@ -369,6 +388,7 @@ const AuthenticatedBulkRouteRouteWithChildren =
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedBulkRouteRoute: typeof AuthenticatedBulkRouteRouteWithChildren
+  AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute
   AuthenticatedChallengeHistoryRoute: typeof AuthenticatedChallengeHistoryRoute
   AuthenticatedChallengeLogRoute: typeof AuthenticatedChallengeLogRoute
   AuthenticatedChallengeNewRoute: typeof AuthenticatedChallengeNewRoute
@@ -380,6 +400,7 @@ interface AuthenticatedRouteRouteChildren {
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedBulkRouteRoute: AuthenticatedBulkRouteRouteWithChildren,
+  AuthenticatedProfileRoute: AuthenticatedProfileRoute,
   AuthenticatedChallengeHistoryRoute: AuthenticatedChallengeHistoryRoute,
   AuthenticatedChallengeLogRoute: AuthenticatedChallengeLogRoute,
   AuthenticatedChallengeNewRoute: AuthenticatedChallengeNewRoute,
