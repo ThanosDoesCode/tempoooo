@@ -37,6 +37,7 @@ export async function syncProfile(user: User) {
 }
 
 export async function signOut() {
+  localStorage.removeItem("saved-credentials");
   await supabase.auth.signOut();
   window.location.href = "/auth";
 }
