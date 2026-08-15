@@ -40,6 +40,29 @@ function AuthPage() {
         const next = sessionStorage.getItem("post-auth-path");
         sessionStorage.removeItem("post-auth-path");
         window.location.href = next ?? "/";
+        return;
+      }
+      // Ask the browser / keychain for a stored credential and sign in with it.
+      try {
+        const cred = (await navigator.credentials?.get({
+          password: true,
+          mediation: "optional",
+        } as CredentialRequestOptions)) as (Credential & { id?: string; password?: string }) | null;
+        if (cred?.id && cred.password) {
+          setEmail(cred.id);
+          setPassword(cred.password);
+          setBusy(true);
+          const { error } = await supabase.auth.signInWithPassword({
+            email: cred.id,
+            password: cred.password,
+          });
+          setBusy(false);
+          if (!error) {
+            window.location.href = "/";
+          }
+        }
+      } catch {
+        /* stored-credential retrieval is best-effort */
       }
     });
   }, []);
@@ -57,6 +80,7 @@ function AuthPage() {
       /* credential storage is a best-effort browser feature */
     }
   };
+
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
