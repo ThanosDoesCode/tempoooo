@@ -23,17 +23,41 @@ export const Route = createFileRoute("/auth")({
   component: AuthPage,
 });
 
+const SAVED_KEY = "saved-credentials";
+
+/** Light obfuscation so the value is not plainly readable at a glance. */
+const encode = (v: string) => btoa(unescape(encodeURIComponent(v)));
+const decode = (v: string) => decodeURIComponent(escape(atob(v)));
+
+function readSaved(): { email: string; password: string } | null {
+  try {
+    const raw = localStorage.getItem(SAVED_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(decode(raw)) as { email?: string; password?: string };
+    if (!parsed.email || !parsed.password) return null;
+    return { email: parsed.email, password: parsed.password };
+  } catch {
+    return null;
+  }
+}
+
 function AuthPage() {
   const navigate = useNavigate();
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [remember, setRemember] = useState(true);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
   useEffect(() => {
     const saved = localStorage.getItem("last-email");
     if (saved) setEmail(saved);
+    const stored = readSaved();
+    if (stored) {
+      setEmail(stored.email);
+      setPassword(stored.password);
+    }
     void supabase.auth.getSession().then(async ({ data }) => {
       if (data.session?.user) {
         await syncProfile(data.session.user);
@@ -42,7 +66,20 @@ function AuthPage() {
         window.location.href = next ?? "/";
         return;
       }
-      // Ask the browser / keychain for a stored credential and sign in with it.
+      // Saved on this device: sign in automatically, no typing needed.
+      if (stored) {
+        setBusy(true);
+        const { error } = await supabase.auth.signInWithPassword(stored);
+        setBusy(false);
+        if (!error) {
+          window.location.href = "/";
+          return;
+        }
+        localStorage.removeItem(SAVED_KEY);
+        setMsg("Saved password no longer works, please sign in again.");
+        return;
+      }
+      // Otherwise ask the browser / keychain for a stored credential.
       try {
         const cred = (await navigator.credentials?.get({
           password: true,
@@ -51,15 +88,6 @@ function AuthPage() {
         if (cred?.id && cred.password) {
           setEmail(cred.id);
           setPassword(cred.password);
-          setBusy(true);
-          const { error } = await supabase.auth.signInWithPassword({
-            email: cred.id,
-            password: cred.password,
-          });
-          setBusy(false);
-          if (!error) {
-            window.location.href = "/";
-          }
         }
       } catch {
         /* stored-credential retrieval is best-effort */
@@ -67,9 +95,14 @@ function AuthPage() {
     });
   }, []);
 
-  /** Lets the browser / iOS keychain offer to store the credentials. */
+  /** Saves locally when asked, and lets the browser / keychain store it too. */
   const offerToSaveCredentials = async () => {
     localStorage.setItem("last-email", email);
+    if (remember) {
+      localStorage.setItem(SAVED_KEY, encode(JSON.stringify({ email, password })));
+    } else {
+      localStorage.removeItem(SAVED_KEY);
+    }
     try {
       const C = (window as unknown as { PasswordCredential?: new (d: unknown) => Credential })
         .PasswordCredential;
@@ -80,6 +113,7 @@ function AuthPage() {
       /* credential storage is a best-effort browser feature */
     }
   };
+
 
 
   const submit = async (e: React.FormEvent) => {
