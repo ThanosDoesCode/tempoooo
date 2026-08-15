@@ -174,6 +174,15 @@ function AuthPage() {
             placeholder="Password"
             className="w-full rounded-xl border border-border bg-elevated px-3 py-3 text-sm outline-none"
           />
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={remember}
+              onChange={(e) => setRemember(e.target.checked)}
+              className="h-4 w-4 rounded border-border accent-primary"
+            />
+            Save password on this device
+          </label>
 
           <button
             disabled={busy}
@@ -186,9 +195,10 @@ function AuthPage() {
         {msg ? <p className="mt-3 text-xs text-warn">{msg}</p> : null}
 
         <p className="mt-3 text-[11px] text-muted-foreground">
-          You stay signed in on this device, and your browser or keychain can save the password so
-          you never type it again.
+          With "Save password" on, this device signs you in automatically and you never type it
+          again. Only enable it on a device you keep to yourself.
         </p>
+
 
 
         <button
