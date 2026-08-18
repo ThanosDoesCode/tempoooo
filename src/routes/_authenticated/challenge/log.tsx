@@ -6,7 +6,13 @@ import { AppShell, PageHeader } from "@/components/AppShell";
 import { Card, Note, SectionTitle } from "@/components/ui-kit";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
-import { todayIn, useMyChallenge } from "@/lib/challenge";
+import {
+  targetForWeek,
+  todayIn,
+  useMyChallenge,
+  useWeekTargets,
+  weekNumberOf,
+} from "@/lib/challenge";
 
 
 export const Route = createFileRoute("/_authenticated/challenge/log")({
@@ -30,6 +36,7 @@ function LogActivity() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { data: challenge } = useMyChallenge();
+  const { data: weekTargets } = useWeekTargets(challenge?.id);
   const today = challenge ? todayIn(challenge.timezone) : new Date().toISOString().slice(0, 10);
 
   const [type, setType] = useState<"run" | "cycle">("run");
@@ -104,7 +111,10 @@ function LogActivity() {
 
   return (
     <AppShell>
-      <PageHeader title="Add activity" subtitle="Evidence screenshot is required." />
+      <PageHeader
+        title="Add activity"
+        subtitle={`This week's target is ${targetForWeek(challenge, weekTargets, weekNumberOf(challenge, today)).toFixed(0)} equivalent km. Evidence screenshot is required.`}
+      />
       <Card className="space-y-3">
         <div className="grid grid-cols-2 gap-2">
           {(["run", "cycle"] as const).map((t) => (
