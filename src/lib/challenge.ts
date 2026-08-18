@@ -229,6 +229,8 @@ export type PaymentRow = {
   amount_eur: number;
   status: "unpaid" | "marked_paid" | "confirmed_paid";
   payment_evidence_path: string | null;
+  settled_by: string | null;
+
 };
 
 export function useWeeks(challengeId: string | undefined) {
