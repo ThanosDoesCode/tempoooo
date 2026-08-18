@@ -2,7 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { Card, Note, SectionTitle } from "@/components/ui-kit";
 import { useAuth } from "@/lib/auth";
-import { eur, useChallengeMembers, useMyChallenge, useWeeks } from "@/lib/challenge";
+import { owedText, useChallengeMembers, useMyChallenge, useWeeks } from "@/lib/challenge";
+
 
 export const Route = createFileRoute("/_authenticated/challenge/history")({
   head: () => ({
