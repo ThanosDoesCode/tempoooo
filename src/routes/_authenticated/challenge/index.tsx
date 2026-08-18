@@ -10,16 +10,18 @@ import { useAuth } from "@/lib/auth";
 
 import { finalizeChallenge } from "@/lib/privileged-rpcs.functions";
 import {
-  eur,
   hoursLeft,
   leaveChallenge,
   km,
+  owedText,
   penaltyFor,
   sumWeek,
+  targetForWeek,
   todayIn,
   useActivities,
   useChallengeMembers,
   useMyChallenge,
+  useWeekTargets,
   weekBounds,
   weekNumberOf,
 } from "@/lib/challenge";
@@ -52,6 +54,7 @@ function ChallengeHome() {
   const { data: challenge, isLoading } = useMyChallenge();
   const { data: members } = useChallengeMembers(challenge?.id);
   const { data: activities } = useActivities(challenge?.id);
+  const { data: weekTargets } = useWeekTargets(challenge?.id);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [leaveArmed, setLeaveArmed] = useState(false);
@@ -157,8 +160,9 @@ function ChallengeHome() {
           const totals = week
             ? sumWeek(activities ?? [], m.userId, week.start, week.end)
             : { running: 0, cycling: 0, equivalent: 0, rows: [] };
-          const pct = Math.min(100, (totals.equivalent / 15) * 100);
-          const done = totals.equivalent >= 15;
+          const target = targetForWeek(challenge, weekTargets, week?.n ?? 1);
+          const pct = target > 0 ? Math.min(100, (totals.equivalent / target) * 100) : 100;
+          const done = totals.equivalent >= target;
           const tone = done ? "bg-good" : "bg-warn";
           return (
             <Card key={m.userId}>
@@ -167,7 +171,7 @@ function ChallengeHome() {
                   {m.userId === user?.id ? "Me" : m.name}
                 </h3>
                 <span className="num text-sm">
-                  {totals.equivalent.toFixed(1)} / 15 km
+                  {totals.equivalent.toFixed(1)} / {target.toFixed(target % 1 === 0 ? 0 : 1)} km
                 </span>
               </div>
               <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-elevated">
@@ -175,10 +179,12 @@ function ChallengeHome() {
               </div>
               <div className="mt-2 flex items-center justify-between text-xs">
                 <span className={done ? "text-good" : "text-muted-foreground"}>
-                  {done ? "Completed ✓" : `${(15 - totals.equivalent).toFixed(1)} km remaining`}
+                  {done
+                    ? "Completed ✓"
+                    : `${(target - totals.equivalent).toFixed(1)} km remaining`}
                 </span>
                 <span className={done ? "text-good" : "text-warn"}>
-                  Current penalty: {eur(penaltyFor(totals.equivalent))}
+                  Current penalty: {owedText(penaltyFor(totals.equivalent, target))}
                 </span>
               </div>
               <p className="mt-2 text-[11px] text-muted-foreground">
@@ -201,7 +207,13 @@ function ChallengeHome() {
 
       </div>
 
-      <div className="mt-4">
+      <div className="mt-4 grid gap-2">
+        <Link
+          to="/challenge/targets"
+          className="block rounded-xl border border-border bg-elevated py-2.5 text-center text-sm font-medium"
+        >
+          Weekly targets
+        </Link>
         <Link
           to="/challenge/log"
           className="block rounded-xl bg-primary py-3 text-center text-sm font-semibold text-primary-foreground"
