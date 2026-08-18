@@ -42,16 +42,33 @@ export const TIERS = [
   { min: 0, penalty: 15, label: "Below 5.00 km" },
 ];
 
+export const DEFAULT_TARGET_KM = 15;
+
 /** Mirrors the database penalty_for() function. Official values always come from the server. */
-export function penaltyFor(equivalentKm: number) {
-  if (equivalentKm >= 15) return 0;
-  if (equivalentKm >= 10) return 5;
-  if (equivalentKm >= 5) return 10;
+export function penaltyFor(equivalentKm: number, targetKm: number = DEFAULT_TARGET_KM) {
+  if (targetKm <= 0 || equivalentKm >= targetKm) return 0;
+  if (equivalentKm >= (targetKm * 2) / 3) return 5;
+  if (equivalentKm >= targetKm / 3) return 10;
   return 15;
 }
 
+/** Forfeit rule: one photo for every 5 euro owed. */
+export const photosFor = (euros: number) => Math.floor(Math.max(0, euros) / 5);
+
+export const photoText = (euros: number) => {
+  const n = photosFor(euros);
+  return n === 0 ? "" : `${n} photo${n > 1 ? "s" : ""}`;
+};
+
+/** "€10 + 2 photos" for any owed amount, "€0" when nothing is owed. */
+export const owedText = (euros: number) => {
+  const p = photoText(euros);
+  return p ? `${eur(euros)} + ${p}` : eur(euros);
+};
+
 export const equivalentKm = (a: { activity_type: string; distance_km: number }) =>
   a.activity_type === "run" ? a.distance_km : a.distance_km / 3;
+
 
 /** Today's date in the challenge timezone (never the device clock's date). */
 export function todayIn(timezone: string) {
@@ -212,6 +229,8 @@ export type PaymentRow = {
   amount_eur: number;
   status: "unpaid" | "marked_paid" | "confirmed_paid";
   payment_evidence_path: string | null;
+  settled_by: string | null;
+
 };
 
 export function useWeeks(challengeId: string | undefined) {
@@ -248,3 +267,86 @@ export function usePayments(challengeId: string | undefined) {
 
 export const eur = (n: number) => `€${n.toFixed(0)}`;
 export const km = (n: number) => `${n.toFixed(1)} km`;
+
+export type WeekTarget = {
+  id: string;
+  challenge_id: string;
+  week_number: number;
+  target_km: number;
+};
+
+/** Per-week target overrides set by the challenge creator for future weeks. */
+export function useWeekTargets(challengeId: string | undefined) {
+  return useQuery({
+    enabled: !!challengeId,
+    queryKey: ["challenge-week-targets", challengeId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("challenge_week_targets")
+        .select("id, challenge_id, week_number, target_km")
+        .eq("challenge_id", challengeId!)
+        .order("week_number", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as WeekTarget[];
+    },
+  });
+}
+
+export function targetForWeek(
+  challenge: Challenge | null | undefined,
+  overrides: WeekTarget[] | undefined,
+  weekNumber: number,
+) {
+  const hit = overrides?.find((t) => t.week_number === weekNumber);
+  return Number(hit?.target_km ?? challenge?.weekly_target_km ?? DEFAULT_TARGET_KM);
+}
+
+/** Sets (or clears, when km is null) the target for a range of future weeks. */
+export async function setWeekTargets(
+  challengeId: string,
+  weekNumbers: number[],
+  targetKm: number | null,
+) {
+  const { data: auth } = await supabase.auth.getUser();
+  const uid = auth.user?.id;
+  if (!uid) throw new Error("Not signed in");
+  if (targetKm === null) {
+    const { error } = await supabase
+      .from("challenge_week_targets")
+      .delete()
+      .eq("challenge_id", challengeId)
+      .in("week_number", weekNumbers);
+    if (error) throw error;
+    return;
+  }
+  const { error } = await supabase.from("challenge_week_targets").upsert(
+    weekNumbers.map((w) => ({
+      challenge_id: challengeId,
+      week_number: w,
+      target_km: targetKm,
+      set_by: uid,
+    })),
+    { onConflict: "challenge_id,week_number" },
+  );
+  if (error) throw error;
+}
+
+/** Marks every open obligation of the signed-in payer as settled in one step. */
+export async function settleMyDebts(challengeId: string, userId: string) {
+  const { error } = await supabase
+    .from("challenge_payments")
+    .update({ status: "confirmed_paid" })
+    .eq("challenge_id", challengeId)
+    .eq("payer_id", userId)
+    .neq("status", "confirmed_paid");
+  if (error) throw error;
+}
+
+/** Reopens a settle done by the signed-in user, in case it was a mistake. */
+export async function reopenPayment(paymentId: string) {
+  const { error } = await supabase
+    .from("challenge_payments")
+    .update({ status: "unpaid" })
+    .eq("id", paymentId);
+  if (error) throw error;
+}

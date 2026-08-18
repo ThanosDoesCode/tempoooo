@@ -501,6 +501,7 @@ export type Database = {
           payer_id: string
           payment_evidence_path: string | null
           recipient_id: string
+          settled_by: string | null
           status: Database["public"]["Enums"]["payment_status"]
           week_id: string
         }
@@ -514,6 +515,7 @@ export type Database = {
           payer_id: string
           payment_evidence_path?: string | null
           recipient_id: string
+          settled_by?: string | null
           status?: Database["public"]["Enums"]["payment_status"]
           week_id: string
         }
@@ -527,6 +529,7 @@ export type Database = {
           payer_id?: string
           payment_evidence_path?: string | null
           recipient_id?: string
+          settled_by?: string | null
           status?: Database["public"]["Enums"]["payment_status"]
           week_id?: string
         }
@@ -543,6 +546,44 @@ export type Database = {
             columns: ["week_id"]
             isOneToOne: true
             referencedRelation: "challenge_weeks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      challenge_week_targets: {
+        Row: {
+          challenge_id: string
+          created_at: string
+          id: string
+          set_by: string
+          target_km: number
+          updated_at: string
+          week_number: number
+        }
+        Insert: {
+          challenge_id: string
+          created_at?: string
+          id?: string
+          set_by: string
+          target_km: number
+          updated_at?: string
+          week_number: number
+        }
+        Update: {
+          challenge_id?: string
+          created_at?: string
+          id?: string
+          set_by?: string
+          target_km?: number
+          updated_at?: string
+          week_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "challenge_week_targets_challenge_id_fkey"
+            columns: ["challenge_id"]
+            isOneToOne: false
+            referencedRelation: "challenges"
             referencedColumns: ["id"]
           },
         ]
@@ -702,7 +743,9 @@ export type Database = {
         Args: { _c: string; _caller: string }
         Returns: number
       }
-      penalty_for: { Args: { _km: number }; Returns: number }
+      penalty_for:
+        | { Args: { _km: number }; Returns: number }
+        | { Args: { _km: number; _target: number }; Returns: number }
       related_profiles: {
         Args: { _caller: string }
         Returns: {
