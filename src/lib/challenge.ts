@@ -42,16 +42,33 @@ export const TIERS = [
   { min: 0, penalty: 15, label: "Below 5.00 km" },
 ];
 
+export const DEFAULT_TARGET_KM = 15;
+
 /** Mirrors the database penalty_for() function. Official values always come from the server. */
-export function penaltyFor(equivalentKm: number) {
-  if (equivalentKm >= 15) return 0;
-  if (equivalentKm >= 10) return 5;
-  if (equivalentKm >= 5) return 10;
+export function penaltyFor(equivalentKm: number, targetKm: number = DEFAULT_TARGET_KM) {
+  if (targetKm <= 0 || equivalentKm >= targetKm) return 0;
+  if (equivalentKm >= (targetKm * 2) / 3) return 5;
+  if (equivalentKm >= targetKm / 3) return 10;
   return 15;
 }
 
+/** Forfeit rule: one photo for every 5 euro owed. */
+export const photosFor = (euros: number) => Math.floor(Math.max(0, euros) / 5);
+
+export const photoText = (euros: number) => {
+  const n = photosFor(euros);
+  return n === 0 ? "" : `${n} photo${n > 1 ? "s" : ""}`;
+};
+
+/** "€10 + 2 photos" for any owed amount, "€0" when nothing is owed. */
+export const owedText = (euros: number) => {
+  const p = photoText(euros);
+  return p ? `${eur(euros)} + ${p}` : eur(euros);
+};
+
 export const equivalentKm = (a: { activity_type: string; distance_km: number }) =>
   a.activity_type === "run" ? a.distance_km : a.distance_km / 3;
+
 
 /** Today's date in the challenge timezone (never the device clock's date). */
 export function todayIn(timezone: string) {
