@@ -46,7 +46,8 @@ function History() {
             <SectionTitle
               right={
                 <span className="text-xs text-muted-foreground">
-                  {byWeek.get(n)?.[0]?.week_start} to {byWeek.get(n)?.[0]?.week_end}
+                  {byWeek.get(n)?.[0]?.week_start} to {byWeek.get(n)?.[0]?.week_end} · target{" "}
+                  {Number(byWeek.get(n)?.[0]?.target_km ?? 15).toFixed(0)} km
                 </span>
               }
             >
@@ -60,13 +61,14 @@ function History() {
                 >
                   <span className="font-medium">{name(w.user_id)}</span>
                   <span className="num text-muted-foreground">
-                    {Number(w.equivalent_km).toFixed(1)} km
+                    {Number(w.equivalent_km).toFixed(1)} / {Number(w.target_km).toFixed(0)} km
                   </span>
                   <span className={w.completed ? "text-good" : "text-warn"}>
-                    {w.completed ? "Completed" : eur(Number(w.penalty_eur))}
+                    {w.completed ? "Completed" : owedText(Number(w.penalty_eur))}
                   </span>
                 </div>
               ))}
+
             </div>
           </Card>
         ))}
