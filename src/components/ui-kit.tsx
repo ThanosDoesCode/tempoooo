@@ -1,5 +1,12 @@
 import { cn } from "@/lib/utils";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+
+export function parseDecimal(raw: string): number | undefined {
+  const s = raw.trim().replace(",", ".");
+  if (s === "") return undefined;
+  const n = Number(s);
+  return Number.isNaN(n) ? undefined : n;
+}
 
 export function Card({ children, className }: { children: ReactNode; className?: string }) {
   return <section className={cn("card-surface fade-up p-4", className)}>{children}</section>;
