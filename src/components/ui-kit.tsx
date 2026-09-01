@@ -1,5 +1,6 @@
 import { cn } from "@/lib/utils";
 import type { ReactNode } from "react";
+import { DecimalInput } from "./DecimalInput";
 
 export function Card({ children, className }: { children: ReactNode; className?: string }) {
   return <section className={cn("card-surface fade-up p-4", className)}>{children}</section>;
@@ -89,7 +90,6 @@ export function Bar({
   );
 }
 
-
 export function Field({
   label,
   hint,
@@ -103,7 +103,9 @@ export function Field({
     <label className="block">
       <span className="text-xs font-medium text-muted-foreground">{label}</span>
       {children}
-      {hint ? <span className="mt-1 block text-[11px] text-muted-foreground/80">{hint}</span> : null}
+      {hint ? (
+        <span className="mt-1 block text-[11px] text-muted-foreground/80">{hint}</span>
+      ) : null}
     </label>
   );
 }
@@ -120,13 +122,11 @@ export function NumInput({
   step?: string;
 }) {
   return (
-    <input
-      type="number"
-      inputMode="decimal"
-      step={step}
-      value={value ?? ""}
+    <DecimalInput
+      value={value}
+      integer={step === "1"}
       placeholder={placeholder}
-      onChange={(e) => onChange(e.target.value === "" ? undefined : Number(e.target.value))}
+      onChange={onChange}
       className="num mt-1 w-full rounded-xl border border-input bg-elevated px-3 py-2.5 text-lg font-semibold outline-none transition-colors placeholder:font-normal placeholder:text-muted-foreground/60 focus:border-ring"
     />
   );

@@ -120,7 +120,9 @@ export function ChallengeInviteCard({ challengeId }: { challengeId: string }) {
 
       {link ? (
         <div className="mt-3 space-y-2">
-          <p className="break-all rounded-xl border border-border bg-elevated p-3 text-xs">{link}</p>
+          <p className="break-all rounded-xl border border-border bg-elevated p-3 text-xs">
+            {link}
+          </p>
           <button
             onClick={copy}
             className="flex w-full items-center justify-center gap-2 rounded-xl border border-border py-2.5 text-sm font-medium"

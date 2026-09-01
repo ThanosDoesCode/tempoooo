@@ -1,5 +1,8 @@
 # Lean Bulk Journal
 
+Challenge push notification deployment, security notes, and the two-account test checklist:
+[docs/challenge-push-notifications.md](docs/challenge-push-notifications.md).
+
 Build a mobile-first fitness progress tracking web app called Lean Bulk Tracker.
 
 The app is for one person following a 12-month lean bulk from September 2026 to September 2027.

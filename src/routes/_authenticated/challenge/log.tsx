@@ -6,6 +6,7 @@ import { AppShell, PageHeader } from "@/components/AppShell";
 import { Card, Note, SectionTitle } from "@/components/ui-kit";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
+import { normalizeDecimal, parseDecimal } from "@/lib/numeric";
 import {
   targetForWeek,
   todayIn,
@@ -13,7 +14,6 @@ import {
   useWeekTargets,
   weekNumberOf,
 } from "@/lib/challenge";
-
 
 export const Route = createFileRoute("/_authenticated/challenge/log")({
   head: () => ({
@@ -60,12 +60,24 @@ function LogActivity() {
     return () => urls.forEach((u) => URL.revokeObjectURL(u));
   }, [files]);
 
-
-  const dist = Number(distance);
+  const parsedDistance = parseDecimal(distance);
+  const dist = parsedDistance.kind === "value" ? parsedDistance.value : NaN;
   const equivalent = type === "run" ? dist : dist / 3;
 
   const submit = async () => {
-    if (!challenge || !user || files.length === 0 || !dist) return;
+    if (!challenge || !user || files.length === 0) return;
+    const minutes = parseDecimal(duration);
+    if (!(dist > 0 && dist <= 1000)) {
+      setError("Enter a distance above 0 and no greater than 1,000 km.");
+      return;
+    }
+    const seconds = minutes.kind === "value" ? Math.round(minutes.value * 60) : null;
+    if (minutes.kind === "invalid" || (seconds != null && (seconds <= 0 || seconds > 2147483647))) {
+      setError("Enter a valid positive duration in minutes, or leave it blank.");
+      return;
+    }
+    setDistance(normalizeDecimal(distance));
+    setDuration(normalizeDecimal(duration));
     setBusy(true);
     setError(null);
     try {
@@ -83,7 +95,7 @@ function LogActivity() {
         activity_type: type,
         distance_km: dist,
         activity_date: date,
-        duration_seconds: duration ? Math.round(Number(duration) * 60) : null,
+        duration_seconds: seconds,
         evidence_path: paths[0]!,
         extra_evidence_paths: paths.slice(1),
         external_activity_url: url || null,
@@ -122,7 +134,9 @@ function LogActivity() {
               key={t}
               onClick={() => setType(t)}
               className={`rounded-xl border py-2.5 text-sm font-medium capitalize ${
-                type === t ? "border-primary bg-primary/10 text-primary" : "border-border bg-elevated"
+                type === t
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-border bg-elevated"
               }`}
             >
               {t}
@@ -132,11 +146,12 @@ function LogActivity() {
 
         <Field label="Distance (km)">
           <input
-            type="number"
+            type="text"
             inputMode="decimal"
             step="0.01"
             value={distance}
             onChange={(e) => setDistance(e.target.value)}
+            onBlur={() => setDistance(normalizeDecimal(distance))}
             className={inputCls}
           />
         </Field>
@@ -152,7 +167,9 @@ function LogActivity() {
         <Field label="Strava screenshots (at least one)">
           <label
             className={`flex cursor-pointer items-center gap-3 rounded-xl border border-dashed px-3 py-3 transition-colors ${
-              files.length ? "border-good/60 bg-good/5" : "border-border bg-elevated hover:border-ring"
+              files.length
+                ? "border-good/60 bg-good/5"
+                : "border-border bg-elevated hover:border-ring"
             }`}
           >
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary">
@@ -207,10 +224,11 @@ function LogActivity() {
 
         <Field label="Duration in minutes (optional)">
           <input
-            type="number"
-            inputMode="numeric"
+            type="text"
+            inputMode="decimal"
             value={duration}
             onChange={(e) => setDuration(e.target.value)}
+            onBlur={() => setDuration(normalizeDecimal(duration))}
             className={inputCls}
           />
         </Field>
@@ -226,7 +244,6 @@ function LogActivity() {
           />
         </Field>
 
-
         {dist > 0 ? (
           <div className="rounded-xl border border-border bg-elevated px-3 py-2 text-sm">
             Equivalent: <span className="num font-semibold">{equivalent.toFixed(2)} km</span>
@@ -234,7 +251,7 @@ function LogActivity() {
         ) : null}
         {error ? <p className="text-xs text-danger">{error}</p> : null}
         <button
-          disabled={busy || files.length === 0 || !dist}
+          disabled={busy || files.length === 0}
           onClick={() => void submit()}
           className="w-full rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground disabled:opacity-60"
         >

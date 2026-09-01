@@ -120,13 +120,21 @@ function TodayPage() {
           <SectionTitle>Morning</SectionTitle>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Bodyweight (kg)">
-              <NumInput value={day?.weight} onChange={(v) => set({ weight: v })} placeholder="61.5" />
+              <NumInput
+                value={day?.weight}
+                onChange={(v) => set({ weight: v })}
+                placeholder="61.5"
+              />
             </Field>
             <Field label="Waist (cm, optional)">
               <NumInput value={day?.waist} onChange={(v) => set({ waist: v })} placeholder="74.0" />
             </Field>
             <Field label="Sleep (hours)">
-              <NumInput value={day?.sleepHours} onChange={(v) => set({ sleepHours: v })} placeholder="8" />
+              <NumInput
+                value={day?.sleepHours}
+                onChange={(v) => set({ sleepHours: v })}
+                placeholder="8"
+              />
             </Field>
             <Field label="Resting HR (optional)">
               <NumInput
@@ -140,7 +148,11 @@ function TodayPage() {
               <Field label="Sleep quality">
                 <div className="mt-1 grid grid-cols-5 gap-1">
                   {[1, 2, 3, 4, 5].map((n) => (
-                    <Chip key={n} active={day?.sleepQuality === n} onClick={() => set({ sleepQuality: n })}>
+                    <Chip
+                      key={n}
+                      active={day?.sleepQuality === n}
+                      onClick={() => set({ sleepQuality: n })}
+                    >
                       {n}
                     </Chip>
                   ))}
@@ -203,16 +215,36 @@ function TodayPage() {
           <SectionTitle>Nutrition</SectionTitle>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Calories (kcal)" hint="target 2,900">
-              <NumInput value={day?.calories} onChange={(v) => set({ calories: v })} step="10" placeholder="2900" />
+              <NumInput
+                value={day?.calories}
+                onChange={(v) => set({ calories: v })}
+                step="10"
+                placeholder="2900"
+              />
             </Field>
             <Field label="Protein (g)" hint="125 to 140 g">
-              <NumInput value={day?.protein} onChange={(v) => set({ protein: v })} step="1" placeholder="130" />
+              <NumInput
+                value={day?.protein}
+                onChange={(v) => set({ protein: v })}
+                step="1"
+                placeholder="130"
+              />
             </Field>
             <Field label="Carbs (g)" hint="around 380 g">
-              <NumInput value={day?.carbs} onChange={(v) => set({ carbs: v })} step="1" placeholder="380" />
+              <NumInput
+                value={day?.carbs}
+                onChange={(v) => set({ carbs: v })}
+                step="1"
+                placeholder="380"
+              />
             </Field>
             <Field label="Fat (g)" hint="80 to 90 g">
-              <NumInput value={day?.fat} onChange={(v) => set({ fat: v })} step="1" placeholder="88" />
+              <NumInput
+                value={day?.fat}
+                onChange={(v) => set({ fat: v })}
+                step="1"
+                placeholder="88"
+              />
             </Field>
             <Field label="Water (L)" hint="3 L">
               <NumInput value={day?.water} onChange={(v) => set({ water: v })} placeholder="3" />
@@ -229,9 +261,27 @@ function TodayPage() {
             </Field>
           </div>
           <div className="mt-4 space-y-2.5">
-            <Bar label="Calories" value={day?.calories} target={targets.calories} unit="kcal" range={RANGES.calories} />
-            <Bar label="Protein" value={day?.protein} target={targets.protein} unit="g" range={RANGES.protein} />
-            <Bar label="Carbs" value={day?.carbs} target={targets.carbs} unit="g" range={RANGES.carbs} />
+            <Bar
+              label="Calories"
+              value={day?.calories}
+              target={targets.calories}
+              unit="kcal"
+              range={RANGES.calories}
+            />
+            <Bar
+              label="Protein"
+              value={day?.protein}
+              target={targets.protein}
+              unit="g"
+              range={RANGES.protein}
+            />
+            <Bar
+              label="Carbs"
+              value={day?.carbs}
+              target={targets.carbs}
+              unit="g"
+              range={RANGES.carbs}
+            />
             <Bar label="Fat" value={day?.fat} target={targets.fat} unit="g" range={RANGES.fat} />
             <Bar label="Water" value={day?.water} target={targets.water} unit="L" />
           </div>
@@ -241,16 +291,34 @@ function TodayPage() {
           <SectionTitle>Activity</SectionTitle>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Steps">
-              <NumInput value={day?.steps} onChange={(v) => set({ steps: v })} step="100" placeholder="8000" />
+              <NumInput
+                value={day?.steps}
+                onChange={(v) => set({ steps: v })}
+                step="100"
+                placeholder="8000"
+              />
             </Field>
             <Field label="Cycling (km)">
-              <NumInput value={day?.cyclingKm} onChange={(v) => set({ cyclingKm: v })} placeholder="6.5" />
+              <NumInput
+                value={day?.cyclingKm}
+                onChange={(v) => set({ cyclingKm: v })}
+                placeholder="6.5"
+              />
             </Field>
             <Field label="Running (km)">
-              <NumInput value={day?.runningKm} onChange={(v) => set({ runningKm: v })} placeholder="0" />
+              <NumInput
+                value={day?.runningKm}
+                onChange={(v) => set({ runningKm: v })}
+                placeholder="0"
+              />
             </Field>
             <Field label="Cardio (min, optional)">
-              <NumInput value={day?.cardioMin} onChange={(v) => set({ cardioMin: v })} step="1" placeholder="0" />
+              <NumInput
+                value={day?.cardioMin}
+                onChange={(v) => set({ cardioMin: v })}
+                step="1"
+                placeholder="0"
+              />
             </Field>
           </div>
           <Field label="Note (optional)">

@@ -114,8 +114,6 @@ function AuthPage() {
     }
   };
 
-
-
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
@@ -198,8 +196,6 @@ function AuthPage() {
           With "Save password" on, this device signs you in automatically and you never type it
           again. Only enable it on a device you keep to yourself.
         </p>
-
-
 
         <button
           onClick={() => setMode(mode === "signin" ? "signup" : "signin")}

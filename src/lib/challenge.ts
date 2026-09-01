@@ -69,7 +69,6 @@ export const owedText = (euros: number) => {
 export const equivalentKm = (a: { activity_type: string; distance_km: number }) =>
   a.activity_type === "run" ? a.distance_km : a.distance_km / 3;
 
-
 /** Today's date in the challenge timezone (never the device clock's date). */
 export function todayIn(timezone: string) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: timezone }).format(new Date());
@@ -155,17 +154,15 @@ export function useChallengeMembers(challengeId: string | undefined) {
     queryKey: ["challenge-members", challengeId],
     queryFn: async () => {
       const [members, profiles] = await Promise.all([
-        supabase.from("challenge_members").select("user_id, joined_at").eq(
-          "challenge_id",
-          challengeId!,
-        ),
+        supabase
+          .from("challenge_members")
+          .select("user_id, joined_at")
+          .eq("challenge_id", challengeId!),
         getRelatedProfiles(),
       ]);
       if (members.error) throw members.error;
       const names = new Map(
-        (profiles ?? []).map(
-          (p) => [p.id, p.display_name || p.email || "Athlete"],
-        ),
+        (profiles ?? []).map((p) => [p.id, p.display_name || p.email || "Athlete"]),
       );
       return (members.data ?? []).map((m) => ({
         userId: m.user_id,
@@ -230,7 +227,6 @@ export type PaymentRow = {
   status: "unpaid" | "marked_paid" | "confirmed_paid";
   payment_evidence_path: string | null;
   settled_by: string | null;
-
 };
 
 export function useWeeks(challengeId: string | undefined) {

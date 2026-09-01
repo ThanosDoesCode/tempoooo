@@ -27,7 +27,7 @@ import {
 } from "@/lib/challenge";
 import { RulesCard } from "@/components/challenge-rules";
 import { ChallengeInviteCard } from "@/components/ChallengeInvite";
-
+import { ChallengeNotifications } from "@/components/ChallengeNotifications";
 
 export const Route = createFileRoute("/_authenticated/challenge/")({
   head: () => ({
@@ -71,8 +71,6 @@ function ChallengeHome() {
     return [...map.entries()] as [string, NonNullable<typeof activities>][];
   }, [activities]);
 
-
-
   const doLeave = async () => {
     if (!challenge) return;
     setLeaving(true);
@@ -95,7 +93,6 @@ function ChallengeHome() {
     if (error) setDeleteError(error.message);
     await qc.invalidateQueries({ queryKey: ["challenge-activities"] });
   };
-
 
   // Lazy, deterministic server-side finalization of any closed weeks.
   useEffect(() => {
@@ -143,6 +140,8 @@ function ChallengeHome() {
         subtitle={`Week ${week?.n} of ${challenge.duration_weeks} · ${challenge.timezone}`}
       />
 
+      {user && <ChallengeNotifications userId={user.id} />}
+
       <Card>
         <SectionTitle right={<span className="text-xs text-muted-foreground">Mon to Sun</span>}>
           This week
@@ -167,9 +166,7 @@ function ChallengeHome() {
           return (
             <Card key={m.userId}>
               <div className="flex items-baseline justify-between">
-                <h3 className="text-sm font-semibold">
-                  {m.userId === user?.id ? "Me" : m.name}
-                </h3>
+                <h3 className="text-sm font-semibold">{m.userId === user?.id ? "Me" : m.name}</h3>
                 <span className="num text-sm">
                   {totals.equivalent.toFixed(1)} / {target.toFixed(target % 1 === 0 ? 0 : 1)} km
                 </span>
@@ -179,9 +176,7 @@ function ChallengeHome() {
               </div>
               <div className="mt-2 flex items-center justify-between text-xs">
                 <span className={done ? "text-good" : "text-muted-foreground"}>
-                  {done
-                    ? "Completed ✓"
-                    : `${(target - totals.equivalent).toFixed(1)} km remaining`}
+                  {done ? "Completed ✓" : `${(target - totals.equivalent).toFixed(1)} km remaining`}
                 </span>
                 <span className={done ? "text-good" : "text-warn"}>
                   Current penalty: {owedText(penaltyFor(totals.equivalent, target))}
@@ -195,16 +190,10 @@ function ChallengeHome() {
         })}
         {(members?.length ?? 0) < (challenge.max_members ?? 2) ? (
           <>
-            <Note>
-              There is still a free spot. Send an invitation link to add another person.
-            </Note>
+            <Note>There is still a free spot. Send an invitation link to add another person.</Note>
             <ChallengeInviteCard challengeId={challenge.id} />
-
           </>
         ) : null}
-
-
-
       </div>
 
       <div className="mt-4 grid gap-2">
@@ -322,7 +311,6 @@ function ChallengeHome() {
         </div>
       </div>
 
-
       <div className="mt-6">
         <SectionTitle>Leave challenge</SectionTitle>
         <Card>
@@ -351,7 +339,6 @@ function ChallengeHome() {
         </Card>
       </div>
     </AppShell>
-
   );
 }
 

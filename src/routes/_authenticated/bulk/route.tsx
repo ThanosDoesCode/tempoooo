@@ -22,9 +22,7 @@ function BulkLayout() {
     const preferred =
       memberships.find((m) => m.role === "owner") ?? (memberships[0] as (typeof memberships)[0]);
     if (preferred.bulk_profile_id !== bulkId) {
-      loadBulk(preferred.bulk_profile_id, preferred.role).catch((e: Error) =>
-        setError(e.message),
-      );
+      loadBulk(preferred.bulk_profile_id, preferred.role).catch((e: Error) => setError(e.message));
     }
   }, [memberships, bulkId, navigate]);
 
