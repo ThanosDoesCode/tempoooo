@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { format, parseISO } from "date-fns";
 import { AppShell, PageHeader } from "@/components/AppShell";
-import { Card, Note, SectionTitle } from "@/components/ui-kit";
+import { Card, Note, parseDecimal, SectionTitle } from "@/components/ui-kit";
 import { useAuth } from "@/lib/auth";
 import {
   DEFAULT_TARGET_KM,
