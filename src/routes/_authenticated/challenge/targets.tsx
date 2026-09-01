@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { format, parseISO } from "date-fns";
 import { AppShell, PageHeader } from "@/components/AppShell";
-import { Card, Note, SectionTitle } from "@/components/ui-kit";
+import { Card, Note, parseDecimal, SectionTitle } from "@/components/ui-kit";
 import { useAuth } from "@/lib/auth";
 import {
   DEFAULT_TARGET_KM,
@@ -85,7 +85,7 @@ function Targets() {
   const applyRange = () => {
     const a = Number(from);
     const b = Number(to || from);
-    const km = value === "" ? null : Number(value);
+    const km = value === "" ? null : (parseDecimal(value) ?? null);
     if (!a || !b || b < a) {
       setError("Enter a valid week range.");
       return;
@@ -146,11 +146,14 @@ function Targets() {
             </Field>
             <Field label="Target km">
               <input
-                type="number"
+                type="text"
                 inputMode="decimal"
-                step="0.5"
                 value={value}
-                onChange={(e) => setValue(e.target.value)}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  if (!/^[0-9]*[.,]?[0-9]*$/.test(raw)) return;
+                  setValue(raw);
+                }}
                 placeholder="10"
                 className={inputCls}
               />
