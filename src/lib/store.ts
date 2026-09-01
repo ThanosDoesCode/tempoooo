@@ -1,5 +1,6 @@
 import { useCallback, useSyncExternalStore } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { createSaveQueue } from "./workout-save";
 import {
   DEFAULT_DATA,
   type AppData,
@@ -18,6 +19,7 @@ let bulkId: string | null = null;
 let role: BulkRole = "viewer";
 let state: AppData | null = null;
 const listeners = new Set<() => void>();
+const queueWorkoutSave = createSaveQueue();
 
 function emit() {
   state = state ? { ...state } : null;
@@ -61,7 +63,6 @@ export const isOwner = () => role === "owner";
 /** Storage object paths per photo set, needed to clean up files on delete. */
 const photoPaths = new Map<string, string[]>();
 
-
 async function signPhotos(rows: PhotoRow[]): Promise<PhotoSet[]> {
   const paths = rows.flatMap((r) =>
     [r.front_path, r.side_path, r.back_path].filter((p): p is string => !!p),
@@ -82,7 +83,6 @@ async function signPhotos(rows: PhotoRow[]): Promise<PhotoSet[]> {
     ),
   );
   return rows.map((r) => ({
-
     id: r.id,
     date: r.taken_on,
     ...(r.weight != null ? { weight: Number(r.weight) } : {}),
@@ -188,7 +188,6 @@ export async function resetBulkData(
 }
 
 export function clearBulk() {
-
   bulkId = null;
   state = null;
   emit();
@@ -200,31 +199,48 @@ export function useActions() {
     const merged: DailyLog = { ...state.days[date], ...patch, date };
     state.days[date] = merged;
     emit();
-    await supabase
-      .from("bulk_days")
-      .upsert({ bulk_profile_id: bulkId, day: date, payload: json(merged) }, {
+    await supabase.from("bulk_days").upsert(
+      { bulk_profile_id: bulkId, day: date, payload: json(merged) },
+      {
         onConflict: "bulk_profile_id,day",
-      });
+      },
+    );
   }, []);
 
-  const saveWorkout = useCallback(async (workout: Workout) => {
-    if (!state || !bulkId || !canWrite()) return;
-    state.workouts[workout.date] = workout;
-    emit();
-    await supabase.from("bulk_workouts").upsert(
-      { bulk_profile_id: bulkId, day: workout.date, payload: json(workout) },
-      { onConflict: "bulk_profile_id,day" },
-    );
+  const saveWorkout = useCallback(async (workout: Workout, expectedUserId?: string) => {
+    if (!state || !bulkId || !canWrite()) throw new Error("This workout cannot be edited.");
+    if (!expectedUserId) throw new Error("Reopen Training before saving this workout.");
+    const id = bulkId;
+    return queueWorkoutSave(async () => {
+      const current = await supabase.auth.getSession();
+      if (bulkId !== id || !canWrite() || current.data.session?.user.id !== expectedUserId)
+        throw new Error("Account or plan changed. Reopen Training before saving.");
+      const { error } = await supabase
+        .from("bulk_workouts")
+        .upsert(
+          { bulk_profile_id: id, day: workout.date, payload: json(workout) },
+          { onConflict: "bulk_profile_id,day" },
+        );
+      if (error) throw new Error(error.message);
+      // Completed totals use server-confirmed saves only.
+      const after = await supabase.auth.getSession();
+      if (state && bulkId === id && after.data.session?.user.id === expectedUserId) {
+        state.workouts = { ...state.workouts, [workout.date]: workout };
+        emit();
+      }
+    });
   }, []);
 
   const setWeekNote = useCallback(async (weekStart: string, note: string) => {
     if (!state || !bulkId || !canWrite()) return;
     state.weekNotes[weekStart] = note;
     emit();
-    await supabase.from("bulk_week_notes").upsert(
-      { bulk_profile_id: bulkId, week_start: weekStart, note },
-      { onConflict: "bulk_profile_id,week_start" },
-    );
+    await supabase
+      .from("bulk_week_notes")
+      .upsert(
+        { bulk_profile_id: bulkId, week_start: weekStart, note },
+        { onConflict: "bulk_profile_id,week_start" },
+      );
   }, []);
 
   const saveTargets = useCallback(async (targets: Targets) => {
@@ -233,7 +249,10 @@ export function useActions() {
     emit();
     await supabase
       .from("bulk_targets")
-      .upsert({ bulk_profile_id: bulkId, payload: json(targets) }, { onConflict: "bulk_profile_id" });
+      .upsert(
+        { bulk_profile_id: bulkId, payload: json(targets) },
+        { onConflict: "bulk_profile_id" },
+      );
   }, []);
 
   const addPhotoSet = useCallback(async (date: string, weight?: number) => {
@@ -354,7 +373,6 @@ export function useActions() {
     [],
   );
 
-
   return {
     saveDay,
     saveWorkout,
@@ -368,5 +386,4 @@ export function useActions() {
     deleteWorkout,
     resetBulkPlan,
   };
-
 }

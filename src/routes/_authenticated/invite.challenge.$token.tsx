@@ -39,7 +39,9 @@ function AcceptChallenge() {
   return (
     <AppShell>
       <PageHeader title="Invitation" subtitle="Checking your invitation." />
-      <Card>{error ? <p className="text-sm text-danger">{error}</p> : <Note>Accepting…</Note>}</Card>
+      <Card>
+        {error ? <p className="text-sm text-danger">{error}</p> : <Note>Accepting…</Note>}
+      </Card>
     </AppShell>
   );
 }

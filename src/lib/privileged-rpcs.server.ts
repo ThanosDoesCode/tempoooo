@@ -4,7 +4,10 @@ type RelatedProfile = { id: string; display_name: string | null; email: string |
 
 async function rpc<T>(name: string, params: Record<string, unknown>): Promise<T> {
   const client = supabaseAdmin as unknown as {
-    rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }>;
+    rpc: (
+      fn: string,
+      args: Record<string, unknown>,
+    ) => Promise<{ data: unknown; error: { message: string } | null }>;
   };
   const { data, error } = await client.rpc(name, params);
   if (error) throw new Error(error.message);

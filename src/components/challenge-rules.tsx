@@ -24,7 +24,6 @@ export function RulesCard() {
         Tiers scale with the week's target. With the default 15 km that is 15, 10 and 5 km. The
         creator can lower or raise the target for future weeks only.
       </Note>
-
     </Card>
   );
 }

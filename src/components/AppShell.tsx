@@ -44,11 +44,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const bulkLabel = role === "owner" ? "My Bulk" : "Shared Bulk";
   const viewerLock = !isChallenge && role === "viewer";
 
-  const nav = isChallenge
-    ? CHALLENGE_NAV
-    : role === "owner"
-      ? [...BULK_NAV, OWNER_NAV]
-      : BULK_NAV;
+  const nav = isChallenge ? CHALLENGE_NAV : role === "owner" ? [...BULK_NAV, OWNER_NAV] : BULK_NAV;
 
   return (
     <div className="min-h-screen bg-background">
@@ -89,7 +85,6 @@ export function AppShell({ children }: { children: ReactNode }) {
           </button>
         </div>
       </div>
-
 
       <main className="mx-auto w-full max-w-lg px-4 pb-28 pt-6">
         {viewerLock ? (

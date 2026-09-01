@@ -9,7 +9,6 @@ import { createBulkProfile, useMemberships } from "@/lib/bulk-access";
 import { useChallengeMembers, useMyChallenge } from "@/lib/challenge";
 import { resetBulkData } from "@/lib/store";
 
-
 export const Route = createFileRoute("/_authenticated/profile")({
   head: () => ({
     meta: [
@@ -74,7 +73,6 @@ function ProfilePage() {
       setBusy(false);
     }
   };
-
 
   return (
     <AppShell>
@@ -167,10 +165,11 @@ function ProfilePage() {
               </button>
             </div>
           )}
-          {resetDone ? <p className="mt-2 text-xs text-good">Your bulk plan is now empty.</p> : null}
+          {resetDone ? (
+            <p className="mt-2 text-xs text-good">Your bulk plan is now empty.</p>
+          ) : null}
         </Card>
       ) : null}
-
 
       <Card className="mt-3">
         <SectionTitle>Session</SectionTitle>

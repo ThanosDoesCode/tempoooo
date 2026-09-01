@@ -4,7 +4,6 @@ import { Card, Note, SectionTitle } from "@/components/ui-kit";
 import { useAuth } from "@/lib/auth";
 import { owedText, useChallengeMembers, useMyChallenge, useWeeks } from "@/lib/challenge";
 
-
 export const Route = createFileRoute("/_authenticated/challenge/history")({
   head: () => ({
     meta: [
@@ -34,7 +33,8 @@ function History() {
   });
   const numbers = [...byWeek.keys()].sort((a, b) => b - a);
 
-  const name = (id: string) => (id === user?.id ? "Me" : (members?.find((m) => m.userId === id)?.name ?? "Athlete"));
+  const name = (id: string) =>
+    id === user?.id ? "Me" : (members?.find((m) => m.userId === id)?.name ?? "Athlete");
 
   return (
     <AppShell>
@@ -68,7 +68,6 @@ function History() {
                   </span>
                 </div>
               ))}
-
             </div>
           </Card>
         ))}

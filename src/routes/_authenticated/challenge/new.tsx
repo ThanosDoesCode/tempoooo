@@ -90,7 +90,9 @@ function NewChallenge() {
         <PageHeader title="Challenge created" subtitle="Send this invitation to your opponent." />
         <Card>
           <SectionTitle>One-time invitation link</SectionTitle>
-          <p className="break-all rounded-xl border border-border bg-elevated p-3 text-xs">{link}</p>
+          <p className="break-all rounded-xl border border-border bg-elevated p-3 text-xs">
+            {link}
+          </p>
           <button
             onClick={() => void navigator.clipboard.writeText(link)}
             className="mt-3 w-full rounded-xl bg-primary py-2.5 text-sm font-semibold text-primary-foreground"

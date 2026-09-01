@@ -1,6 +1,14 @@
 import { addDays, differenceInCalendarDays, format, parseISO, startOfWeek } from "date-fns";
-import type { AppData, DailyLog, ExerciseEntry, Workout } from "./types";
-import { exerciseDef } from "./types";
+import type { AppData, DailyLog, ExerciseEntry, Workout } from "./types.ts";
+import { exerciseDef } from "./types.ts";
+import {
+  effectiveLoad,
+  entryLoadLabel,
+  exerciseMetrics,
+  isBodyweight,
+  metricNumber,
+  workingReps,
+} from "./training.ts";
 
 export const iso = (d: Date) => format(d, "yyyy-MM-dd");
 
@@ -56,7 +64,8 @@ export type BulkStatus = {
 /** Weekly rate from the trailing 7-day average now vs 14 days ago. */
 export function bulkStatus(data: AppData, on: Date = new Date()): BulkStatus {
   const today = iso(on);
-  const currentAvg = avg7(data, today) ?? (latestWeight(data) ? avg7(data, latestWeight(data)!.date) : null);
+  const currentAvg =
+    avg7(data, today) ?? (latestWeight(data) ? avg7(data, latestWeight(data)!.date) : null);
   const daysLogged = sortedDays(data).filter((d) => d.weight != null).length;
   const past = avg7(data, iso(addDays(on, -14)));
   const rate = currentAvg != null && past != null ? (currentAvg - past) / 2 : null;
@@ -163,7 +172,9 @@ export function waistChange(data: AppData, days: number, on: Date = new Date()):
 export type WeekSummary = ReturnType<typeof buildWeekSummary>;
 
 export function buildWeekSummary(data: AppData, weekStart: Date) {
-  const days = weekDays(weekStart).map((d) => data.days[d]).filter(Boolean) as DailyLog[];
+  const days = weekDays(weekStart)
+    .map((d) => data.days[d])
+    .filter(Boolean) as DailyLog[];
   const dates = weekDays(weekStart);
   const num = (sel: (d: DailyLog) => number | undefined) =>
     days.map(sel).filter((v): v is number => typeof v === "number");
@@ -231,6 +242,7 @@ export function buildWeekSummary(data: AppData, weekStart: Date) {
 export function focusPoints(data: AppData, workouts: Workout[]): string[] {
   const out: string[] = [];
   for (const w of workouts) {
+    if (w.status === "draft") continue;
     for (const e of w.entries) {
       const p = progressionFor(data, e, w.date);
       if (p.readyForWeight) out.push(`Increase weight on ${e.exercise}`);
@@ -263,6 +275,7 @@ export type ProgressionResult = {
   prs: string[];
   readyForWeight: boolean;
   hint: string | null;
+  explanation: string | null;
   prev: (ExerciseEntry & { date: string }) | null;
 };
 
@@ -274,12 +287,22 @@ export function progressionFor(
 ): ProgressionResult {
   const def = exerciseDef(entry.exercise);
   const prev = previousEntry(data, entry.exercise, date);
+  if (isBodyweight(entry.exercise)) return bodyweightProgression(entry, prev);
   const logged = entry.weight != null || entry.reps.some((r) => r != null);
   const setsFilled = entry.reps.filter((r) => r != null);
   const atTop =
-    !!def && setsFilled.length === entry.reps.length && entry.reps.every((r) => (r ?? 0) >= def.max);
+    !!def &&
+    setsFilled.length === entry.reps.length &&
+    entry.reps.every((r) => (r ?? 0) >= def.max);
 
-  const base = { repDelta: null, prs: [] as string[], readyForWeight: atTop, prev, hint: null };
+  const base = {
+    repDelta: null,
+    prs: [] as string[],
+    readyForWeight: atTop,
+    prev,
+    hint: null,
+    explanation: null,
+  };
 
   if (!logged)
     return { ...base, state: "empty", label: "Not logged", tone: "muted", readyForWeight: false };
@@ -329,7 +352,102 @@ export function progressionFor(
       ? `Rebuild reps from ${def.min} upward`
       : null;
 
-  return { state, label, tone, repDelta, prs, readyForWeight: atTop, hint, prev };
+  const explanation = trendExplanation(entry, prev, entry.weight ?? 0, prev.weight ?? 0);
+  return { state, label, tone, repDelta, prs, readyForWeight: atTop, hint, prev, explanation };
+}
+
+function trendExplanation(
+  entry: ExerciseEntry,
+  prev: ExerciseEntry,
+  load: number,
+  oldLoad: number,
+): string {
+  const delta = totalReps(entry.reps) - totalReps(prev.reps);
+  const loadDelta = load - oldLoad;
+  const signedValue = (n: number) => `${n > 0 ? "+" : ""}${metricNumber(n)}`;
+  if (Math.abs(loadDelta) < 0.000001)
+    return delta === 0
+      ? "Same load and total reps"
+      : `${signedValue(delta)} total reps at the same load`;
+  const bodyweightOnly =
+    isBodyweight(entry.exercise) &&
+    (entry.addedWeight ?? 0) === (prev.addedWeight ?? 0) &&
+    (entry.assistance ?? 0) === (prev.assistance ?? 0);
+  return `${delta === 0 ? "Same reps" : `${signedValue(delta)} total reps`} at ${signedValue(loadDelta)} kg${bodyweightOnly ? " bodyweight" : isBodyweight(entry.exercise) ? " effective load" : ""}`;
+}
+
+function bodyweightProgression(
+  entry: ExerciseEntry,
+  prev: ProgressionResult["prev"],
+): ProgressionResult {
+  const reps = workingReps(entry);
+  const def = exerciseDef(entry.exercise)!;
+  const load = effectiveLoad(entry);
+  const atTop =
+    load != null &&
+    reps.length === entry.reps.length &&
+    reps.length > 0 &&
+    reps.every((r) => r >= def.max);
+  const base: ProgressionResult = {
+    state: "baseline",
+    label: "Baseline",
+    tone: "muted",
+    repDelta: null,
+    prs: [],
+    readyForWeight: atTop,
+    prev,
+    hint: atTop ? "Increase weight next session" : null,
+    explanation: null,
+  };
+  if (!reps.length)
+    return { ...base, state: "empty", label: "Not logged", readyForWeight: false, hint: null };
+  if (load == null)
+    return { ...base, explanation: "Session bodyweight is needed to compare load." };
+  if (!prev) return base;
+  const oldLoad = effectiveLoad(prev);
+  if (oldLoad == null)
+    return {
+      ...base,
+      explanation: "Previous bodyweight is unknown; this establishes a load baseline.",
+    };
+  const oldReps = workingReps(prev);
+  if (reps.length !== oldReps.length || !oldReps.length)
+    return {
+      ...base,
+      readyForWeight: false,
+      hint: null,
+      explanation: "Log the same number of working sets to compare performance.",
+    };
+  const repDelta = totalReps(reps) - totalReps(oldReps);
+  const sameLoad = Math.abs(load - oldLoad) < 0.000001;
+  const heavier = !sameLoad && load > oldLoad;
+  // At higher loads, maintain each set or lose at most two reps per set while
+  // staying at/above the target minimum. Volume never determines the verdict.
+  const maintained = reps.every((r, i) => r >= oldReps[i]!);
+  const rebuilding = reps.every((r, i) => r >= def.min && r >= oldReps[i]! - 2);
+  const progressed = (heavier && (maintained || rebuilding)) || (sameLoad && repDelta >= 2);
+  const regressed =
+    (!sameLoad && !heavier) ||
+    (sameLoad && repDelta <= -3) ||
+    (heavier && !maintained && !rebuilding);
+  const prs: string[] = [];
+  if (heavier) prs.push("🏆 Weight PR");
+  if (bestRep(reps) > bestRep(oldReps) && !heavier) prs.push("🏆 Rep PR");
+  if (load * totalReps(reps) > oldLoad * totalReps(oldReps)) prs.push("🏆 Volume PR");
+  return {
+    ...base,
+    state: progressed ? "progressed" : regressed ? "regressed" : "same",
+    label: progressed ? "PROGRESSED" : regressed ? "REGRESSED" : "SAME",
+    tone: progressed ? "good" : regressed ? "danger" : "warn",
+    repDelta,
+    prs,
+    hint: atTop
+      ? "Increase weight next session"
+      : heavier
+        ? `Rebuild reps from ${def.min} upward`
+        : null,
+    explanation: `${trendExplanation(entry, prev, load, oldLoad)}${heavier && !maintained && !rebuilding ? "; rep loss exceeds the rebuild range" : ""}`,
+  };
 }
 
 /** Compares each exercise in given workouts against its previous occurrence. */
@@ -340,11 +458,12 @@ export function progressionCounts(data: AppData, workouts: Workout[]) {
   const prs: string[] = [];
 
   for (const w of workouts) {
+    if (w.status === "draft") continue;
     for (const e of w.entries) {
       const r = progressionFor(data, e, w.date);
       if (r.state === "progressed") {
         progressed++;
-        if (r.prs.length) prs.push(`${e.exercise} ${e.weight ?? 0}kg × ${bestRep(e.reps)}`);
+        if (r.prs.length) prs.push(`${e.exercise} ${entryLoadLabel(e)} × ${bestRep(e.reps)}`);
       } else if (r.state === "same") same++;
       else if (r.state === "regressed") regressed++;
     }
@@ -354,7 +473,7 @@ export function progressionCounts(data: AppData, workouts: Workout[]) {
 
 export function previousEntry(data: AppData, exercise: string, beforeDate: string) {
   const candidates = Object.values(data.workouts)
-    .filter((w) => w.date < beforeDate)
+    .filter((w) => w.date < beforeDate && w.status !== "draft")
     .sort((a, b) => b.date.localeCompare(a.date));
   for (const w of candidates) {
     const e = w.entries.find((x) => x.exercise === exercise && (x.weight || bestRep(x.reps)));
@@ -365,6 +484,7 @@ export function previousEntry(data: AppData, exercise: string, beforeDate: strin
 
 export function exerciseHistory(data: AppData, exercise: string) {
   return Object.values(data.workouts)
+    .filter((w) => w.status !== "draft")
     .sort((a, b) => a.date.localeCompare(b.date))
     .flatMap((w) => {
       const e = w.entries.find((x) => x.exercise === exercise);
@@ -372,9 +492,11 @@ export function exerciseHistory(data: AppData, exercise: string) {
       return [
         {
           date: w.date,
-          weight: e.weight ?? 0,
+          weight: effectiveLoad(e),
           bestReps: bestRep(e.reps),
-          volume: score(e.weight, e.reps),
+          volume: exerciseMetrics(e).volume,
+          entry: e,
+          sessionNote: w.sessionNote,
         },
       ];
     });
@@ -385,10 +507,18 @@ export function strengthChange(data: AppData, exercise: string) {
   const h = exerciseHistory(data, exercise);
   const first = h[0];
   const last = h[h.length - 1];
-  if (!first || !last || h.length < 2 || first.volume === 0) return null;
+  if (
+    !first ||
+    !last ||
+    h.length < 2 ||
+    first.volume == null ||
+    last.volume == null ||
+    first.volume === 0
+  )
+    return null;
   return {
     pct: ((last.volume - first.volume) / first.volume) * 100,
-    latest: `${last.weight}kg × ${last.bestReps}`,
+    latest: `${entryLoadLabel(last.entry)} × ${last.bestReps}`,
     sessions: h.length,
   };
 }
