@@ -1,5 +1,12 @@
 import { cn } from "@/lib/utils";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+
+export function parseDecimal(raw: string): number | undefined {
+  const s = raw.trim().replace(",", ".");
+  if (s === "") return undefined;
+  const n = Number(s);
+  return Number.isNaN(n) ? undefined : n;
+}
 
 export function Card({ children, className }: { children: ReactNode; className?: string }) {
   return <section className={cn("card-surface fade-up p-4", className)}>{children}</section>;
@@ -112,21 +119,35 @@ export function NumInput({
   value,
   onChange,
   placeholder,
-  step = "0.1",
+  step,
 }: {
   value: number | undefined;
   onChange: (v: number | undefined) => void;
   placeholder?: string;
   step?: string;
 }) {
+  void step;
+  const [text, setText] = useState(value == null ? "" : String(value));
+
+  useEffect(() => {
+    setText((cur) => {
+      if (parseDecimal(cur) === value) return cur;
+      return value == null ? "" : String(value);
+    });
+  }, [value]);
+
   return (
     <input
-      type="number"
+      type="text"
       inputMode="decimal"
-      step={step}
-      value={value ?? ""}
+      value={text}
       placeholder={placeholder}
-      onChange={(e) => onChange(e.target.value === "" ? undefined : Number(e.target.value))}
+      onChange={(e) => {
+        const raw = e.target.value;
+        if (!/^[0-9]*[.,]?[0-9]*$/.test(raw)) return;
+        setText(raw);
+        onChange(parseDecimal(raw));
+      }}
       className="num mt-1 w-full rounded-xl border border-input bg-elevated px-3 py-2.5 text-lg font-semibold outline-none transition-colors placeholder:font-normal placeholder:text-muted-foreground/60 focus:border-ring"
     />
   );
