@@ -146,11 +146,14 @@ function Targets() {
             </Field>
             <Field label="Target km">
               <input
-                type="number"
+                type="text"
                 inputMode="decimal"
-                step="0.5"
                 value={value}
-                onChange={(e) => setValue(e.target.value)}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  if (!/^[0-9]*[.,]?[0-9]*$/.test(raw)) return;
+                  setValue(raw);
+                }}
                 placeholder="10"
                 className={inputCls}
               />
