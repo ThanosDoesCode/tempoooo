@@ -85,7 +85,7 @@ function Targets() {
   const applyRange = () => {
     const a = Number(from);
     const b = Number(to || from);
-    const km = value === "" ? null : Number(value);
+    const km = value === "" ? null : (parseDecimal(value) ?? null);
     if (!a || !b || b < a) {
       setError("Enter a valid week range.");
       return;
