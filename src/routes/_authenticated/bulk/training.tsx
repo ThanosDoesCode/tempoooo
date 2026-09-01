@@ -11,7 +11,7 @@ import {
   YAxis,
 } from "recharts";
 import { AppShell, PageHeader } from "@/components/AppShell";
-import { Card, Chip, Note, SectionTitle } from "@/components/ui-kit";
+import { Card, Chip, Note, parseDecimal, SectionTitle } from "@/components/ui-kit";
 import { exerciseHistory, iso, progressionFor, totalReps } from "@/lib/calc";
 import { useActions, useAppData } from "@/lib/store";
 import { EXERCISES, type ExerciseEntry, type SplitType } from "@/lib/types";

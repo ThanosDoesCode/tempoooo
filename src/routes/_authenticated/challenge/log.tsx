@@ -61,7 +61,7 @@ function LogActivity() {
   }, [files]);
 
 
-  const dist = Number(distance);
+  const dist = parseDecimal(distance) ?? 0;
   const equivalent = type === "run" ? dist : dist / 3;
 
   const submit = async () => {
@@ -132,11 +132,14 @@ function LogActivity() {
 
         <Field label="Distance (km)">
           <input
-            type="number"
+            type="text"
             inputMode="decimal"
-            step="0.01"
             value={distance}
-            onChange={(e) => setDistance(e.target.value)}
+            onChange={(e) => {
+              const raw = e.target.value;
+              if (!/^[0-9]*[.,]?[0-9]*$/.test(raw)) return;
+              setDistance(raw);
+            }}
             className={inputCls}
           />
         </Field>
