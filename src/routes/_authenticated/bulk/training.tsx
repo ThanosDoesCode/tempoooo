@@ -266,15 +266,29 @@ function SmallInput({
   onChange: (v: number | undefined) => void;
   step?: string;
 }) {
+  void step;
+  const [text, setText] = useState(value == null ? "" : String(value));
+
+  useEffect(() => {
+    setText((cur) => {
+      if (parseDecimal(cur) === value) return cur;
+      return value == null ? "" : String(value);
+    });
+  }, [value]);
+
   return (
     <label className="block">
       <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</span>
       <input
-        type="number"
+        type="text"
         inputMode="decimal"
-        step={step}
-        value={value ?? ""}
-        onChange={(e) => onChange(e.target.value === "" ? undefined : Number(e.target.value))}
+        value={text}
+        onChange={(e) => {
+          const raw = e.target.value;
+          if (!/^[0-9]*[.,]?[0-9]*$/.test(raw)) return;
+          setText(raw);
+          onChange(parseDecimal(raw));
+        }}
         className="num mt-1 w-full rounded-xl border border-input bg-elevated px-2 py-2 text-center text-lg font-semibold outline-none focus:border-ring"
       />
     </label>
