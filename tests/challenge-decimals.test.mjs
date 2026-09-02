@@ -17,7 +17,7 @@ const compiled = ts.transpileModule(
     },
   },
 ).outputText;
-function fixture(distance, duration = "", type = "run") {
+function fixture(distance, duration = "", type = "run", storageThrows = false) {
   const values = [
     type,
     distance,
@@ -29,6 +29,8 @@ function fixture(distance, duration = "", type = "run") {
     [],
     null,
     null,
+    null,
+    false,
     false,
   ];
   let index = 0;
@@ -40,6 +42,18 @@ function fixture(distance, duration = "", type = "run") {
   const context = {
     exports: {},
     crypto: { randomUUID: () => "test-id" },
+    sessionStorage: {
+      getItem: () => {
+        if (storageThrows) throw new Error("storage unavailable");
+        return null;
+      },
+      setItem: () => {
+        if (storageThrows) throw new Error("storage unavailable");
+      },
+      removeItem: () => {
+        if (storageThrows) throw new Error("storage unavailable");
+      },
+    },
     require(name) {
       if (name === "react")
         return {
@@ -154,6 +168,16 @@ test("Challenge form exposes upload and save phases before confirmed success", a
   assert.deepEqual(f.toasts, ["Activity saved."]);
   assert.equal(
     f.updates.some(([i, value]) => i === 9 && value),
+    false,
+  );
+});
+test("confirmed activity remains successful when browser draft storage is unavailable", async () => {
+  const f = fixture("7.25", "40", "run", true);
+  await f.submit();
+  assert.equal(f.rows.length, 1);
+  assert.deepEqual(f.toasts, ["Activity saved."]);
+  assert.equal(
+    f.updates.some(([i, value]) => i === 10 && value),
     false,
   );
 });

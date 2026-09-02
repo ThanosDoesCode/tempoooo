@@ -15,7 +15,8 @@ const root = new URL("../supabase/migrations/", import.meta.url);
 before(async () => {
   // Only Supabase's platform schemas are stubbed; every application migration,
   // trigger, calculation, table grant and RLS policy below is the real SQL.
-  await db.exec(`CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role BYPASSRLS;
+  await db.exec(`SET TIME ZONE 'UTC';
+    CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role BYPASSRLS;
     CREATE SCHEMA auth; CREATE SCHEMA storage; CREATE SCHEMA extensions;
     CREATE TABLE auth.users(id uuid PRIMARY KEY);
     CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;

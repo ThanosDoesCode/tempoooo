@@ -14,7 +14,7 @@ import {
   Trophy,
 } from "lucide-react";
 import { AppShell, PageHeader } from "@/components/AppShell";
-import { Card, Note, PendingLabel, SectionTitle } from "@/components/ui-kit";
+import { Card, DataError, Note, PendingLabel, SectionTitle } from "@/components/ui-kit";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 
@@ -41,7 +41,7 @@ import {
   weekBounds,
   weekNumberOf,
 } from "@/lib/challenge";
-import { RulesCard } from "@/components/challenge-rules";
+import { ChallengePrimer } from "@/components/challenge-rules";
 import { ChallengeInviteCard } from "@/components/ChallengeInvite";
 import { ChallengeNotifications } from "@/components/ChallengeNotifications";
 
@@ -67,10 +67,18 @@ export const Route = createFileRoute("/_authenticated/challenge/")({
 function ChallengeHome() {
   const { user } = useAuth();
   const qc = useQueryClient();
-  const { data: challenge, isLoading } = useMyChallenge();
-  const { data: members, isLoading: membersLoading } = useChallengeMembers(challenge?.id);
-  const { data: activities, isLoading: activitiesLoading } = useActivities(challenge?.id);
-  const { data: travelPauses, isLoading: pausesLoading } = useTravelPauses(challenge?.id);
+  const challengeQuery = useMyChallenge();
+  const { data: challenge, isLoading, error: challengeError } = challengeQuery;
+  const membersQuery = useChallengeMembers(challenge?.id);
+  const { data: members, isLoading: membersLoading, error: membersError } = membersQuery;
+  const activitiesQuery = useActivities(challenge?.id);
+  const {
+    data: activities,
+    isLoading: activitiesLoading,
+    error: activitiesError,
+  } = activitiesQuery;
+  const pausesQuery = useTravelPauses(challenge?.id);
+  const { data: travelPauses, isLoading: pausesLoading, error: pausesError } = pausesQuery;
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -139,11 +147,23 @@ function ChallengeHome() {
     );
   }
 
+  if (challengeError && !challenge) {
+    return (
+      <AppShell>
+        <PageHeader title="Tempo Challenge" subtitle="Your weekly challenge." />
+        <DataError
+          message="Check your connection and try loading your challenge again."
+          onRetry={() => void challengeQuery.refetch()}
+        />
+      </AppShell>
+    );
+  }
+
   if (!challenge) {
     return (
       <AppShell>
         <PageHeader title="Tempo" subtitle="A private two-person endurance bet." />
-        <RulesCard />
+        <ChallengePrimer />
         <div className="mt-4 grid gap-2">
           <Link
             to="/challenge/new"
@@ -186,6 +206,22 @@ function ChallengeHome() {
           Week {week?.n} of {challenge.duration_weeks} · {formatTimeLeft(week?.hours ?? 0)} left
         </p>
       </header>
+
+      {membersError || activitiesError || pausesError ? (
+        <div className="mb-3">
+          <DataError
+            title="Some challenge data did not load"
+            message="Your saved data is unchanged. Retry to refresh progress, activities, and travel pauses."
+            onRetry={() => {
+              void Promise.all([
+                membersQuery.refetch(),
+                activitiesQuery.refetch(),
+                pausesQuery.refetch(),
+              ]);
+            }}
+          />
+        </div>
+      ) : null}
 
       <Card className="p-0">
         <div className="flex items-center justify-between px-3.5 pb-2 pt-3">
@@ -348,7 +384,7 @@ function ChallengeHome() {
                         type="button"
                         disabled={deletingId !== null}
                         onClick={() => setConfirmId(null)}
-                        className="rounded-lg px-2 py-1 text-[11px] font-medium text-muted-foreground"
+                        className="min-h-11 rounded-lg px-3 py-2 text-xs font-medium text-muted-foreground"
                       >
                         Cancel
                       </button>
@@ -356,7 +392,7 @@ function ChallengeHome() {
                         type="button"
                         disabled={deletingId !== null}
                         onClick={() => void removeActivity(activity.id)}
-                        className="rounded-lg bg-danger px-2.5 py-1 text-[11px] font-semibold text-primary-foreground disabled:opacity-60"
+                        className="min-h-11 rounded-lg bg-danger px-3 py-2 text-xs font-semibold text-primary-foreground disabled:opacity-60"
                       >
                         {deletingId === activity.id ? (
                           <PendingLabel>Deleting…</PendingLabel>
@@ -379,8 +415,10 @@ function ChallengeHome() {
               {activityMessage}
             </p>
           ) : null}
-          {!activitiesLoading && recent.length === 0 ? (
-            <Note>No activities logged yet.</Note>
+          {!activitiesLoading && !activitiesError && recent.length === 0 ? (
+            <Note>
+              No activity yet. Add a run or ride when you have its duration and evidence screenshot.
+            </Note>
           ) : null}
         </div>
       </section>
@@ -401,7 +439,10 @@ function ChallengeHome() {
 
       {needsOpponent ? (
         <section className="mt-5">
-          <Note>There is still a free spot. Send an invitation link to add your opponent.</Note>
+          <Note>
+            Your opponent has not joined yet. Your progress is saved; send them a fresh invitation
+            link when they are ready.
+          </Note>
           <div className="mt-2">
             <ChallengeInviteCard challengeId={challenge.id} />
           </div>
@@ -441,6 +482,15 @@ function ChallengeHome() {
               "Leave this challenge"
             )}
           </button>
+          {leaveArmed && !leaving ? (
+            <button
+              type="button"
+              onClick={() => setLeaveArmed(false)}
+              className="mt-2 min-h-11 w-full rounded-xl border border-border px-3 py-2 text-sm font-medium text-muted-foreground"
+            >
+              Cancel
+            </button>
+          ) : null}
           {leaveError ? (
             <p role="alert" className="mt-2 text-xs text-danger">
               {leaveError}
@@ -523,7 +573,7 @@ function ParticipantProgress({
       ) : (
         <div className="mt-3">
           <div className="h-1.5 rounded-full bg-elevated" />
-          <p className="mt-2 text-[11px] text-muted-foreground">Waiting to join</p>
+          <p className="mt-2 text-[11px] text-muted-foreground">Opponent has not joined yet</p>
         </div>
       )}
     </div>
@@ -570,7 +620,8 @@ function EvidenceViewer({ paths }: { paths: string[] }) {
       <button
         type="button"
         onClick={() => void show()}
-        className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 font-medium text-muted-foreground hover:bg-elevated"
+        aria-label={`View ${paths.length} evidence screenshot${paths.length > 1 ? "s" : ""}`}
+        className="inline-flex min-h-11 items-center gap-1 rounded-lg px-2 py-2 font-medium text-muted-foreground hover:bg-elevated"
       >
         <ImageIcon className="h-3 w-3" aria-hidden="true" /> Evidence
         {paths.length > 1 ? ` ${paths.length}` : ""}
@@ -581,9 +632,22 @@ function EvidenceViewer({ paths }: { paths: string[] }) {
   return (
     <div className="order-last mt-1 basis-full">
       {error ? (
-        <p role="alert" className="text-[11px] text-danger">
-          {error}
-        </p>
+        <div
+          role="alert"
+          className="flex items-center justify-between gap-2 text-[11px] text-danger"
+        >
+          <span>Could not load evidence. {error}</span>
+          <button
+            type="button"
+            onClick={() => {
+              setUrls(null);
+              void show();
+            }}
+            className="min-h-11 shrink-0 rounded-lg border border-danger/40 px-3 py-2 font-semibold"
+          >
+            Retry
+          </button>
+        </div>
       ) : loading ? (
         <p role="status" className="text-[11px] text-muted-foreground">
           Loading evidence…
@@ -606,7 +670,7 @@ function EvidenceViewer({ paths }: { paths: string[] }) {
       <button
         type="button"
         onClick={() => setOpen(false)}
-        className="mt-1 text-[11px] font-medium text-muted-foreground"
+        className="mt-1 min-h-11 rounded-lg px-2 text-[11px] font-medium text-muted-foreground"
       >
         Hide evidence
       </button>

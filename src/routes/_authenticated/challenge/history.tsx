@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell, PageHeader } from "@/components/AppShell";
-import { Card, Note, SectionTitle } from "@/components/ui-kit";
+import { Card, DataError, Note, SectionTitle } from "@/components/ui-kit";
 import { useAuth } from "@/lib/auth";
 import { owedText, useChallengeMembers, useMyChallenge, useWeeks } from "@/lib/challenge";
 
@@ -22,9 +22,12 @@ export const Route = createFileRoute("/_authenticated/challenge/history")({
 
 function History() {
   const { user } = useAuth();
-  const { data: challenge } = useMyChallenge();
-  const { data: members } = useChallengeMembers(challenge?.id);
-  const { data: weeks } = useWeeks(challenge?.id);
+  const challengeQuery = useMyChallenge();
+  const { data: challenge, isLoading: challengeLoading, error: challengeError } = challengeQuery;
+  const membersQuery = useChallengeMembers(challenge?.id);
+  const { data: members, error: membersError } = membersQuery;
+  const weeksQuery = useWeeks(challenge?.id);
+  const { data: weeks, isLoading: weeksLoading, error: weeksError } = weeksQuery;
 
   const byWeek = new Map<number, typeof weeks>();
   (weeks ?? []).forEach((w) => {
@@ -39,7 +42,32 @@ function History() {
   return (
     <AppShell>
       <PageHeader title="History" subtitle="Finalized weeks are locked and cannot be edited." />
-      {numbers.length === 0 ? <Note>No weeks have closed yet.</Note> : null}
+      {challengeLoading || (challenge && weeksLoading) ? (
+        <div className="space-y-3" aria-label="Loading weekly history">
+          <div className="h-28 animate-pulse rounded-2xl bg-card" />
+          <div className="h-28 animate-pulse rounded-2xl bg-card" />
+        </div>
+      ) : null}
+      {challengeError || membersError || weeksError ? (
+        <DataError
+          message="Your finalized results are unchanged. Check your connection and try again."
+          onRetry={() => {
+            void Promise.all(
+              challenge
+                ? [challengeQuery.refetch(), membersQuery.refetch(), weeksQuery.refetch()]
+                : [challengeQuery.refetch()],
+            );
+          }}
+        />
+      ) : null}
+      {!challengeLoading && !challengeError && !challenge ? (
+        <Note>Join or create a challenge before weekly history can appear.</Note>
+      ) : null}
+      {challenge && !weeksLoading && !weeksError && numbers.length === 0 ? (
+        <Note>
+          No finalized weeks yet. Results and penalties appear here after the first Sunday closes.
+        </Note>
+      ) : null}
       <div className="space-y-3">
         {numbers.map((n) => (
           <Card key={n}>

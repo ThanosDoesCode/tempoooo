@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Download, Plane } from "lucide-react";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { RulesCard } from "@/components/challenge-rules";
-import { Card, Note, PendingLabel, SectionTitle } from "@/components/ui-kit";
+import { Card, DataError, Note, PendingLabel, SectionTitle } from "@/components/ui-kit";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import {
@@ -48,12 +48,22 @@ export const Route = createFileRoute("/_authenticated/challenge/payments")({
 function Payments() {
   const { user } = useAuth();
   const qc = useQueryClient();
-  const { data: challenge } = useMyChallenge();
-  const { data: members } = useChallengeMembers(challenge?.id);
-  const { data: payments } = usePayments(challenge?.id);
-  const { data: weeks } = useWeeks(challenge?.id);
-  const { data: activities, isLoading: activitiesLoading } = useActivities(challenge?.id);
-  const { data: travelPauses } = useTravelPauses(challenge?.id);
+  const challengeQuery = useMyChallenge();
+  const { data: challenge, isLoading: challengeLoading, error: challengeError } = challengeQuery;
+  const membersQuery = useChallengeMembers(challenge?.id);
+  const { data: members, isLoading: membersLoading, error: membersError } = membersQuery;
+  const paymentsQuery = usePayments(challenge?.id);
+  const { data: payments, isLoading: paymentsLoading, error: paymentsError } = paymentsQuery;
+  const weeksQuery = useWeeks(challenge?.id);
+  const { data: weeks, isLoading: weeksLoading, error: weeksError } = weeksQuery;
+  const activitiesQuery = useActivities(challenge?.id);
+  const {
+    data: activities,
+    isLoading: activitiesLoading,
+    error: activitiesError,
+  } = activitiesQuery;
+  const pausesQuery = useTravelPauses(challenge?.id);
+  const { data: travelPauses, isLoading: pausesLoading, error: pausesError } = pausesQuery;
   const [pending, setPending] = useState<{
     id: string;
     action: "mark" | "undo" | "confirm" | "settle" | "reopen";
@@ -67,6 +77,7 @@ function Payments() {
   const [travelPending, setTravelPending] = useState<string | null>(null);
   const [travelError, setTravelError] = useState<string | null>(null);
   const [travelNotice, setTravelNotice] = useState<string | null>(null);
+  const [pauseRemoveArmed, setPauseRemoveArmed] = useState<string | null>(null);
 
   const rows = payments ?? [];
   const open = rows.filter((p) => p.status !== "confirmed_paid");
@@ -185,6 +196,7 @@ function Payments() {
     try {
       await removeTravelPause(id);
       await qc.invalidateQueries({ queryKey: ["challenge-travel-pauses"] });
+      setPauseRemoveArmed(null);
       setTravelNotice("Travel pause removed. That week is active again.");
     } catch (e) {
       setTravelError(`Could not remove the travel pause. ${(e as Error).message}`);
@@ -192,6 +204,60 @@ function Payments() {
       setTravelPending(null);
     }
   };
+
+  const initialLoading =
+    challengeLoading ||
+    (!!challenge &&
+      (membersLoading || paymentsLoading || weeksLoading || activitiesLoading || pausesLoading));
+  const loadError =
+    challengeError || membersError || paymentsError || weeksError || activitiesError || pausesError;
+
+  if (initialLoading) {
+    return (
+      <AppShell>
+        <PageHeader title="Money" subtitle="Loading penalties and travel settings…" />
+        <div className="grid grid-cols-2 gap-3" aria-label="Loading money data">
+          <div className="h-24 animate-pulse rounded-2xl bg-card" />
+          <div className="h-24 animate-pulse rounded-2xl bg-card" />
+        </div>
+        <div className="mt-3 h-40 animate-pulse rounded-2xl bg-card" />
+      </AppShell>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <AppShell>
+        <PageHeader title="Money" subtitle="Penalties, payments, and travel pauses." />
+        <DataError
+          message="No payment or travel data was changed. Check your connection and try again."
+          onRetry={() => {
+            void Promise.all(
+              challenge
+                ? [
+                    challengeQuery.refetch(),
+                    membersQuery.refetch(),
+                    paymentsQuery.refetch(),
+                    weeksQuery.refetch(),
+                    activitiesQuery.refetch(),
+                    pausesQuery.refetch(),
+                  ]
+                : [challengeQuery.refetch()],
+            );
+          }}
+        />
+      </AppShell>
+    );
+  }
+
+  if (!challenge) {
+    return (
+      <AppShell>
+        <PageHeader title="Money" />
+        <Note>Join or create a challenge before penalties and travel pauses can appear.</Note>
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell>
@@ -261,7 +327,12 @@ function Payments() {
 
       <div className="mt-4 space-y-2">
         <SectionTitle>Open obligations</SectionTitle>
-        {open.length === 0 ? <Note>Nothing outstanding. Everything is settled.</Note> : null}
+        {open.length === 0 ? (
+          <Note>
+            No penalties are outstanding. New obligations appear only after a finalized week ends
+            below 15 challenge km.
+          </Note>
+        ) : null}
         {open.map((p) => {
           const mine = p.payer_id === user?.id;
           return (
@@ -509,24 +580,52 @@ function Payments() {
                     </p>
                   </div>
                   {pause.user_id === user.id && pause.week_number >= currentWeek ? (
-                    <button
-                      type="button"
-                      disabled={travelPending !== null}
-                      onClick={() => void cancelTravelPause(pause.id)}
-                      className="rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium disabled:opacity-60"
-                    >
-                      {travelPending === pause.id ? (
-                        <PendingLabel>Removing…</PendingLabel>
-                      ) : (
-                        "Remove"
-                      )}
-                    </button>
+                    <div className="flex items-center gap-1">
+                      {pauseRemoveArmed === pause.id ? (
+                        <button
+                          type="button"
+                          disabled={travelPending !== null}
+                          onClick={() => setPauseRemoveArmed(null)}
+                          className="min-h-11 rounded-lg px-2.5 py-2 text-xs font-medium text-muted-foreground"
+                        >
+                          Cancel
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        disabled={travelPending !== null}
+                        onClick={() => {
+                          if (pauseRemoveArmed !== pause.id) {
+                            setPauseRemoveArmed(pause.id);
+                            return;
+                          }
+                          void cancelTravelPause(pause.id);
+                        }}
+                        className={`min-h-11 rounded-lg px-3 py-2 text-xs font-semibold disabled:opacity-60 ${
+                          pauseRemoveArmed === pause.id
+                            ? "bg-danger text-primary-foreground"
+                            : "border border-border"
+                        }`}
+                      >
+                        {travelPending === pause.id ? (
+                          <PendingLabel>Removing…</PendingLabel>
+                        ) : pauseRemoveArmed === pause.id ? (
+                          "Confirm removal"
+                        ) : (
+                          "Remove pause"
+                        )}
+                      </button>
+                    </div>
                   ) : null}
                 </Card>
               ))}
             </div>
-          ) : null}
-          <Note>No pause is needed if the participant chooses to keep participating normally.</Note>
+          ) : (
+            <Note>
+              No travel pauses are scheduled. Keep participating normally unless you travel outside
+              Greece or Sweden and choose to pause your full week.
+            </Note>
+          )}
         </section>
       ) : null}
 

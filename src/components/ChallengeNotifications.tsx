@@ -19,6 +19,7 @@ export function ChallengeNotifications({ userId }: { userId: string }) {
     text: string;
     tone: "info" | "success" | "error";
   } | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
   useEffect(() => {
     let alive = true;
     let current: PushSdk | null = null;
@@ -33,7 +34,7 @@ export function ChallengeNotifications({ userId }: { userId: string }) {
       } catch {
         if (alive)
           setFeedback({
-            text: "Could not check notification status. Reload to retry.",
+            text: "Could not check notification status.",
             tone: "error",
           });
       } finally {
@@ -74,7 +75,7 @@ export function ChallengeNotifications({ userId }: { userId: string }) {
       current?.User.PushSubscription.removeEventListener("change", onChange);
       window.removeEventListener("focus", onChange);
     };
-  }, [userId]);
+  }, [userId, retryKey]);
   const enable = async () => {
     if (!sdk) return;
     setPhase("enabling");
@@ -109,6 +110,8 @@ export function ChallengeNotifications({ userId }: { userId: string }) {
       setPhase(null);
     }
   };
+  const permissionMissing =
+    typeof Notification !== "undefined" && Notification.permission === "default";
   return (
     <div className="card-surface overflow-hidden">
       <details className="group">
@@ -148,6 +151,12 @@ export function ChallengeNotifications({ userId }: { userId: string }) {
           <p className="text-[11px] leading-relaxed text-muted-foreground">
             Get updates when your opponent logs activity, completes the week, or changes a payment.
           </p>
+          {!on && phase === null && permissionMissing && feedback?.tone !== "error" ? (
+            <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+              Notification permission has not been granted on this device. Tempo asks only after you
+              tap Enable notifications.
+            </p>
+          ) : null}
           <div className="mt-2 flex flex-wrap gap-2 text-xs">
             {!on ? (
               <button
@@ -191,13 +200,21 @@ export function ChallengeNotifications({ userId }: { userId: string }) {
         </div>
       </details>
       {feedback?.tone === "error" ? (
-        <p
+        <div
           role="alert"
           className="flex items-start gap-2 border-t border-danger/20 bg-danger/5 px-3 py-2 text-[11px] leading-relaxed text-danger"
         >
           <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-          {feedback.text}
-        </p>
+          <span className="min-w-0 flex-1">{feedback.text}</span>
+          <button
+            type="button"
+            disabled={phase !== null}
+            onClick={() => setRetryKey((key) => key + 1)}
+            className="min-h-11 shrink-0 rounded-lg border border-danger/40 px-3 py-2 font-semibold disabled:opacity-50"
+          >
+            Retry
+          </button>
+        </div>
       ) : null}
     </div>
   );

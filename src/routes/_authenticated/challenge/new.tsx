@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { addDays, format, startOfWeek } from "date-fns";
 import { useState } from "react";
 import { AppShell, PageHeader } from "@/components/AppShell";
-import { RulesCard } from "@/components/challenge-rules";
+import { ChallengePrimer } from "@/components/challenge-rules";
 import { Card, Note, PendingLabel, SectionTitle } from "@/components/ui-kit";
 import { supabase } from "@/integrations/supabase/client";
 import { randomToken, sha256Hex, useAuth } from "@/lib/auth";
@@ -117,7 +117,7 @@ function NewChallenge() {
   return (
     <AppShell>
       <PageHeader title="Create challenge" subtitle="Private, two people, minimum 52 weeks." />
-      <RulesCard />
+      <ChallengePrimer />
       <Card className="mt-3 space-y-3">
         <Labelled label="Challenge name">
           <input value={name} onChange={(e) => setName(e.target.value)} className={inputCls} />

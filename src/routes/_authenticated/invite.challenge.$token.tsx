@@ -24,8 +24,10 @@ function AcceptChallenge() {
   const { token } = useParams({ from: "/_authenticated/invite/challenge/$token" });
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
+    setError(null);
     void (async () => {
       try {
         await acceptChallengeInvitation({ data: { token } });
@@ -34,16 +36,24 @@ function AcceptChallenge() {
         setError(cause instanceof Error ? cause.message : "Could not accept invitation");
       }
     })();
-  }, [token, navigate]);
+  }, [token, navigate, retryKey]);
 
   return (
     <AppShell>
       <PageHeader title="Invitation" subtitle="Checking your invitation." />
       <Card>
         {error ? (
-          <p role="alert" className="text-sm text-danger">
-            {error}
-          </p>
+          <div role="alert">
+            <p className="text-sm font-semibold text-danger">Could not accept this invitation</p>
+            <p className="mt-1 text-xs text-muted-foreground">{error}</p>
+            <button
+              type="button"
+              onClick={() => setRetryKey((key) => key + 1)}
+              className="mt-3 min-h-11 rounded-xl border border-danger/40 px-4 py-2 text-sm font-semibold text-danger"
+            >
+              Try again
+            </button>
+          </div>
         ) : (
           <Note>
             <PendingLabel>Accepting invitation…</PendingLabel>

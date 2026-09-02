@@ -92,6 +92,15 @@
     font-feature-settings: "tnum" 1;
   }
 
+  :where(a, button, summary, input, select, textarea):focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+
+  :where(a, button, summary) {
+    touch-action: manipulation;
+  }
+
   input[type="number"]::-webkit-outer-spin-button,
   input[type="number"]::-webkit-inner-spin-button {
     -webkit-appearance: none;
@@ -115,8 +124,24 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
   .fade-up {
     animation: none;
+  }
+}
+
+@media (pointer: coarse) {
+  button,
+  summary {
+    min-height: 2.75rem;
   }
 }
 

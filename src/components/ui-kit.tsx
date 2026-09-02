@@ -174,3 +174,27 @@ export function PendingLabel({ children }: { children: ReactNode }) {
     </span>
   );
 }
+
+export function DataError({
+  title = "Could not load this data",
+  message,
+  onRetry,
+}: {
+  title?: string;
+  message: string;
+  onRetry: () => void;
+}) {
+  return (
+    <div role="alert" className="rounded-xl border border-danger/30 bg-danger/5 p-3">
+      <p className="text-sm font-semibold text-danger">{title}</p>
+      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{message}</p>
+      <button
+        type="button"
+        onClick={onRetry}
+        className="mt-3 min-h-11 rounded-xl border border-danger/40 px-4 py-2 text-sm font-semibold text-danger active:scale-[0.98]"
+      >
+        Try again
+      </button>
+    </div>
+  );
+}

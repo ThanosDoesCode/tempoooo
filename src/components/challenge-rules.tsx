@@ -1,10 +1,51 @@
 import { Card, Note, SectionTitle } from "@/components/ui-kit";
 
+export function ChallengePrimer() {
+  return (
+    <Card>
+      <SectionTitle>How Tempo works</SectionTitle>
+      <ol className="space-y-2 text-sm">
+        <PrimerStep number="1" title="Reach 15 challenge km each week">
+          Equivalent km are your converted progress: runs count 1:1 below 7:00 min/km, and rides
+          count 3:1 from 18 km/h.
+        </PrimerStep>
+        <PrimerStep number="2" title="Add duration and evidence">
+          Every activity needs its duration and a screenshot that verifies distance and pace or
+          speed.
+        </PrimerStep>
+        <PrimerStep number="3" title="Sunday locks the result">
+          Finishing below 15 creates a €5, €10, or €15 penalty. Extra km do not carry over.
+        </PrimerStep>
+        <PrimerStep number="4" title="Travelling can pause your week">
+          Outside Greece or Sweden, you can pause your own full week so it is penalty-free.
+        </PrimerStep>
+      </ol>
+      <details className="group mt-3 border-t border-border pt-1">
+        <summary className="flex min-h-11 cursor-pointer list-none items-center text-xs font-semibold text-primary [&::-webkit-details-marker]:hidden">
+          View all challenge rules
+          <span className="ml-auto text-muted-foreground group-open:hidden">+</span>
+          <span className="ml-auto hidden text-muted-foreground group-open:inline">−</span>
+        </summary>
+        <div className="space-y-4 pb-1 pt-2">
+          <RulesContent />
+        </div>
+      </details>
+    </Card>
+  );
+}
+
 export function RulesCard() {
   return (
     <Card className="space-y-4">
       <SectionTitle>Challenge rules</SectionTitle>
+      <RulesContent />
+    </Card>
+  );
+}
 
+function RulesContent() {
+  return (
+    <>
       <RuleGroup title="Weekly target">
         <li>Weekly target is 15 challenge km.</li>
         <li>Extra distance above 15 does not carry over.</li>
@@ -54,7 +95,31 @@ export function RulesCard() {
         Weeks run Monday 00:00 to Sunday 23:59 in the challenge timezone. Finalized results stay
         locked.
       </Note>
-    </Card>
+    </>
+  );
+}
+
+function PrimerStep({
+  number,
+  title,
+  children,
+}: {
+  number: string;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <li className="flex gap-3">
+      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-primary/15 text-xs font-bold text-primary">
+        {number}
+      </span>
+      <span className="min-w-0">
+        <span className="block font-semibold">{title}</span>
+        <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">
+          {children}
+        </span>
+      </span>
+    </li>
   );
 }
 

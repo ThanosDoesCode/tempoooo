@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Check, ChevronDown, ImageUp } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell, PageHeader } from "@/components/AppShell";
-import { Card, Note, PendingLabel } from "@/components/ui-kit";
+import { Card, DataError, Note, PendingLabel } from "@/components/ui-kit";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { normalizeDecimal, parseDecimal } from "@/lib/numeric";
@@ -35,7 +35,8 @@ function LogActivity() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const { data: challenge } = useMyChallenge();
+  const challengeQuery = useMyChallenge();
+  const { data: challenge, isLoading: challengeLoading, error: challengeError } = challengeQuery;
   const today = challenge ? todayIn(challenge.timezone) : new Date().toISOString().slice(0, 10);
 
   const [type, setType] = useState<"run" | "cycle">("run");
@@ -47,9 +48,12 @@ function LogActivity() {
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
   const [pending, setPending] = useState<"uploading" | "saving" | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [requestError, setRequestError] = useState<string | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [draftReady, setDraftReady] = useState(false);
   const busy = pending !== null;
+  const draftKey = challenge && user ? `challenge-activity-draft:${user.id}:${challenge.id}` : null;
 
   useEffect(() => {
     if (files.length === 0) {
@@ -60,6 +64,51 @@ function LogActivity() {
     setPreviews(urls);
     return () => urls.forEach((u) => URL.revokeObjectURL(u));
   }, [files]);
+
+  useEffect(() => {
+    if (!draftKey) return;
+    setDraftReady(false);
+    try {
+      const raw = sessionStorage.getItem(draftKey);
+      if (raw) {
+        const draft = JSON.parse(raw) as {
+          type?: "run" | "cycle";
+          distance?: string;
+          date?: string;
+          duration?: string;
+          url?: string;
+          note?: string;
+          moreOpen?: boolean;
+        };
+        if (draft.type === "run" || draft.type === "cycle") setType(draft.type);
+        if (typeof draft.distance === "string") setDistance(draft.distance);
+        if (typeof draft.date === "string" && draft.date <= today) setDate(draft.date);
+        if (typeof draft.duration === "string") setDuration(draft.duration);
+        if (typeof draft.url === "string") setUrl(draft.url);
+        if (typeof draft.note === "string") setNote(draft.note);
+        if (typeof draft.moreOpen === "boolean") setMoreOpen(draft.moreOpen);
+      }
+    } catch {
+      try {
+        sessionStorage.removeItem(draftKey);
+      } catch {
+        // Storage can be unavailable in restrictive browser modes; keep the in-memory form usable.
+      }
+    }
+    setDraftReady(true);
+  }, [draftKey, today]);
+
+  useEffect(() => {
+    if (!draftKey || !draftReady) return;
+    try {
+      sessionStorage.setItem(
+        draftKey,
+        JSON.stringify({ type, distance, date, duration, url, note, moreOpen }),
+      );
+    } catch {
+      // Draft persistence is a safeguard; storage failure must not break activity entry.
+    }
+  }, [date, distance, draftKey, draftReady, duration, moreOpen, note, type, url]);
 
   const parsedDistance = parseDecimal(distance);
   const dist = parsedDistance.kind === "value" ? parsedDistance.value : NaN;
@@ -76,9 +125,15 @@ function LogActivity() {
       : null;
 
   const submit = async () => {
-    if (!challenge || !user || files.length === 0) return;
+    if (!challenge || !user) return;
+    setValidationError(null);
+    setRequestError(null);
+    if (files.length === 0) {
+      setValidationError("Attach at least one screenshot that verifies the activity.");
+      return;
+    }
     if (!(dist > 0 && dist <= 1000)) {
-      setError("Enter a distance above 0 and no greater than 1,000 km.");
+      setValidationError("Enter a distance above 0 and no greater than 1,000 km.");
       return;
     }
     const seconds = durationSeconds;
@@ -88,13 +143,12 @@ function LogActivity() {
       seconds <= 0 ||
       seconds > 2147483647
     ) {
-      setError("Enter a valid positive duration so pace or speed can be verified.");
+      setValidationError("Enter a valid positive duration so pace or speed can be verified.");
       return;
     }
     setDistance(normalizeDecimal(distance));
     setDuration(normalizeDecimal(duration));
     setPending("uploading");
-    setError(null);
     try {
       const paths: string[] = [];
       for (const f of files) {
@@ -119,15 +173,45 @@ function LogActivity() {
         verification_source: "manual_strava_screenshot",
       });
       if (error) throw error;
+      if (draftKey) {
+        try {
+          sessionStorage.removeItem(draftKey);
+        } catch {
+          // The confirmed database write remains successful even if local cleanup is unavailable.
+        }
+      }
       void qc.invalidateQueries({ queryKey: ["challenge-activities"] });
       toast.success("Activity saved.");
       void navigate({ to: "/challenge" });
     } catch (e) {
-      setError(`Could not save activity. ${(e as Error).message}`);
+      setRequestError((e as Error).message);
     } finally {
       setPending(null);
     }
   };
+
+  if (challengeLoading) {
+    return (
+      <AppShell>
+        <div className="space-y-3">
+          <div className="h-16 animate-pulse rounded-2xl bg-card" />
+          <div className="h-72 animate-pulse rounded-2xl bg-card" />
+        </div>
+      </AppShell>
+    );
+  }
+
+  if (challengeError && !challenge) {
+    return (
+      <AppShell>
+        <PageHeader title="Add activity" />
+        <DataError
+          message="Your form has not been changed. Check your connection and try loading the challenge again."
+          onRetry={() => void challengeQuery.refetch()}
+        />
+      </AppShell>
+    );
+  }
 
   if (!challenge) {
     return (
@@ -151,8 +235,9 @@ function LogActivity() {
               key={t}
               type="button"
               disabled={busy}
+              aria-pressed={type === t}
               onClick={() => setType(t)}
-              className={`rounded-xl border py-2.5 text-sm font-medium capitalize disabled:opacity-60 ${
+              className={`min-h-11 rounded-xl border py-2.5 text-sm font-medium capitalize disabled:opacity-60 ${
                 type === t
                   ? "border-primary bg-primary/10 text-primary"
                   : "border-border bg-elevated"
@@ -251,6 +336,8 @@ function LogActivity() {
 
         {metrics ? (
           <div
+            role="status"
+            aria-live="polite"
             className={`rounded-xl border px-3 py-2 text-sm ${
               metrics.qualified ? "border-good/30 bg-good/5" : "border-danger/30 bg-danger/5"
             }`}
@@ -282,7 +369,7 @@ function LogActivity() {
           disabled={busy}
           aria-expanded={moreOpen}
           onClick={() => setMoreOpen((open) => !open)}
-          className="flex w-full items-center justify-between rounded-lg px-1 py-1 text-xs font-medium text-muted-foreground disabled:opacity-60"
+          className="flex min-h-11 w-full items-center justify-between rounded-lg px-2 py-2 text-xs font-medium text-muted-foreground disabled:opacity-60"
         >
           More details
           <ChevronDown
@@ -322,10 +409,27 @@ function LogActivity() {
             </Field>
           </div>
         ) : null}
-        {error ? (
-          <p role="alert" className="text-xs text-danger">
-            {error}
-          </p>
+        {validationError ? (
+          <div role="alert" className="rounded-xl border border-warn/30 bg-warn/5 p-3">
+            <p className="text-xs font-semibold text-warn">Check your activity</p>
+            <p className="mt-1 text-xs text-muted-foreground">{validationError}</p>
+          </div>
+        ) : null}
+        {requestError ? (
+          <div role="alert" className="rounded-xl border border-danger/30 bg-danger/5 p-3">
+            <p className="text-xs font-semibold text-danger">Activity was not saved</p>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+              Your entered details and selected screenshots are still here. {requestError}
+            </p>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void submit()}
+              className="mt-3 min-h-11 rounded-xl border border-danger/40 px-4 py-2 text-sm font-semibold text-danger disabled:opacity-60"
+            >
+              Try saving again
+            </button>
+          </div>
         ) : null}
         <button
           type="button"
@@ -337,7 +441,7 @@ function LogActivity() {
                 : "Save activity"
           }
           aria-busy={busy}
-          disabled={busy || files.length === 0 || !duration.trim()}
+          disabled={busy}
           onClick={() => void submit()}
           className="w-full rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground disabled:opacity-60"
         >

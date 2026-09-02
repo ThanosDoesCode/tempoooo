@@ -13,7 +13,7 @@ type Invitation = {
   revoked_at: string | null;
 };
 
-export function usePendingInvites(challengeId: string | undefined) {
+function usePendingInvites(challengeId: string | undefined) {
   return useQuery({
     enabled: !!challengeId,
     queryKey: ["challenge-invitations", challengeId],
@@ -37,7 +37,7 @@ export function usePendingInvites(challengeId: string | undefined) {
  */
 export function ChallengeInviteCard({ challengeId }: { challengeId: string }) {
   const { user } = useAuth();
-  const { data: pending, refetch } = usePendingInvites(challengeId);
+  const { data: pending, isLoading, error: loadError, refetch } = usePendingInvites(challengeId);
   const [email, setEmail] = useState("");
   const [link, setLink] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -54,12 +54,13 @@ export function ChallengeInviteCard({ challengeId }: { challengeId: string }) {
     setError(null);
     setNotice(null);
     try {
-      await supabase
+      const { error: revokeError } = await supabase
         .from("challenge_invitations")
         .update({ revoked_at: new Date().toISOString() })
         .eq("challenge_id", challengeId)
         .is("accepted_at", null)
         .is("revoked_at", null);
+      if (revokeError) throw revokeError;
       const token = randomToken();
       const { error: e } = await supabase.from("challenge_invitations").insert({
         challenge_id: challengeId,
@@ -79,17 +80,34 @@ export function ChallengeInviteCard({ challengeId }: { challengeId: string }) {
     }
   };
 
-  const copy = () => {
+  const copy = async () => {
     if (!link) return;
-    void navigator.clipboard.writeText(link);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1600);
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    } catch {
+      setError("Could not copy the link. Select and copy it manually.");
+    }
   };
 
   return (
     <Card>
       <SectionTitle>Invite your opponent</SectionTitle>
-      {current ? (
+      {isLoading ? (
+        <div className="h-8 animate-pulse rounded-lg bg-elevated" aria-label="Loading invitation" />
+      ) : loadError ? (
+        <div role="alert" className="rounded-xl border border-danger/30 bg-danger/5 p-3 text-xs">
+          <p className="text-danger">Could not load the current invitation.</p>
+          <button
+            type="button"
+            onClick={() => void refetch()}
+            className="mt-2 min-h-11 rounded-lg border border-danger/40 px-3 py-2 font-semibold text-danger"
+          >
+            Try again
+          </button>
+        </div>
+      ) : current ? (
         <p className="text-xs text-muted-foreground">
           Pending invitation for{" "}
           <span className="font-medium text-foreground">{current.invited_email}</span>, expires{" "}
@@ -114,6 +132,7 @@ export function ChallengeInviteCard({ challengeId }: { challengeId: string }) {
       </label>
 
       <button
+        type="button"
         onClick={() => void generate()}
         disabled={busy || !target}
         className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
@@ -134,7 +153,8 @@ export function ChallengeInviteCard({ challengeId }: { challengeId: string }) {
             {link}
           </p>
           <button
-            onClick={copy}
+            type="button"
+            onClick={() => void copy()}
             className="flex w-full items-center justify-center gap-2 rounded-xl border border-border py-2.5 text-sm font-medium"
           >
             <Copy className="h-4 w-4" /> {copied ? "Copied" : "Copy link"}
