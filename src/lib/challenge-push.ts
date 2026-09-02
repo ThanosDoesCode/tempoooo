@@ -165,12 +165,25 @@ export async function enableChallengePush(sdk: PushSdk, userId: string) {
   const id = await subscriptionId(sdk);
   await assertCurrentUser(userId);
   localStorage.setItem(markerKey, JSON.stringify({ userId, id }));
-  const result = await endpoint<{ enabled: boolean }>({
-    action: "register",
-    subscription_id: id,
-    activate: true,
-  });
-  if (!result.enabled) throw new Error("Could not enable notifications. Reload and try again.");
+  let result: { enabled: boolean } | null = null;
+
+  for (let attempt = 0; attempt < 8; attempt++) {
+    try {
+      result = await endpoint<{ enabled: boolean }>({
+        action: "register",
+        subscription_id: id,
+        activate: true,
+      });
+      break;
+    } catch {
+      if (attempt === 7)
+        throw new Error("Could not update notifications. Please retry in a moment.");
+      await new Promise((resolve) => window.setTimeout(resolve, 1500));
+    }
+  }
+
+  if (!result?.enabled)
+    throw new Error("Could not enable notifications. Reload and try again.");
 }
 
 export async function refreshChallengePush(sdk: PushSdk, userId: string) {
