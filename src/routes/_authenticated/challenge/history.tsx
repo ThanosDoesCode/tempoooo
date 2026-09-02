@@ -7,13 +7,13 @@ import { owedText, useChallengeMembers, useMyChallenge, useWeeks } from "@/lib/c
 export const Route = createFileRoute("/_authenticated/challenge/history")({
   head: () => ({
     meta: [
-      { title: "Weekly history — Challenge" },
+      { title: "Weekly history — Tempo" },
       {
         name: "description",
         content:
           "Locked weekly results for both athletes: equivalent kilometres, completion and penalties, calculated on the server.",
       },
-      { property: "og:title", content: "Weekly history — Challenge" },
+      { property: "og:title", content: "Weekly history — Tempo" },
       { property: "og:description", content: "Immutable finalized weeks and penalties." },
     ],
   }),

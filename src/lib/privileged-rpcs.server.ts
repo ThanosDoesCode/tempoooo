@@ -14,15 +14,6 @@ async function rpc<T>(name: string, params: Record<string, unknown>): Promise<T>
   return data as T;
 }
 
-export const ensureBulkProfileFor = (caller: string) =>
-  rpc<string>("ensure_bulk_profile", { _caller: caller });
-
-export const setBulkEditorFor = (caller: string, bulk: string, user: string, editor: boolean) =>
-  rpc<void>("set_bulk_editor", { _caller: caller, _bulk: bulk, _user: user, _editor: editor });
-
-export const acceptBulkInvitationFor = (caller: string, email: string, token: string) =>
-  rpc<string>("accept_bulk_invitation", { _caller: caller, _email: email, _token: token });
-
 export const acceptChallengeInvitationFor = (caller: string, email: string, token: string) =>
   rpc<string>("accept_challenge_invitation", { _caller: caller, _email: email, _token: token });
 

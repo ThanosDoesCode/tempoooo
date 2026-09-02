@@ -15,8 +15,8 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedBulkRouteRouteImport } from './routes/_authenticated/bulk/route'
 import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated/profile'
 import { Route as AuthenticatedBulkIndexRouteImport } from './routes/_authenticated/bulk/index'
-import { Route as AuthenticatedBulkAccessRouteImport } from './routes/_authenticated/bulk/access'
 import { Route as AuthenticatedBulkCheckInRouteImport } from './routes/_authenticated/bulk/check-in'
+import { Route as AuthenticatedBulkHistoryRouteImport } from './routes/_authenticated/bulk/history'
 import { Route as AuthenticatedBulkProgressRouteImport } from './routes/_authenticated/bulk/progress'
 import { Route as AuthenticatedBulkTrainingRouteImport } from './routes/_authenticated/bulk/training'
 import { Route as AuthenticatedChallengeIndexRouteImport } from './routes/_authenticated/challenge/index'
@@ -25,7 +25,6 @@ import { Route as AuthenticatedChallengeLogRouteImport } from './routes/_authent
 import { Route as AuthenticatedChallengeNewRouteImport } from './routes/_authenticated/challenge/new'
 import { Route as AuthenticatedChallengePaymentsRouteImport } from './routes/_authenticated/challenge/payments'
 import { Route as AuthenticatedChallengeTargetsRouteImport } from './routes/_authenticated/challenge/targets'
-import { Route as AuthenticatedInviteBulkTokenRouteImport } from './routes/_authenticated/invite.bulk.$token'
 import { Route as AuthenticatedInviteChallengeTokenRouteImport } from './routes/_authenticated/invite.challenge.$token'
 
 const IndexRoute = IndexRouteImport.update({
@@ -57,15 +56,16 @@ const AuthenticatedBulkIndexRoute = AuthenticatedBulkIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthenticatedBulkRouteRoute,
 } as any)
-const AuthenticatedBulkAccessRoute = AuthenticatedBulkAccessRouteImport.update({
-  id: '/access',
-  path: '/access',
-  getParentRoute: () => AuthenticatedBulkRouteRoute,
-} as any)
 const AuthenticatedBulkCheckInRoute =
   AuthenticatedBulkCheckInRouteImport.update({
     id: '/check-in',
     path: '/check-in',
+    getParentRoute: () => AuthenticatedBulkRouteRoute,
+  } as any)
+const AuthenticatedBulkHistoryRoute =
+  AuthenticatedBulkHistoryRouteImport.update({
+    id: '/history',
+    path: '/history',
     getParentRoute: () => AuthenticatedBulkRouteRoute,
   } as any)
 const AuthenticatedBulkProgressRoute =
@@ -116,12 +116,6 @@ const AuthenticatedChallengeTargetsRoute =
     path: '/challenge/targets',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
-const AuthenticatedInviteBulkTokenRoute =
-  AuthenticatedInviteBulkTokenRouteImport.update({
-    id: '/invite/bulk/$token',
-    path: '/invite/bulk/$token',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
 const AuthenticatedInviteChallengeTokenRoute =
   AuthenticatedInviteChallengeTokenRouteImport.update({
     id: '/invite/challenge/$token',
@@ -134,8 +128,8 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/bulk': typeof AuthenticatedBulkRouteRouteWithChildren
   '/profile': typeof AuthenticatedProfileRoute
-  '/bulk/access': typeof AuthenticatedBulkAccessRoute
   '/bulk/check-in': typeof AuthenticatedBulkCheckInRoute
+  '/bulk/history': typeof AuthenticatedBulkHistoryRoute
   '/bulk/progress': typeof AuthenticatedBulkProgressRoute
   '/bulk/training': typeof AuthenticatedBulkTrainingRoute
   '/challenge/history': typeof AuthenticatedChallengeHistoryRoute
@@ -145,15 +139,14 @@ export interface FileRoutesByFullPath {
   '/challenge/targets': typeof AuthenticatedChallengeTargetsRoute
   '/bulk/': typeof AuthenticatedBulkIndexRoute
   '/challenge/': typeof AuthenticatedChallengeIndexRoute
-  '/invite/bulk/$token': typeof AuthenticatedInviteBulkTokenRoute
   '/invite/challenge/$token': typeof AuthenticatedInviteChallengeTokenRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/profile': typeof AuthenticatedProfileRoute
-  '/bulk/access': typeof AuthenticatedBulkAccessRoute
   '/bulk/check-in': typeof AuthenticatedBulkCheckInRoute
+  '/bulk/history': typeof AuthenticatedBulkHistoryRoute
   '/bulk/progress': typeof AuthenticatedBulkProgressRoute
   '/bulk/training': typeof AuthenticatedBulkTrainingRoute
   '/challenge/history': typeof AuthenticatedChallengeHistoryRoute
@@ -163,7 +156,6 @@ export interface FileRoutesByTo {
   '/challenge/targets': typeof AuthenticatedChallengeTargetsRoute
   '/bulk': typeof AuthenticatedBulkIndexRoute
   '/challenge': typeof AuthenticatedChallengeIndexRoute
-  '/invite/bulk/$token': typeof AuthenticatedInviteBulkTokenRoute
   '/invite/challenge/$token': typeof AuthenticatedInviteChallengeTokenRoute
 }
 export interface FileRoutesById {
@@ -173,8 +165,8 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/_authenticated/bulk': typeof AuthenticatedBulkRouteRouteWithChildren
   '/_authenticated/profile': typeof AuthenticatedProfileRoute
-  '/_authenticated/bulk/access': typeof AuthenticatedBulkAccessRoute
   '/_authenticated/bulk/check-in': typeof AuthenticatedBulkCheckInRoute
+  '/_authenticated/bulk/history': typeof AuthenticatedBulkHistoryRoute
   '/_authenticated/bulk/progress': typeof AuthenticatedBulkProgressRoute
   '/_authenticated/bulk/training': typeof AuthenticatedBulkTrainingRoute
   '/_authenticated/challenge/history': typeof AuthenticatedChallengeHistoryRoute
@@ -184,7 +176,6 @@ export interface FileRoutesById {
   '/_authenticated/challenge/targets': typeof AuthenticatedChallengeTargetsRoute
   '/_authenticated/bulk/': typeof AuthenticatedBulkIndexRoute
   '/_authenticated/challenge/': typeof AuthenticatedChallengeIndexRoute
-  '/_authenticated/invite/bulk/$token': typeof AuthenticatedInviteBulkTokenRoute
   '/_authenticated/invite/challenge/$token': typeof AuthenticatedInviteChallengeTokenRoute
 }
 export interface FileRouteTypes {
@@ -194,8 +185,8 @@ export interface FileRouteTypes {
     | '/auth'
     | '/bulk'
     | '/profile'
-    | '/bulk/access'
     | '/bulk/check-in'
+    | '/bulk/history'
     | '/bulk/progress'
     | '/bulk/training'
     | '/challenge/history'
@@ -205,15 +196,14 @@ export interface FileRouteTypes {
     | '/challenge/targets'
     | '/bulk/'
     | '/challenge/'
-    | '/invite/bulk/$token'
     | '/invite/challenge/$token'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/auth'
     | '/profile'
-    | '/bulk/access'
     | '/bulk/check-in'
+    | '/bulk/history'
     | '/bulk/progress'
     | '/bulk/training'
     | '/challenge/history'
@@ -223,7 +213,6 @@ export interface FileRouteTypes {
     | '/challenge/targets'
     | '/bulk'
     | '/challenge'
-    | '/invite/bulk/$token'
     | '/invite/challenge/$token'
   id:
     | '__root__'
@@ -232,8 +221,8 @@ export interface FileRouteTypes {
     | '/auth'
     | '/_authenticated/bulk'
     | '/_authenticated/profile'
-    | '/_authenticated/bulk/access'
     | '/_authenticated/bulk/check-in'
+    | '/_authenticated/bulk/history'
     | '/_authenticated/bulk/progress'
     | '/_authenticated/bulk/training'
     | '/_authenticated/challenge/history'
@@ -243,7 +232,6 @@ export interface FileRouteTypes {
     | '/_authenticated/challenge/targets'
     | '/_authenticated/bulk/'
     | '/_authenticated/challenge/'
-    | '/_authenticated/invite/bulk/$token'
     | '/_authenticated/invite/challenge/$token'
   fileRoutesById: FileRoutesById
 }
@@ -297,18 +285,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedBulkIndexRouteImport
       parentRoute: typeof AuthenticatedBulkRouteRoute
     }
-    '/_authenticated/bulk/access': {
-      id: '/_authenticated/bulk/access'
-      path: '/access'
-      fullPath: '/bulk/access'
-      preLoaderRoute: typeof AuthenticatedBulkAccessRouteImport
-      parentRoute: typeof AuthenticatedBulkRouteRoute
-    }
     '/_authenticated/bulk/check-in': {
       id: '/_authenticated/bulk/check-in'
       path: '/check-in'
       fullPath: '/bulk/check-in'
       preLoaderRoute: typeof AuthenticatedBulkCheckInRouteImport
+      parentRoute: typeof AuthenticatedBulkRouteRoute
+    }
+    '/_authenticated/bulk/history': {
+      id: '/_authenticated/bulk/history'
+      path: '/history'
+      fullPath: '/bulk/history'
+      preLoaderRoute: typeof AuthenticatedBulkHistoryRouteImport
       parentRoute: typeof AuthenticatedBulkRouteRoute
     }
     '/_authenticated/bulk/progress': {
@@ -367,13 +355,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedChallengeTargetsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/invite/bulk/$token': {
-      id: '/_authenticated/invite/bulk/$token'
-      path: '/invite/bulk/$token'
-      fullPath: '/invite/bulk/$token'
-      preLoaderRoute: typeof AuthenticatedInviteBulkTokenRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
     '/_authenticated/invite/challenge/$token': {
       id: '/_authenticated/invite/challenge/$token'
       path: '/invite/challenge/$token'
@@ -385,8 +366,8 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedBulkRouteRouteChildren {
-  AuthenticatedBulkAccessRoute: typeof AuthenticatedBulkAccessRoute
   AuthenticatedBulkCheckInRoute: typeof AuthenticatedBulkCheckInRoute
+  AuthenticatedBulkHistoryRoute: typeof AuthenticatedBulkHistoryRoute
   AuthenticatedBulkProgressRoute: typeof AuthenticatedBulkProgressRoute
   AuthenticatedBulkTrainingRoute: typeof AuthenticatedBulkTrainingRoute
   AuthenticatedBulkIndexRoute: typeof AuthenticatedBulkIndexRoute
@@ -394,8 +375,8 @@ interface AuthenticatedBulkRouteRouteChildren {
 
 const AuthenticatedBulkRouteRouteChildren: AuthenticatedBulkRouteRouteChildren =
   {
-    AuthenticatedBulkAccessRoute: AuthenticatedBulkAccessRoute,
     AuthenticatedBulkCheckInRoute: AuthenticatedBulkCheckInRoute,
+    AuthenticatedBulkHistoryRoute: AuthenticatedBulkHistoryRoute,
     AuthenticatedBulkProgressRoute: AuthenticatedBulkProgressRoute,
     AuthenticatedBulkTrainingRoute: AuthenticatedBulkTrainingRoute,
     AuthenticatedBulkIndexRoute: AuthenticatedBulkIndexRoute,
@@ -415,7 +396,6 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedChallengePaymentsRoute: typeof AuthenticatedChallengePaymentsRoute
   AuthenticatedChallengeTargetsRoute: typeof AuthenticatedChallengeTargetsRoute
   AuthenticatedChallengeIndexRoute: typeof AuthenticatedChallengeIndexRoute
-  AuthenticatedInviteBulkTokenRoute: typeof AuthenticatedInviteBulkTokenRoute
   AuthenticatedInviteChallengeTokenRoute: typeof AuthenticatedInviteChallengeTokenRoute
 }
 
@@ -428,7 +408,6 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedChallengePaymentsRoute: AuthenticatedChallengePaymentsRoute,
   AuthenticatedChallengeTargetsRoute: AuthenticatedChallengeTargetsRoute,
   AuthenticatedChallengeIndexRoute: AuthenticatedChallengeIndexRoute,
-  AuthenticatedInviteBulkTokenRoute: AuthenticatedInviteBulkTokenRoute,
   AuthenticatedInviteChallengeTokenRoute:
     AuthenticatedInviteChallengeTokenRoute,
 }

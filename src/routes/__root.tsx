@@ -13,6 +13,7 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { ChallengePushSession } from "../components/ChallengePushSession";
 import { Toaster } from "../components/ui/sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 function NotFoundComponent() {
   return (
@@ -79,14 +80,14 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lean Bulk Tracker — bulk and challenge" },
+      { title: "Tempo — bulk and challenge" },
       {
         name: "description",
         content:
           "A private lean bulk tracker plus a two-person 52-week running and cycling challenge with weekly targets and penalties.",
       },
       { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lean Bulk Tracker — bulk and challenge" },
+      { property: "og:title", content: "Tempo — bulk and challenge" },
       {
         property: "og:description",
         content:
@@ -95,7 +96,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:site", content: "@Lovable" },
-      { name: "twitter:title", content: "Lean Bulk Tracker — bulk and challenge" },
+      { name: "twitter:title", content: "Tempo — bulk and challenge" },
       {
         name: "twitter:description",
         content:
@@ -144,6 +145,14 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+
+  useEffect(() => {
+    const { data } = supabase.auth.onAuthStateChange(() => {
+      void queryClient.invalidateQueries({ queryKey: ["authenticated-user"] });
+      void queryClient.invalidateQueries({ queryKey: ["bulk-memberships"] });
+    });
+    return () => data.subscription.unsubscribe();
+  }, [queryClient]);
 
   return (
     <QueryClientProvider client={queryClient}>

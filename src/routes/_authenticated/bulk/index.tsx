@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { format } from "date-fns";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { Bar, Card, Chip, Field, Note, NumInput, SectionTitle, Stat } from "@/components/ui-kit";
 import { bulkStatus, dayCompletion, fmt, iso, signed, weekDays, weekStartOf } from "@/lib/calc";
@@ -11,13 +11,12 @@ import { RANGES, type MealPlanId, type WorkoutType } from "@/lib/types";
 export const Route = createFileRoute("/_authenticated/bulk/")({
   head: () => ({
     meta: [
-      { title: "Today — Lean Bulk Tracker" },
+      { title: "Today — Tempo" },
       {
         name: "description",
-        content:
-          "Log bodyweight, nutrition, activity and training in under a minute with Lean Bulk Tracker.",
+        content: "Log bodyweight, nutrition, activity and training in under a minute with Tempo.",
       },
-      { property: "og:title", content: "Today — Lean Bulk Tracker" },
+      { property: "og:title", content: "Today — Tempo" },
       {
         property: "og:description",
         content: "Fast daily logging for a 12-month lean bulk.",
@@ -33,7 +32,8 @@ function TodayPage() {
   const data = useAppData();
   const { saveDay } = useActions();
   const today = iso(new Date());
-  const [saved, setSaved] = useState(false);
+  const [sync, setSync] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const revision = useRef(0);
 
   const day = data?.days[today];
   const targets = data?.targets;
@@ -54,18 +54,40 @@ function TodayPage() {
   }
 
   const set = (patch: Parameters<typeof saveDay>[1]) => {
-    saveDay(today, patch);
-    setSaved(false);
+    const version = ++revision.current;
+    setSync("saving");
+    void saveDay(today, patch)
+      .then(() => {
+        if (version === revision.current) setSync("saved");
+      })
+      .catch(() => {
+        if (version === revision.current) setSync("error");
+      });
+  };
+
+  const saveNow = async () => {
+    const version = ++revision.current;
+    setSync("saving");
+    try {
+      await saveDay(today, {});
+      if (version === revision.current) setSync("saved");
+    } catch {
+      if (version === revision.current) setSync("error");
+    }
   };
 
   const pickPlan = (id: MealPlanId) => {
     const plan = mealPlan(id);
+    const mealSnapshot = plan
+      ? { name: plan.name, base: [...plan.base], meals: [...plan.meals], macros: plan.macros }
+      : undefined;
     if (!plan?.macros) {
-      set({ mealPlan: id });
+      set({ mealPlan: id, mealSnapshot });
       return;
     }
     set({
       mealPlan: id,
+      mealSnapshot,
       calories: plan.macros.calories,
       protein: plan.macros.protein,
       carbs: plan.macros.carbs,
@@ -366,14 +388,17 @@ function TodayPage() {
             />
           </div>
           <button
-            onClick={() => {
-              saveDay(today, {});
-              setSaved(true);
-            }}
-            className="w-full rounded-xl bg-primary py-3 text-base font-semibold text-primary-foreground transition-transform active:scale-[0.98]"
+            onClick={() => void saveNow()}
+            disabled={sync === "saving"}
+            className="w-full rounded-xl bg-primary py-3 text-base font-semibold text-primary-foreground transition-transform active:scale-[0.98] disabled:opacity-60"
           >
-            {saved ? "Saved ✓" : "Save Day"}
+            {sync === "saving" ? "Saving day…" : sync === "saved" ? "Saved ✓" : "Save Day"}
           </button>
+          {sync === "error" ? (
+            <p role="alert" className="mt-2 text-xs text-danger">
+              Your latest change was not saved. Check your connection and try again.
+            </p>
+          ) : null}
         </div>
       </div>
     </AppShell>

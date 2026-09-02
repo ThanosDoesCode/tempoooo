@@ -7,7 +7,7 @@ import { acceptChallengeInvitation } from "@/lib/privileged-rpcs.functions";
 export const Route = createFileRoute("/_authenticated/invite/challenge/$token")({
   head: () => ({
     meta: [
-      { title: "Challenge invitation — Lean Bulk Tracker" },
+      { title: "Challenge invitation — Tempo" },
       {
         name: "description",
         content:

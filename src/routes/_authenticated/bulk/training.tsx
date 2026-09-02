@@ -10,12 +10,12 @@ import { useActions, useAppData, useBulkMeta } from "@/lib/store";
 export const Route = createFileRoute("/_authenticated/bulk/training")({
   head: () => ({
     meta: [
-      { title: "Training — Lean Bulk Tracker" },
+      { title: "Training — Tempo" },
       {
         name: "description",
         content: "Log sets, reps and weights with last session's numbers side by side.",
       },
-      { property: "og:title", content: "Training — Lean Bulk Tracker" },
+      { property: "og:title", content: "Training — Tempo" },
       {
         property: "og:description",
         content: "Exercise logging with progression status and strength history graphs.",
@@ -29,7 +29,7 @@ function TrainingPage() {
   const data = useAppData();
   const { user } = useAuth();
   const { bulkId, role } = useBulkMeta();
-  const { saveWorkout } = useActions();
+  const { saveWorkout, saveTargets } = useActions();
   const today = iso(new Date());
   const [date, setDate] = useState(today);
   return (
@@ -54,6 +54,12 @@ function TrainingPage() {
           date={date}
           cacheKey={`training-draft:${user.id}:${bulkId}:${date}`}
           onSave={(workout) => saveWorkout(workout, user.id)}
+          onSaveSetupNote={async (exercise, note) => {
+            const notes = { ...(data.targets.exerciseSetupNotes ?? {}) };
+            if (note) notes[exercise] = note;
+            else delete notes[exercise];
+            await saveTargets({ ...data.targets, exerciseSetupNotes: notes });
+          }}
           readOnly={role === "viewer"}
         />
       ) : (

@@ -1,23 +1,23 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { LogOut, Mail, Plus, RotateCcw } from "lucide-react";
+import { LogOut, Mail, RotateCcw } from "lucide-react";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { Card, Note, SectionTitle } from "@/components/ui-kit";
 import { ChallengeInviteCard } from "@/components/ChallengeInvite";
 import { useAuth, signOut } from "@/lib/auth";
-import { createBulkProfile, useMemberships } from "@/lib/bulk-access";
+import { useMemberships } from "@/lib/bulk-access";
 import { useChallengeMembers, useMyChallenge } from "@/lib/challenge";
 import { resetBulkData } from "@/lib/store";
 
 export const Route = createFileRoute("/_authenticated/profile")({
   head: () => ({
     meta: [
-      { title: "Profile — Lean Bulk Tracker" },
+      { title: "Profile — Tempo" },
       {
         name: "description",
         content: "See the account you are signed in with and create or open your lean bulk plan.",
       },
-      { property: "og:title", content: "Profile — Lean Bulk Tracker" },
+      { property: "og:title", content: "Profile — Tempo" },
       {
         property: "og:description",
         content: "Manage your account and your lean bulk plan access.",
@@ -32,7 +32,7 @@ export const Route = createFileRoute("/_authenticated/profile")({
 function ProfilePage() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { data: memberships, isLoading, refetch } = useMemberships();
+  const { data: memberships } = useMemberships();
   const { data: challenge } = useMyChallenge();
   const { data: challengeMembers } = useChallengeMembers(challenge?.id);
   const [busy, setBusy] = useState(false);
@@ -41,23 +41,8 @@ function ProfilePage() {
   const [resetTargets, setResetTargets] = useState(false);
   const [resetDone, setResetDone] = useState(false);
 
-  const hasBulk = (memberships?.length ?? 0) > 0;
   const ownedPlan = memberships?.find((m) => m.role === "owner");
   const canInvite = !!challenge && (challengeMembers?.length ?? 0) < 2;
-
-  const create = async () => {
-    setBusy(true);
-    setError(null);
-    try {
-      await createBulkProfile();
-      await refetch();
-      void navigate({ to: "/bulk" });
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const reset = async () => {
     if (!ownedPlan) return;
@@ -86,35 +71,18 @@ function ProfilePage() {
         </div>
       </Card>
 
-      <Card className="mt-3">
-        <SectionTitle>Bulk plan</SectionTitle>
-        {isLoading ? (
-          <div className="h-9 animate-pulse rounded-xl bg-elevated" />
-        ) : hasBulk ? (
+      {ownedPlan ? (
+        <Card className="mt-3">
+          <SectionTitle>Private Bulk</SectionTitle>
           <button
             onClick={() => void navigate({ to: "/bulk" })}
-            className="w-full rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground"
+            className="min-h-11 w-full rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground"
           >
             Open my bulk plan
           </button>
-        ) : (
-          <div className="space-y-2">
-            <Note>
-              This account has no bulk plan yet. Create one to unlock Today, Training, Progress and
-              Check-In.
-            </Note>
-            <button
-              onClick={() => void create()}
-              disabled={busy}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-            >
-              <Plus className="h-4 w-4" />
-              {busy ? "Creating…" : "Create my bulk plan"}
-            </button>
-          </div>
-        )}
-        {error ? <p className="mt-2 text-xs text-danger">{error}</p> : null}
-      </Card>
+          {error ? <p className="mt-2 text-xs text-danger">{error}</p> : null}
+        </Card>
+      ) : null}
 
       {canInvite ? (
         <div className="mt-3">
@@ -174,7 +142,11 @@ function ProfilePage() {
       <Card className="mt-3">
         <SectionTitle>Session</SectionTitle>
         <button
-          onClick={() => void signOut()}
+          onClick={() => {
+            void signOut().then((signedOut) => {
+              if (signedOut) void navigate({ to: "/auth", replace: true });
+            });
+          }}
           className="flex w-full items-center justify-center gap-2 rounded-xl border border-border py-3 text-sm font-medium text-muted-foreground"
         >
           <LogOut className="h-4 w-4" /> Sign out

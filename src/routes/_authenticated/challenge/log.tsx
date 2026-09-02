@@ -19,12 +19,12 @@ import {
 export const Route = createFileRoute("/_authenticated/challenge/log")({
   head: () => ({
     meta: [
-      { title: "Add activity — Challenge" },
+      { title: "Add activity — Tempo" },
       {
         name: "description",
         content: "Log a qualifying run or ride with duration and a Strava screenshot as evidence.",
       },
-      { property: "og:title", content: "Add activity — Challenge" },
+      { property: "og:title", content: "Add activity — Tempo" },
       { property: "og:description", content: "Run or cycle, screenshot required." },
     ],
   }),

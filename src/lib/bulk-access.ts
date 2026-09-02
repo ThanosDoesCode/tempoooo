@@ -1,7 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
+import { queryOptions, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { BulkRole } from "./store";
-import { ensureBulkProfile } from "./privileged-rpcs.functions";
 
 export type Membership = {
   bulk_profile_id: string;
@@ -10,24 +9,29 @@ export type Membership = {
   allow_editor: boolean;
 };
 
-export function useMemberships() {
-  return useQuery({
+export const bulkOwnerQueryOptions = () =>
+  queryOptions({
     queryKey: ["bulk-memberships"],
     queryFn: async (): Promise<Membership[]> => {
       const { data, error } = await supabase
         .from("bulk_members")
         .select("bulk_profile_id, role, bulk_profiles(owner_id, allow_editor)");
       if (error) throw error;
-      return (data ?? []).map((r) => ({
-        bulk_profile_id: r.bulk_profile_id,
-        role: r.role as BulkRole,
-        owner_id: (r.bulk_profiles as { owner_id: string } | null)?.owner_id ?? "",
-        allow_editor: (r.bulk_profiles as { allow_editor: boolean } | null)?.allow_editor ?? false,
-      }));
+      return (data ?? [])
+        .filter((r) => r.role === "owner")
+        .map((r) => ({
+          bulk_profile_id: r.bulk_profile_id,
+          role: r.role as BulkRole,
+          owner_id: (r.bulk_profiles as { owner_id: string } | null)?.owner_id ?? "",
+          allow_editor:
+            (r.bulk_profiles as { allow_editor: boolean } | null)?.allow_editor ?? false,
+        }));
     },
+    staleTime: 5 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+    retry: 1,
   });
-}
 
-export async function createBulkProfile() {
-  return ensureBulkProfile();
+export function useMemberships() {
+  return useQuery(bulkOwnerQueryOptions());
 }

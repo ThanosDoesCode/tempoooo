@@ -15,6 +15,10 @@ import {
   bestRecentSet,
   notesPreview,
   volumeMultiplier,
+  bodyweightMode,
+  repeatPreviousSet,
+  restSecondsRemaining,
+  setSessionBodyweight,
 } from "../src/lib/training.ts";
 import { progressionFor, exerciseHistory, previousEntry } from "../src/lib/calc.ts";
 import { createSaveQueue } from "../src/lib/workout-save.ts";
@@ -106,6 +110,77 @@ test("new session bodyweight is snapshotted and survives changed daily weights a
   assert.equal(restored.entries.find((e) => e.exercise === "Pull-Ups").bodyweight, 62);
   const overridden = updateExercise(restored, "Pull-Ups", { bodyweight: 64.5, addedWeight: 2.5 });
   assert.equal(effectiveLoad(overridden.entries.find((e) => e.exercise === "Pull-Ups")), 67);
+});
+test("new programs append abs after every original Legs and Arms exercise", () => {
+  assert.deepEqual(
+    EXERCISES.Legs.slice(-2).map((e) => e.name),
+    ["Cable Crunches", "Hanging Leg Raises"],
+  );
+  assert.deepEqual(
+    EXERCISES["Arms & Shoulders"].slice(-2).map((e) => e.name),
+    ["Cable Crunches", "Hanging Leg Raises"],
+  );
+  for (const required of ["Leg Curls", "Calf Raises"])
+    assert.ok(EXERCISES.Legs.some((e) => e.name === required));
+  assert.ok(EXERCISES["Arms & Shoulders"].some((e) => e.name === "Lateral Raises"));
+  const old = workout("2026-08-20", [entry("Calf Raises")], { status: "completed", type: "Legs" });
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(old)).entries.map((e) => e.exercise),
+    ["Calf Raises"],
+  );
+});
+test("bodyweight modes preserve effective load without double counting", () => {
+  const base = { ...bw(62), loadMode: "bodyweight" };
+  assert.equal(bodyweightMode(base), "bodyweight");
+  assert.equal(effectiveLoad({ ...base, addedWeight: 10, assistance: 15 }), 62);
+  assert.equal(effectiveLoad({ ...base, loadMode: "added", addedWeight: 5 }), 67);
+  assert.equal(effectiveLoad({ ...base, loadMode: "assisted", assistance: 15 }), 47);
+  const hanging = createWorkout(
+    data([], { "2026-08-31": { date: "2026-08-31", weight: 62 } }),
+    "2026-08-31",
+    "Legs",
+  ).entries.find((e) => e.exercise === "Hanging Leg Raises");
+  assert.equal(hanging.loadMode, "bodyweight");
+  assert.equal(effectiveLoad(hanging), 62);
+  assert.equal(effectiveLoad({ ...hanging, loadMode: "added", addedWeight: 3 }), 65);
+});
+test("session bodyweight updates every bodyweight exercise snapshot", () => {
+  const w = setSessionBodyweight(createWorkout(data(), "2026-08-31", "Legs"), 63.5);
+  assert.equal(w.sessionBodyweight, 63.5);
+  assert.ok(
+    w.entries
+      .filter((e) => ["Hanging Leg Raises"].includes(e.exercise))
+      .every((e) => e.bodyweight === 63.5),
+  );
+});
+test("Same copies only the previous current-session set and never overwrites", () => {
+  const original = {
+    ...bw(62, [10, undefined, undefined]),
+    loadMode: "added",
+    addedWeight: 5,
+    rpe: 9,
+    notes: "keep",
+  };
+  const second = repeatPreviousSet(original, 1);
+  assert.deepEqual(second.reps, [10, 10, undefined]);
+  assert.equal(second.loadMode, "added");
+  assert.equal(second.addedWeight, 5);
+  assert.equal(second.rpe, 9);
+  assert.equal(second.notes, "keep");
+  const third = repeatPreviousSet(second, 2);
+  assert.deepEqual(third.reps, [10, 10, 10]);
+  assert.equal(repeatPreviousSet({ ...third, reps: [10, 8, 7] }, 2).reps[2], 7);
+  assert.equal(repeatPreviousSet(original, 0), original);
+  const assisted = repeatPreviousSet(
+    { ...original, loadMode: "assisted", addedWeight: 0, assistance: 15 },
+    1,
+  );
+  assert.equal(assisted.assistance, 15);
+});
+test("rest timer derives remaining time from its deadline after background gaps", () => {
+  assert.equal(restSecondsRemaining(120_000, 0), 120);
+  assert.equal(restSecondsRemaining(120_000, 91_500), 29);
+  assert.equal(restSecondsRemaining(120_000, 130_000), 0);
 });
 for (const exercise of ["Pull-Ups", "Chin-Ups"]) {
   test(`${exercise} maintained reps at 62→65 kg progress with load PRs`, () => {

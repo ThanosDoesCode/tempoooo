@@ -7,13 +7,13 @@ export const Route = createFileRoute("/auth")({
   ssr: false,
   head: () => ({
     meta: [
-      { title: "Sign in — Lean Bulk Tracker" },
+      { title: "Sign in — Tempo" },
       {
         name: "description",
         content:
           "Sign in to your private lean bulk tracker and your two-person running and cycling challenge.",
       },
-      { property: "og:title", content: "Sign in — Lean Bulk Tracker" },
+      { property: "og:title", content: "Sign in — Tempo" },
       {
         property: "og:description",
         content: "Private bulk tracking and a 52-week endurance challenge.",
@@ -63,7 +63,7 @@ function AuthPage() {
         await syncProfile(data.session.user);
         const next = sessionStorage.getItem("post-auth-path");
         sessionStorage.removeItem("post-auth-path");
-        window.location.href = next ?? "/";
+        await navigate({ to: next ?? "/challenge", replace: true });
         return;
       }
       // Saved on this device: sign in automatically, no typing needed.
@@ -72,7 +72,7 @@ function AuthPage() {
         const { error } = await supabase.auth.signInWithPassword(stored);
         setBusy(false);
         if (!error) {
-          window.location.href = "/";
+          await navigate({ to: "/challenge", replace: true });
           return;
         }
         localStorage.removeItem(SAVED_KEY);
@@ -93,7 +93,7 @@ function AuthPage() {
         /* stored-credential retrieval is best-effort */
       }
     });
-  }, []);
+  }, [navigate]);
 
   /** Saves locally when asked, and lets the browser / keychain store it too. */
   const offerToSaveCredentials = async () => {
@@ -134,7 +134,7 @@ function AuthPage() {
       await offerToSaveCredentials();
       // small delay so the browser can show its save-password prompt
       setTimeout(() => {
-        window.location.href = "/";
+        void navigate({ to: "/challenge", replace: true });
       }, 400);
     } else {
       await offerToSaveCredentials();
@@ -145,7 +145,7 @@ function AuthPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm">
-        <h1 className="text-2xl font-semibold tracking-tight">Lean Bulk Tracker</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Tempo</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Private bulk tracking and your 52-week endurance challenge.
         </p>

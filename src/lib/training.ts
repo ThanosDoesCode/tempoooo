@@ -20,6 +20,13 @@ const valid = (n: unknown): n is number => typeof n === "number" && Number.isFin
 export const isWorkingRep = (r: unknown): r is number => valid(r) && Number.isInteger(r) && r > 0;
 export const workingReps = (entry: ExerciseEntry) => entry.reps.filter(isWorkingRep);
 export const isBodyweight = (name: string) => exerciseDef(name)?.loadKind === "bodyweight";
+export type BodyweightMode = "bodyweight" | "added" | "assisted";
+export function bodyweightMode(entry: ExerciseEntry): BodyweightMode {
+  if (entry.loadMode) return entry.loadMode;
+  if ((entry.assistance ?? 0) > 0) return "assisted";
+  if ((entry.addedWeight ?? 0) > 0) return "added";
+  return "bodyweight";
+}
 export const volumeMultiplier = (name: string) =>
   exerciseDef(name)?.loadKind === "dumbbell-pair" ? 2 : 1;
 export const metricNumber = (n: number) => n.toLocaleString("en-GB", { maximumFractionDigits: 2 });
@@ -35,8 +42,10 @@ export function effectiveLoad(entry: ExerciseEntry): number | null {
     return valid(entry.weight) && entry.weight >= 0 ? entry.weight : null;
   // Do not reinterpret legacy "weight" as added weight or fill missing historical bodyweight.
   if (!valid(entry.bodyweight) || entry.bodyweight <= 0) return null;
-  const added = entry.addedWeight ?? 0;
-  const assistance = entry.assistance ?? 0;
+  const mode = entry.loadMode;
+  // Legacy entries had no explicit mode and could contain both values; preserve that calculation.
+  const added = mode == null || mode === "added" ? (entry.addedWeight ?? 0) : 0;
+  const assistance = mode == null || mode === "assisted" ? (entry.assistance ?? 0) : 0;
   if (!valid(added) || !valid(assistance) || added < 0 || assistance < 0) return null;
   const load = entry.bodyweight + added - assistance;
   return load > 0 ? load : null;
@@ -70,17 +79,44 @@ export function workoutMetrics(workout: Workout) {
 }
 
 export function createWorkout(data: AppData, date: string, type: SplitType): Workout {
+  const sessionBodyweight = bodyweightOn(data, date);
   return {
     date,
     type,
     status: "draft",
+    ...(sessionBodyweight ? { sessionBodyweight } : {}),
     entries: EXERCISES[type].map((def) => ({
       exercise: def.name,
       reps: [undefined, undefined, undefined],
-      ...(isBodyweight(def.name) ? { bodyweight: bodyweightOn(data, date), addedWeight: 0 } : {}),
+      ...(isBodyweight(def.name)
+        ? { bodyweight: sessionBodyweight, loadMode: "bodyweight" as const, addedWeight: 0 }
+        : {}),
     })),
   };
 }
+
+export function setSessionBodyweight(workout: Workout, value: number | undefined): Workout {
+  return {
+    ...workout,
+    sessionBodyweight: value,
+    entries: workout.entries.map((entry) =>
+      isBodyweight(entry.exercise) ? { ...entry, bodyweight: value } : entry,
+    ),
+  };
+}
+
+/** Copies only current-session set data; exercise-level load fields already apply to every set. */
+export function repeatPreviousSet(entry: ExerciseEntry, setIndex: number): ExerciseEntry {
+  if (setIndex < 1 || setIndex >= entry.reps.length) return entry;
+  const previous = entry.reps[setIndex - 1];
+  if (!isWorkingRep(previous) || entry.reps[setIndex] != null) return entry;
+  const reps = [...entry.reps];
+  reps[setIndex] = previous;
+  return { ...entry, reps };
+}
+
+export const restSecondsRemaining = (deadlineMs: number, nowMs = Date.now()) =>
+  Math.max(0, Math.ceil((deadlineMs - nowMs) / 1000));
 
 /** Only new drafts get automatic timing; legacy sessions never get invented starts. */
 export function updateExercise(
@@ -89,12 +125,27 @@ export function updateExercise(
   patch: Partial<ExerciseEntry>,
   now = new Date(),
 ): Workout {
+  const compatiblePatch =
+    isBodyweight(name) && patch.loadMode == null
+      ? {
+          ...patch,
+          ...((patch.assistance ?? 0) > 0
+            ? { loadMode: "assisted" as const }
+            : (patch.addedWeight ?? 0) > 0
+              ? { loadMode: "added" as const }
+              : {}),
+        }
+      : patch;
   const next = {
     ...workout,
-    entries: workout.entries.map((e) => (e.exercise === name ? { ...e, ...patch } : e)),
+    entries: workout.entries.map((e) => (e.exercise === name ? { ...e, ...compatiblePatch } : e)),
   };
   if (!next.entries.some((e) => e.exercise === name))
-    next.entries.push({ exercise: name, reps: [undefined, undefined, undefined], ...patch });
+    next.entries.push({
+      exercise: name,
+      reps: [undefined, undefined, undefined],
+      ...compatiblePatch,
+    });
   if (next.status === "draft" && !next.startedAt && workoutMetrics(next).workingSets > 0)
     next.startedAt = now.toISOString();
   return next;

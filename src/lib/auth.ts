@@ -1,6 +1,21 @@
 import { useEffect, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
+import { queryOptions } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+
+export const authenticatedUserQueryOptions = () =>
+  queryOptions({
+    queryKey: ["authenticated-user"],
+    queryFn: async () => {
+      const { data, error } = await supabase.auth.getUser();
+      if (error && !data.user) return null;
+      if (error) throw error;
+      return data.user;
+    },
+    staleTime: 5 * 60_000,
+    gcTime: 30 * 60_000,
+    retry: 1,
+  });
 
 export function useAuth() {
   const [session, setSession] = useState<Session | null>(null);
@@ -44,11 +59,11 @@ export async function signOut() {
     window.alert(
       "Could not safely disconnect this device's notifications. Please retry signing out when connected.",
     );
-    return;
+    return false;
   }
   localStorage.removeItem("saved-credentials");
   await supabase.auth.signOut();
-  window.location.href = "/auth";
+  return true;
 }
 
 export async function sha256Hex(value: string) {

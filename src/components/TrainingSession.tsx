@@ -15,6 +15,7 @@ import { ExerciseNotes } from "./ExerciseNotes";
 import { exerciseHistory, progressionFor, totalReps } from "@/lib/calc";
 import {
   EXERCISES,
+  exerciseDef,
   type AppData,
   type ExerciseEntry,
   type SplitType,
@@ -22,6 +23,7 @@ import {
 } from "@/lib/types";
 import {
   bestRecentSet,
+  bodyweightMode,
   completeWorkout,
   createWorkout,
   effectiveLoad,
@@ -30,6 +32,9 @@ import {
   isBodyweight,
   metricNumber,
   notesPreview,
+  repeatPreviousSet,
+  restSecondsRemaining,
+  setSessionBodyweight,
   updateExercise,
   volumeMultiplier,
   workoutDuration,
@@ -45,15 +50,18 @@ export function TrainingSession({
   date,
   cacheKey,
   onSave,
+  onSaveSetupNote,
   readOnly = false,
 }: {
   data: AppData;
   date: string;
   cacheKey: string;
   onSave: (workout: Workout) => Promise<void>;
+  onSaveSetupNote?: (exercise: string, note: string) => Promise<void>;
   readOnly?: boolean;
 }) {
   const [restored] = useState(() => (readOnly ? null : readWorkoutDraft(cacheKey, date)));
+  const [storedAtOpen] = useState(() => !!restored || !!data.workouts[date]);
   const [workout, setWorkout] = useState<Workout>(
     () => restored ?? data.workouts[date] ?? createWorkout(data, date, "Chest & Back"),
   );
@@ -121,6 +129,11 @@ export function TrainingSession({
     setRestRunning(true);
   };
   const metrics = workoutMetrics(workout);
+  const displayedExercises = storedAtOpen
+    ? workout.entries.map(
+        (entry) => exerciseDef(entry.exercise) ?? { name: entry.exercise, min: 1, max: 99 },
+      )
+    : EXERCISES[workout.type];
   const duration = workoutDuration(workout, now);
   const hasContent =
     metrics.workingSets > 0 ||
@@ -167,6 +180,22 @@ export function TrainingSession({
             One split per date. Logged sets and notes keep this session’s split.
           </p>
         ) : null}
+        {displayedExercises.some((def) => isBodyweight(def.name)) ? (
+          <Card className="mb-3">
+            <SmallInput
+              label="Session bodyweight kg"
+              value={
+                workout.sessionBodyweight ??
+                workout.entries.find((entry) => isBodyweight(entry.exercise))?.bodyweight
+              }
+              min={0.1}
+              onChange={(value) => change(setSessionBodyweight(current.current, value))}
+            />
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              Saved once for this workout and reused by every bodyweight exercise.
+            </p>
+          </Card>
+        ) : null}
         <div
           className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground"
           aria-live="polite"
@@ -207,7 +236,7 @@ export function TrainingSession({
           </p>
         ) : null}
         <div className="space-y-3">
-          {EXERCISES[workout.type].map((def) => {
+          {displayedExercises.map((def) => {
             const entry = workout.entries.find((e) => e.exercise === def.name) ?? {
               exercise: def.name,
               reps: [undefined, undefined, undefined],
@@ -243,19 +272,43 @@ export function TrainingSession({
                 </p>
                 {bw ? (
                   <>
-                    <div className="mb-2 grid grid-cols-2 gap-2">
+                    <div className="mb-2 flex flex-wrap gap-1.5" aria-label="Load mode">
+                      {(
+                        [
+                          ["bodyweight", "BW"],
+                          ["added", "BW + weight"],
+                          ["assisted", "Assisted"],
+                        ] as const
+                      ).map(([mode, label]) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          onClick={() =>
+                            update(def.name, {
+                              loadMode: mode,
+                              ...(mode === "added" ? { assistance: 0 } : { addedWeight: 0 }),
+                              ...(mode === "bodyweight" ? { assistance: 0 } : {}),
+                            })
+                          }
+                          className={`min-h-11 rounded-full border px-3 py-2 text-xs font-semibold ${bodyweightMode(entry) === mode ? "border-primary bg-primary/15 text-primary" : "border-border bg-elevated text-muted-foreground"}`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    {bodyweightMode(entry) === "added" ? (
                       <SmallInput
-                        label="Bodyweight kg"
-                        value={entry.bodyweight}
-                        min={0.1}
-                        onChange={(value) => update(def.name, { bodyweight: value })}
-                      />
-                      <SmallInput
-                        label="Added weight kg"
+                        label="Extra weight kg"
                         value={entry.addedWeight ?? 0}
                         onChange={(value) => update(def.name, { addedWeight: value ?? 0 })}
                       />
-                    </div>
+                    ) : bodyweightMode(entry) === "assisted" ? (
+                      <SmallInput
+                        label="Assistance kg"
+                        value={entry.assistance ?? 0}
+                        onChange={(value) => update(def.name, { assistance: value ?? 0 })}
+                      />
+                    ) : null}
                     <p className="mb-2 text-[11px] text-muted-foreground">
                       {effectiveLoad(entry) == null
                         ? "Enter bodyweight for this session; older weights are never guessed."
@@ -273,20 +326,38 @@ export function TrainingSession({
                     />
                   ) : null}
                   {[0, 1, 2].map((i) => (
-                    <SmallInput
-                      key={i}
-                      label={`Set ${i + 1}`}
-                      value={entry.reps[i]}
-                      integer
-                      onChange={(value) => {
-                        const savedEntry =
-                          current.current.entries.find((e) => e.exercise === def.name) ?? entry;
-                        const reps = [...savedEntry.reps];
-                        reps[i] = value;
-                        update(def.name, { reps });
-                        if (value != null && value > 0) startRest();
-                      }}
-                    />
+                    <div key={i} className="min-w-0">
+                      <SmallInput
+                        label={`Set ${i + 1}`}
+                        value={entry.reps[i]}
+                        integer
+                        onChange={(value) => {
+                          const savedEntry =
+                            current.current.entries.find((e) => e.exercise === def.name) ?? entry;
+                          const reps = [...savedEntry.reps];
+                          reps[i] = value;
+                          update(def.name, { reps });
+                          if (value != null && value > 0) startRest();
+                        }}
+                      />
+                      {i > 0 ? (
+                        <button
+                          type="button"
+                          disabled={entry.reps[i - 1] == null || entry.reps[i] != null}
+                          onClick={() => {
+                            const savedEntry =
+                              current.current.entries.find((e) => e.exercise === def.name) ?? entry;
+                            const repeated = repeatPreviousSet(savedEntry, i);
+                            if (repeated === savedEntry) return;
+                            update(def.name, { reps: repeated.reps });
+                            startRest();
+                          }}
+                          className="mt-1 min-h-11 w-full rounded-lg text-[10px] font-semibold text-primary disabled:text-muted-foreground/40"
+                        >
+                          Same
+                        </button>
+                      ) : null}
+                    </div>
                   ))}
                 </div>
                 {p.prs.length ? (
@@ -318,6 +389,13 @@ export function TrainingSession({
                   onSave={(patch) => update(def.name, patch)}
                   disabled={readOnly || completing}
                 />
+                {onSaveSetupNote ? (
+                  <SetupNote
+                    initial={data.targets.exerciseSetupNotes?.[def.name] ?? ""}
+                    onSave={(note) => onSaveSetupNote(def.name, note)}
+                    disabled={readOnly || completing}
+                  />
+                ) : null}
                 <button
                   type="button"
                   onClick={() => setGraphFor(graphFor === def.name ? null : def.name)}
@@ -451,12 +529,67 @@ export function TrainingSession({
         </Note>
       </div>
       <RestTimer
-        key={restKey}
+        restartToken={restKey}
         running={restRunning}
         onStart={startRest}
         onStop={() => setRestRunning(false)}
       />
     </form>
+  );
+}
+
+function SetupNote({
+  initial,
+  onSave,
+  disabled,
+}: {
+  initial: string;
+  onSave: (note: string) => Promise<void>;
+  disabled: boolean;
+}) {
+  const [value, setValue] = useState(initial);
+  const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const save = async () => {
+    setStatus("saving");
+    try {
+      await onSave(value.trim());
+      setStatus("saved");
+    } catch {
+      setStatus("error");
+    }
+  };
+  return (
+    <details className="mt-1">
+      <summary className="min-h-11 cursor-pointer py-3 text-xs font-medium text-primary">
+        Setup note
+      </summary>
+      <label className="block text-xs text-muted-foreground">
+        Saved for future workouts
+        <input
+          value={value}
+          disabled={disabled || status === "saving"}
+          onChange={(event) => {
+            setValue(event.target.value);
+            setStatus("idle");
+          }}
+          placeholder="Seat 4, cable height 7…"
+          className="mt-1 min-h-11 w-full rounded-xl border border-input bg-elevated px-3 text-base outline-none focus:border-ring"
+        />
+      </label>
+      <button
+        type="button"
+        disabled={disabled || status === "saving"}
+        onClick={() => void save()}
+        className="mt-2 min-h-11 rounded-xl border border-border px-3 text-xs font-semibold text-primary disabled:opacity-50"
+      >
+        {status === "saving" ? "Saving setup…" : status === "saved" ? "Setup saved" : "Save setup"}
+      </button>
+      {status === "error" ? (
+        <p role="alert" className="mt-1 text-xs text-danger">
+          Setup note was not saved. Try again.
+        </p>
+      ) : null}
+    </details>
   );
 }
 
@@ -497,14 +630,17 @@ function SmallInput({
 }
 
 function RestTimer({
+  restartToken,
   running,
   onStart,
   onStop,
 }: {
+  restartToken: number;
   running: boolean;
   onStart: () => void;
   onStop: () => void;
 }) {
+  const [deadline, setDeadline] = useState<number | null>(null);
   const [left, setLeft] = useState(120);
   const [typing, setTyping] = useState(false);
   useEffect(() => {
@@ -522,13 +658,23 @@ function RestTimer({
     };
   }, []);
   useEffect(() => {
-    if (!running) return;
-    const end = Date.now() + 120_000;
-    const tick = () => setLeft(Math.max(0, Math.ceil((end - Date.now()) / 1000)));
+    if (!running) {
+      setDeadline(null);
+      return;
+    }
+    setDeadline(Date.now() + 120_000);
+  }, [restartToken, running]);
+  useEffect(() => {
+    if (!running || deadline == null) return;
+    const tick = () => setLeft(restSecondsRemaining(deadline));
     tick();
     const timer = setInterval(tick, 1000);
-    return () => clearInterval(timer);
-  }, [running]);
+    document.addEventListener("visibilitychange", tick);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", tick);
+    };
+  }, [deadline, running]);
   return (
     <div
       className={`pointer-events-none fixed inset-x-0 bottom-20 z-20 flex justify-center px-4 ${typing ? "invisible" : ""}`}

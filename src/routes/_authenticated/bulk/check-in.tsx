@@ -25,13 +25,13 @@ import type { AppData, Workout } from "@/lib/types";
 export const Route = createFileRoute("/_authenticated/bulk/check-in")({
   head: () => ({
     meta: [
-      { title: "Check-In — Lean Bulk Tracker" },
+      { title: "Check-In — Tempo" },
       {
         name: "description",
         content:
           "Weekly and monthly lean bulk summaries built for a single clean screenshot to share with ChatGPT.",
       },
-      { property: "og:title", content: "Check-In — Lean Bulk Tracker" },
+      { property: "og:title", content: "Check-In — Tempo" },
       {
         property: "og:description",
         content: "One screenshot with weight trend, nutrition, training, activity and recovery.",
@@ -194,12 +194,10 @@ function CheckInPage() {
           <div className="mt-4">
             <Card>
               <SectionTitle>Notes</SectionTitle>
-              <textarea
-                value={s.note}
-                onChange={(e) => setWeekNote(iso(weekStart), e.target.value)}
-                rows={3}
-                placeholder="Anything unusual this week? Sick, missed gym, ate out, travelled, cycled to university 5 days, poor sleep, very sore."
-                className="w-full resize-none rounded-xl border border-input bg-elevated px-3 py-2.5 text-sm outline-none focus:border-ring"
+              <WeekNoteInput
+                key={iso(weekStart)}
+                initial={s.note}
+                onSave={(note) => setWeekNote(iso(weekStart), note)}
               />
             </Card>
           </div>
@@ -215,6 +213,53 @@ function CheckInPage() {
         Generate ChatGPT {mode === "weekly" ? "Check-In" : "Monthly Summary"}
       </button>
     </AppShell>
+  );
+}
+
+function WeekNoteInput({
+  initial,
+  onSave,
+}: {
+  initial: string;
+  onSave: (note: string) => Promise<void>;
+}) {
+  const [value, setValue] = useState(initial);
+  const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const save = async () => {
+    setStatus("saving");
+    try {
+      await onSave(value);
+      setStatus("saved");
+    } catch {
+      setStatus("error");
+    }
+  };
+  return (
+    <div>
+      <textarea
+        value={value}
+        onChange={(event) => {
+          setValue(event.target.value);
+          setStatus("idle");
+        }}
+        onBlur={() => void save()}
+        rows={3}
+        placeholder="Anything unusual this week? Sick, missed gym, ate out, travelled, cycled to university 5 days, poor sleep, very sore."
+        className="w-full resize-none rounded-xl border border-input bg-elevated px-3 py-2.5 text-sm outline-none focus:border-ring"
+      />
+      <p
+        role={status === "error" ? "alert" : "status"}
+        className={`mt-1 text-[11px] ${status === "error" ? "text-danger" : "text-muted-foreground"}`}
+      >
+        {status === "saving"
+          ? "Saving note…"
+          : status === "saved"
+            ? "Note saved"
+            : status === "error"
+              ? "Note was not saved. Tap outside to retry."
+              : "Saved when you leave the field"}
+      </p>
+    </div>
   );
 }
 
@@ -311,7 +356,7 @@ function ShareWeek({
     .filter((d) => d.weight != null)
     .pop();
   return (
-    <ShareWrap title="Lean Bulk Check-In" subtitle={s.label} onClose={onClose}>
+    <ShareWrap title="Tempo Bulk Check-In" subtitle={s.label} onClose={onClose}>
       <div className="pb-2">
         <ShareHead>Weight</ShareHead>
         <ShareLine
@@ -483,7 +528,7 @@ function ShareMonth({ data, onClose }: { data: AppData; onClose: () => void }) {
   const decision = m.status.label === "ON TARGET" ? "Keep calories unchanged" : "Review calories";
 
   return (
-    <ShareWrap title="Lean Bulk Monthly" subtitle={m.label} onClose={onClose}>
+    <ShareWrap title="Tempo Bulk Monthly" subtitle={m.label} onClose={onClose}>
       <div className="pb-2">
         <ShareLine label="Start weight" value={fmt(m.startWeight, 1, " kg")} />
         <ShareLine label="End weight" value={fmt(m.endWeight, 1, " kg")} />

@@ -46,13 +46,13 @@ import { ChallengeNotifications } from "@/components/ChallengeNotifications";
 export const Route = createFileRoute("/_authenticated/challenge/")({
   head: () => ({
     meta: [
-      { title: "This week — Challenge" },
+      { title: "This week — Tempo" },
       {
         name: "description",
         content:
           "Track this week's equivalent kilometres, live penalty and remaining distance in your private two-person endurance challenge.",
       },
-      { property: "og:title", content: "This week — Challenge" },
+      { property: "og:title", content: "This week — Tempo" },
       {
         property: "og:description",
         content: "15 equivalent km per week, running and cycling, tiered penalties.",
@@ -131,7 +131,7 @@ function ChallengeHome() {
   if (!challenge) {
     return (
       <AppShell>
-        <PageHeader title="Challenge" subtitle="A private two-person endurance bet." />
+        <PageHeader title="Tempo" subtitle="A private two-person endurance bet." />
         <RulesCard />
         <div className="mt-4 grid gap-2">
           <Link
@@ -536,16 +536,20 @@ function formatActivityDay(day: string, today: string) {
 function EvidenceViewer({ paths }: { paths: string[] }) {
   const [urls, setUrls] = useState<string[] | null>(null);
   const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const show = async () => {
     setOpen(true);
     if (urls) return;
+    setLoading(true);
+    setError(null);
     const { data, error: e } = await supabase.storage
       .from("challenge-evidence")
       .createSignedUrls(paths, 300);
     if (e) setError(e.message);
     else setUrls((data ?? []).map((item) => item.signedUrl).filter(Boolean) as string[]);
+    setLoading(false);
   };
 
   if (paths.length === 0) return null;
@@ -568,6 +572,10 @@ function EvidenceViewer({ paths }: { paths: string[] }) {
       {error ? (
         <p role="alert" className="text-[11px] text-danger">
           {error}
+        </p>
+      ) : loading ? (
+        <p role="status" className="text-[11px] text-muted-foreground">
+          Loading evidence…
         </p>
       ) : urls ? (
         <div className="space-y-2">

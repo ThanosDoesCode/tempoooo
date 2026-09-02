@@ -23,6 +23,7 @@ before(async () => {
     CREATE TABLE storage.objects(id uuid PRIMARY KEY, bucket_id text, name text);
     ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
     CREATE FUNCTION storage.foldername(text) RETURNS text[] LANGUAGE sql AS $$ SELECT string_to_array($1, '/') $$;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON storage.objects TO authenticated, service_role;
     GRANT USAGE ON SCHEMA auth, public, storage TO authenticated, anon, service_role;
     GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA auth TO authenticated, anon, service_role;`);
   for (const file of (await readdir(root)).filter((f) => f.endsWith(".sql")).sort()) {
@@ -120,6 +121,66 @@ test("RLS permits A and B's own activities, rejects a third party, and isolates 
       )
     ).rows[0].n,
     1,
+  );
+});
+test("Bulk data is owner-only and normal users cannot bootstrap owner access", async () => {
+  const bulk = randomUUID();
+  await db.query("INSERT INTO public.bulk_profiles(id,owner_id) VALUES ($1,$2)", [bulk, a]);
+  await db.query(
+    "INSERT INTO public.bulk_members(bulk_profile_id,user_id,role,invited_by) VALUES ($1,$2,'owner',$2),($1,$3,'editor',$2),($1,$4,'viewer',$2)",
+    [bulk, a, b, c],
+  );
+  await db.query(
+    "INSERT INTO public.bulk_targets(bulk_profile_id,payload) VALUES ($1,'{\"calories\":2900}')",
+    [bulk],
+  );
+  const objectId = randomUUID();
+  await db.query(
+    "INSERT INTO storage.objects(id,bucket_id,name) VALUES ($1,'bulk-progress-photos',$2)",
+    [objectId, `${bulk}/private.jpg`],
+  );
+
+  const owner = await asUser(a, () =>
+    db.query("SELECT payload FROM public.bulk_targets WHERE bulk_profile_id=$1", [bulk]),
+  );
+  assert.equal(owner.rows.length, 1);
+  assert.equal(
+    (await asUser(a, () => db.query("SELECT id FROM storage.objects WHERE id=$1", [objectId]))).rows
+      .length,
+    1,
+  );
+  for (const user of [b, c]) {
+    assert.equal(
+      (
+        await asUser(user, () =>
+          db.query("SELECT payload FROM public.bulk_targets WHERE bulk_profile_id=$1", [bulk]),
+        )
+      ).rows.length,
+      0,
+    );
+    assert.equal(
+      (await asUser(user, () => db.query("SELECT id FROM storage.objects WHERE id=$1", [objectId])))
+        .rows.length,
+      0,
+    );
+  }
+  const formerViewerProfiles = await db.query("SELECT id FROM public.related_profiles($1)", [c]);
+  assert.equal(
+    formerViewerProfiles.rows.some((profile) => profile.id === a),
+    false,
+  );
+  await assert.rejects(
+    asUser(c, () => db.query("INSERT INTO public.bulk_profiles(owner_id) VALUES ($1)", [c])),
+    /row-level security|permission denied/,
+  );
+  await assert.rejects(
+    asUser(a, () =>
+      db.query(
+        "INSERT INTO public.bulk_members(bulk_profile_id,user_id,role,invited_by) VALUES ($1,$2,'viewer',$3)",
+        [bulk, c, a],
+      ),
+    ),
+    /row-level security|permission denied/,
   );
 });
 test("normal activity creation still works without forging audit history", async () => {
@@ -401,7 +462,12 @@ test("unrelated edits and bulk tracker writes create no events", async () => {
   await asUser(a, () =>
     db.query("UPDATE public.profiles SET display_name='Renamed' WHERE id=$1", [a]),
   );
-  await asUser(a, () => db.query("INSERT INTO public.bulk_profiles(owner_id) VALUES ($1)", [a]));
+  const ownedBulk = (
+    await db.query("SELECT id FROM public.bulk_profiles WHERE owner_id=$1 LIMIT 1", [a])
+  ).rows[0].id;
+  await asUser(a, () =>
+    db.query("UPDATE public.bulk_profiles SET allow_editor=false WHERE id=$1", [ownedBulk]),
+  );
   assert.equal(
     (await db.query("SELECT count(*) AS n FROM public.challenge_notification_events")).rows[0].n,
     before,

@@ -10,7 +10,7 @@ import { randomToken, sha256Hex, useAuth } from "@/lib/auth";
 export const Route = createFileRoute("/_authenticated/challenge/new")({
   head: () => ({
     meta: [
-      { title: "Create challenge — Lean Bulk Tracker" },
+      { title: "Create challenge — Tempo" },
       {
         name: "description",
         content:

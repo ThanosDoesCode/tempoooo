@@ -3,6 +3,13 @@ export type SplitType = Exclude<WorkoutType, "Rest">;
 
 export type MealPlanId = "beef" | "lentil" | "kebab" | "salmon" | "custom";
 
+export type MealSnapshot = {
+  name: string;
+  base: string[];
+  meals: string[];
+  macros: { calories: number; protein: number; carbs: number; fat: number } | null;
+};
+
 export type DailyLog = {
   date: string; // yyyy-MM-dd
   weight?: number | undefined;
@@ -15,6 +22,7 @@ export type DailyLog = {
   carbs?: number | undefined;
   fat?: number | undefined;
   mealPlan?: MealPlanId | undefined;
+  mealSnapshot?: MealSnapshot | undefined;
   creatine?: boolean | undefined;
   water?: number | undefined;
   steps?: number | undefined;
@@ -34,6 +42,7 @@ export type ExerciseEntry = {
   bodyweight?: number | undefined; // Session snapshot, never inferred for historical entries.
   addedWeight?: number | undefined;
   assistance?: number | undefined; // Reserved for assisted bodyweight movements.
+  loadMode?: "bodyweight" | "added" | "assisted" | undefined;
   noteTags?: string[] | undefined;
   rpe?: number | undefined;
 };
@@ -48,6 +57,7 @@ export type Workout = {
   completedAt?: string | undefined;
   durationSeconds?: number | undefined;
   durationOverrideSeconds?: number | undefined;
+  sessionBodyweight?: number | undefined;
 };
 
 export type PhotoSet = {
@@ -67,6 +77,7 @@ export type Targets = {
   water: number;
   startWeight: number;
   targetWeight: number;
+  exerciseSetupNotes?: Record<string, string> | undefined;
 };
 
 export type AppData = {
@@ -107,6 +118,8 @@ export const EXERCISES: Record<SplitType, ExerciseDef[]> = {
     { name: "Romanian Deadlifts", min: 6, max: 10 },
     { name: "Leg Curls", min: 10, max: 15 },
     { name: "Calf Raises", min: 12, max: 20 },
+    { name: "Cable Crunches", min: 10, max: 15 },
+    { name: "Hanging Leg Raises", min: 8, max: 15, loadKind: "bodyweight" },
   ],
   "Arms & Shoulders": [
     { name: "Chin-Ups", min: 5, max: 10, loadKind: "bodyweight" },
@@ -114,6 +127,8 @@ export const EXERCISES: Record<SplitType, ExerciseDef[]> = {
     { name: "Tricep Pushdowns", min: 10, max: 15 },
     { name: "Overhead Tricep Extensions", min: 10, max: 15 },
     { name: "Lateral Raises", min: 12, max: 18 },
+    { name: "Cable Crunches", min: 10, max: 15 },
+    { name: "Hanging Leg Raises", min: 8, max: 15, loadKind: "bodyweight" },
   ],
 };
 

@@ -41,12 +41,12 @@ import { ALL_EXERCISES, type AppData, type PhotoSet } from "@/lib/types";
 export const Route = createFileRoute("/_authenticated/bulk/progress")({
   head: () => ({
     meta: [
-      { title: "Progress — Lean Bulk Tracker" },
+      { title: "Progress — Tempo" },
       {
         name: "description",
         content: "Weight trend, waist, calories, activity and strength across the 12-month bulk.",
       },
-      { property: "og:title", content: "Progress — Lean Bulk Tracker" },
+      { property: "og:title", content: "Progress — Tempo" },
       {
         property: "og:description",
         content: "Long-term charts and progress photo comparisons for a lean bulk.",

@@ -20,6 +20,11 @@ let role: BulkRole = "viewer";
 let state: AppData | null = null;
 const listeners = new Set<() => void>();
 const queueWorkoutSave = createSaveQueue();
+const pendingDays = new Set<string>();
+const daySaveQueues = new Map<string, ReturnType<typeof createSaveQueue>>();
+const dayRevisions = new Map<string, number>();
+const pendingWeekNotes = new Set<string>();
+let targetsPending = false;
 
 function emit() {
   state = state ? { ...state } : null;
@@ -101,12 +106,7 @@ type PhotoRow = {
   back_path: string | null;
 };
 
-export async function loadBulk(id: string, r: BulkRole) {
-  bulkId = id;
-  role = r;
-  state = null;
-  emit();
-
+async function fetchBulkSnapshot(id: string): Promise<AppData> {
   const [targets, days, workouts, notes, photos] = await Promise.all([
     supabase.from("bulk_targets").select("payload").eq("bulk_profile_id", id).maybeSingle(),
     supabase.from("bulk_days").select("day,payload").eq("bulk_profile_id", id),
@@ -123,9 +123,6 @@ export async function loadBulk(id: string, r: BulkRole) {
     (error) => error !== null,
   );
   if (failed) {
-    bulkId = null;
-    state = null;
-    emit();
     throw new Error(failed.message);
   }
 
@@ -146,6 +143,43 @@ export async function loadBulk(id: string, r: BulkRole) {
     next.weekNotes[row.week_start] = row.note;
   });
 
+  return next;
+}
+
+export async function loadBulk(id: string, r: BulkRole) {
+  bulkId = id;
+  role = r;
+  state = null;
+  emit();
+  try {
+    const next = await fetchBulkSnapshot(id);
+    if (bulkId !== id) return;
+    state = next;
+  } catch (error) {
+    if (bulkId === id) {
+      bulkId = null;
+      state = null;
+    }
+    throw error;
+  } finally {
+    emit();
+  }
+}
+
+/** Refreshes server data without clearing the visible snapshot or local in-flight edits. */
+export async function refreshBulk() {
+  if (!bulkId || !state) return;
+  const id = bulkId;
+  const local = state;
+  const next = await fetchBulkSnapshot(id);
+  if (bulkId !== id || !state) return;
+  pendingDays.forEach((day) => {
+    if (local.days[day]) next.days[day] = local.days[day];
+  });
+  pendingWeekNotes.forEach((week) => {
+    if (local.weekNotes[week] != null) next.weekNotes[week] = local.weekNotes[week];
+  });
+  if (targetsPending) next.targets = local.targets;
   state = next;
   emit();
 }
@@ -196,15 +230,37 @@ export function clearBulk() {
 export function useActions() {
   const saveDay = useCallback(async (date: string, patch: Partial<DailyLog>) => {
     if (!state || !bulkId || !canWrite()) return;
+    const previous = state.days[date];
     const merged: DailyLog = { ...state.days[date], ...patch, date };
+    const id = bulkId;
+    const version = (dayRevisions.get(date) ?? 0) + 1;
+    dayRevisions.set(date, version);
     state.days[date] = merged;
+    pendingDays.add(date);
     emit();
-    await supabase.from("bulk_days").upsert(
-      { bulk_profile_id: bulkId, day: date, payload: json(merged) },
-      {
-        onConflict: "bulk_profile_id,day",
-      },
-    );
+    const queue = daySaveQueues.get(date) ?? createSaveQueue();
+    daySaveQueues.set(date, queue);
+    try {
+      await queue(async () => {
+        if (bulkId !== id || !canWrite()) throw new Error("Account or plan changed.");
+        const { error } = await supabase
+          .from("bulk_days")
+          .upsert(
+            { bulk_profile_id: id, day: date, payload: json(merged) },
+            { onConflict: "bulk_profile_id,day" },
+          );
+        if (error) throw new Error(error.message);
+      });
+    } catch (error) {
+      if (state && dayRevisions.get(date) === version) {
+        if (previous) state.days[date] = previous;
+        else delete state.days[date];
+        emit();
+      }
+      throw error;
+    } finally {
+      if (dayRevisions.get(date) === version) pendingDays.delete(date);
+    }
   }, []);
 
   const saveWorkout = useCallback(async (workout: Workout, expectedUserId?: string) => {
@@ -233,26 +289,47 @@ export function useActions() {
 
   const setWeekNote = useCallback(async (weekStart: string, note: string) => {
     if (!state || !bulkId || !canWrite()) return;
+    const previous = state.weekNotes[weekStart];
     state.weekNotes[weekStart] = note;
+    pendingWeekNotes.add(weekStart);
     emit();
-    await supabase
+    const { error } = await supabase
       .from("bulk_week_notes")
       .upsert(
         { bulk_profile_id: bulkId, week_start: weekStart, note },
         { onConflict: "bulk_profile_id,week_start" },
       );
+    pendingWeekNotes.delete(weekStart);
+    if (error) {
+      if (state) {
+        if (previous == null) delete state.weekNotes[weekStart];
+        else state.weekNotes[weekStart] = previous;
+        emit();
+      }
+      throw new Error(error.message);
+    }
   }, []);
 
   const saveTargets = useCallback(async (targets: Targets) => {
     if (!state || !bulkId || !canWrite()) return;
+    const previous = state.targets;
     state.targets = targets;
+    targetsPending = true;
     emit();
-    await supabase
+    const { error } = await supabase
       .from("bulk_targets")
       .upsert(
         { bulk_profile_id: bulkId, payload: json(targets) },
         { onConflict: "bulk_profile_id" },
       );
+    targetsPending = false;
+    if (error) {
+      if (state) {
+        state.targets = previous;
+        emit();
+      }
+      throw new Error(error.message);
+    }
   }, []);
 
   const addPhotoSet = useCallback(async (date: string, weight?: number) => {

@@ -1,30 +1,29 @@
-import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { useMemberships } from "@/lib/bulk-access";
+import { bulkOwnerQueryOptions, useMemberships } from "@/lib/bulk-access";
 import { loadBulk, useBulkMeta } from "@/lib/store";
 
 export const Route = createFileRoute("/_authenticated/bulk")({
+  beforeLoad: async ({ context }) => {
+    const owners = await context.queryClient.ensureQueryData(bulkOwnerQueryOptions());
+    if (!owners.length) throw redirect({ to: "/challenge" });
+  },
   component: BulkLayout,
 });
 
 function BulkLayout() {
-  const navigate = useNavigate();
   const { data: memberships, isLoading } = useMemberships();
   const { bulkId } = useBulkMeta();
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!memberships) return;
-    if (memberships.length === 0) {
-      void navigate({ to: "/profile" });
-      return;
-    }
-    const preferred =
-      memberships.find((m) => m.role === "owner") ?? (memberships[0] as (typeof memberships)[0]);
+    if (memberships.length === 0) return;
+    const preferred = memberships[0]!;
     if (preferred.bulk_profile_id !== bulkId) {
       loadBulk(preferred.bulk_profile_id, preferred.role).catch((e: Error) => setError(e.message));
     }
-  }, [memberships, bulkId, navigate]);
+  }, [memberships, bulkId]);
 
   if (error) {
     return <div className="p-6 text-sm text-danger">{error}</div>;

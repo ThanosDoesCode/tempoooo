@@ -32,13 +32,13 @@ import { downloadChallengeCsv } from "@/lib/challenge-export";
 export const Route = createFileRoute("/_authenticated/challenge/payments")({
   head: () => ({
     meta: [
-      { title: "Money — Challenge" },
+      { title: "Money — Tempo" },
       {
         name: "description",
         content:
           "Outstanding penalties, photo forfeits, settle up and recipient confirmation for your two-person endurance challenge.",
       },
-      { property: "og:title", content: "Money — Challenge" },
+      { property: "og:title", content: "Money — Tempo" },
       { property: "og:description", content: "Owe, pay, confirm. Nothing is deleted." },
     ],
   }),

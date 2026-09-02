@@ -142,6 +142,7 @@ export function hoursLeft(challenge: Challenge, weekNumber: number) {
 export function useMyChallenge() {
   return useQuery({
     queryKey: ["challenge"],
+    staleTime: 5 * 60_000,
     queryFn: async () => {
       const { data: auth } = await supabase.auth.getUser();
       const uid = auth.user?.id;
@@ -185,6 +186,7 @@ export function useChallengeMembers(challengeId: string | undefined) {
   return useQuery({
     enabled: !!challengeId,
     queryKey: ["challenge-members", challengeId],
+    staleTime: 5 * 60_000,
     queryFn: async () => {
       const [members, profiles] = await Promise.all([
         supabase
@@ -209,6 +211,7 @@ export function useActivities(challengeId: string | undefined) {
   return useQuery({
     enabled: !!challengeId,
     queryKey: ["challenge-activities", challengeId],
+    staleTime: 30_000,
     queryFn: async () => {
       const rows: Activity[] = [];
       const pageSize = 500;
@@ -259,6 +262,7 @@ export function useTravelPauses(challengeId: string | undefined) {
   return useQuery({
     enabled: !!challengeId,
     queryKey: ["challenge-travel-pauses", challengeId],
+    staleTime: 30_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("challenge_travel_pauses")
@@ -369,6 +373,7 @@ export function useWeeks(challengeId: string | undefined) {
   return useQuery({
     enabled: !!challengeId,
     queryKey: ["challenge-weeks", challengeId],
+    staleTime: 60_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("challenge_weeks")
@@ -385,6 +390,7 @@ export function usePayments(challengeId: string | undefined) {
   return useQuery({
     enabled: !!challengeId,
     queryKey: ["challenge-payments", challengeId],
+    staleTime: 30_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("challenge_payments")

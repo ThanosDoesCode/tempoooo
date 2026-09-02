@@ -1,0 +1,56 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import { PULL_REFRESH_THRESHOLD, pullGesture } from "../src/lib/pull-to-refresh.ts";
+
+const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
+
+test("pull-to-refresh ignores tiny, horizontal and mid-scroll gestures", () => {
+  assert.equal(pullGesture({ x: 0, y: 0 }, { x: 0, y: 10 }, 0).distance, 0);
+  assert.equal(pullGesture({ x: 0, y: 0 }, { x: 40, y: 20 }, 0).cancelled, true);
+  assert.equal(pullGesture({ x: 0, y: 0 }, { x: 0, y: 200 }, 10).distance, 0);
+  const ready = pullGesture({ x: 0, y: 0 }, { x: 4, y: 150 }, 0);
+  assert.equal(ready.ready, true);
+  assert.ok(ready.distance >= PULL_REFRESH_THRESHOLD);
+});
+
+test("refresh revalidates data without a destructive browser reload", async () => {
+  const source = await read("src/components/PullToRefresh.tsx");
+  assert.match(source, /refetchQueries\(\{ type: "active" \}\)/);
+  assert.match(source, /refreshBulk\(\)/);
+  assert.match(source, /router\.invalidate\(\)/);
+  assert.doesNotMatch(source, /location\.reload/);
+  assert.doesNotMatch(await read("src/routes/index.tsx"), /location\.reload/);
+});
+
+test("Tempo manifest and navigation expose Challenge by default and owner-only Bulk History", async () => {
+  const manifest = JSON.parse(await read("public/manifest.webmanifest"));
+  assert.equal(manifest.name, "Tempo");
+  assert.equal(manifest.short_name, "Tempo");
+  assert.equal(manifest.start_url, "/challenge");
+  const index = await read("src/routes/index.tsx");
+  assert.match(index, /data\.session \? "\/challenge" : "\/auth"/);
+  assert.doesNotMatch(index, /window\.location/);
+  const shell = await read("src/components/AppShell.tsx");
+  assert.match(shell, /"\/bulk\/history", label: "History"/);
+  assert.doesNotMatch(shell, /Sharing|Shared Bulk|\/bulk\/access/);
+  const guard = await read("src/routes/_authenticated/bulk/route.tsx");
+  assert.match(guard, /bulkOwnerQueryOptions/);
+  assert.match(guard, /redirect\(\{ to: "\/challenge" \}\)/);
+});
+
+test("Bulk History uses stored snapshots and labels legacy meal limitations", async () => {
+  const source = await read("src/routes/_authenticated/bulk/history.tsx");
+  assert.match(source, /day\?\.mealSnapshot \?\? configuredPlan/);
+  assert.match(source, /Legacy day:/);
+  assert.match(source, /individual\s+consumption was not stored separately/);
+  assert.match(source, /No workout was logged/);
+  assert.match(source, /No nutrition was logged/);
+});
+
+test("OneSignal worker remains push-only without private application caching", async () => {
+  const worker = await read("public/OneSignalSDKWorker.js");
+  assert.match(worker, /OneSignalSDK\.sw\.js/);
+  assert.doesNotMatch(worker, /addEventListener\s*\(\s*["']fetch/);
+  assert.doesNotMatch(worker, /caches\./);
+});
