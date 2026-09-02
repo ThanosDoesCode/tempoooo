@@ -14,7 +14,8 @@ export const Route = createFileRoute("/")({
       { property: "og:title", content: "Lean Bulk Tracker — bulk and challenge" },
       {
         property: "og:description",
-        content: "A private lean bulk tracker plus a two-person 52-week running and cycling challenge with weekly targets and penalties.",
+        content:
+          "A private lean bulk tracker plus a two-person 52-week running and cycling challenge with weekly targets and penalties.",
       },
     ],
   }),
@@ -31,7 +32,6 @@ function Entry() {
       }
       const { data: members } = await supabase.from("bulk_members").select("bulk_profile_id");
       window.location.href = members && members.length > 0 ? "/bulk" : "/profile";
-
     })();
   }, []);
 

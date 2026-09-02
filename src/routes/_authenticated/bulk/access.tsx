@@ -46,9 +46,7 @@ function Access() {
         supabase.from("bulk_members").select("id,user_id,role").eq("bulk_profile_id", bulkId!),
         getRelatedProfiles(),
       ]);
-      const names = new Map(
-        profiles.map((p) => [p.id, p.display_name || p.email || "Member"]),
-      );
+      const names = new Map(profiles.map((p) => [p.id, p.display_name || p.email || "Member"]));
       return ((rows ?? []) as Member[]).map((m) => ({
         ...m,
         name: names.get(m.user_id) ?? "Member",
@@ -126,9 +124,7 @@ function Access() {
               className="flex items-center justify-between rounded-xl border border-border bg-elevated px-3 py-2"
             >
               <div>
-                <p className="text-sm font-medium">
-                  {m.user_id === user?.id ? "Me" : m.name}
-                </p>
+                <p className="text-sm font-medium">{m.user_id === user?.id ? "Me" : m.name}</p>
                 <p className="text-[11px] capitalize text-muted-foreground">{m.role}</p>
               </div>
               {isOwner && m.role !== "owner" ? (

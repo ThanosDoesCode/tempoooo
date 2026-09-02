@@ -11,7 +11,9 @@ export const ensureBulkProfile = createServerFn({ method: "POST" })
 
 export const setBulkEditor = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data) => z.object({ bulk: z.string().uuid(), user: z.string().uuid(), editor: z.boolean() }).parse(data))
+  .inputValidator((data) =>
+    z.object({ bulk: z.string().uuid(), user: z.string().uuid(), editor: z.boolean() }).parse(data),
+  )
   .handler(async ({ data, context }) => {
     const { setBulkEditorFor } = await import("./privileged-rpcs.server");
     return setBulkEditorFor(context.userId, data.bulk, data.user, data.editor);

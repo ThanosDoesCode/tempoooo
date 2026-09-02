@@ -490,6 +490,77 @@ export type Database = {
           },
         ]
       }
+      challenge_notification_events: {
+        Row: {
+          actor_id: string
+          actor_membership_id: string
+          attempts: number
+          challenge_id: string
+          created_at: string
+          dedupe_key: string
+          facts: Json
+          finished_at: string | null
+          id: string
+          kind: string
+          last_error: string | null
+          lease_token: string | null
+          lease_until: string | null
+          next_attempt_at: string
+          opponent_membership_id: string
+          provider_message_id: string | null
+          status: string
+          subscription_ids: string[] | null
+        }
+        Insert: {
+          actor_id: string
+          actor_membership_id: string
+          attempts?: number
+          challenge_id: string
+          created_at?: string
+          dedupe_key: string
+          facts: Json
+          finished_at?: string | null
+          id?: string
+          kind: string
+          last_error?: string | null
+          lease_token?: string | null
+          lease_until?: string | null
+          next_attempt_at?: string
+          opponent_membership_id: string
+          provider_message_id?: string | null
+          status?: string
+          subscription_ids?: string[] | null
+        }
+        Update: {
+          actor_id?: string
+          actor_membership_id?: string
+          attempts?: number
+          challenge_id?: string
+          created_at?: string
+          dedupe_key?: string
+          facts?: Json
+          finished_at?: string | null
+          id?: string
+          kind?: string
+          last_error?: string | null
+          lease_token?: string | null
+          lease_until?: string | null
+          next_attempt_at?: string
+          opponent_membership_id?: string
+          provider_message_id?: string | null
+          status?: string
+          subscription_ids?: string[] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "challenge_notification_events_challenge_id_fkey"
+            columns: ["challenge_id"]
+            isOneToOne: false
+            referencedRelation: "challenges"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       challenge_payments: {
         Row: {
           amount_eur: number
@@ -549,6 +620,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      challenge_push_users: {
+        Row: {
+          enabled: boolean
+          external_id: string
+          user_id: string
+        }
+        Insert: {
+          enabled?: boolean
+          external_id?: string
+          user_id: string
+        }
+        Update: {
+          enabled?: boolean
+          external_id?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       challenge_week_targets: {
         Row: {
@@ -719,6 +808,42 @@ export type Database = {
         }
         Relationships: []
       }
+      push_subscriptions: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          last_seen_at: string
+          platform: string
+          provider: string
+          subscription_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          last_seen_at?: string
+          platform?: string
+          provider?: string
+          subscription_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          last_seen_at?: string
+          platform?: string
+          provider?: string
+          subscription_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -738,6 +863,36 @@ export type Database = {
         Args: { _c: string; _d: string }
         Returns: boolean
       }
+      claim_challenge_push_events: {
+        Args: never
+        Returns: {
+          actor_id: string
+          actor_membership_id: string
+          attempts: number
+          challenge_id: string
+          created_at: string
+          dedupe_key: string
+          facts: Json
+          finished_at: string | null
+          id: string
+          kind: string
+          last_error: string | null
+          lease_token: string | null
+          lease_until: string | null
+          next_attempt_at: string
+          opponent_membership_id: string
+          provider_message_id: string | null
+          status: string
+          subscription_ids: string[] | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "challenge_notification_events"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      disable_challenge_push: { Args: never; Returns: undefined }
       ensure_bulk_profile: { Args: { _caller: string }; Returns: string }
       finalize_challenge: {
         Args: { _c: string; _caller: string }
@@ -746,6 +901,15 @@ export type Database = {
       penalty_for:
         | { Args: { _km: number }; Returns: number }
         | { Args: { _km: number; _target: number }; Returns: number }
+      register_challenge_push_device: {
+        Args: {
+          _activate: boolean
+          _external_id: string
+          _subscription: string
+          _user: string
+        }
+        Returns: boolean
+      }
       related_profiles: {
         Args: { _caller: string }
         Returns: {
@@ -785,12 +949,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -814,11 +978,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -839,11 +1003,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -864,11 +1028,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -881,11 +1045,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }

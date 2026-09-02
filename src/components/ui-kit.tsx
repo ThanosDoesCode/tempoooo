@@ -1,12 +1,6 @@
 import { cn } from "@/lib/utils";
-import { useEffect, useState, type ReactNode } from "react";
-
-export function parseDecimal(raw: string): number | undefined {
-  const s = raw.trim().replace(",", ".");
-  if (s === "") return undefined;
-  const n = Number(s);
-  return Number.isNaN(n) ? undefined : n;
-}
+import type { ReactNode } from "react";
+import { DecimalInput } from "./DecimalInput";
 
 export function Card({ children, className }: { children: ReactNode; className?: string }) {
   return <section className={cn("card-surface fade-up p-4", className)}>{children}</section>;
@@ -96,7 +90,6 @@ export function Bar({
   );
 }
 
-
 export function Field({
   label,
   hint,
@@ -110,7 +103,9 @@ export function Field({
     <label className="block">
       <span className="text-xs font-medium text-muted-foreground">{label}</span>
       {children}
-      {hint ? <span className="mt-1 block text-[11px] text-muted-foreground/80">{hint}</span> : null}
+      {hint ? (
+        <span className="mt-1 block text-[11px] text-muted-foreground/80">{hint}</span>
+      ) : null}
     </label>
   );
 }
@@ -119,35 +114,19 @@ export function NumInput({
   value,
   onChange,
   placeholder,
-  step,
+  step = "0.1",
 }: {
   value: number | undefined;
   onChange: (v: number | undefined) => void;
   placeholder?: string;
   step?: string;
 }) {
-  void step;
-  const [text, setText] = useState(value == null ? "" : String(value));
-
-  useEffect(() => {
-    setText((cur) => {
-      if (parseDecimal(cur) === value) return cur;
-      return value == null ? "" : String(value);
-    });
-  }, [value]);
-
   return (
-    <input
-      type="text"
-      inputMode="decimal"
-      value={text}
+    <DecimalInput
+      value={value}
+      integer={step === "1"}
       placeholder={placeholder}
-      onChange={(e) => {
-        const raw = e.target.value;
-        if (!/^[0-9]*[.,]?[0-9]*$/.test(raw)) return;
-        setText(raw);
-        onChange(parseDecimal(raw));
-      }}
+      onChange={onChange}
       className="num mt-1 w-full rounded-xl border border-input bg-elevated px-3 py-2.5 text-lg font-semibold outline-none transition-colors placeholder:font-normal placeholder:text-muted-foreground/60 focus:border-ring"
     />
   );

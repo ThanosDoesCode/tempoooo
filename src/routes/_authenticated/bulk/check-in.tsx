@@ -3,9 +3,7 @@ import { addDays, endOfMonth, format, parseISO, startOfMonth } from "date-fns";
 import { useMemo, useState } from "react";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { Card, Chip, SectionTitle, Stat } from "@/components/ui-kit";
-import {
-  ALL_EXERCISES,
-} from "@/lib/types";
+import { ALL_EXERCISES } from "@/lib/types";
 import {
   bulkStatus,
   strengthChange,
@@ -50,10 +48,7 @@ function CheckInPage() {
   const [mode, setMode] = useState<"weekly" | "monthly">("weekly");
   const [share, setShare] = useState(false);
 
-  const weekStart = useMemo(
-    () => addDays(weekStartOf(new Date()), weekOffset * 7),
-    [weekOffset],
-  );
+  const weekStart = useMemo(() => addDays(weekStartOf(new Date()), weekOffset * 7), [weekOffset]);
 
   if (!data) {
     return (
@@ -108,7 +103,9 @@ function CheckInPage() {
             <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
               Weekly weight change
             </p>
-            <p className={`num mt-1 text-5xl font-semibold ${toneText(tone)}`}>{signed(s.change, 2)}</p>
+            <p className={`num mt-1 text-5xl font-semibold ${toneText(tone)}`}>
+              {signed(s.change, 2)}
+            </p>
             <p className={`mt-1 text-sm font-semibold tracking-wide ${toneText(tone)}`}>
               {s.status.label}
             </p>
@@ -120,7 +117,9 @@ function CheckInPage() {
               <p className={`text-base font-semibold ${toneText(s.advice.tone)}`}>
                 {s.advice.decision}
               </p>
-              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{s.advice.detail}</p>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                {s.advice.detail}
+              </p>
               {s.focus.length ? (
                 <>
                   <p className="mt-3 text-[10px] uppercase tracking-wider text-muted-foreground">
@@ -135,7 +134,6 @@ function CheckInPage() {
               ) : null}
             </Card>
           </div>
-
 
           <Card>
             <SectionTitle>Body</SectionTitle>
@@ -236,7 +234,13 @@ function Rows({ rows }: { rows: [string, string][] }) {
 const toneBg = (t: string) =>
   t === "good" ? "bg-good/10" : t === "warn" ? "bg-warn/10" : t === "danger" ? "bg-danger/10" : "";
 const toneText = (t: string) =>
-  t === "good" ? "text-good" : t === "warn" ? "text-warn" : t === "danger" ? "text-danger" : "text-foreground";
+  t === "good"
+    ? "text-good"
+    : t === "warn"
+      ? "text-warn"
+      : t === "danger"
+        ? "text-danger"
+        : "text-foreground";
 
 const trend = (v: number | null, good: (n: number) => boolean) =>
   v == null ? "•" : good(v) ? "▲" : v < 0 ? "▼" : "▲";
@@ -326,7 +330,10 @@ function ShareWeek({
         <ShareHead>Nutrition</ShareHead>
         <ShareLine label="Average" value={fmt0(s.avgCalories, " kcal")} />
         <ShareLine label="Days within target" value={`${s.daysOnTarget}/7`} />
-        <ShareLine label="Protein / carbs / fat" value={`${fmt0(s.avgProtein)} / ${fmt0(s.avgCarbs)} / ${fmt0(s.avgFat)} g`} />
+        <ShareLine
+          label="Protein / carbs / fat"
+          value={`${fmt0(s.avgProtein)} / ${fmt0(s.avgCarbs)} / ${fmt0(s.avgFat)} g`}
+        />
       </div>
       <div className="py-2">
         <ShareHead>Training</ShareHead>
@@ -341,7 +348,10 @@ function ShareWeek({
         <ShareLine label="Average sleep" value={fmt(s.avgSleep, 1, " hours")} />
         <ShareLine label="Steps/day" value={fmt0(s.avgSteps)} />
         <ShareLine label="Resting HR" value={fmt0(s.avgRestingHr, " bpm")} />
-        <ShareLine label="Cycling / running" value={`${s.cyclingKm.toFixed(1)} / ${s.runningKm.toFixed(1)} km`} />
+        <ShareLine
+          label="Cycling / running"
+          value={`${s.cyclingKm.toFixed(1)} / ${s.runningKm.toFixed(1)} km`}
+        />
       </div>
       <div className="py-2">
         <ShareHead>Decision</ShareHead>
@@ -368,7 +378,6 @@ function ShareWeek({
   );
 }
 
-
 function monthlyStats(data: AppData, month: Date) {
   const start = startOfMonth(month);
   const end = endOfMonth(month);
@@ -378,12 +387,11 @@ function monthlyStats(data: AppData, month: Date) {
   });
   const weights = days.filter((d) => d.weight != null).map((d) => d.weight as number);
   const waists = days.filter((d) => d.waist != null).map((d) => d.waist as number);
-  const workouts = days
-    .map((d) => data.workouts[d.date])
-    .filter(Boolean) as Workout[];
+  const workouts = days.map((d) => data.workouts[d.date]).filter(Boolean) as Workout[];
   const prog = progressionCounts(data, workouts);
   const weeks = Math.max(1, Math.round(days.length / 7));
-  const gained = weights.length > 1 ? (weights[weights.length - 1] as number) - (weights[0] as number) : null;
+  const gained =
+    weights.length > 1 ? (weights[weights.length - 1] as number) - (weights[0] as number) : null;
 
   return {
     label: format(month, "MMMM yyyy"),
@@ -503,14 +511,16 @@ function ShareMonth({ data, onClose }: { data: AppData; onClose: () => void }) {
         <div className="py-3">
           <div className="flex gap-2">
             {m.photos.flatMap((p) =>
-              [p.front, p.side, p.back].filter(Boolean).map((src, i) => (
-                <img
-                  key={`${p.id}-${i}`}
-                  src={src as string}
-                  alt="Monthly progress"
-                  className="h-24 w-20 rounded-lg object-cover"
-                />
-              )),
+              [p.front, p.side, p.back]
+                .filter(Boolean)
+                .map((src, i) => (
+                  <img
+                    key={`${p.id}-${i}`}
+                    src={src as string}
+                    alt="Monthly progress"
+                    className="h-24 w-20 rounded-lg object-cover"
+                  />
+                )),
             )}
           </div>
         </div>

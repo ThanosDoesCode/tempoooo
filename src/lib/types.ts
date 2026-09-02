@@ -31,12 +31,23 @@ export type ExerciseEntry = {
   weight?: number | undefined;
   reps: (number | undefined)[]; // 3 sets
   notes?: string | undefined;
+  bodyweight?: number | undefined; // Session snapshot, never inferred for historical entries.
+  addedWeight?: number | undefined;
+  assistance?: number | undefined; // Reserved for assisted bodyweight movements.
+  noteTags?: string[] | undefined;
+  rpe?: number | undefined;
 };
 
 export type Workout = {
   date: string;
   type: SplitType;
   entries: ExerciseEntry[];
+  status?: "draft" | "completed" | undefined; // Missing means legacy, not confirmed complete.
+  sessionNote?: string | undefined;
+  startedAt?: string | undefined;
+  completedAt?: string | undefined;
+  durationSeconds?: number | undefined;
+  durationOverrideSeconds?: number | undefined;
 };
 
 export type PhotoSet = {
@@ -75,13 +86,18 @@ export const RANGES = {
   water: [3, 4] as const,
 };
 
-export type ExerciseDef = { name: string; min: number; max: number };
+export type ExerciseDef = {
+  name: string;
+  min: number;
+  max: number;
+  loadKind?: "bodyweight" | "dumbbell-pair";
+};
 
 export const EXERCISES: Record<SplitType, ExerciseDef[]> = {
   "Chest & Back": [
-    { name: "Incline Dumbbell Press", min: 6, max: 10 },
+    { name: "Incline Dumbbell Press", min: 6, max: 10, loadKind: "dumbbell-pair" },
     { name: "Cable Low-to-High Fly", min: 10, max: 15 },
-    { name: "Pull-Ups", min: 5, max: 10 },
+    { name: "Pull-Ups", min: 5, max: 10, loadKind: "bodyweight" },
     { name: "Cable Rows", min: 8, max: 12 },
     { name: "Face Pulls", min: 12, max: 18 },
   ],
@@ -93,8 +109,8 @@ export const EXERCISES: Record<SplitType, ExerciseDef[]> = {
     { name: "Calf Raises", min: 12, max: 20 },
   ],
   "Arms & Shoulders": [
-    { name: "Chin-Ups", min: 5, max: 10 },
-    { name: "Incline Dumbbell Curls", min: 8, max: 12 },
+    { name: "Chin-Ups", min: 5, max: 10, loadKind: "bodyweight" },
+    { name: "Incline Dumbbell Curls", min: 8, max: 12, loadKind: "dumbbell-pair" },
     { name: "Tricep Pushdowns", min: 10, max: 15 },
     { name: "Overhead Tricep Extensions", min: 10, max: 15 },
     { name: "Lateral Raises", min: 12, max: 18 },

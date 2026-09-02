@@ -5,6 +5,7 @@ import { format, parseISO } from "date-fns";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { Card, Note, parseDecimal, SectionTitle } from "@/components/ui-kit";
 import { useAuth } from "@/lib/auth";
+import { normalizeDecimal, parseDecimal } from "@/lib/numeric";
 import {
   DEFAULT_TARGET_KM,
   setWeekTargets,
@@ -85,8 +86,19 @@ function Targets() {
   const applyRange = () => {
     const a = Number(from);
     const b = Number(to || from);
-    const km = value === "" ? null : (parseDecimal(value) ?? null);
-    if (!a || !b || b < a) {
+    const target = parseDecimal(value);
+    if (target.kind === "invalid" || (target.kind === "value" && target.value <= 0)) {
+      setError("Enter a valid target, or leave it empty to reset.");
+      return;
+    }
+    const km = target.kind === "value" ? target.value : null;
+    if (
+      !Number.isInteger(a) ||
+      !Number.isInteger(b) ||
+      a < 1 ||
+      b < a ||
+      b > (challenge?.duration_weeks ?? 0)
+    ) {
       setError("Enter a valid week range.");
       return;
     }
@@ -95,6 +107,7 @@ function Targets() {
       return;
     }
     const weeks: number[] = [];
+    setValue(normalizeDecimal(value));
     for (let n = a; n <= b; n++) weeks.push(n);
     void apply(weeks, km);
   };
@@ -148,12 +161,10 @@ function Targets() {
               <input
                 type="text"
                 inputMode="decimal"
+                step="0.5"
                 value={value}
-                onChange={(e) => {
-                  const raw = e.target.value;
-                  if (!/^[0-9]*[.,]?[0-9]*$/.test(raw)) return;
-                  setValue(raw);
-                }}
+                onChange={(e) => setValue(e.target.value)}
+                onBlur={() => setValue(normalizeDecimal(value))}
                 placeholder="10"
                 className={inputCls}
               />

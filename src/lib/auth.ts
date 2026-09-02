@@ -37,6 +37,15 @@ export async function syncProfile(user: User) {
 }
 
 export async function signOut() {
+  const { detachChallengePush } = await import("./challenge-push");
+  try {
+    await detachChallengePush();
+  } catch {
+    window.alert(
+      "Could not safely disconnect this device's notifications. Please retry signing out when connected.",
+    );
+    return;
+  }
   localStorage.removeItem("saved-credentials");
   await supabase.auth.signOut();
   window.location.href = "/auth";

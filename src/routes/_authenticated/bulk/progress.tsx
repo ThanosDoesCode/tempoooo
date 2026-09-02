@@ -17,6 +17,7 @@ import {
 } from "recharts";
 
 import { AppShell, PageHeader } from "@/components/AppShell";
+import { TrainingSummary } from "@/components/TrainingSummary";
 import { Card, Chip, Note, SectionTitle, Stat } from "@/components/ui-kit";
 import {
   avg7,
@@ -36,7 +37,6 @@ import {
 } from "@/lib/calc";
 import { useActions, useAppData, useBulkMeta } from "@/lib/store";
 import { ALL_EXERCISES, type AppData, type PhotoSet } from "@/lib/types";
-
 
 export const Route = createFileRoute("/_authenticated/bulk/progress")({
   head: () => ({
@@ -77,7 +77,6 @@ function ProgressPage() {
   const month = MONTHS[monthIdx] as Date;
   const all = sortedDays(data);
 
-
   const latest = latestWeight(data);
   const rolling = latest ? avg7(data, latest.date) : null;
   const start = data.targets.startWeight;
@@ -91,18 +90,18 @@ function ProgressPage() {
       ? mean(
           weekly
             .slice(1)
-            .map((w, i) => (w.avg != null && weekly[i]!.avg != null ? w.avg - weekly[i]!.avg! : null))
+            .map((w, i) =>
+              w.avg != null && weekly[i]!.avg != null ? w.avg - weekly[i]!.avg! : null,
+            )
             .filter((v): v is number => v != null),
         )
       : null;
 
   const status = bulkStatus(data);
-  const monthDays = Array.from(
-    { length: endOfMonth(month).getDate() },
-    (_, i) => iso(new Date(month.getFullYear(), month.getMonth(), i + 1)),
+  const monthDays = Array.from({ length: endOfMonth(month).getDate() }, (_, i) =>
+    iso(new Date(month.getFullYear(), month.getMonth(), i + 1)),
   );
-  const firstAvg =
-    monthDays.map((d) => avg7(data, d)).find((v): v is number => v != null) ?? null;
+  const firstAvg = monthDays.map((d) => avg7(data, d)).find((v): v is number => v != null) ?? null;
 
   const weightSeries = monthDays.map((d, i) => ({
     date: d,
@@ -116,7 +115,6 @@ function ProgressPage() {
     .filter((d) => d.waist != null)
     .map((d) => ({ date: d.date, waist: d.waist as number }));
   const waist4w = waistChange(data, 28);
-
 
   return (
     <AppShell>
@@ -186,7 +184,11 @@ function ProgressPage() {
           <ChartBox>
             <ComposedChart data={weightSeries} margin={{ top: 8, right: 8, left: -22, bottom: 0 }}>
               <CartesianGrid stroke="var(--color-border)" vertical={false} />
-              <XAxis dataKey="date" tickFormatter={(d: string) => format(parseISO(d), "d")} {...axis} />
+              <XAxis
+                dataKey="date"
+                tickFormatter={(d: string) => format(parseISO(d), "d")}
+                {...axis}
+              />
               <YAxis domain={["auto", "auto"]} {...axis} />
               <Tooltip {...tooltip} />
               <ReferenceLine y={start} stroke="var(--color-chart-5)" strokeDasharray="4 4" />
@@ -251,17 +253,26 @@ function ProgressPage() {
           <ChartBox>
             <ComposedChart data={waistSeries} margin={{ top: 8, right: 8, left: -22, bottom: 0 }}>
               <CartesianGrid stroke="var(--color-border)" vertical={false} />
-              <XAxis dataKey="date" tickFormatter={(d: string) => format(parseISO(d), "d MMM")} {...axis} />
+              <XAxis
+                dataKey="date"
+                tickFormatter={(d: string) => format(parseISO(d), "d MMM")}
+                {...axis}
+              />
               <YAxis domain={["auto", "auto"]} {...axis} />
               <Tooltip {...tooltip} />
-              <Line type="monotone" dataKey="waist" stroke="var(--color-chart-3)" strokeWidth={2.5} dot />
+              <Line
+                type="monotone"
+                dataKey="waist"
+                stroke="var(--color-chart-3)"
+                strokeWidth={2.5}
+                dot
+              />
             </ComposedChart>
           </ChartBox>
           <p className="mt-1 text-[11px] text-muted-foreground">
             Some waist growth is normal while gaining. Only excessive growth matters.
           </p>
         </Card>
-
 
         <Card>
           <SectionTitle>Calories by week</SectionTitle>
@@ -271,8 +282,17 @@ function ProgressPage() {
               <XAxis dataKey="label" {...axis} />
               <YAxis {...axis} />
               <Tooltip {...tooltip} />
-              <ReferenceLine y={data.targets.calories} stroke="var(--color-chart-2)" strokeDasharray="4 4" />
-              <RBar dataKey="calories" fill="var(--color-chart-1)" radius={[6, 6, 0, 0]} name="Avg kcal" />
+              <ReferenceLine
+                y={data.targets.calories}
+                stroke="var(--color-chart-2)"
+                strokeDasharray="4 4"
+              />
+              <RBar
+                dataKey="calories"
+                fill="var(--color-chart-1)"
+                radius={[6, 6, 0, 0]}
+                name="Avg kcal"
+              />
             </BarChart>
           </ChartBox>
         </Card>
@@ -285,8 +305,18 @@ function ProgressPage() {
               <XAxis dataKey="label" {...axis} />
               <YAxis {...axis} />
               <Tooltip {...tooltip} />
-              <RBar dataKey="cycling" fill="var(--color-chart-2)" radius={[6, 6, 0, 0]} name="Cycling km" />
-              <RBar dataKey="running" fill="var(--color-chart-3)" radius={[6, 6, 0, 0]} name="Running km" />
+              <RBar
+                dataKey="cycling"
+                fill="var(--color-chart-2)"
+                radius={[6, 6, 0, 0]}
+                name="Cycling km"
+              />
+              <RBar
+                dataKey="running"
+                fill="var(--color-chart-3)"
+                radius={[6, 6, 0, 0]}
+                name="Running km"
+              />
             </BarChart>
           </ChartBox>
           <p className="mt-2 text-xs text-muted-foreground">
@@ -326,7 +356,7 @@ function ProgressPage() {
           </div>
         </Card>
 
-
+        <TrainingSummary data={data} />
         <PhotosSection data={data} />
       </div>
     </AppShell>
@@ -359,7 +389,10 @@ function ChartBox({ children }: { children: React.ReactElement }) {
 }
 
 function weeklySeries(data: AppData) {
-  const buckets = new Map<string, { cal: number[]; steps: number[]; cycling: number; running: number; end: string }>();
+  const buckets = new Map<
+    string,
+    { cal: number[]; steps: number[]; cycling: number; running: number; end: string }
+  >();
   for (const d of sortedDays(data)) {
     const key = iso(weekStartOf(parseISO(d.date)));
     const b = buckets.get(key) ?? { cal: [], steps: [], cycling: 0, running: 0, end: d.date };
@@ -386,7 +419,9 @@ function PhotosSection({ data }: { data: AppData }) {
   const owner = role === "owner";
   const fileRef = useRef<HTMLInputElement>(null);
   const importRef = useRef<HTMLInputElement>(null);
-  const [pending, setPending] = useState<{ id: string; slot: "front" | "side" | "back" } | null>(null);
+  const [pending, setPending] = useState<{ id: string; slot: "front" | "side" | "back" } | null>(
+    null,
+  );
   const [compare, setCompare] = useState(false);
   const [slot, setSlot] = useState<"front" | "side" | "back">("front");
   const [aId, setAId] = useState<string | null>(null);
@@ -397,7 +432,6 @@ function PhotosSection({ data }: { data: AppData }) {
     setConfirmDelete(null);
     await deletePhotoSet(id);
   };
-
 
   const photos = useMemo(
     () => [...data.photos].sort((a, b) => a.date.localeCompare(b.date)),
@@ -455,7 +489,6 @@ function PhotosSection({ data }: { data: AppData }) {
         Take every 4 weeks in the same location, lighting, distance and pose. Photos are stored
         privately in your account, and you can still export a backup file of your logs.
       </Note>
-
 
       <div className="mt-3 grid grid-cols-2 gap-2">
         <button
@@ -524,7 +557,6 @@ function PhotosSection({ data }: { data: AppData }) {
         </div>
       ) : null}
 
-
       <div className="mt-3 space-y-3">
         {photos.length === 0 ? (
           <p className="text-xs text-muted-foreground">No photo sets yet.</p>
@@ -563,7 +595,11 @@ function PhotosSection({ data }: { data: AppData }) {
                   className="overflow-hidden rounded-lg border border-border bg-elevated"
                 >
                   {p[slot] ? (
-                    <img src={p[slot]} alt={`${slot} progress`} className="h-28 w-full object-cover" />
+                    <img
+                      src={p[slot]}
+                      alt={`${slot} progress`}
+                      className="h-28 w-full object-cover"
+                    />
                   ) : (
                     <span className="grid h-28 place-items-center text-[11px] capitalize text-muted-foreground">
                       + {slot}
@@ -574,7 +610,6 @@ function PhotosSection({ data }: { data: AppData }) {
             </div>
           </div>
         ))}
-
       </div>
 
       <input
