@@ -45,7 +45,7 @@ export function ChallengeNotifications({ userId }: { userId: string }) {
         .then(async (value) => {
           if (!alive) return;
           current = value;
-          setSdk(value);
+          setSdk(() => value);
           await refresh();
           if (alive) {
             value.User.PushSubscription.addEventListener("change", onChange);

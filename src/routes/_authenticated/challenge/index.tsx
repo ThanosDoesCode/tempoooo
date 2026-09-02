@@ -140,7 +140,7 @@ function ChallengeHome() {
         subtitle={`Week ${week?.n} of ${challenge.duration_weeks} · ${challenge.timezone}`}
       />
 
-      {/* Temporarily disabled while debugging push initialization */}
+      {user && <ChallengeNotifications userId={user.id} />}
 
       <Card>
         <SectionTitle right={<span className="text-xs text-muted-foreground">Mon to Sun</span>}>
