@@ -75,10 +75,11 @@ async function count(kind) {
   );
 }
 async function activity(uid, km, challenge = x, type = "run") {
+  const durationSeconds = Math.round(type === "run" ? km * 360 : (km / 20) * 3600);
   return asUser(uid, () =>
     db.query(
-      "INSERT INTO public.challenge_activities(challenge_id,user_id,activity_type,distance_km,activity_date,evidence_path) VALUES ($1,$2,$3,$4,CURRENT_DATE,'private-test-evidence') RETURNING id",
-      [challenge, uid, type, km],
+      "INSERT INTO public.challenge_activities(challenge_id,user_id,activity_type,distance_km,duration_seconds,activity_date,evidence_path) VALUES ($1,$2,$3,$4,$5,CURRENT_DATE,'private-test-evidence') RETURNING id",
+      [challenge, uid, type, km, durationSeconds],
     ),
   );
 }
@@ -156,7 +157,7 @@ test("activity owner can correct an open-week activity and the trigger records i
   assert.equal(Number(corrected.rows[0].distance_km), 12);
   const audit = await asUser(a, () =>
     db.query(
-      "SELECT old_activity_type,old_distance_km,old_activity_date,changed_by,changed_at,action FROM public.challenge_activity_audit WHERE activity_id=$1",
+      "SELECT old_activity_type,old_distance_km,old_activity_date,old_duration_seconds,changed_by,changed_at,action FROM public.challenge_activity_audit WHERE activity_id=$1",
       [id],
     ),
   );
@@ -165,6 +166,7 @@ test("activity owner can correct an open-week activity and the trigger records i
   assert.equal(audit.rows[0].old_activity_type, "run");
   assert.equal(Number(audit.rows[0].old_distance_km), 4);
   assert.deepEqual(audit.rows[0].old_activity_date, beforeDate);
+  assert.equal(audit.rows[0].old_duration_seconds, 1440);
   assert.equal(audit.rows[0].changed_by, a);
   assert.ok(audit.rows[0].changed_at);
 });
@@ -328,6 +330,64 @@ test("crossing 15 creates one completion; later posts, edits and recrossings can
   );
   assert.equal(await count("target_reached"), 1);
   assert.equal(await count("activity_posted"), 4);
+});
+test("pace and speed thresholds are authoritative and duration changes are audited", async () => {
+  const challenge = await freshChallenge("Qualification thresholds");
+  const insert = (type, km, seconds) =>
+    asUser(a, () =>
+      db.query(
+        "INSERT INTO public.challenge_activities(challenge_id,user_id,activity_type,distance_km,duration_seconds,activity_date,evidence_path) VALUES ($1,$2,$3,$4,$5,CURRENT_DATE,'test') RETURNING id,is_qualified,qualifying_equivalent_km,average_speed_kmh,average_pace_seconds_per_km",
+        [challenge, a, type, km, seconds],
+      ),
+    );
+  const fastRun = (await insert("run", 7, 2939)).rows[0];
+  const sevenMinuteRun = (await insert("run", 7, 2940)).rows[0];
+  const thresholdRide = (await insert("cycle", 18, 3600)).rows[0];
+  const slowRide = (await insert("cycle", 18, 3601)).rows[0];
+  assert.equal(fastRun.is_qualified, true);
+  assert.equal(Number(fastRun.qualifying_equivalent_km), 7);
+  assert.equal(sevenMinuteRun.is_qualified, false);
+  assert.equal(Number(sevenMinuteRun.qualifying_equivalent_km), 0);
+  assert.equal(thresholdRide.is_qualified, true);
+  assert.equal(Number(thresholdRide.qualifying_equivalent_km), 6);
+  assert.equal(slowRide.is_qualified, false);
+  assert.equal(Number(slowRide.qualifying_equivalent_km), 0);
+  await asUser(a, () =>
+    db.query("UPDATE public.challenge_activities SET duration_seconds=2800 WHERE id=$1", [
+      sevenMinuteRun.id,
+    ]),
+  );
+  const audit = await db.query(
+    "SELECT old_duration_seconds FROM public.challenge_activity_audit WHERE activity_id=$1",
+    [sevenMinuteRun.id],
+  );
+  assert.equal(audit.rows[0].old_duration_seconds, 2940);
+  await assert.rejects(
+    asUser(a, () =>
+      db.query(
+        "INSERT INTO public.challenge_activities(challenge_id,user_id,activity_type,distance_km,activity_date,evidence_path) VALUES ($1,$2,'run',5,CURRENT_DATE,'test')",
+        [challenge, a],
+      ),
+    ),
+    /Duration is required/,
+  );
+});
+test("fixed weekly penalty tiers use only the published 15, 10 and 5 km boundaries", async () => {
+  const result = await db.query(
+    "SELECT public.penalty_for(15,15) AS full,public.penalty_for(14.99,15) AS five,public.penalty_for(10,15) AS ten_boundary,public.penalty_for(9.99,15) AS ten,public.penalty_for(5,15) AS five_boundary,public.penalty_for(4.99,15) AS fifteen,public.penalty_for(0,0) AS paused",
+  );
+  assert.deepEqual(
+    Object.fromEntries(Object.entries(result.rows[0]).map(([key, value]) => [key, Number(value)])),
+    {
+      full: 0,
+      five: 5,
+      ten_boundary: 5,
+      ten: 10,
+      five_boundary: 10,
+      fifteen: 15,
+      paused: 0,
+    },
+  );
 });
 test("unrelated edits and bulk tracker writes create no events", async () => {
   const before = (await db.query("SELECT count(*) AS n FROM public.challenge_notification_events"))
@@ -497,7 +557,7 @@ test("server registration respects account opt-out, rejects forged identity, and
     false,
   );
 });
-test("rollback leaves no event and configured weekly targets stay authoritative", async () => {
+test("rollback leaves no event and the 15 km weekly target cannot be overridden", async () => {
   const beforeCount = (
     await db.query("SELECT count(*) AS n FROM public.challenge_notification_events")
   ).rows[0].n;
@@ -505,7 +565,7 @@ test("rollback leaves no event and configured weekly targets stay authoritative"
     await db.exec("BEGIN");
     try {
       await db.query(
-        "INSERT INTO public.challenge_activities(challenge_id,user_id,activity_type,distance_km,activity_date,evidence_path) VALUES ($1,$2,'run',1,CURRENT_DATE,'test')",
+        "INSERT INTO public.challenge_activities(challenge_id,user_id,activity_type,distance_km,duration_seconds,activity_date,evidence_path) VALUES ($1,$2,'run',1,360,CURRENT_DATE,'test')",
         [x, a],
       );
     } finally {
@@ -525,23 +585,16 @@ test("rollback leaves no event and configured weekly targets stay authoritative"
     "INSERT INTO public.challenge_members(challenge_id,user_id) VALUES ($1,$2),($1,$3)",
     [custom, a, b],
   );
-  await asUser(a, () =>
-    db.query(
-      "INSERT INTO public.challenge_week_targets(challenge_id,week_number,target_km,set_by) VALUES ($1,2,30,$2)",
-      [custom, a],
+  await assert.rejects(
+    asUser(a, () =>
+      db.query(
+        "INSERT INTO public.challenge_week_targets(challenge_id,week_number,target_km,set_by) VALUES ($1,2,30,$2)",
+        [custom, a],
+      ),
     ),
+    /permission denied/,
   );
   await db.query("UPDATE public.challenges SET start_date=CURRENT_DATE-7 WHERE id=$1", [custom]);
-  await activity(a, 15, custom);
-  assert.equal(
-    (
-      await db.query(
-        "SELECT count(*) AS n FROM public.challenge_notification_events WHERE challenge_id=$1 AND kind='target_reached'",
-        [custom],
-      )
-    ).rows[0].n,
-    0,
-  );
   await activity(a, 15, custom);
   const result = (
     await db.query(
@@ -550,7 +603,7 @@ test("rollback leaves no event and configured weekly targets stay authoritative"
     )
   ).rows;
   assert.equal(result.length, 1);
-  assert.equal(result[0].facts.target_km, 30);
+  assert.equal(result[0].facts.target_km, 15);
 });
 test("a multi-row insert crossing the target emits exactly one completion", async () => {
   const batch = randomUUID();
@@ -564,7 +617,7 @@ test("a multi-row insert crossing the target emits exactly one completion", asyn
   );
   await asUser(a, () =>
     db.query(
-      "INSERT INTO public.challenge_activities(challenge_id,user_id,activity_type,distance_km,activity_date,evidence_path) VALUES ($1,$2,'run',15,CURRENT_DATE,'test'),($1,$2,'run',15,CURRENT_DATE,'test')",
+      "INSERT INTO public.challenge_activities(challenge_id,user_id,activity_type,distance_km,duration_seconds,activity_date,evidence_path) VALUES ($1,$2,'run',15,5400,CURRENT_DATE,'test'),($1,$2,'run',15,5400,CURRENT_DATE,'test')",
       [batch, a],
     ),
   );
@@ -575,6 +628,90 @@ test("a multi-row insert crossing the target emits exactly one completion", asyn
   ).rows.map((r) => r.kind);
   assert.equal(kinds.filter((k) => k === "activity_posted").length, 2);
   assert.equal(kinds.filter((k) => k === "target_reached").length, 1);
+});
+test("an outside-country pause is private to its owner and makes only their week penalty-free", async () => {
+  const challenge = await freshChallenge("Travel pause");
+  await activity(a, 1, challenge);
+  const pause = await asUser(a, () =>
+    db.query(
+      "INSERT INTO public.challenge_travel_pauses(challenge_id,user_id,week_number,country) VALUES ($1,$2,1,'Italy') RETURNING id",
+      [challenge, a],
+    ),
+  );
+  assert.equal(pause.rows.length, 1);
+  await assert.rejects(
+    asUser(b, () =>
+      db.query(
+        "INSERT INTO public.challenge_travel_pauses(challenge_id,user_id,week_number,country) VALUES ($1,$2,1,'France')",
+        [challenge, a],
+      ),
+    ),
+    /row-level security|manage your own/,
+  );
+  assert.equal(
+    (
+      await asUser(b, () =>
+        db.query("SELECT count(*) AS n FROM public.challenge_travel_pauses WHERE challenge_id=$1", [
+          challenge,
+        ]),
+      )
+    ).rows[0].n,
+    1,
+  );
+  assert.equal(
+    (
+      await asUser(c, () =>
+        db.query("SELECT count(*) AS n FROM public.challenge_travel_pauses WHERE challenge_id=$1", [
+          challenge,
+        ]),
+      )
+    ).rows[0].n,
+    0,
+  );
+  await assert.rejects(
+    asUser(a, () =>
+      db.query(
+        "INSERT INTO public.challenge_travel_pauses(challenge_id,user_id,week_number,country) VALUES ($1,$2,2,'Sweden')",
+        [challenge, a],
+      ),
+    ),
+    /stays active/,
+  );
+  await db.query("UPDATE public.challenges SET start_date=CURRENT_DATE-7 WHERE id=$1", [challenge]);
+  await db.exec(
+    "ALTER TABLE public.challenge_activities DISABLE TRIGGER challenge_activities_guard",
+  );
+  await db.query(
+    "UPDATE public.challenge_activities SET activity_date=CURRENT_DATE-7 WHERE challenge_id=$1",
+    [challenge],
+  );
+  await db.exec(
+    "ALTER TABLE public.challenge_activities ENABLE TRIGGER challenge_activities_guard",
+  );
+  await db.query("SELECT public.finalize_challenge($1,$2)", [a, challenge]);
+  const finalized = await db.query(
+    "SELECT user_id,paused,pause_country,target_km,penalty_eur FROM public.challenge_weeks WHERE challenge_id=$1 ORDER BY user_id",
+    [challenge],
+  );
+  const mine = finalized.rows.find((row) => row.user_id === a);
+  const opponent = finalized.rows.find((row) => row.user_id === b);
+  assert.deepEqual(
+    {
+      paused: mine.paused,
+      country: mine.pause_country,
+      target: Number(mine.target_km),
+      penalty: Number(mine.penalty_eur),
+    },
+    { paused: true, country: "Italy", target: 0, penalty: 0 },
+  );
+  assert.deepEqual(
+    {
+      paused: opponent.paused,
+      target: Number(opponent.target_km),
+      penalty: Number(opponent.penalty_eur),
+    },
+    { paused: false, target: 15, penalty: 15 },
+  );
 });
 test("outbox claim leases prevent duplicate workers; expired leases retry, stale events expire", async () => {
   const first = (await db.query("SELECT * FROM public.claim_challenge_push_events()")).rows;

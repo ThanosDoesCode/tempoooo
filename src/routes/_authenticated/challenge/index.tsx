@@ -10,8 +10,8 @@ import {
   Link as LinkIcon,
   MoreHorizontal,
   Plus,
-  SlidersHorizontal,
   Trash2,
+  Trophy,
 } from "lucide-react";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { Card, Note, PendingLabel, SectionTitle } from "@/components/ui-kit";
@@ -20,18 +20,22 @@ import { useAuth } from "@/lib/auth";
 
 import { finalizeChallenge } from "@/lib/privileged-rpcs.functions";
 import {
+  activityMetrics,
+  DEFAULT_TARGET_KM,
+  formatPace,
   hoursLeft,
   leaveChallenge,
   km,
   owedText,
   penaltyFor,
+  qualifiedEquivalentKm,
   sumWeek,
-  targetForWeek,
   todayIn,
   useActivities,
   useChallengeMembers,
   useMyChallenge,
-  useWeekTargets,
+  useTravelPauses,
+  weekPaused,
   weekBounds,
   weekNumberOf,
 } from "@/lib/challenge";
@@ -64,7 +68,7 @@ function ChallengeHome() {
   const { data: challenge, isLoading } = useMyChallenge();
   const { data: members, isLoading: membersLoading } = useChallengeMembers(challenge?.id);
   const { data: activities, isLoading: activitiesLoading } = useActivities(challenge?.id);
-  const { data: weekTargets, isLoading: targetsLoading } = useWeekTargets(challenge?.id);
+  const { data: travelPauses, isLoading: pausesLoading } = useTravelPauses(challenge?.id);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -145,7 +149,7 @@ function ChallengeHome() {
   }
 
   const today = todayIn(challenge.timezone);
-  const target = targetForWeek(challenge, weekTargets, week?.n ?? 1);
+  const target = DEFAULT_TARGET_KM;
   const me = members?.find((member) => member.userId === user?.id);
   const opponent = members?.find((member) => member.userId !== user?.id);
   const meTotals =
@@ -154,9 +158,11 @@ function ChallengeHome() {
       : { running: 0, cycling: 0, equivalent: 0, rows: [] };
   const opponentTotals =
     week && opponent ? sumWeek(activities ?? [], opponent.userId, week.start, week.end) : null;
+  const mePaused = !!(week && user && weekPaused(travelPauses, user.id, week.n));
+  const opponentPaused = !!(week && opponent && weekPaused(travelPauses, opponent.userId, week.n));
   const recent = (activities ?? []).slice(0, 20);
   const needsOpponent = !membersLoading && (members?.length ?? 0) < (challenge.max_members ?? 2);
-  const progressLoading = membersLoading || activitiesLoading || targetsLoading;
+  const progressLoading = membersLoading || activitiesLoading || pausesLoading;
 
   return (
     <AppShell>
@@ -182,6 +188,7 @@ function ChallengeHome() {
             label={me ? "Me" : "You"}
             totals={meTotals}
             target={target}
+            paused={mePaused}
             barClass="bg-primary"
             loading={progressLoading}
           />
@@ -189,6 +196,7 @@ function ChallengeHome() {
             label={opponent?.name ?? "Opponent"}
             totals={opponentTotals}
             target={target}
+            paused={opponentPaused}
             barClass="bg-chart-2"
             bordered
             loading={progressLoading}
@@ -216,6 +224,7 @@ function ChallengeHome() {
           ) : null}
           {!activitiesLoading &&
             recent.map((activity) => {
+              const metrics = activityMetrics(activity);
               const who = members?.find((member) => member.userId === activity.user_id);
               const mine = activity.user_id === user?.id;
               const canDelete =
@@ -253,7 +262,7 @@ function ChallengeHome() {
                             </span>
                           </p>
                           <span className="num shrink-0 text-xs font-medium text-muted-foreground">
-                            {Number(activity.equivalent_km).toFixed(2)} eq
+                            {qualifiedEquivalentKm(activity).toFixed(2)} eq
                           </span>
                         </div>
                         <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
@@ -261,9 +270,19 @@ function ChallengeHome() {
                           {activity.duration_seconds
                             ? ` · ${Math.round(activity.duration_seconds / 60)} min`
                             : ""}
+                          {activity.duration_seconds
+                            ? activity.activity_type === "run"
+                              ? ` · ${formatPace(metrics.averagePace)}`
+                              : ` · ${metrics.averageSpeed?.toFixed(1)} km/h`
+                            : ""}
                           {` · ${formatActivityDay(activity.activity_date, today)}`}
                           {activity.edited ? " · Edited" : ""}
                         </p>
+                        {!metrics.qualified ? (
+                          <p className="mt-0.5 text-[11px] font-medium text-danger">
+                            Does not count toward the weekly target
+                          </p>
+                        ) : null}
                         {activity.note ? (
                           <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-foreground/80">
                             “{activity.note}”
@@ -358,19 +377,13 @@ function ChallengeHome() {
       <section className="mt-5">
         <SectionTitle>Challenge settings</SectionTitle>
         <div className="space-y-2">
-          <Link
-            to="/challenge/targets"
-            className="card-surface flex items-center gap-3 px-3 py-2.5 text-sm"
-          >
-            <span className="grid h-8 w-8 place-items-center rounded-lg bg-elevated text-muted-foreground">
-              <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
+          <div className="card-surface flex items-center gap-3 px-3 py-2.5 text-sm">
+            <span className="grid h-8 w-8 place-items-center rounded-lg bg-elevated text-primary">
+              <Trophy className="h-4 w-4" aria-hidden="true" />
             </span>
-            <span className="font-medium">Weekly targets</span>
-            <span className="ml-auto text-xs text-muted-foreground">
-              {targetsLoading ? "…" : `${target.toFixed(target % 1 === 0 ? 0 : 1)} km`}
-            </span>
-            <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-          </Link>
+            <span className="font-medium">Weekly target</span>
+            <span className="ml-auto text-xs text-muted-foreground">15 challenge km</span>
+          </div>
           {user ? <ChallengeNotifications userId={user.id} /> : null}
         </div>
       </section>
@@ -437,6 +450,7 @@ function ParticipantProgress({
   barClass,
   bordered = false,
   loading = false,
+  paused = false,
 }: {
   label: string;
   totals: ProgressTotals | null;
@@ -444,6 +458,7 @@ function ParticipantProgress({
   barClass: string;
   bordered?: boolean;
   loading?: boolean;
+  paused?: boolean;
 }) {
   const equivalent = totals?.equivalent ?? 0;
   const complete = totals ? equivalent >= target : false;
@@ -461,25 +476,33 @@ function ParticipantProgress({
       ) : totals ? (
         <>
           <p className="num mt-1 text-lg font-semibold leading-none">
-            {equivalent.toFixed(1)}
-            <span className="ml-1 text-xs font-normal text-muted-foreground">
-              / {target.toFixed(target % 1 === 0 ? 0 : 1)} km
-            </span>
+            {paused ? (
+              <span className="text-good">Travel pause</span>
+            ) : (
+              <>
+                {equivalent.toFixed(1)}
+                <span className="ml-1 text-xs font-normal text-muted-foreground">
+                  / {target.toFixed(target % 1 === 0 ? 0 : 1)} km
+                </span>
+              </>
+            )}
           </p>
           <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-elevated">
             <div
               className={`h-full rounded-full transition-all duration-500 ${barClass}`}
-              style={{ width: `${pct}%` }}
+              style={{ width: `${paused ? 100 : pct}%` }}
             />
           </div>
           <div className="mt-2 space-y-0.5 text-[11px]">
-            <p className={complete ? "text-good" : "text-muted-foreground"}>
-              {complete
-                ? "Target complete"
-                : `${Math.max(0, target - equivalent).toFixed(1)} km left`}
+            <p className={complete || paused ? "text-good" : "text-muted-foreground"}>
+              {paused
+                ? "Week is penalty-free"
+                : complete
+                  ? "Target complete"
+                  : `${Math.max(0, target - equivalent).toFixed(1)} km left`}
             </p>
-            <p className={complete ? "text-good" : "text-warn"}>
-              Penalty {owedText(penaltyFor(equivalent, target))}
+            <p className={complete || paused ? "text-good" : "text-warn"}>
+              Penalty {owedText(paused ? 0 : penaltyFor(equivalent, target))}
             </p>
             <p className="truncate text-[10px] text-muted-foreground/80">
               Run {km(totals.running)} · Ride {km(totals.cycling)}

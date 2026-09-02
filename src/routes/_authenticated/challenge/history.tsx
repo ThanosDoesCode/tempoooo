@@ -61,10 +61,12 @@ function History() {
                 >
                   <span className="font-medium">{name(w.user_id)}</span>
                   <span className="num text-muted-foreground">
-                    {Number(w.equivalent_km).toFixed(1)} / {Number(w.target_km).toFixed(0)} km
+                    {w.paused
+                      ? `Paused · ${w.pause_country ?? "travel"}`
+                      : `${Number(w.equivalent_km).toFixed(1)} / ${Number(w.target_km).toFixed(0)} km`}
                   </span>
-                  <span className={w.completed ? "text-good" : "text-warn"}>
-                    {w.completed ? "Completed" : owedText(Number(w.penalty_eur))}
+                  <span className={w.completed || w.paused ? "text-good" : "text-warn"}>
+                    {w.paused ? "€0" : w.completed ? "Completed" : owedText(Number(w.penalty_eur))}
                   </span>
                 </div>
               ))}

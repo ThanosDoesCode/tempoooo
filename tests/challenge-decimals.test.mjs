@@ -64,10 +64,20 @@ function fixture(distance, duration = "", type = "run") {
       if (name === "@/lib/challenge")
         return {
           useMyChallenge: () => ({ data: challenge }),
-          useWeekTargets: () => ({ data: [] }),
           todayIn: () => "2026-08-31",
-          targetForWeek: () => 10,
-          weekNumberOf: () => 1,
+          DEFAULT_TARGET_KM: 15,
+          activityMetrics: ({ activity_type, distance_km, duration_seconds }) => {
+            const speed = (distance_km * 3600) / duration_seconds;
+            const pace = duration_seconds / distance_km;
+            const qualified = activity_type === "run" ? pace < 420 : speed >= 18;
+            return {
+              averageSpeed: speed,
+              averagePace: pace,
+              qualified,
+              equivalent: qualified ? (activity_type === "run" ? distance_km : distance_km / 3) : 0,
+            };
+          },
+          formatPace: (seconds) => `${Math.floor(seconds / 60)}:00 min/km`,
         };
       if (name === "@/integrations/supabase/client")
         return {
@@ -123,14 +133,15 @@ for (const type of ["run", "cycle"])
     assert.equal(f.rows[0].duration_seconds, 3690);
     assert.equal(f.rows[0].activity_type, type);
   });
-test("Challenge form accepts decimal points and optional duration", async () => {
+test("Challenge form rejects a missing duration before uploading evidence", async () => {
   const f = fixture("7.25");
   await f.submit();
-  assert.equal(f.rows[0].distance_km, 7.25);
-  assert.equal(f.rows[0].duration_seconds, null);
+  assert.equal(f.rows.length, 0);
+  assert.equal(f.uploads, 0);
+  assert.ok(f.updates.some(([i, value]) => i === 9 && /duration/i.test(value)));
 });
 test("Challenge form exposes upload and save phases before confirmed success", async () => {
-  const f = fixture("7.25");
+  const f = fixture("7.25", "40");
   await f.submit();
   assert.deepEqual(
     f.updates.filter(([i]) => i === 8),
@@ -172,8 +183,8 @@ test("Challenge decimal inputs preserve raw comma text until blur", () => {
   input.props.onBlur();
   assert.deepEqual(f.updates.at(-1), [1, "61"]);
 });
-test("Challenge form keeps optional details collapsed on the common path", () => {
-  const f = fixture("7.25");
+test("Challenge form keeps duration visible and optional details collapsed", () => {
+  const f = fixture("7.25", "40");
   const more = f.nodes.find(
     (node) => node.type === "button" && node.props.children?.[0] === "More details",
   );
@@ -182,4 +193,5 @@ test("Challenge form keeps optional details collapsed on the common path", () =>
     f.nodes.some((node) => node.type === "input" && node.props.type === "date"),
     false,
   );
+  assert.ok(f.nodes.some((node) => node.type === "input" && node.props.value === "40"));
 });

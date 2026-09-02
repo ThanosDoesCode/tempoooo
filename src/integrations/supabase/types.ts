@@ -299,6 +299,8 @@ export type Database = {
         Row: {
           activity_date: string
           activity_type: Database["public"]["Enums"]["activity_kind"]
+          average_pace_seconds_per_km: number | null
+          average_speed_kmh: number | null
           challenge_id: string
           created_at: string
           distance_km: number
@@ -309,7 +311,9 @@ export type Database = {
           external_activity_url: string | null
           extra_evidence_paths: string[]
           id: string
+          is_qualified: boolean | null
           note: string | null
+          qualifying_equivalent_km: number | null
           strava_activity_id: string | null
           strava_athlete_id: string | null
           updated_at: string
@@ -319,6 +323,8 @@ export type Database = {
         Insert: {
           activity_date: string
           activity_type: Database["public"]["Enums"]["activity_kind"]
+          average_pace_seconds_per_km?: number | null
+          average_speed_kmh?: number | null
           challenge_id: string
           created_at?: string
           distance_km: number
@@ -329,7 +335,9 @@ export type Database = {
           external_activity_url?: string | null
           extra_evidence_paths?: string[]
           id?: string
+          is_qualified?: boolean | null
           note?: string | null
+          qualifying_equivalent_km?: number | null
           strava_activity_id?: string | null
           strava_athlete_id?: string | null
           updated_at?: string
@@ -339,6 +347,8 @@ export type Database = {
         Update: {
           activity_date?: string
           activity_type?: Database["public"]["Enums"]["activity_kind"]
+          average_pace_seconds_per_km?: number | null
+          average_speed_kmh?: number | null
           challenge_id?: string
           created_at?: string
           distance_km?: number
@@ -349,7 +359,9 @@ export type Database = {
           external_activity_url?: string | null
           extra_evidence_paths?: string[]
           id?: string
+          is_qualified?: boolean | null
           note?: string | null
+          qualifying_equivalent_km?: number | null
           strava_activity_id?: string | null
           strava_athlete_id?: string | null
           updated_at?: string
@@ -377,6 +389,7 @@ export type Database = {
           old_activity_date: string | null
           old_activity_type: Database["public"]["Enums"]["activity_kind"] | null
           old_distance_km: number | null
+          old_duration_seconds: number | null
         }
         Insert: {
           action: string
@@ -390,6 +403,7 @@ export type Database = {
             | Database["public"]["Enums"]["activity_kind"]
             | null
           old_distance_km?: number | null
+          old_duration_seconds?: number | null
         }
         Update: {
           action?: string
@@ -403,6 +417,7 @@ export type Database = {
             | Database["public"]["Enums"]["activity_kind"]
             | null
           old_distance_km?: number | null
+          old_duration_seconds?: number | null
         }
         Relationships: [
           {
@@ -677,6 +692,44 @@ export type Database = {
           },
         ]
       }
+      challenge_travel_pauses: {
+        Row: {
+          challenge_id: string
+          country: string
+          created_at: string
+          id: string
+          updated_at: string
+          user_id: string
+          week_number: number
+        }
+        Insert: {
+          challenge_id: string
+          country: string
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id: string
+          week_number: number
+        }
+        Update: {
+          challenge_id?: string
+          country?: string
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+          week_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "challenge_travel_pauses_challenge_id_fkey"
+            columns: ["challenge_id"]
+            isOneToOne: false
+            referencedRelation: "challenges"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       challenge_weeks: {
         Row: {
           challenge_id: string
@@ -685,6 +738,8 @@ export type Database = {
           equivalent_km: number
           finalized_at: string
           id: string
+          pause_country: string | null
+          paused: boolean
           penalty_eur: number
           running_km: number
           target_km: number
@@ -700,6 +755,8 @@ export type Database = {
           equivalent_km?: number
           finalized_at?: string
           id?: string
+          pause_country?: string | null
+          paused?: boolean
           penalty_eur?: number
           running_km?: number
           target_km?: number
@@ -715,6 +772,8 @@ export type Database = {
           equivalent_km?: number
           finalized_at?: string
           id?: string
+          pause_country?: string | null
+          paused?: boolean
           penalty_eur?: number
           running_km?: number
           target_km?: number

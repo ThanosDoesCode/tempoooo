@@ -9,11 +9,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { normalizeDecimal, parseDecimal } from "@/lib/numeric";
 import {
-  targetForWeek,
+  activityMetrics,
+  DEFAULT_TARGET_KM,
+  formatPace,
   todayIn,
   useMyChallenge,
-  useWeekTargets,
-  weekNumberOf,
 } from "@/lib/challenge";
 
 export const Route = createFileRoute("/_authenticated/challenge/log")({
@@ -22,8 +22,7 @@ export const Route = createFileRoute("/_authenticated/challenge/log")({
       { title: "Add activity — Challenge" },
       {
         name: "description",
-        content:
-          "Log a run or ride with a Strava screenshot as evidence and see the equivalent kilometres instantly.",
+        content: "Log a qualifying run or ride with duration and a Strava screenshot as evidence.",
       },
       { property: "og:title", content: "Add activity — Challenge" },
       { property: "og:description", content: "Run or cycle, screenshot required." },
@@ -37,7 +36,6 @@ function LogActivity() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { data: challenge } = useMyChallenge();
-  const { data: weekTargets } = useWeekTargets(challenge?.id);
   const today = challenge ? todayIn(challenge.timezone) : new Date().toISOString().slice(0, 10);
 
   const [type, setType] = useState<"run" | "cycle">("run");
@@ -65,18 +63,32 @@ function LogActivity() {
 
   const parsedDistance = parseDecimal(distance);
   const dist = parsedDistance.kind === "value" ? parsedDistance.value : NaN;
-  const equivalent = type === "run" ? dist : dist / 3;
+  const parsedDuration = parseDecimal(duration);
+  const durationSeconds =
+    parsedDuration.kind === "value" ? Math.round(parsedDuration.value * 60) : null;
+  const metrics =
+    dist > 0 && durationSeconds && durationSeconds > 0
+      ? activityMetrics({
+          activity_type: type,
+          distance_km: dist,
+          duration_seconds: durationSeconds,
+        })
+      : null;
 
   const submit = async () => {
     if (!challenge || !user || files.length === 0) return;
-    const minutes = parseDecimal(duration);
     if (!(dist > 0 && dist <= 1000)) {
       setError("Enter a distance above 0 and no greater than 1,000 km.");
       return;
     }
-    const seconds = minutes.kind === "value" ? Math.round(minutes.value * 60) : null;
-    if (minutes.kind === "invalid" || (seconds != null && (seconds <= 0 || seconds > 2147483647))) {
-      setError("Enter a valid positive duration in minutes, or leave it blank.");
+    const seconds = durationSeconds;
+    if (
+      parsedDuration.kind !== "value" ||
+      seconds === null ||
+      seconds <= 0 ||
+      seconds > 2147483647
+    ) {
+      setError("Enter a valid positive duration so pace or speed can be verified.");
       return;
     }
     setDistance(normalizeDecimal(distance));
@@ -130,7 +142,7 @@ function LogActivity() {
     <AppShell>
       <PageHeader
         title="Add activity"
-        subtitle={`${targetForWeek(challenge, weekTargets, weekNumberOf(challenge, today)).toFixed(0)} equivalent km this week · screenshot required.`}
+        subtitle={`${DEFAULT_TARGET_KM} challenge km this week · duration and screenshot required.`}
       />
       <Card className="space-y-3 p-3">
         <div className="grid grid-cols-2 gap-2">
@@ -160,6 +172,18 @@ function LogActivity() {
             disabled={busy}
             onChange={(e) => setDistance(e.target.value)}
             onBlur={() => setDistance(normalizeDecimal(distance))}
+            className={inputCls}
+          />
+        </Field>
+        <Field label="Duration in minutes">
+          <input
+            type="text"
+            inputMode="decimal"
+            value={duration}
+            disabled={busy}
+            onChange={(e) => setDuration(e.target.value)}
+            onBlur={() => setDuration(normalizeDecimal(duration))}
+            placeholder="e.g. 36.5"
             className={inputCls}
           />
         </Field>
@@ -225,10 +249,31 @@ function LogActivity() {
           ) : null}
         </Field>
 
-        {dist > 0 ? (
-          <div className="flex items-center justify-between rounded-xl bg-elevated px-3 py-2 text-sm">
-            <span className="text-muted-foreground">Equivalent distance</span>
-            <span className="num font-semibold">{equivalent.toFixed(2)} km</span>
+        {metrics ? (
+          <div
+            className={`rounded-xl border px-3 py-2 text-sm ${
+              metrics.qualified ? "border-good/30 bg-good/5" : "border-danger/30 bg-danger/5"
+            }`}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-muted-foreground">
+                {type === "run"
+                  ? formatPace(metrics.averagePace)
+                  : `${metrics.averageSpeed?.toFixed(1)} km/h`}
+              </span>
+              <span className={`font-semibold ${metrics.qualified ? "text-good" : "text-danger"}`}>
+                {metrics.qualified
+                  ? `${metrics.equivalent.toFixed(2)} challenge km`
+                  : "Does not qualify"}
+              </span>
+            </div>
+            {!metrics.qualified ? (
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                {type === "run"
+                  ? "Run pace must be under 7:00 min/km."
+                  : "Ride speed must be at least 18 km/h."}
+              </p>
+            ) : null}
           </div>
         ) : null}
 
@@ -255,17 +300,6 @@ function LogActivity() {
                 value={date}
                 disabled={busy}
                 onChange={(e) => setDate(e.target.value)}
-                className={inputCls}
-              />
-            </Field>
-            <Field label="Duration in minutes (optional)">
-              <input
-                type="text"
-                inputMode="decimal"
-                value={duration}
-                disabled={busy}
-                onChange={(e) => setDuration(e.target.value)}
-                onBlur={() => setDuration(normalizeDecimal(duration))}
                 className={inputCls}
               />
             </Field>
@@ -303,7 +337,7 @@ function LogActivity() {
                 : "Save activity"
           }
           aria-busy={busy}
-          disabled={busy || files.length === 0}
+          disabled={busy || files.length === 0 || !duration.trim()}
           onClick={() => void submit()}
           className="w-full rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground disabled:opacity-60"
         >
@@ -317,7 +351,7 @@ function LogActivity() {
         </button>
         <Note>
           Activities can only be logged inside the current, open week. Screenshots are private to
-          both challenge members. Running counts 1:1; cycling counts 3:1.
+          both members. A run counts at 1:1 below 7:00 min/km; a ride counts at 3:1 from 18 km/h.
         </Note>
       </Card>
     </AppShell>

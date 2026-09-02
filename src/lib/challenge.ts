@@ -24,6 +24,10 @@ export type Activity = {
   activity_type: "run" | "cycle";
   distance_km: number;
   equivalent_km: number;
+  qualifying_equivalent_km: number;
+  is_qualified: boolean;
+  average_speed_kmh: number | null;
+  average_pace_seconds_per_km: number | null;
   activity_date: string;
   duration_seconds: number | null;
   evidence_path: string;
@@ -46,9 +50,9 @@ export const DEFAULT_TARGET_KM = 15;
 
 /** Mirrors the database penalty_for() function. Official values always come from the server. */
 export function penaltyFor(equivalentKm: number, targetKm: number = DEFAULT_TARGET_KM) {
-  if (targetKm <= 0 || equivalentKm >= targetKm) return 0;
-  if (equivalentKm >= (targetKm * 2) / 3) return 5;
-  if (equivalentKm >= targetKm / 3) return 10;
+  if (targetKm <= 0 || equivalentKm >= 15) return 0;
+  if (equivalentKm >= 10) return 5;
+  if (equivalentKm >= 5) return 10;
   return 15;
 }
 
@@ -66,8 +70,37 @@ export const owedText = (euros: number) => {
   return p ? `${eur(euros)} + ${p}` : eur(euros);
 };
 
-export const equivalentKm = (a: { activity_type: string; distance_km: number }) =>
-  a.activity_type === "run" ? a.distance_km : a.distance_km / 3;
+export function activityMetrics(activity: {
+  activity_type: "run" | "cycle";
+  distance_km: number;
+  duration_seconds: number | null;
+}) {
+  const distance = Number(activity.distance_km);
+  const duration = Number(activity.duration_seconds);
+  const averageSpeed = duration > 0 ? (distance * 3600) / duration : null;
+  const averagePace = duration > 0 && distance > 0 ? duration / distance : null;
+  const qualified =
+    activity.activity_type === "run"
+      ? averagePace !== null && averagePace < 420
+      : averageSpeed !== null && averageSpeed >= 18;
+  return {
+    averageSpeed,
+    averagePace,
+    qualified,
+    equivalent: qualified ? (activity.activity_type === "run" ? distance : distance / 3) : 0,
+  };
+}
+
+export function qualifiedEquivalentKm(activity: Activity) {
+  const stored = Number(activity.qualifying_equivalent_km);
+  return Number.isFinite(stored) ? stored : activityMetrics(activity).equivalent;
+}
+
+export function formatPace(secondsPerKm: number | null) {
+  if (secondsPerKm === null || !Number.isFinite(secondsPerKm)) return "—";
+  const rounded = Math.round(secondsPerKm);
+  return `${Math.floor(rounded / 60)}:${String(rounded % 60).padStart(2, "0")} min/km`;
+}
 
 /** Today's date in the challenge timezone (never the device clock's date). */
 export function todayIn(timezone: string) {
@@ -177,14 +210,23 @@ export function useActivities(challengeId: string | undefined) {
     enabled: !!challengeId,
     queryKey: ["challenge-activities", challengeId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("challenge_activities")
-        .select("*")
-        .eq("challenge_id", challengeId!)
-        .order("activity_date", { ascending: false })
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return (data ?? []) as unknown as Activity[];
+      const rows: Activity[] = [];
+      const pageSize = 500;
+      for (let from = 0; ; from += pageSize) {
+        const { data, error } = await supabase
+          .from("challenge_activities")
+          .select("*")
+          .eq("challenge_id", challengeId!)
+          .order("activity_date", { ascending: false })
+          .order("created_at", { ascending: false })
+          .order("id", { ascending: true })
+          .range(from, from + pageSize - 1);
+        if (error) throw error;
+        const page = (data ?? []) as unknown as Activity[];
+        rows.push(...page);
+        if (page.length < pageSize) break;
+      }
+      return rows;
     },
   });
 }
@@ -199,7 +241,99 @@ export function sumWeek(activities: Activity[], userId: string, start: string, e
   const cycling = rows
     .filter((a) => a.activity_type === "cycle")
     .reduce((s, a) => s + Number(a.distance_km), 0);
-  return { running, cycling, equivalent: running + cycling / 3, rows };
+  const equivalent = rows.reduce((sum, activity) => sum + qualifiedEquivalentKm(activity), 0);
+  return { running, cycling, equivalent, rows };
+}
+
+export type TravelPause = {
+  id: string;
+  challenge_id: string;
+  user_id: string;
+  week_number: number;
+  country: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export function useTravelPauses(challengeId: string | undefined) {
+  return useQuery({
+    enabled: !!challengeId,
+    queryKey: ["challenge-travel-pauses", challengeId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("challenge_travel_pauses")
+        .select("*")
+        .eq("challenge_id", challengeId!)
+        .order("week_number", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as unknown as TravelPause[];
+    },
+  });
+}
+
+export async function setTravelPause(challengeId: string, weekNumber: number, country: string) {
+  const { data: auth } = await supabase.auth.getUser();
+  const uid = auth.user?.id;
+  if (!uid) throw new Error("Not signed in");
+  const { error } = await supabase.from("challenge_travel_pauses").upsert(
+    {
+      challenge_id: challengeId,
+      user_id: uid,
+      week_number: weekNumber,
+      country: country.trim(),
+    },
+    { onConflict: "challenge_id,user_id,week_number" },
+  );
+  if (error) throw error;
+}
+
+export async function removeTravelPause(pauseId: string) {
+  const { error } = await supabase.from("challenge_travel_pauses").delete().eq("id", pauseId);
+  if (error) throw error;
+}
+
+export function weekPaused(pauses: TravelPause[] | undefined, userId: string, weekNumber: number) {
+  return !!pauses?.some((pause) => pause.user_id === userId && pause.week_number === weekNumber);
+}
+
+export type LifetimeStats = {
+  totalKm: number;
+  challengeKm: number;
+  averageSpeedKmh: number | null;
+  runningKm: number;
+  cyclingKm: number;
+  runningPaceSecondsPerKm: number | null;
+  cyclingSpeedKmh: number | null;
+  activities: number;
+  qualifiedActivities: number;
+};
+
+export function summarizeActivities(activities: Activity[], userId: string): LifetimeStats {
+  const rows = activities.filter((activity) => activity.user_id === userId);
+  const timed = rows.filter((activity) => Number(activity.duration_seconds) > 0);
+  const runs = timed.filter((activity) => activity.activity_type === "run");
+  const rides = timed.filter((activity) => activity.activity_type === "cycle");
+  const distance = (list: Activity[]) =>
+    list.reduce((sum, activity) => sum + Number(activity.distance_km), 0);
+  const duration = (list: Activity[]) =>
+    list.reduce((sum, activity) => sum + Number(activity.duration_seconds), 0);
+  const speed = (list: Activity[]) => {
+    const seconds = duration(list);
+    return seconds > 0 ? (distance(list) * 3600) / seconds : null;
+  };
+  const runDistance = distance(runs);
+  const runDuration = duration(runs);
+  return {
+    totalKm: distance(rows),
+    challengeKm: rows.reduce((sum, activity) => sum + qualifiedEquivalentKm(activity), 0),
+    averageSpeedKmh: speed(timed),
+    runningKm: distance(rows.filter((activity) => activity.activity_type === "run")),
+    cyclingKm: distance(rows.filter((activity) => activity.activity_type === "cycle")),
+    runningPaceSecondsPerKm: runDistance > 0 ? runDuration / runDistance : null,
+    cyclingSpeedKmh: speed(rides),
+    activities: rows.length,
+    qualifiedActivities: rows.filter((activity) => activityMetrics(activity).qualified).length,
+  };
 }
 
 export type WeekRow = {
@@ -215,6 +349,8 @@ export type WeekRow = {
   target_km: number;
   completed: boolean;
   penalty_eur: number;
+  paused: boolean;
+  pause_country: string | null;
 };
 
 export type PaymentRow = {
@@ -263,69 +399,6 @@ export function usePayments(challengeId: string | undefined) {
 
 export const eur = (n: number) => `€${n.toFixed(0)}`;
 export const km = (n: number) => `${n.toFixed(1)} km`;
-
-export type WeekTarget = {
-  id: string;
-  challenge_id: string;
-  week_number: number;
-  target_km: number;
-};
-
-/** Per-week target overrides set by the challenge creator for future weeks. */
-export function useWeekTargets(challengeId: string | undefined) {
-  return useQuery({
-    enabled: !!challengeId,
-    queryKey: ["challenge-week-targets", challengeId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("challenge_week_targets")
-        .select("id, challenge_id, week_number, target_km")
-        .eq("challenge_id", challengeId!)
-        .order("week_number", { ascending: true });
-      if (error) throw error;
-      return (data ?? []) as WeekTarget[];
-    },
-  });
-}
-
-export function targetForWeek(
-  challenge: Challenge | null | undefined,
-  overrides: WeekTarget[] | undefined,
-  weekNumber: number,
-) {
-  const hit = overrides?.find((t) => t.week_number === weekNumber);
-  return Number(hit?.target_km ?? challenge?.weekly_target_km ?? DEFAULT_TARGET_KM);
-}
-
-/** Sets (or clears, when km is null) the target for a range of future weeks. */
-export async function setWeekTargets(
-  challengeId: string,
-  weekNumbers: number[],
-  targetKm: number | null,
-) {
-  const { data: auth } = await supabase.auth.getUser();
-  const uid = auth.user?.id;
-  if (!uid) throw new Error("Not signed in");
-  if (targetKm === null) {
-    const { error } = await supabase
-      .from("challenge_week_targets")
-      .delete()
-      .eq("challenge_id", challengeId)
-      .in("week_number", weekNumbers);
-    if (error) throw error;
-    return;
-  }
-  const { error } = await supabase.from("challenge_week_targets").upsert(
-    weekNumbers.map((w) => ({
-      challenge_id: challengeId,
-      week_number: w,
-      target_km: targetKm,
-      set_by: uid,
-    })),
-    { onConflict: "challenge_id,week_number" },
-  );
-  if (error) throw error;
-}
 
 /** Marks every open obligation of the signed-in payer as settled in one step. */
 export async function settleMyDebts(challengeId: string, userId: string) {

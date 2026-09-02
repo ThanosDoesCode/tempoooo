@@ -1,32 +1,44 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { Download, Plane } from "lucide-react";
 import { AppShell, PageHeader } from "@/components/AppShell";
+import { RulesCard } from "@/components/challenge-rules";
 import { Card, Note, PendingLabel, SectionTitle } from "@/components/ui-kit";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import {
   eur,
+  formatPace,
   owedText,
   photoText,
+  removeTravelPause,
   reopenPayment,
+  setTravelPause,
   settleMyDebts,
+  summarizeActivities,
+  todayIn,
+  useActivities,
   usePayments,
   useChallengeMembers,
   useMyChallenge,
+  useTravelPauses,
   useWeeks,
+  weekBounds,
+  weekNumberOf,
 } from "@/lib/challenge";
+import { downloadChallengeCsv } from "@/lib/challenge-export";
 
 export const Route = createFileRoute("/_authenticated/challenge/payments")({
   head: () => ({
     meta: [
-      { title: "Payments — Challenge" },
+      { title: "Money — Challenge" },
       {
         name: "description",
         content:
           "Outstanding penalties, photo forfeits, settle up and recipient confirmation for your two-person endurance challenge.",
       },
-      { property: "og:title", content: "Payments — Challenge" },
+      { property: "og:title", content: "Money — Challenge" },
       { property: "og:description", content: "Owe, pay, confirm. Nothing is deleted." },
     ],
   }),
@@ -40,6 +52,8 @@ function Payments() {
   const { data: members } = useChallengeMembers(challenge?.id);
   const { data: payments } = usePayments(challenge?.id);
   const { data: weeks } = useWeeks(challenge?.id);
+  const { data: activities, isLoading: activitiesLoading } = useActivities(challenge?.id);
+  const { data: travelPauses } = useTravelPauses(challenge?.id);
   const [pending, setPending] = useState<{
     id: string;
     action: "mark" | "undo" | "confirm" | "settle" | "reopen";
@@ -48,6 +62,11 @@ function Payments() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [showSettled, setShowSettled] = useState(false);
+  const [pauseWeek, setPauseWeek] = useState("");
+  const [pauseCountry, setPauseCountry] = useState("");
+  const [travelPending, setTravelPending] = useState<string | null>(null);
+  const [travelError, setTravelError] = useState<string | null>(null);
+  const [travelNotice, setTravelNotice] = useState<string | null>(null);
 
   const rows = payments ?? [];
   const open = rows.filter((p) => p.status !== "confirmed_paid");
@@ -62,6 +81,15 @@ function Payments() {
   const weekOf = (id: string) => weeks?.find((w) => w.id === id)?.week_number;
   const name = (id: string) =>
     id === user?.id ? "Me" : (members?.find((m) => m.userId === id)?.name ?? "Athlete");
+
+  const currentWeek = challenge
+    ? Math.max(1, weekNumberOf(challenge, todayIn(challenge.timezone)))
+    : 1;
+  const selectedPauseWeek = Number(pauseWeek || currentWeek);
+  const comparison = (members ?? []).map((member) => ({
+    ...member,
+    stats: summarizeActivities(activities ?? [], member.userId),
+  }));
 
   const refresh = () => qc.invalidateQueries({ queryKey: ["challenge-payments"] });
 
@@ -124,10 +152,51 @@ function Payments() {
     }
   };
 
+  const saveTravelPause = async () => {
+    if (!challenge || !user) return;
+    const country = pauseCountry.trim();
+    if (!country) {
+      setTravelError("Enter the country you are travelling to.");
+      return;
+    }
+    if (["greece", "sweden", "gr", "se"].includes(country.toLowerCase())) {
+      setTravelError("The challenge remains active in Greece and Sweden.");
+      return;
+    }
+    setTravelPending("save");
+    setTravelError(null);
+    setTravelNotice(null);
+    try {
+      await setTravelPause(challenge.id, selectedPauseWeek, country);
+      await qc.invalidateQueries({ queryKey: ["challenge-travel-pauses"] });
+      setPauseCountry("");
+      setTravelNotice(`Week ${selectedPauseWeek} is paused for your trip to ${country}.`);
+    } catch (e) {
+      setTravelError(`Could not save the travel pause. ${(e as Error).message}`);
+    } finally {
+      setTravelPending(null);
+    }
+  };
+
+  const cancelTravelPause = async (id: string) => {
+    setTravelPending(id);
+    setTravelError(null);
+    setTravelNotice(null);
+    try {
+      await removeTravelPause(id);
+      await qc.invalidateQueries({ queryKey: ["challenge-travel-pauses"] });
+      setTravelNotice("Travel pause removed. That week is active again.");
+    } catch (e) {
+      setTravelError(`Could not remove the travel pause. ${(e as Error).message}`);
+    } finally {
+      setTravelPending(null);
+    }
+  };
+
   return (
     <AppShell>
       <PageHeader
-        title="Payments"
+        title="Money"
         subtitle="Penalties are created automatically when a week closes. Every €5 is also 1 photo."
       />
 
@@ -301,6 +370,169 @@ function Payments() {
           ) : null}
         </div>
       ) : null}
+
+      <section className="mt-5">
+        <SectionTitle>52-week comparison</SectionTitle>
+        <div className="grid grid-cols-2 gap-3">
+          {comparison.map((player) => (
+            <Card key={player.userId} className="p-3">
+              <p className="truncate text-xs font-semibold">
+                {player.userId === user?.id ? "Me" : player.name}
+              </p>
+              <p className="num mt-2 text-xl font-semibold">{player.stats.totalKm.toFixed(1)} km</p>
+              <p className="text-[11px] text-muted-foreground">Total real distance</p>
+              <div className="mt-2 border-t border-border pt-2 text-[11px] text-muted-foreground">
+                <p>{player.stats.challengeKm.toFixed(1)} qualifying challenge km</p>
+                <p>
+                  {player.stats.averageSpeedKmh === null
+                    ? "Average speed —"
+                    : `Average speed ${player.stats.averageSpeedKmh.toFixed(1)} km/h`}
+                </p>
+                <p>Run pace {formatPace(player.stats.runningPaceSecondsPerKm)}</p>
+                <p>
+                  {player.stats.cyclingSpeedKmh === null
+                    ? "Ride speed —"
+                    : `Ride speed ${player.stats.cyclingSpeedKmh.toFixed(1)} km/h`}
+                </p>
+              </div>
+            </Card>
+          ))}
+        </div>
+        {challenge && members ? (
+          <button
+            type="button"
+            disabled={activitiesLoading}
+            onClick={() =>
+              downloadChallengeCsv(
+                challenge,
+                members,
+                activities ?? [],
+                weeks ?? [],
+                travelPauses ?? [],
+              )
+            }
+            className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-border py-2.5 text-sm font-medium disabled:opacity-60"
+          >
+            <Download className="h-4 w-4" aria-hidden="true" />
+            {activitiesLoading ? "Preparing challenge data…" : "Download challenge data (CSV)"}
+          </button>
+        ) : null}
+        <Note>
+          The export includes both players, every activity, stored pace and speed, qualifying
+          distance, finalized penalties, and travel pauses. Activity records remain stored after the
+          52 weeks end.
+        </Note>
+      </section>
+
+      {challenge && user && currentWeek <= challenge.duration_weeks ? (
+        <section className="mt-5">
+          <SectionTitle>Travel pause</SectionTitle>
+          <Card className="space-y-3 p-3">
+            <div className="flex items-start gap-2">
+              <Plane className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+              <p className="text-xs text-muted-foreground">
+                Travelling outside Greece or Sweden? Pause your own entire challenge week to make it
+                penalty-free. Your opponent remains active.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <label>
+                <span className="mb-1 block text-[11px] uppercase tracking-wider text-muted-foreground">
+                  Challenge week
+                </span>
+                <select
+                  value={pauseWeek || String(currentWeek)}
+                  disabled={travelPending !== null}
+                  onChange={(event) => setPauseWeek(event.target.value)}
+                  className="w-full rounded-xl border border-border bg-elevated px-3 py-2.5 text-sm outline-none"
+                >
+                  {Array.from(
+                    { length: challenge.duration_weeks - Math.max(1, currentWeek) + 1 },
+                    (_, index) => Math.max(1, currentWeek) + index,
+                  ).map((weekNumber) => {
+                    const bounds = weekBounds(challenge, weekNumber);
+                    return (
+                      <option key={weekNumber} value={weekNumber}>
+                        Week {weekNumber} · {bounds.start}
+                      </option>
+                    );
+                  })}
+                </select>
+              </label>
+              <label>
+                <span className="mb-1 block text-[11px] uppercase tracking-wider text-muted-foreground">
+                  Country
+                </span>
+                <input
+                  value={pauseCountry}
+                  disabled={travelPending !== null}
+                  onChange={(event) => setPauseCountry(event.target.value)}
+                  placeholder="e.g. Italy"
+                  className="w-full rounded-xl border border-border bg-elevated px-3 py-2.5 text-sm outline-none"
+                />
+              </label>
+            </div>
+            <button
+              type="button"
+              disabled={travelPending !== null || !pauseCountry.trim()}
+              onClick={() => void saveTravelPause()}
+              className="w-full rounded-xl bg-primary py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+            >
+              {travelPending === "save" ? (
+                <PendingLabel>Pausing your week…</PendingLabel>
+              ) : (
+                "Pause my week"
+              )}
+            </button>
+            {travelError ? (
+              <p role="alert" className="text-xs text-danger">
+                {travelError}
+              </p>
+            ) : null}
+            {travelNotice ? (
+              <p role="status" className="text-xs text-good">
+                {travelNotice}
+              </p>
+            ) : null}
+          </Card>
+
+          {(travelPauses?.length ?? 0) > 0 ? (
+            <div className="mt-2 space-y-2">
+              {travelPauses?.map((pause) => (
+                <Card key={pause.id} className="flex items-center gap-3 p-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">
+                      {name(pause.user_id)} · Week {pause.week_number}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {pause.country} · penalty-free
+                    </p>
+                  </div>
+                  {pause.user_id === user.id && pause.week_number >= currentWeek ? (
+                    <button
+                      type="button"
+                      disabled={travelPending !== null}
+                      onClick={() => void cancelTravelPause(pause.id)}
+                      className="rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium disabled:opacity-60"
+                    >
+                      {travelPending === pause.id ? (
+                        <PendingLabel>Removing…</PendingLabel>
+                      ) : (
+                        "Remove"
+                      )}
+                    </button>
+                  ) : null}
+                </Card>
+              ))}
+            </div>
+          ) : null}
+          <Note>No pause is needed if the participant chooses to keep participating normally.</Note>
+        </section>
+      ) : null}
+
+      <section className="mt-5">
+        <RulesCard />
+      </section>
 
       <Note>
         Only the payer can mark or settle a payment, only the recipient can confirm one they
