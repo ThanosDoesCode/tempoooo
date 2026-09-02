@@ -7,13 +7,14 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { ChallengePushSession } from "../components/ChallengePushSession";
 import { Toaster } from "../components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { clearBulk } from "@/lib/store";
 
 function NotFoundComponent() {
   return (
@@ -145,11 +146,16 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const previousUserId = useRef<string | null>(null);
 
   useEffect(() => {
-    const { data } = supabase.auth.onAuthStateChange(() => {
-      void queryClient.invalidateQueries({ queryKey: ["authenticated-user"] });
-      void queryClient.invalidateQueries({ queryKey: ["bulk-memberships"] });
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      const nextUserId = session?.user.id ?? null;
+      if (previousUserId.current === nextUserId) return;
+      previousUserId.current = nextUserId;
+      clearBulk();
+      queryClient.removeQueries({ queryKey: ["authenticated-user"] });
+      queryClient.removeQueries({ queryKey: ["bulk-memberships"] });
     });
     return () => data.subscription.unsubscribe();
   }, [queryClient]);

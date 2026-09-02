@@ -27,6 +27,7 @@ import {
   leaveChallenge,
   km,
   owedText,
+  paymentsQueryOptions,
   penaltyFor,
   qualifiedEquivalentKm,
   sumWeek,
@@ -35,6 +36,7 @@ import {
   useChallengeMembers,
   useMyChallenge,
   useTravelPauses,
+  weeksQueryOptions,
   weekPaused,
   weekBounds,
   weekNumberOf,
@@ -83,7 +85,9 @@ function ChallengeHome() {
     setLeaveError(null);
     try {
       await leaveChallenge(challenge.id);
-      await qc.invalidateQueries();
+      await qc.invalidateQueries({
+        predicate: (query) => String(query.queryKey[0]).startsWith("challenge"),
+      });
       setLeaveArmed(false);
     } catch (e) {
       setLeaveError(`Could not leave the challenge. ${(e as Error).message}`);
@@ -113,6 +117,13 @@ function ChallengeHome() {
   useEffect(() => {
     if (challenge) void finalizeChallenge({ data: { challenge: challenge.id } });
   }, [challenge]);
+
+  // The default screen warms the two small secondary datasets used by History and Money.
+  useEffect(() => {
+    if (!challenge) return;
+    void qc.prefetchQuery(weeksQueryOptions(challenge.id));
+    void qc.prefetchQuery(paymentsQueryOptions(challenge.id));
+  }, [challenge, qc]);
 
   const week = useMemo(() => {
     if (!challenge) return null;

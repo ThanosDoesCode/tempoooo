@@ -18,7 +18,8 @@ test("refresh revalidates data without a destructive browser reload", async () =
   const source = await read("src/components/PullToRefresh.tsx");
   assert.match(source, /refetchQueries\(\{ type: "active" \}\)/);
   assert.match(source, /refreshBulk\(\)/);
-  assert.match(source, /router\.invalidate\(\)/);
+  assert.doesNotMatch(source, /router\.invalidate\(\)/);
+  assert.match(source, /a, button, input, textarea, select/);
   assert.doesNotMatch(source, /location\.reload/);
   assert.doesNotMatch(await read("src/routes/index.tsx"), /location\.reload/);
 });
@@ -34,15 +35,38 @@ test("Tempo manifest and navigation expose Challenge by default and owner-only B
   const shell = await read("src/components/AppShell.tsx");
   assert.match(shell, /"\/bulk\/history", label: "History"/);
   assert.match(shell, /isBulk && hasBulk \? BULK_NAV : CHALLENGE_NAV/);
+  assert.match(shell, /onPointerDown=\{\(\) => acknowledge/);
+  assert.match(shell, /router\.status === "pending"/);
   assert.doesNotMatch(shell, /Sharing|Shared Bulk|\/bulk\/access/);
   const guard = await read("src/routes/_authenticated/bulk/route.tsx");
   assert.match(guard, /bulkOwnerQueryOptions/);
-  assert.match(guard, /fetchQuery/);
-  assert.match(guard, /staleTime: 0/);
+  assert.match(guard, /ensureQueryData/);
+  assert.match(guard, /prefetchBulk/);
+  assert.match(guard, /memberships\.length === 0/);
+  assert.match(guard, /clearBulk\(\)/);
   assert.match(guard, /redirect\(\{ to: "\/bulk-access-denied", replace: true \}\)/);
   const denied = await read("src/routes/_authenticated/bulk-access-denied.tsx");
   assert.match(denied, /Bulk access required/);
   assert.match(denied, /only available to authorized administrators/);
+});
+
+test("navigation prefetch removes avoidable sequential reads", async () => {
+  const challenge = await read("src/lib/challenge.ts");
+  assert.match(challenge, /challenges!inner/);
+  assert.match(challenge, /auth\.getSession\(\)/);
+  assert.doesNotMatch(
+    challenge,
+    /auth\.getUser\(\)[\s\S]*challenge_members[\s\S]*\.from\("challenges"\)/,
+  );
+  const store = await read("src/lib/store.ts");
+  assert.match(store, /export function prefetchBulk/);
+  assert.match(store, /Promise\.all\(\[/);
+  const home = await read("src/routes/_authenticated/challenge/index.tsx");
+  assert.match(home, /prefetchQuery\(weeksQueryOptions/);
+  assert.match(home, /prefetchQuery\(paymentsQueryOptions/);
+  const root = await read("src/routes/__root.tsx");
+  assert.match(root, /previousUserId\.current === nextUserId/);
+  assert.match(root, /removeQueries\(\{ queryKey: \["bulk-memberships"\] \}\)/);
 });
 
 test("Bulk History uses stored snapshots and labels legacy meal limitations", async () => {

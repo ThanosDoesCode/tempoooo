@@ -25,6 +25,8 @@ const daySaveQueues = new Map<string, ReturnType<typeof createSaveQueue>>();
 const dayRevisions = new Map<string, number>();
 const pendingWeekNotes = new Set<string>();
 let targetsPending = false;
+type BulkPreload = { promise: Promise<AppData>; data?: AppData };
+const bulkPreloads = new Map<string, BulkPreload>();
 
 function emit() {
   state = state ? { ...state } : null;
@@ -146,15 +148,52 @@ async function fetchBulkSnapshot(id: string): Promise<AppData> {
   return next;
 }
 
+/** Starts the owner-only Bulk snapshot reads before the route commits. */
+export function prefetchBulk(id: string) {
+  if (bulkId === id && state) return Promise.resolve();
+  const existing = bulkPreloads.get(id);
+  if (existing) return existing.promise.then(() => undefined);
+  const preload = {} as BulkPreload;
+  preload.promise = fetchBulkSnapshot(id)
+    .then((data) => {
+      preload.data = data;
+      return data;
+    })
+    .catch((error) => {
+      if (bulkPreloads.get(id) === preload) bulkPreloads.delete(id);
+      throw error;
+    });
+  bulkPreloads.set(id, preload);
+  window.setTimeout(() => {
+    if (bulkPreloads.get(id) === preload) bulkPreloads.delete(id);
+  }, 60_000);
+  return preload.promise.then(() => undefined);
+}
+
 export async function loadBulk(id: string, r: BulkRole) {
+  if (bulkId === id && state) {
+    if (role !== r) {
+      role = r;
+      emit();
+    }
+    return;
+  }
+  const preload = bulkPreloads.get(id);
   bulkId = id;
   role = r;
+  if (preload?.data) {
+    state = preload.data;
+    bulkPreloads.delete(id);
+    emit();
+    return;
+  }
   state = null;
   emit();
   try {
-    const next = await fetchBulkSnapshot(id);
+    const next = preload ? await preload.promise : await fetchBulkSnapshot(id);
     if (bulkId !== id) return;
     state = next;
+    bulkPreloads.delete(id);
   } catch (error) {
     if (bulkId === id) {
       bulkId = null;
@@ -224,6 +263,7 @@ export async function resetBulkData(
 export function clearBulk() {
   bulkId = null;
   state = null;
+  bulkPreloads.clear();
   emit();
 }
 

@@ -1,4 +1,4 @@
-import { Link, useLocation, useNavigate } from "@tanstack/react-router";
+import { Link, useLocation, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   CalendarCheck,
   Dumbbell,
@@ -15,6 +15,7 @@ import {
 import { useEffect, useState, type ReactNode } from "react";
 import { signOut } from "@/lib/auth";
 import { useMemberships } from "@/lib/bulk-access";
+import { prefetchBulk } from "@/lib/store";
 import { PullToRefresh } from "./PullToRefresh";
 
 const BULK_NAV = [
@@ -35,6 +36,7 @@ const CHALLENGE_NAV = [
 export function AppShell({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  const navigationPending = useRouterState({ select: (router) => router.status === "pending" });
   const isChallenge = pathname.startsWith("/challenge");
   const isBulk = pathname.startsWith("/bulk");
   const { data: memberships } = useMemberships();
@@ -43,9 +45,17 @@ export function AppShell({ children }: { children: ReactNode }) {
   useEffect(() => setPendingTo(null), [pathname]);
 
   const hasBulk = memberships?.some((membership) => membership.role === "owner") ?? false;
+  const owner = memberships?.find((membership) => membership.role === "owner");
   const showingChallenge = pendingTo ? pendingTo.startsWith("/challenge") : isChallenge;
 
   const nav = isBulk && hasBulk ? BULK_NAV : CHALLENGE_NAV;
+  const prefetchDestination = (to: string) => {
+    if (to.startsWith("/bulk") && owner) void prefetchBulk(owner.bulk_profile_id);
+  };
+  const acknowledge = (to: string) => {
+    setPendingTo(to);
+    prefetchDestination(to);
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -56,7 +66,10 @@ export function AppShell({ children }: { children: ReactNode }) {
             <Link
               to="/bulk"
               preload="intent"
-              onClick={() => setPendingTo("/bulk")}
+              onPointerEnter={() => prefetchDestination("/bulk")}
+              onFocus={() => prefetchDestination("/bulk")}
+              onPointerDown={() => acknowledge("/bulk")}
+              onClick={() => acknowledge("/bulk")}
               className={`min-h-11 rounded-lg px-3 py-2.5 text-sm font-medium active:scale-95 ${
                 showingChallenge ? "text-muted-foreground" : "bg-elevated text-foreground"
               }`}
@@ -67,7 +80,8 @@ export function AppShell({ children }: { children: ReactNode }) {
           <Link
             to="/challenge"
             preload="intent"
-            onClick={() => setPendingTo("/challenge")}
+            onPointerDown={() => acknowledge("/challenge")}
+            onClick={() => acknowledge("/challenge")}
             className={`min-h-11 rounded-lg px-3 py-2.5 text-sm font-semibold active:scale-95 ${
               showingChallenge ? "bg-elevated text-foreground" : "text-muted-foreground"
             }`}
@@ -94,6 +108,12 @@ export function AppShell({ children }: { children: ReactNode }) {
             <LogOut className="h-4 w-4" />
           </button>
         </div>
+        <div
+          aria-hidden="true"
+          className={`absolute inset-x-0 bottom-0 h-0.5 overflow-hidden transition-opacity ${navigationPending ? "opacity-100" : "opacity-0"}`}
+        >
+          <span className="block h-full w-1/2 animate-pulse rounded-full bg-primary" />
+        </div>
       </div>
 
       <main className={`mx-auto w-full max-w-lg px-4 pb-28 ${isChallenge ? "pt-4" : "pt-6"}`}>
@@ -111,7 +131,10 @@ export function AppShell({ children }: { children: ReactNode }) {
               to={to}
               preload="intent"
               activeOptions={{ exact }}
-              onClick={() => setPendingTo(to)}
+              onPointerEnter={() => prefetchDestination(to)}
+              onFocus={() => prefetchDestination(to)}
+              onPointerDown={() => acknowledge(to)}
+              onClick={() => acknowledge(to)}
               aria-current={pendingTo === to ? "page" : undefined}
               className={`group flex min-h-11 flex-col items-center gap-1 rounded-xl py-2 text-muted-foreground transition active:scale-95 active:bg-elevated data-[status=active]:text-primary ${pendingTo === to ? "bg-elevated text-primary" : ""}`}
             >

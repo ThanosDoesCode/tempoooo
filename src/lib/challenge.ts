@@ -1,5 +1,5 @@
 import { addDays, format, parseISO } from "date-fns";
-import { useQuery } from "@tanstack/react-query";
+import { queryOptions, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { getRelatedProfiles } from "./privileged-rpcs.functions";
 
@@ -139,34 +139,33 @@ export function hoursLeft(challenge: Challenge, weekNumber: number) {
 }
 
 /** Only challenges the signed-in user is still a member of. Leaving frees them to start a new one. */
-export function useMyChallenge() {
-  return useQuery({
+export const myChallengeQueryOptions = () =>
+  queryOptions({
     queryKey: ["challenge"],
     staleTime: 5 * 60_000,
     queryFn: async () => {
-      const { data: auth } = await supabase.auth.getUser();
-      const uid = auth.user?.id;
+      // The session lookup is local; RLS still authenticates the joined database read.
+      const { data: auth } = await supabase.auth.getSession();
+      const uid = auth.session?.user.id;
       if (!uid) return null;
-      const memberships = await supabase
-        .from("challenge_members")
-        .select("challenge_id, joined_at")
-        .eq("user_id", uid)
-        .order("joined_at", { ascending: false });
-      if (memberships.error) throw memberships.error;
-      const ids = (memberships.data ?? []).map((m) => m.challenge_id);
-      if (ids.length === 0) return null;
       const { data, error } = await supabase
-        .from("challenges")
+        .from("challenge_members")
         .select(
-          "id, created_by, name, start_date, duration_weeks, timezone, weekly_target_km, running_ratio, cycling_ratio, max_members, status",
+          "joined_at, challenges!inner(id, created_by, name, start_date, duration_weeks, timezone, weekly_target_km, running_ratio, cycling_ratio, max_members, status)",
         )
-        .in("id", ids)
-        .order("created_at", { ascending: false })
-        .limit(1);
+        .eq("user_id", uid)
+        .order("joined_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
       if (error) throw error;
-      return (data?.[0] as Challenge | undefined) ?? null;
+      const joined = (data as unknown as { challenges?: Challenge | Challenge[] } | null)
+        ?.challenges;
+      return (Array.isArray(joined) ? joined[0] : joined) ?? null;
     },
   });
+
+export function useMyChallenge() {
+  return useQuery(myChallengeQueryOptions());
 }
 
 /** Removes the signed-in user from a challenge. Their logged activities stay in the record. */
@@ -369,37 +368,47 @@ export type PaymentRow = {
   settled_by: string | null;
 };
 
-export function useWeeks(challengeId: string | undefined) {
-  return useQuery({
-    enabled: !!challengeId,
+export const weeksQueryOptions = (challengeId: string) =>
+  queryOptions({
     queryKey: ["challenge-weeks", challengeId],
     staleTime: 60_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("challenge_weeks")
         .select("*")
-        .eq("challenge_id", challengeId!)
+        .eq("challenge_id", challengeId)
         .order("week_number", { ascending: false });
       if (error) throw error;
       return (data ?? []) as unknown as WeekRow[];
     },
   });
+
+export function useWeeks(challengeId: string | undefined) {
+  return useQuery({
+    ...weeksQueryOptions(challengeId ?? ""),
+    enabled: !!challengeId,
+  });
 }
 
-export function usePayments(challengeId: string | undefined) {
-  return useQuery({
-    enabled: !!challengeId,
+export const paymentsQueryOptions = (challengeId: string) =>
+  queryOptions({
     queryKey: ["challenge-payments", challengeId],
     staleTime: 30_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("challenge_payments")
         .select("*")
-        .eq("challenge_id", challengeId!)
+        .eq("challenge_id", challengeId)
         .order("created_at", { ascending: false });
       if (error) throw error;
       return (data ?? []) as unknown as PaymentRow[];
     },
+  });
+
+export function usePayments(challengeId: string | undefined) {
+  return useQuery({
+    ...paymentsQueryOptions(challengeId ?? ""),
+    enabled: !!challengeId,
   });
 }
 

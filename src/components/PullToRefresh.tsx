@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useLocation, useRouter } from "@tanstack/react-router";
+import { useLocation } from "@tanstack/react-router";
 import { LoaderCircle, RotateCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { refreshBulk } from "@/lib/store";
@@ -7,7 +7,6 @@ import { PULL_REFRESH_THRESHOLD, pullGesture } from "@/lib/pull-to-refresh";
 
 export function PullToRefresh() {
   const queryClient = useQueryClient();
-  const router = useRouter();
   const { pathname } = useLocation();
   const start = useRef<{ x: number; y: number } | null>(null);
   const cancelled = useRef(false);
@@ -32,7 +31,7 @@ export function PullToRefresh() {
       if (
         statusRef.current === "refreshing" ||
         window.scrollY > 0 ||
-        target?.closest("input, textarea, select, [role=dialog], [data-no-pull]")
+        target?.closest("a, button, input, textarea, select, [role=dialog], [data-no-pull]")
       ) {
         start.current = null;
         return;
@@ -67,10 +66,10 @@ export function PullToRefresh() {
       }
       updateDistance(PULL_REFRESH_THRESHOLD);
       updateStatus("refreshing");
+      const isBulkRoute = pathname === "/bulk" || pathname.startsWith("/bulk/");
       void Promise.all([
         queryClient.refetchQueries({ type: "active" }),
-        pathname.startsWith("/bulk") ? refreshBulk() : Promise.resolve(),
-        router.invalidate(),
+        isBulkRoute ? refreshBulk() : Promise.resolve(),
       ])
         .then(() => {
           updateStatus("done");
@@ -105,7 +104,7 @@ export function PullToRefresh() {
       document.removeEventListener("touchend", end);
       document.removeEventListener("touchcancel", cancel);
     };
-  }, [pathname, queryClient, router, updateDistance, updateStatus]);
+  }, [pathname, queryClient, updateDistance, updateStatus]);
 
   if (status === "idle") return null;
   const ready = distance >= PULL_REFRESH_THRESHOLD;
