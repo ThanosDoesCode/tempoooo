@@ -1,10 +1,20 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { format, parseISO } from "date-fns";
-import { Bike, Footprints, Image as ImageIcon, Link as LinkIcon } from "lucide-react";
+import { differenceInCalendarDays, format, parseISO } from "date-fns";
+import {
+  Bike,
+  ChevronRight,
+  Footprints,
+  Image as ImageIcon,
+  Link as LinkIcon,
+  MoreHorizontal,
+  Plus,
+  SlidersHorizontal,
+  Trash2,
+} from "lucide-react";
 import { AppShell, PageHeader } from "@/components/AppShell";
-import { Card, Note, SectionTitle } from "@/components/ui-kit";
+import { Card, Note, PendingLabel, SectionTitle } from "@/components/ui-kit";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 
@@ -52,24 +62,16 @@ function ChallengeHome() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const { data: challenge, isLoading } = useMyChallenge();
-  const { data: members } = useChallengeMembers(challenge?.id);
-  const { data: activities } = useActivities(challenge?.id);
-  const { data: weekTargets } = useWeekTargets(challenge?.id);
+  const { data: members, isLoading: membersLoading } = useChallengeMembers(challenge?.id);
+  const { data: activities, isLoading: activitiesLoading } = useActivities(challenge?.id);
+  const { data: weekTargets, isLoading: targetsLoading } = useWeekTargets(challenge?.id);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [activityMessage, setActivityMessage] = useState<string | null>(null);
   const [leaveArmed, setLeaveArmed] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [leaveError, setLeaveError] = useState<string | null>(null);
-
-  const groupedActivities = useMemo(() => {
-    const map = new Map<string, typeof activities>();
-    for (const a of (activities ?? []).slice(0, 20)) {
-      const list = map.get(a.activity_date) ?? [];
-      list.push(a);
-      map.set(a.activity_date, list);
-    }
-    return [...map.entries()] as [string, NonNullable<typeof activities>][];
-  }, [activities]);
 
   const doLeave = async () => {
     if (!challenge) return;
@@ -80,18 +82,27 @@ function ChallengeHome() {
       await qc.invalidateQueries();
       setLeaveArmed(false);
     } catch (e) {
-      setLeaveError((e as Error).message);
+      setLeaveError(`Could not leave the challenge. ${(e as Error).message}`);
     } finally {
       setLeaving(false);
     }
   };
 
   const removeActivity = async (id: string) => {
-    setConfirmId(null);
+    setDeletingId(id);
     setDeleteError(null);
-    const { error } = await supabase.from("challenge_activities").delete().eq("id", id);
-    if (error) setDeleteError(error.message);
-    await qc.invalidateQueries({ queryKey: ["challenge-activities"] });
+    setActivityMessage(null);
+    try {
+      const { error } = await supabase.from("challenge_activities").delete().eq("id", id);
+      if (error) throw error;
+      await qc.invalidateQueries({ queryKey: ["challenge-activities"] });
+      setConfirmId(null);
+      setActivityMessage("Activity deleted.");
+    } catch (error) {
+      setDeleteError(`Could not delete activity. ${(error as Error).message}`);
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   // Lazy, deterministic server-side finalization of any closed weeks.
@@ -133,192 +144,257 @@ function ChallengeHome() {
     );
   }
 
+  const today = todayIn(challenge.timezone);
+  const target = targetForWeek(challenge, weekTargets, week?.n ?? 1);
+  const me = members?.find((member) => member.userId === user?.id);
+  const opponent = members?.find((member) => member.userId !== user?.id);
+  const meTotals =
+    week && user
+      ? sumWeek(activities ?? [], user.id, week.start, week.end)
+      : { running: 0, cycling: 0, equivalent: 0, rows: [] };
+  const opponentTotals =
+    week && opponent ? sumWeek(activities ?? [], opponent.userId, week.start, week.end) : null;
+  const recent = (activities ?? []).slice(0, 20);
+  const needsOpponent = !membersLoading && (members?.length ?? 0) < (challenge.max_members ?? 2);
+  const progressLoading = membersLoading || activitiesLoading || targetsLoading;
+
   return (
     <AppShell>
-      <PageHeader
-        title={challenge.name}
-        subtitle={`Week ${week?.n} of ${challenge.duration_weeks} · ${challenge.timezone}`}
-      />
-
-      {user && <ChallengeNotifications userId={user.id} />}
-
-      <Card>
-        <SectionTitle right={<span className="text-xs text-muted-foreground">Mon to Sun</span>}>
-          This week
-        </SectionTitle>
-        <p className="num text-3xl font-semibold">
-          {week ? Math.floor(week.hours / 24) : 0}d {week ? Math.floor(week.hours % 24) : 0}h
+      <header className="fade-up mb-4">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">
+          {challenge.duration_weeks}-week challenge
         </p>
-        <p className="text-xs text-muted-foreground">
-          remaining · closes Sunday 23:59 {challenge.timezone}
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight">{challenge.name}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Week {week?.n} of {challenge.duration_weeks} · {formatTimeLeft(week?.hours ?? 0)} left
         </p>
+      </header>
+
+      <Card className="p-0">
+        <div className="flex items-center justify-between px-3.5 pb-2 pt-3">
+          <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            This week
+          </h2>
+          <span className="text-[10px] text-muted-foreground">Ends Sun · {challenge.timezone}</span>
+        </div>
+        <div className="grid grid-cols-2 border-t border-border">
+          <ParticipantProgress
+            label={me ? "Me" : "You"}
+            totals={meTotals}
+            target={target}
+            barClass="bg-primary"
+            loading={progressLoading}
+          />
+          <ParticipantProgress
+            label={opponent?.name ?? "Opponent"}
+            totals={opponentTotals}
+            target={target}
+            barClass="bg-chart-2"
+            bordered
+            loading={progressLoading}
+          />
+        </div>
       </Card>
 
-      <div className="mt-3 space-y-3">
-        {(members ?? []).map((m) => {
-          const totals = week
-            ? sumWeek(activities ?? [], m.userId, week.start, week.end)
-            : { running: 0, cycling: 0, equivalent: 0, rows: [] };
-          const target = targetForWeek(challenge, weekTargets, week?.n ?? 1);
-          const pct = target > 0 ? Math.min(100, (totals.equivalent / target) * 100) : 100;
-          const done = totals.equivalent >= target;
-          const tone = done ? "bg-good" : "bg-warn";
-          return (
-            <Card key={m.userId}>
-              <div className="flex items-baseline justify-between">
-                <h3 className="text-sm font-semibold">{m.userId === user?.id ? "Me" : m.name}</h3>
-                <span className="num text-sm">
-                  {totals.equivalent.toFixed(1)} / {target.toFixed(target % 1 === 0 ? 0 : 1)} km
-                </span>
-              </div>
-              <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-elevated">
-                <div className={`h-full rounded-full ${tone}`} style={{ width: `${pct}%` }} />
-              </div>
-              <div className="mt-2 flex items-center justify-between text-xs">
-                <span className={done ? "text-good" : "text-muted-foreground"}>
-                  {done ? "Completed ✓" : `${(target - totals.equivalent).toFixed(1)} km remaining`}
-                </span>
-                <span className={done ? "text-good" : "text-warn"}>
-                  Current penalty: {owedText(penaltyFor(totals.equivalent, target))}
-                </span>
-              </div>
-              <p className="mt-2 text-[11px] text-muted-foreground">
-                Run {km(totals.running)} · Cycle {km(totals.cycling)}
-              </p>
-            </Card>
-          );
-        })}
-        {(members?.length ?? 0) < (challenge.max_members ?? 2) ? (
-          <>
-            <Note>There is still a free spot. Send an invitation link to add another person.</Note>
-            <ChallengeInviteCard challengeId={challenge.id} />
-          </>
-        ) : null}
-      </div>
+      <Link
+        to="/challenge/log"
+        className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground shadow-[0_8px_28px_-12px_var(--color-primary)] active:scale-[0.99]"
+      >
+        <Plus className="h-4 w-4" aria-hidden="true" /> Add activity
+      </Link>
 
-      <div className="mt-4 grid gap-2">
-        <Link
-          to="/challenge/targets"
-          className="block rounded-xl border border-border bg-elevated py-2.5 text-center text-sm font-medium"
-        >
-          Weekly targets
-        </Link>
-        <Link
-          to="/challenge/log"
-          className="block rounded-xl bg-primary py-3 text-center text-sm font-semibold text-primary-foreground"
-        >
-          Add activity
-        </Link>
-      </div>
-
-      <div className="mt-5">
-        <SectionTitle>Recent activity</SectionTitle>
-        <div className="space-y-4">
-          {groupedActivities.map(([day, rows]) => (
-            <div key={day}>
-              <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                {formatDay(day)}
-              </p>
-              <div className="space-y-2">
-                {rows.map((a) => {
-                  const who = members?.find((m) => m.userId === a.user_id);
-                  const mine = a.user_id === user?.id;
-                  const canDelete =
-                    mine && week && a.activity_date >= week.start && a.activity_date <= week.end;
-                  return (
-                    <Card key={a.id} className="p-3">
-                      <div className="flex items-start gap-3">
-                        <span
-                          className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${
-                            a.activity_type === "run"
-                              ? "bg-primary/15 text-primary"
-                              : "bg-chart-2/15 text-[color:var(--chart-2)]"
-                          }`}
-                        >
-                          {a.activity_type === "run" ? (
-                            <Footprints className="h-4 w-4" />
-                          ) : (
-                            <Bike className="h-4 w-4" />
-                          )}
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-baseline justify-between gap-2">
-                            <p className="num text-base font-semibold">
-                              {Number(a.distance_km).toFixed(1)} km
-                              <span className="ml-1.5 text-xs font-normal capitalize text-muted-foreground">
-                                {a.activity_type === "run" ? "run" : "ride"}
-                              </span>
-                            </p>
-                            <span className="num shrink-0 text-xs font-medium text-muted-foreground">
-                              = {Number(a.equivalent_km).toFixed(2)} eq
+      <section className="mt-5">
+        <SectionTitle right={<span className="text-[11px] text-muted-foreground">Latest 20</span>}>
+          Recent activity
+        </SectionTitle>
+        <div className="space-y-2">
+          {activitiesLoading ? (
+            <>
+              <div className="h-20 animate-pulse rounded-2xl bg-card" />
+              <div className="h-20 animate-pulse rounded-2xl bg-card" />
+            </>
+          ) : null}
+          {!activitiesLoading &&
+            recent.map((activity) => {
+              const who = members?.find((member) => member.userId === activity.user_id);
+              const mine = activity.user_id === user?.id;
+              const canDelete =
+                mine &&
+                week &&
+                activity.activity_date >= week.start &&
+                activity.activity_date <= week.end;
+              const evidencePaths = [
+                activity.evidence_path,
+                ...(activity.extra_evidence_paths ?? []),
+              ];
+              return (
+                <Card key={activity.id} className="overflow-hidden p-0">
+                  <div className="px-3 py-2.5">
+                    <div className="flex items-start gap-2.5">
+                      <span
+                        className={`mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg ${
+                          activity.activity_type === "run"
+                            ? "bg-primary/15 text-primary"
+                            : "bg-chart-2/15 text-chart-2"
+                        }`}
+                      >
+                        {activity.activity_type === "run" ? (
+                          <Footprints className="h-3.5 w-3.5" aria-hidden="true" />
+                        ) : (
+                          <Bike className="h-3.5 w-3.5" aria-hidden="true" />
+                        )}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-baseline justify-between gap-2">
+                          <p className="num truncate text-sm font-semibold">
+                            {Number(activity.distance_km).toFixed(1)} km
+                            <span className="ml-1.5 font-normal text-muted-foreground">
+                              {activity.activity_type === "run" ? "Run" : "Ride"}
                             </span>
-                          </div>
-                          <p className="mt-0.5 text-[11px] text-muted-foreground">
-                            {mine ? "Me" : (who?.name ?? "Athlete")}
-                            {a.duration_seconds
-                              ? ` · ${Math.round(a.duration_seconds / 60)} min`
-                              : ""}
-                            {a.edited ? " · Edited" : ""}
                           </p>
-                          {a.note ? (
-                            <p className="mt-2 rounded-lg bg-elevated px-2.5 py-1.5 text-xs leading-relaxed text-foreground/90">
-                              {a.note}
-                            </p>
+                          <span className="num shrink-0 text-xs font-medium text-muted-foreground">
+                            {Number(activity.equivalent_km).toFixed(2)} eq
+                          </span>
+                        </div>
+                        <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                          {mine ? "You" : (who?.name ?? "Athlete")}
+                          {activity.duration_seconds
+                            ? ` · ${Math.round(activity.duration_seconds / 60)} min`
+                            : ""}
+                          {` · ${formatActivityDay(activity.activity_date, today)}`}
+                          {activity.edited ? " · Edited" : ""}
+                        </p>
+                        {activity.note ? (
+                          <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-foreground/80">
+                            “{activity.note}”
+                          </p>
+                        ) : null}
+                        <div className="mt-1 flex flex-wrap items-center gap-1 text-[11px]">
+                          <EvidenceViewer paths={evidencePaths} />
+                          {activity.external_activity_url ? (
+                            <a
+                              href={activity.external_activity_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 font-medium text-primary"
+                            >
+                              <LinkIcon className="h-3 w-3" aria-hidden="true" /> Strava
+                            </a>
                           ) : null}
-                          <EvidenceViewer
-                            paths={[a.evidence_path, ...(a.extra_evidence_paths ?? [])]}
-                          />
-                          <div className="mt-2 flex items-center justify-between gap-2">
-                            {a.external_activity_url ? (
-                              <a
-                                href={a.external_activity_url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex items-center gap-1 text-[11px] font-medium text-primary"
+                          {canDelete ? (
+                            <details className="group/menu ml-auto open:basis-full">
+                              <summary
+                                aria-label="Activity actions"
+                                className="ml-auto grid h-7 w-7 cursor-pointer list-none place-items-center rounded-lg text-muted-foreground hover:bg-elevated [&::-webkit-details-marker]:hidden"
                               >
-                                <LinkIcon className="h-3 w-3" /> Strava
-                              </a>
-                            ) : (
-                              <span />
-                            )}
-
-                            {canDelete ? (
-                              <button
-                                onClick={() => {
-                                  if (confirmId === a.id) void removeActivity(a.id);
-                                  else setConfirmId(a.id);
-                                }}
-                                className={`shrink-0 rounded-lg px-2 py-1 text-[11px] font-medium ${
-                                  confirmId === a.id
-                                    ? "bg-danger text-primary-foreground"
-                                    : "text-danger hover:bg-danger/10"
-                                }`}
-                              >
-                                {confirmId === a.id ? "Confirm delete" : "Delete"}
-                              </button>
-                            ) : null}
-                          </div>
+                                <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+                              </summary>
+                              <div className="mt-1 flex justify-end border-t border-border pt-1.5">
+                                <button
+                                  type="button"
+                                  disabled={deletingId !== null}
+                                  onClick={(event) => {
+                                    event.currentTarget.closest("details")?.removeAttribute("open");
+                                    setDeleteError(null);
+                                    setActivityMessage(null);
+                                    setConfirmId(activity.id);
+                                  }}
+                                  className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-[11px] font-medium text-danger hover:bg-danger/10 disabled:opacity-50"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" aria-hidden="true" /> Delete
+                                  activity
+                                </button>
+                              </div>
+                            </details>
+                          ) : null}
                         </div>
                       </div>
-                    </Card>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-          {deleteError ? <p className="text-xs text-danger">{deleteError}</p> : null}
-          {(activities?.length ?? 0) === 0 ? <Note>No activities logged yet.</Note> : null}
+                    </div>
+                  </div>
+                  {confirmId === activity.id ? (
+                    <div className="flex items-center gap-2 border-t border-danger/25 bg-danger/5 px-3 py-2">
+                      <p className="mr-auto text-[11px] text-danger">Delete this activity?</p>
+                      <button
+                        type="button"
+                        disabled={deletingId !== null}
+                        onClick={() => setConfirmId(null)}
+                        className="rounded-lg px-2 py-1 text-[11px] font-medium text-muted-foreground"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        disabled={deletingId !== null}
+                        onClick={() => void removeActivity(activity.id)}
+                        className="rounded-lg bg-danger px-2.5 py-1 text-[11px] font-semibold text-primary-foreground disabled:opacity-60"
+                      >
+                        {deletingId === activity.id ? (
+                          <PendingLabel>Deleting…</PendingLabel>
+                        ) : (
+                          "Delete"
+                        )}
+                      </button>
+                    </div>
+                  ) : null}
+                </Card>
+              );
+            })}
+          {deleteError ? (
+            <p role="alert" className="text-xs text-danger">
+              {deleteError}
+            </p>
+          ) : null}
+          {activityMessage ? (
+            <p role="status" className="text-xs text-good">
+              {activityMessage}
+            </p>
+          ) : null}
+          {!activitiesLoading && recent.length === 0 ? (
+            <Note>No activities logged yet.</Note>
+          ) : null}
         </div>
-      </div>
+      </section>
 
-      <div className="mt-6">
-        <SectionTitle>Leave challenge</SectionTitle>
-        <Card>
+      <section className="mt-5">
+        <SectionTitle>Challenge settings</SectionTitle>
+        <div className="space-y-2">
+          <Link
+            to="/challenge/targets"
+            className="card-surface flex items-center gap-3 px-3 py-2.5 text-sm"
+          >
+            <span className="grid h-8 w-8 place-items-center rounded-lg bg-elevated text-muted-foreground">
+              <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
+            </span>
+            <span className="font-medium">Weekly targets</span>
+            <span className="ml-auto text-xs text-muted-foreground">
+              {targetsLoading ? "…" : `${target.toFixed(target % 1 === 0 ? 0 : 1)} km`}
+            </span>
+            <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+          </Link>
+          {user ? <ChallengeNotifications userId={user.id} /> : null}
+        </div>
+      </section>
+
+      {needsOpponent ? (
+        <section className="mt-5">
+          <Note>There is still a free spot. Send an invitation link to add your opponent.</Note>
+          <div className="mt-2">
+            <ChallengeInviteCard challengeId={challenge.id} />
+          </div>
+        </section>
+      ) : null}
+
+      <details className="group card-surface mt-5 overflow-hidden">
+        <summary className="flex cursor-pointer list-none items-center px-3 py-2.5 text-xs font-medium text-muted-foreground [&::-webkit-details-marker]:hidden">
+          Challenge membership
+          <ChevronRight className="ml-auto h-4 w-4 transition-transform group-open:rotate-90" />
+        </summary>
+        <div className="border-t border-border p-3">
           <p className="text-xs text-muted-foreground">
-            Leaving removes you from {challenge.name}. Your logged activities stay in the record and
-            you can create a brand new challenge with someone else straight away.
+            Leaving removes you from {challenge.name}. Your logged activities stay in the record.
           </p>
           <button
+            type="button"
             onClick={() => {
               if (!leaveArmed) {
                 setLeaveArmed(true);
@@ -333,17 +409,104 @@ function ChallengeHome() {
                 : "border border-danger/40 text-danger"
             }`}
           >
-            {leaving ? "Leaving…" : leaveArmed ? "Confirm and leave" : "Leave this challenge"}
+            {leaving ? (
+              <PendingLabel>Leaving challenge…</PendingLabel>
+            ) : leaveArmed ? (
+              "Confirm and leave"
+            ) : (
+              "Leave this challenge"
+            )}
           </button>
-          {leaveError ? <p className="mt-2 text-xs text-danger">{leaveError}</p> : null}
-        </Card>
-      </div>
+          {leaveError ? (
+            <p role="alert" className="mt-2 text-xs text-danger">
+              {leaveError}
+            </p>
+          ) : null}
+        </div>
+      </details>
     </AppShell>
   );
 }
 
-function formatDay(day: string) {
-  return format(parseISO(day), "EEEE d MMM");
+type ProgressTotals = ReturnType<typeof sumWeek>;
+
+function ParticipantProgress({
+  label,
+  totals,
+  target,
+  barClass,
+  bordered = false,
+  loading = false,
+}: {
+  label: string;
+  totals: ProgressTotals | null;
+  target: number;
+  barClass: string;
+  bordered?: boolean;
+  loading?: boolean;
+}) {
+  const equivalent = totals?.equivalent ?? 0;
+  const complete = totals ? equivalent >= target : false;
+  const pct = totals && target > 0 ? Math.min(100, (equivalent / target) * 100) : 0;
+
+  return (
+    <div className={`min-w-0 px-3 py-3 ${bordered ? "border-l border-border" : ""}`}>
+      <p className="truncate text-xs font-semibold">{label}</p>
+      {loading ? (
+        <div className="mt-2 space-y-2 animate-pulse">
+          <div className="h-5 w-24 rounded-md bg-elevated" />
+          <div className="h-1.5 rounded-full bg-elevated" />
+          <div className="h-8 w-20 rounded-md bg-elevated" />
+        </div>
+      ) : totals ? (
+        <>
+          <p className="num mt-1 text-lg font-semibold leading-none">
+            {equivalent.toFixed(1)}
+            <span className="ml-1 text-xs font-normal text-muted-foreground">
+              / {target.toFixed(target % 1 === 0 ? 0 : 1)} km
+            </span>
+          </p>
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-elevated">
+            <div
+              className={`h-full rounded-full transition-all duration-500 ${barClass}`}
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+          <div className="mt-2 space-y-0.5 text-[11px]">
+            <p className={complete ? "text-good" : "text-muted-foreground"}>
+              {complete
+                ? "Target complete"
+                : `${Math.max(0, target - equivalent).toFixed(1)} km left`}
+            </p>
+            <p className={complete ? "text-good" : "text-warn"}>
+              Penalty {owedText(penaltyFor(equivalent, target))}
+            </p>
+            <p className="truncate text-[10px] text-muted-foreground/80">
+              Run {km(totals.running)} · Ride {km(totals.cycling)}
+            </p>
+          </div>
+        </>
+      ) : (
+        <div className="mt-3">
+          <div className="h-1.5 rounded-full bg-elevated" />
+          <p className="mt-2 text-[11px] text-muted-foreground">Waiting to join</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function formatTimeLeft(hours: number) {
+  const days = Math.max(0, Math.floor(hours / 24));
+  const remainingHours = Math.max(0, Math.floor(hours % 24));
+  return `${days}d ${remainingHours}h`;
+}
+
+function formatActivityDay(day: string, today: string) {
+  const difference = differenceInCalendarDays(parseISO(today), parseISO(day));
+  if (difference === 0) return "Today";
+  if (difference === 1) return "Yesterday";
+  return format(parseISO(day), "d MMM");
 }
 
 /** Evidence screenshots are visible to both members so neither can cheat. */
@@ -359,7 +522,7 @@ function EvidenceViewer({ paths }: { paths: string[] }) {
       .from("challenge-evidence")
       .createSignedUrls(paths, 300);
     if (e) setError(e.message);
-    else setUrls((data ?? []).map((d) => d.signedUrl).filter(Boolean) as string[]);
+    else setUrls((data ?? []).map((item) => item.signedUrl).filter(Boolean) as string[]);
   };
 
   if (paths.length === 0) return null;
@@ -367,35 +530,39 @@ function EvidenceViewer({ paths }: { paths: string[] }) {
   if (!open) {
     return (
       <button
+        type="button"
         onClick={() => void show()}
-        className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-border bg-elevated px-2.5 py-1.5 text-[11px] font-medium"
+        className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 font-medium text-muted-foreground hover:bg-elevated"
       >
-        <ImageIcon className="h-3.5 w-3.5 text-muted-foreground" /> View evidence
-        {paths.length > 1 ? ` (${paths.length})` : ""}
+        <ImageIcon className="h-3 w-3" aria-hidden="true" /> Evidence
+        {paths.length > 1 ? ` ${paths.length}` : ""}
       </button>
     );
   }
 
   return (
-    <div className="mt-2">
+    <div className="order-last mt-1 basis-full">
       {error ? (
-        <p className="text-[11px] text-danger">{error}</p>
+        <p role="alert" className="text-[11px] text-danger">
+          {error}
+        </p>
       ) : urls ? (
         <div className="space-y-2">
-          {urls.map((u, i) => (
-            <a key={u} href={u} target="_blank" rel="noreferrer">
+          {urls.map((url, index) => (
+            <a key={url} href={url} target="_blank" rel="noreferrer">
               <img
-                src={u}
-                alt={`Activity evidence screenshot ${i + 1}`}
+                src={url}
+                alt={`Activity evidence screenshot ${index + 1}`}
                 className="max-h-72 w-full rounded-xl border border-border bg-elevated object-contain"
               />
             </a>
           ))}
         </div>
       ) : (
-        <div className="h-24 animate-pulse rounded-xl bg-elevated" />
+        <div className="h-20 animate-pulse rounded-xl bg-elevated" />
       )}
       <button
+        type="button"
         onClick={() => setOpen(false)}
         className="mt-1 text-[11px] font-medium text-muted-foreground"
       >

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Copy, Link2, RefreshCw } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { Card, Note, SectionTitle } from "@/components/ui-kit";
+import { Card, Note, PendingLabel, SectionTitle } from "@/components/ui-kit";
 import { supabase } from "@/integrations/supabase/client";
 import { randomToken, sha256Hex, useAuth } from "@/lib/auth";
 
@@ -43,6 +43,7 @@ export function ChallengeInviteCard({ challengeId }: { challengeId: string }) {
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const current = pending?.[0];
   const target = email.trim().toLowerCase() || current?.invited_email || "";
@@ -51,6 +52,7 @@ export function ChallengeInviteCard({ challengeId }: { challengeId: string }) {
     if (!user || !target) return;
     setBusy(true);
     setError(null);
+    setNotice(null);
     try {
       await supabase
         .from("challenge_invitations")
@@ -69,8 +71,9 @@ export function ChallengeInviteCard({ challengeId }: { challengeId: string }) {
       if (e) throw e;
       setLink(`${window.location.origin}/invite/challenge/${token}`);
       await refetch();
+      setNotice("Invitation link created.");
     } catch (e) {
-      setError((e as Error).message);
+      setError(`Could not create an invitation link. ${(e as Error).message}`);
     } finally {
       setBusy(false);
     }
@@ -102,6 +105,7 @@ export function ChallengeInviteCard({ challengeId }: { challengeId: string }) {
         </span>
         <input
           type="email"
+          disabled={busy}
           value={email}
           placeholder={current?.invited_email ?? "friend@email.com"}
           onChange={(e) => setEmail(e.target.value)}
@@ -114,8 +118,14 @@ export function ChallengeInviteCard({ challengeId }: { challengeId: string }) {
         disabled={busy || !target}
         className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
       >
-        {link ? <RefreshCw className="h-4 w-4" /> : <Link2 className="h-4 w-4" />}
-        {busy ? "Creating…" : link ? "Create a new link" : "Create invitation link"}
+        {!busy && (link ? <RefreshCw className="h-4 w-4" /> : <Link2 className="h-4 w-4" />)}
+        {busy ? (
+          <PendingLabel>Creating invitation…</PendingLabel>
+        ) : link ? (
+          "Create a new link"
+        ) : (
+          "Create invitation link"
+        )}
       </button>
 
       {link ? (
@@ -132,7 +142,16 @@ export function ChallengeInviteCard({ challengeId }: { challengeId: string }) {
         </div>
       ) : null}
 
-      {error ? <p className="mt-2 text-xs text-danger">{error}</p> : null}
+      {error ? (
+        <p role="alert" className="mt-2 text-xs text-danger">
+          {error}
+        </p>
+      ) : null}
+      {notice ? (
+        <p role="status" className="mt-2 text-xs text-good">
+          {notice}
+        </p>
+      ) : null}
       <div className="mt-2">
         <Note>
           The link is shown once for security. Creating a new one cancels any earlier link, only the

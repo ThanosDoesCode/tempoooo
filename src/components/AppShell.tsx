@@ -28,8 +28,8 @@ const BULK_NAV = [
 const OWNER_NAV = { to: "/bulk/access", label: "Sharing", icon: Users, exact: false } as const;
 
 const CHALLENGE_NAV = [
-  { to: "/challenge", label: "This week", icon: Trophy, exact: true },
-  { to: "/challenge/log", label: "Log", icon: PlusCircle, exact: false },
+  { to: "/challenge", label: "Week", icon: Trophy, exact: true },
+  { to: "/challenge/log", label: "Add", icon: PlusCircle, exact: false },
   { to: "/challenge/history", label: "History", icon: History, exact: false },
   { to: "/challenge/payments", label: "Money", icon: Euro, exact: false },
 ] as const;
@@ -86,7 +86,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </div>
 
-      <main className="mx-auto w-full max-w-lg px-4 pb-28 pt-6">
+      <main className={`mx-auto w-full max-w-lg px-4 pb-28 ${isChallenge ? "pt-4" : "pt-6"}`}>
         {viewerLock ? (
           <fieldset disabled className="m-0 border-0 p-0">
             {children}

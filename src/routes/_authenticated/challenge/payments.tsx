@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { AppShell, PageHeader } from "@/components/AppShell";
-import { Card, Note, SectionTitle } from "@/components/ui-kit";
+import { Card, Note, PendingLabel, SectionTitle } from "@/components/ui-kit";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import {
@@ -40,9 +40,13 @@ function Payments() {
   const { data: members } = useChallengeMembers(challenge?.id);
   const { data: payments } = usePayments(challenge?.id);
   const { data: weeks } = useWeeks(challenge?.id);
-  const [busy, setBusy] = useState<string | null>(null);
+  const [pending, setPending] = useState<{
+    id: string;
+    action: "mark" | "undo" | "confirm" | "settle" | "reopen";
+  } | null>(null);
   const [settleArmed, setSettleArmed] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [showSettled, setShowSettled] = useState(false);
 
   const rows = payments ?? [];
@@ -62,38 +66,62 @@ function Payments() {
   const refresh = () => qc.invalidateQueries({ queryKey: ["challenge-payments"] });
 
   const setStatus = async (id: string, status: "marked_paid" | "confirmed_paid" | "unpaid") => {
-    setBusy(id);
+    const action =
+      status === "marked_paid" ? "mark" : status === "confirmed_paid" ? "confirm" : "undo";
+    setPending({ id, action });
     setError(null);
-    const { error: e } = await supabase.from("challenge_payments").update({ status }).eq("id", id);
-    if (e) setError(e.message);
-    await refresh();
-    setBusy(null);
+    setNotice(null);
+    try {
+      const { error: e } = await supabase
+        .from("challenge_payments")
+        .update({ status })
+        .eq("id", id);
+      if (e) throw e;
+      await refresh();
+      setNotice(
+        status === "marked_paid"
+          ? "Payment marked as paid."
+          : status === "confirmed_paid"
+            ? "Payment confirmed as received."
+            : "Payment returned to unpaid.",
+      );
+    } catch (e) {
+      setError(`Could not update the payment. ${(e as Error).message}`);
+    } finally {
+      setPending(null);
+    }
   };
 
   const settleUp = async () => {
     if (!challenge || !user) return;
-    setBusy("settle");
+    setPending({ id: "settle", action: "settle" });
     setError(null);
+    setNotice(null);
     try {
       await settleMyDebts(challenge.id, user.id);
+      await refresh();
       setSettleArmed(false);
+      setNotice("Your open payments are settled.");
     } catch (e) {
-      setError((e as Error).message);
+      setError(`Could not settle your payments. ${(e as Error).message}`);
+    } finally {
+      setPending(null);
     }
-    await refresh();
-    setBusy(null);
   };
 
   const reopen = async (id: string) => {
-    setBusy(id);
+    setPending({ id, action: "reopen" });
     setError(null);
+    setNotice(null);
     try {
       await reopenPayment(id);
+      await refresh();
+      setNotice("Payment reopened.");
     } catch (e) {
-      setError((e as Error).message);
+      setError(`Could not reopen the payment. ${(e as Error).message}`);
+    } finally {
+      setPending(null);
     }
-    await refresh();
-    setBusy(null);
   };
 
   return (
@@ -128,7 +156,7 @@ function Payments() {
             total goes back to zero and the items move to the settled list.
           </p>
           <button
-            disabled={busy === "settle"}
+            disabled={pending !== null}
             onClick={() => {
               if (!settleArmed) {
                 setSettleArmed(true);
@@ -140,16 +168,27 @@ function Payments() {
               settleArmed ? "bg-good text-background" : "bg-primary text-primary-foreground"
             }`}
           >
-            {busy === "settle"
-              ? "Settling…"
-              : settleArmed
-                ? `Confirm, I have paid ${owedText(iOwe)}`
-                : "I have paid, reset my total"}
+            {pending?.id === "settle" ? (
+              <PendingLabel>Settling payments…</PendingLabel>
+            ) : settleArmed ? (
+              `Confirm, I have paid ${owedText(iOwe)}`
+            ) : (
+              "I have paid, reset my total"
+            )}
           </button>
         </Card>
       ) : null}
 
-      {error ? <p className="mt-2 text-xs text-danger">{error}</p> : null}
+      {error ? (
+        <p role="alert" className="mt-2 text-xs text-danger">
+          {error}
+        </p>
+      ) : null}
+      {notice ? (
+        <p role="status" className="mt-2 text-xs text-good">
+          {notice}
+        </p>
+      ) : null}
 
       <div className="mt-4 space-y-2">
         <SectionTitle>Open obligations</SectionTitle>
@@ -171,29 +210,41 @@ function Payments() {
               <div className="mt-2 flex gap-2">
                 {mine && p.status === "unpaid" ? (
                   <button
-                    disabled={busy === p.id}
+                    disabled={pending !== null}
                     onClick={() => void setStatus(p.id, "marked_paid")}
-                    className="flex-1 rounded-xl bg-primary py-2 text-xs font-semibold text-primary-foreground"
+                    className="flex-1 rounded-xl bg-primary py-2 text-xs font-semibold text-primary-foreground disabled:opacity-60"
                   >
-                    Mark as paid
+                    {pending?.id === p.id && pending.action === "mark" ? (
+                      <PendingLabel>Marking paid…</PendingLabel>
+                    ) : (
+                      "Mark as paid"
+                    )}
                   </button>
                 ) : null}
                 {mine && p.status === "marked_paid" ? (
                   <button
-                    disabled={busy === p.id}
+                    disabled={pending !== null}
                     onClick={() => void setStatus(p.id, "unpaid")}
-                    className="flex-1 rounded-xl border border-border py-2 text-xs font-medium"
+                    className="flex-1 rounded-xl border border-border py-2 text-xs font-medium disabled:opacity-60"
                   >
-                    Undo
+                    {pending?.id === p.id && pending.action === "undo" ? (
+                      <PendingLabel>Undoing…</PendingLabel>
+                    ) : (
+                      "Undo"
+                    )}
                   </button>
                 ) : null}
                 {!mine && p.status === "marked_paid" ? (
                   <button
-                    disabled={busy === p.id}
+                    disabled={pending !== null}
                     onClick={() => void setStatus(p.id, "confirmed_paid")}
-                    className="flex-1 rounded-xl bg-good py-2 text-xs font-semibold text-background"
+                    className="flex-1 rounded-xl bg-good py-2 text-xs font-semibold text-background disabled:opacity-60"
                   >
-                    Confirm received
+                    {pending?.id === p.id && pending.action === "confirm" ? (
+                      <PendingLabel>Confirming…</PendingLabel>
+                    ) : (
+                      "Confirm received"
+                    )}
                   </button>
                 ) : null}
               </div>
@@ -233,11 +284,15 @@ function Payments() {
                   </p>
                   {p.settled_by === user?.id ? (
                     <button
-                      disabled={busy === p.id}
+                      disabled={pending !== null}
                       onClick={() => void reopen(p.id)}
-                      className="mt-2 w-full rounded-xl border border-border py-2 text-xs font-medium"
+                      className="mt-2 w-full rounded-xl border border-border py-2 text-xs font-medium disabled:opacity-60"
                     >
-                      Reopen, this was a mistake
+                      {pending?.id === p.id && pending.action === "reopen" ? (
+                        <PendingLabel>Reopening…</PendingLabel>
+                      ) : (
+                        "Reopen, this was a mistake"
+                      )}
                     </button>
                   ) : null}
                 </Card>

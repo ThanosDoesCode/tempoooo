@@ -27,12 +27,14 @@ function fixture(distance, duration = "", type = "run") {
     "",
     [{ name: "fixture.jpg" }],
     [],
-    false,
     null,
+    null,
+    false,
   ];
   let index = 0;
   const updates = [];
   const rows = [];
+  const toasts = [];
   let uploads = 0;
   const challenge = { id: "test-challenge", timezone: "Europe/Stockholm" };
   const context = {
@@ -57,6 +59,7 @@ function fixture(distance, duration = "", type = "run") {
       if (name === "@tanstack/react-query")
         return { useQueryClient: () => ({ invalidateQueries: async () => {} }) };
       if (name === "@/lib/numeric") return numeric;
+      if (name === "sonner") return { toast: { success: (message) => toasts.push(message) } };
       if (name === "@/lib/auth") return { useAuth: () => ({ user: { id: "test-user" } }) };
       if (name === "@/lib/challenge")
         return {
@@ -100,12 +103,13 @@ function fixture(distance, duration = "", type = "run") {
     nodes,
     updates,
     rows,
+    toasts,
     get uploads() {
       return uploads;
     },
     async submit() {
       nodes
-        .find((n) => n.type === "button" && n.props.children === "Save activity")
+        .find((n) => n.type === "button" && n.props["aria-label"] === "Save activity")
         .props.onClick();
       await new Promise((resolve) => setImmediate(resolve));
     },
@@ -124,6 +128,23 @@ test("Challenge form accepts decimal points and optional duration", async () => 
   await f.submit();
   assert.equal(f.rows[0].distance_km, 7.25);
   assert.equal(f.rows[0].duration_seconds, null);
+});
+test("Challenge form exposes upload and save phases before confirmed success", async () => {
+  const f = fixture("7.25");
+  await f.submit();
+  assert.deepEqual(
+    f.updates.filter(([i]) => i === 8),
+    [
+      [8, "uploading"],
+      [8, "saving"],
+      [8, null],
+    ],
+  );
+  assert.deepEqual(f.toasts, ["Activity saved."]);
+  assert.equal(
+    f.updates.some(([i, value]) => i === 9 && value),
+    false,
+  );
 });
 for (const [dist, duration] of [
   ["invalid", ""],
@@ -150,4 +171,15 @@ test("Challenge decimal inputs preserve raw comma text until blur", () => {
   assert.deepEqual(f.updates.at(-1), [1, "61,"]);
   input.props.onBlur();
   assert.deepEqual(f.updates.at(-1), [1, "61"]);
+});
+test("Challenge form keeps optional details collapsed on the common path", () => {
+  const f = fixture("7.25");
+  const more = f.nodes.find(
+    (node) => node.type === "button" && node.props.children?.[0] === "More details",
+  );
+  assert.ok(more);
+  assert.equal(
+    f.nodes.some((node) => node.type === "input" && node.props.type === "date"),
+    false,
+  );
 });

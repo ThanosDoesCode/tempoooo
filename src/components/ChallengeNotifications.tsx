@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Bell } from "lucide-react";
-import { Card } from "@/components/ui-kit";
+import { Bell, ChevronRight, TriangleAlert } from "lucide-react";
+import { PendingLabel } from "@/components/ui-kit";
 import {
   disableChallengePush,
   enableChallengePush,
@@ -14,8 +14,11 @@ import {
 export function ChallengeNotifications({ userId }: { userId: string }) {
   const [sdk, setSdk] = useState<PushSdk | null>(null);
   const [on, setOn] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const [phase, setPhase] = useState<"checking" | "enabling" | "disabling" | null>("checking");
+  const [feedback, setFeedback] = useState<{
+    text: string;
+    tone: "info" | "success" | "error";
+  } | null>(null);
   useEffect(() => {
     let alive = true;
     let current: PushSdk | null = null;
@@ -28,7 +31,11 @@ export function ChallengeNotifications({ userId }: { userId: string }) {
         const enabled = await pushIsEnabled(current);
         if (alive) setOn(enabled);
       } catch {
-        if (alive) setMessage("Could not check notification status. Reload to retry.");
+        if (alive)
+          setFeedback({
+            text: "Could not check notification status. Reload to retry.",
+            tone: "error",
+          });
       } finally {
         refreshing = false;
       }
@@ -38,11 +45,13 @@ export function ChallengeNotifications({ userId }: { userId: string }) {
     };
     setSdk(null);
     setOn(false);
+    setPhase("checking");
     const reason = pushUnavailableReason();
-    setMessage(reason);
+    setFeedback(reason ? { text: reason, tone: "info" } : null);
     if (!reason) {
-      void prepareChallengePush(userId)
-        .then(async (value) => {
+      void (async () => {
+        try {
+          const value = await prepareChallengePush(userId);
           if (!alive) return;
           current = value;
           setSdk(() => value);
@@ -51,10 +60,14 @@ export function ChallengeNotifications({ userId }: { userId: string }) {
             value.User.PushSubscription.addEventListener("change", onChange);
             window.addEventListener("focus", onChange);
           }
-        })
-        .catch((error: Error) => {
-          if (alive) setMessage(error.message);
-        });
+        } catch (error) {
+          if (alive) setFeedback({ text: (error as Error).message, tone: "error" });
+        } finally {
+          if (alive) setPhase(null);
+        }
+      })();
+    } else {
+      setPhase(null);
     }
     return () => {
       alive = false;
@@ -64,69 +77,128 @@ export function ChallengeNotifications({ userId }: { userId: string }) {
   }, [userId]);
   const enable = async () => {
     if (!sdk) return;
-    setBusy(true);
-    setMessage(null);
+    setPhase("enabling");
+    setFeedback({
+      text: "Registering this device. This can take a few seconds.",
+      tone: "info",
+    });
     try {
       await enableChallengePush(sdk, userId);
       setOn(true);
+      setFeedback({ text: "Challenge notifications enabled on this device.", tone: "success" });
     } catch (error) {
       setOn(false);
-      setMessage((error as Error).message);
+      setFeedback({ text: (error as Error).message, tone: "error" });
     } finally {
-      setBusy(false);
+      setPhase(null);
     }
   };
   const disable = async () => {
-    setBusy(true);
+    setPhase("disabling");
+    setFeedback({ text: "Disabling challenge notifications…", tone: "info" });
     try {
       await disableChallengePush(sdk);
       setOn(false);
-      setMessage("Challenge notifications disabled on all devices.");
+      setFeedback({
+        text: "Challenge notifications disabled on all devices.",
+        tone: "success",
+      });
     } catch (error) {
-      setMessage((error as Error).message);
+      setFeedback({ text: (error as Error).message, tone: "error" });
     } finally {
-      setBusy(false);
+      setPhase(null);
     }
   };
   return (
-    <div className="my-4">
-      <Card>
-        <div className="flex items-center gap-2 text-sm font-semibold">
-          <Bell size={16} aria-hidden="true" />
-          <span role="status">Notifications {on ? "On" : "Off"}</span>
-        </div>
-        <p className="mt-2 text-xs text-muted-foreground">
-          Get notified when your opponent logs an activity, completes the week, or updates a
-          payment. Notifications may show their first name, distance or payment amount on your lock
-          screen.
-        </p>
-        <div className="mt-3 flex flex-wrap gap-3 text-xs">
-          {!on && (
+    <div className="card-surface overflow-hidden">
+      <details className="group">
+        <summary className="flex cursor-pointer list-none items-center gap-3 px-3 py-2.5 [&::-webkit-details-marker]:hidden">
+          <span className="grid h-8 w-8 place-items-center rounded-lg bg-elevated text-muted-foreground">
+            <Bell className="h-4 w-4" aria-hidden="true" />
+          </span>
+          <span className="text-sm font-medium">Notifications</span>
+          <span
+            role="status"
+            className={`ml-auto text-xs ${
+              feedback?.tone === "error"
+                ? "text-danger"
+                : on
+                  ? "text-good"
+                  : "text-muted-foreground"
+            }`}
+          >
+            {phase === "checking"
+              ? "Checking…"
+              : phase === "enabling"
+                ? "Enabling…"
+                : phase === "disabling"
+                  ? "Disabling…"
+                  : feedback?.tone === "error"
+                    ? "Needs attention"
+                    : on
+                      ? "On"
+                      : "Off"}
+          </span>
+          <ChevronRight
+            className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-90"
+            aria-hidden="true"
+          />
+        </summary>
+        <div className="border-t border-border px-3 pb-3 pt-2.5">
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
+            Get updates when your opponent logs activity, completes the week, or changes a payment.
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2 text-xs">
+            {!on ? (
+              <button
+                type="button"
+                disabled={!sdk || phase !== null}
+                onClick={() => void enable()}
+                className="rounded-lg bg-primary px-3 py-2 font-semibold text-primary-foreground disabled:opacity-50"
+              >
+                {phase === "checking" ? (
+                  <PendingLabel>Checking notifications…</PendingLabel>
+                ) : phase === "enabling" ? (
+                  <PendingLabel>Enabling notifications…</PendingLabel>
+                ) : (
+                  "Enable notifications"
+                )}
+              </button>
+            ) : null}
             <button
               type="button"
-              disabled={!sdk || busy}
-              onClick={() => void enable()}
-              className="rounded-lg bg-primary px-3 py-2 font-semibold text-primary-foreground disabled:opacity-50"
+              disabled={phase !== null}
+              onClick={() => void disable()}
+              className="rounded-lg border border-border px-3 py-2 disabled:opacity-50"
             >
-              {busy ? "Updating…" : "Enable challenge notifications"}
+              {phase === "disabling" ? (
+                <PendingLabel>Disabling notifications…</PendingLabel>
+              ) : (
+                "Disable on all devices"
+              )}
             </button>
-          )}
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => void disable()}
-            className="rounded-lg border border-border px-3 py-2 disabled:opacity-50"
-          >
-            Disable on all devices
-          </button>
+          </div>
+          {feedback && feedback.tone !== "error" ? (
+            <p
+              role="status"
+              className={`mt-2 text-xs ${
+                feedback.tone === "success" ? "text-good" : "text-muted-foreground"
+              }`}
+            >
+              {feedback.text}
+            </p>
+          ) : null}
         </div>
-        {message && (
-          <p role="status" className="mt-2 text-xs text-muted-foreground">
-            {message}
-          </p>
-        )}
-        {on && <p className="mt-2 text-xs text-muted-foreground">Enabled on this device.</p>}
-      </Card>
+      </details>
+      {feedback?.tone === "error" ? (
+        <p
+          role="alert"
+          className="flex items-start gap-2 border-t border-danger/20 bg-danger/5 px-3 py-2 text-[11px] leading-relaxed text-danger"
+        >
+          <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          {feedback.text}
+        </p>
+      ) : null}
     </div>
   );
 }

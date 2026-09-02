@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { format, parseISO } from "date-fns";
 import { AppShell, PageHeader } from "@/components/AppShell";
-import { Card, Note, SectionTitle } from "@/components/ui-kit";
+import { Card, Note, PendingLabel, SectionTitle } from "@/components/ui-kit";
 import { useAuth } from "@/lib/auth";
 import { normalizeDecimal, parseDecimal } from "@/lib/numeric";
 import {
@@ -44,7 +44,7 @@ function Targets() {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [value, setValue] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [pending, setPending] = useState<"range" | number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
 
@@ -67,9 +67,11 @@ function Targets() {
     return list.slice(0, 26);
   }, [challenge, overrides, currentWeek]);
 
-  const apply = async (weeks: number[], km: number | null) => {
+  const busy = pending !== null;
+
+  const apply = async (weeks: number[], km: number | null, source: "range" | number) => {
     if (!challenge) return;
-    setBusy(true);
+    setPending(source);
     setError(null);
     setOk(null);
     try {
@@ -79,7 +81,7 @@ function Targets() {
     } catch (e) {
       setError((e as Error).message);
     } finally {
-      setBusy(false);
+      setPending(null);
     }
   };
 
@@ -109,7 +111,7 @@ function Targets() {
     const weeks: number[] = [];
     setValue(normalizeDecimal(value));
     for (let n = a; n <= b; n++) weeks.push(n);
-    void apply(weeks, km);
+    void apply(weeks, km, "range");
   };
 
   if (!challenge) {
@@ -142,6 +144,7 @@ function Targets() {
                 type="number"
                 inputMode="numeric"
                 value={from}
+                disabled={busy}
                 onChange={(e) => setFrom(e.target.value)}
                 placeholder={String(currentWeek + 1)}
                 className={inputCls}
@@ -152,6 +155,7 @@ function Targets() {
                 type="number"
                 inputMode="numeric"
                 value={to}
+                disabled={busy}
                 onChange={(e) => setTo(e.target.value)}
                 placeholder={String(currentWeek + 1)}
                 className={inputCls}
@@ -163,6 +167,7 @@ function Targets() {
                 inputMode="decimal"
                 step="0.5"
                 value={value}
+                disabled={busy}
                 onChange={(e) => setValue(e.target.value)}
                 onBlur={() => setValue(normalizeDecimal(value))}
                 placeholder="10"
@@ -175,14 +180,26 @@ function Targets() {
             onClick={applyRange}
             className="w-full rounded-xl bg-primary py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
           >
-            {busy ? "Saving…" : "Apply to these weeks"}
+            {pending === "range" ? (
+              <PendingLabel>Saving targets…</PendingLabel>
+            ) : (
+              "Apply to these weeks"
+            )}
           </button>
           <Note>
             Leave the target empty and apply to reset those weeks to the default. A busy month is
             one action: for example weeks {currentWeek + 1} to {currentWeek + 4} at 8 km.
           </Note>
-          {error ? <p className="text-xs text-danger">{error}</p> : null}
-          {ok ? <p className="text-xs text-good">{ok}</p> : null}
+          {error ? (
+            <p role="alert" className="text-xs text-danger">
+              {error}
+            </p>
+          ) : null}
+          {ok ? (
+            <p role="status" className="text-xs text-good">
+              {ok}
+            </p>
+          ) : null}
         </Card>
       )}
 
@@ -209,10 +226,10 @@ function Targets() {
                 {isCreator && w.custom ? (
                   <button
                     disabled={busy}
-                    onClick={() => void apply([w.n], null)}
-                    className="rounded-lg border border-border px-2 py-1 text-[11px] font-medium"
+                    onClick={() => void apply([w.n], null, w.n)}
+                    className="rounded-lg border border-border px-2 py-1 text-[11px] font-medium disabled:opacity-60"
                   >
-                    Reset
+                    {pending === w.n ? <PendingLabel>Resetting…</PendingLabel> : "Reset"}
                   </button>
                 ) : null}
               </div>

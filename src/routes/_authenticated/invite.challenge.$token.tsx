@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate, useParams } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { AppShell, PageHeader } from "@/components/AppShell";
-import { Card, Note } from "@/components/ui-kit";
+import { Card, Note, PendingLabel } from "@/components/ui-kit";
 import { acceptChallengeInvitation } from "@/lib/privileged-rpcs.functions";
 
 export const Route = createFileRoute("/_authenticated/invite/challenge/$token")({
@@ -40,7 +40,15 @@ function AcceptChallenge() {
     <AppShell>
       <PageHeader title="Invitation" subtitle="Checking your invitation." />
       <Card>
-        {error ? <p className="text-sm text-danger">{error}</p> : <Note>Accepting…</Note>}
+        {error ? (
+          <p role="alert" className="text-sm text-danger">
+            {error}
+          </p>
+        ) : (
+          <Note>
+            <PendingLabel>Accepting invitation…</PendingLabel>
+          </Note>
+        )}
       </Card>
     </AppShell>
   );

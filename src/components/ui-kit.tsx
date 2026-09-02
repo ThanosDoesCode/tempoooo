@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { LoaderCircle } from "lucide-react";
 import type { ReactNode } from "react";
 import { DecimalInput } from "./DecimalInput";
 
@@ -162,5 +163,14 @@ export function Note({ children }: { children: ReactNode }) {
     <p className="rounded-xl bg-elevated/70 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
       {children}
     </p>
+  );
+}
+
+export function PendingLabel({ children }: { children: ReactNode }) {
+  return (
+    <span className="inline-flex items-center justify-center gap-2">
+      <LoaderCircle className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+      {children}
+    </span>
   );
 }

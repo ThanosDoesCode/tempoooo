@@ -3,7 +3,7 @@ import { addDays, format, startOfWeek } from "date-fns";
 import { useState } from "react";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { RulesCard } from "@/components/challenge-rules";
-import { Card, Note, SectionTitle } from "@/components/ui-kit";
+import { Card, Note, PendingLabel, SectionTitle } from "@/components/ui-kit";
 import { supabase } from "@/integrations/supabase/client";
 import { randomToken, sha256Hex, useAuth } from "@/lib/auth";
 
@@ -78,7 +78,7 @@ function NewChallenge() {
       if (e3) throw e3;
       setLink(`${window.location.origin}/invite/challenge/${token}`);
     } catch (e) {
-      setError((e as Error).message);
+      setError(`Could not create the challenge. ${(e as Error).message}`);
     } finally {
       setBusy(false);
     }
@@ -161,13 +161,17 @@ function NewChallenge() {
             className={inputCls}
           />
         </Labelled>
-        {error ? <p className="text-xs text-danger">{error}</p> : null}
+        {error ? (
+          <p role="alert" className="text-xs text-danger">
+            {error}
+          </p>
+        ) : null}
         <button
           disabled={busy || !email}
           onClick={() => void create()}
           className="w-full rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground disabled:opacity-60"
         >
-          Create challenge
+          {busy ? <PendingLabel>Creating challenge…</PendingLabel> : "Create challenge"}
         </button>
       </Card>
     </AppShell>
