@@ -123,8 +123,6 @@ export async function prepareChallengePush(userId: string) {
   });
   await assertCurrentUser(userId);
   await sdk.login(identity.external_id);
-  // Loading the card never enables push. An opt-out also applies to returning browsers.
-  if (!identity.enabled) await sdk.User.PushSubscription.optOut();
   return sdk;
 }
 
