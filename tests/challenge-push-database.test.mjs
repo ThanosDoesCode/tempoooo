@@ -149,7 +149,15 @@ test("Bulk data is owner-only and normal users cannot bootstrap owner access", a
       .length,
     1,
   );
-  for (const user of [b, c]) {
+  const ownerWrite = await asUser(a, () =>
+    db.query(
+      "UPDATE public.bulk_targets SET payload='{\"calories\":3000}' WHERE bulk_profile_id=$1 RETURNING payload",
+      [bulk],
+    ),
+  );
+  assert.equal(ownerWrite.rows[0].payload.calories, 3000);
+
+  for (const user of [b, c, d]) {
     assert.equal(
       (
         await asUser(user, () =>
@@ -161,6 +169,17 @@ test("Bulk data is owner-only and normal users cannot bootstrap owner access", a
     assert.equal(
       (await asUser(user, () => db.query("SELECT id FROM storage.objects WHERE id=$1", [objectId])))
         .rows.length,
+      0,
+    );
+    assert.equal(
+      (
+        await asUser(user, () =>
+          db.query(
+            "UPDATE public.bulk_targets SET payload='{\"calories\":1}' WHERE bulk_profile_id=$1 RETURNING payload",
+            [bulk],
+          ),
+        )
+      ).rows.length,
       0,
     );
   }

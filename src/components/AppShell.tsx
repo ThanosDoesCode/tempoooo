@@ -36,6 +36,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const isChallenge = pathname.startsWith("/challenge");
+  const isBulk = pathname.startsWith("/bulk");
   const { data: memberships } = useMemberships();
   const [pendingTo, setPendingTo] = useState<string | null>(null);
 
@@ -44,7 +45,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const hasBulk = memberships?.some((membership) => membership.role === "owner") ?? false;
   const showingChallenge = pendingTo ? pendingTo.startsWith("/challenge") : isChallenge;
 
-  const nav = isChallenge ? CHALLENGE_NAV : BULK_NAV;
+  const nav = isBulk && hasBulk ? BULK_NAV : CHALLENGE_NAV;
 
   return (
     <div className="min-h-screen bg-background">

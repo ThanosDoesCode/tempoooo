@@ -33,10 +33,16 @@ test("Tempo manifest and navigation expose Challenge by default and owner-only B
   assert.doesNotMatch(index, /window\.location/);
   const shell = await read("src/components/AppShell.tsx");
   assert.match(shell, /"\/bulk\/history", label: "History"/);
+  assert.match(shell, /isBulk && hasBulk \? BULK_NAV : CHALLENGE_NAV/);
   assert.doesNotMatch(shell, /Sharing|Shared Bulk|\/bulk\/access/);
   const guard = await read("src/routes/_authenticated/bulk/route.tsx");
   assert.match(guard, /bulkOwnerQueryOptions/);
-  assert.match(guard, /redirect\(\{ to: "\/challenge" \}\)/);
+  assert.match(guard, /fetchQuery/);
+  assert.match(guard, /staleTime: 0/);
+  assert.match(guard, /redirect\(\{ to: "\/bulk-access-denied", replace: true \}\)/);
+  const denied = await read("src/routes/_authenticated/bulk-access-denied.tsx");
+  assert.match(denied, /Bulk access required/);
+  assert.match(denied, /only available to authorized administrators/);
 });
 
 test("Bulk History uses stored snapshots and labels legacy meal limitations", async () => {

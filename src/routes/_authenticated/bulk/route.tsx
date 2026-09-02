@@ -5,8 +5,11 @@ import { loadBulk, useBulkMeta } from "@/lib/store";
 
 export const Route = createFileRoute("/_authenticated/bulk")({
   beforeLoad: async ({ context }) => {
-    const owners = await context.queryClient.ensureQueryData(bulkOwnerQueryOptions());
-    if (!owners.length) throw redirect({ to: "/challenge" });
+    const owners = await context.queryClient.fetchQuery({
+      ...bulkOwnerQueryOptions(),
+      staleTime: 0,
+    });
+    if (!owners.length) throw redirect({ to: "/bulk-access-denied", replace: true });
   },
   component: BulkLayout,
 });
