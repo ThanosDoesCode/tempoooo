@@ -138,6 +138,7 @@ export class OneSignal {
         headings: { en: text.title },
         contents: { en: text.body },
         url: new URL("/challenge", this.siteUrl).href,
+        chrome_web_icon: new URL("/icons/challenge-notification.png", this.siteUrl).href,
         idempotency_key: event.id,
         // Limit lock-screen exposure and stale delivery after membership changes.
         ttl: 300,
