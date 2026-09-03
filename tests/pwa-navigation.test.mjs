@@ -29,6 +29,19 @@ test("Tempo manifest and navigation expose Challenge by default and owner-only B
   assert.equal(manifest.name, "Tempo");
   assert.equal(manifest.short_name, "Tempo");
   assert.equal(manifest.start_url, "/challenge");
+  assert.equal(manifest.display, "standalone");
+  assert.deepEqual(
+    manifest.icons.map(({ src, sizes }) => ({ src, sizes })),
+    [
+      { src: "/icons/challenge-192.png", sizes: "192x192" },
+      { src: "/icons/challenge-512.png", sizes: "512x512" },
+    ],
+  );
+  const root = await read("src/routes/__root.tsx");
+  assert.match(root, /apple-mobile-web-app-capable", content: "yes"/);
+  assert.match(root, /apple-mobile-web-app-title", content: "Tempo"/);
+  assert.match(root, /apple-mobile-web-app-status-bar-style", content: "black-translucent"/);
+  assert.match(root, /rel: "apple-touch-icon"[\s\S]*sizes: "180x180"[\s\S]*apple-touch-icon\.png/);
   const index = await read("src/routes/index.tsx");
   assert.match(index, /data\.session \? "\/challenge" : "\/auth"/);
   assert.doesNotMatch(index, /window\.location/);
