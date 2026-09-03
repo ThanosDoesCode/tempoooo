@@ -1,7 +1,9 @@
 import { authorizedDispatcher, deliverEvent, type PushEvent } from "../_shared/challenge-push.ts";
 import { adminClient, databaseStore, oneSignal } from "../_shared/push-store.ts";
+import { operationalLog, safeOperationalCode } from "../_shared/observability.ts";
 
 Deno.serve(async (request: Request) => {
+  const requestId = crypto.randomUUID();
   if (request.method !== "POST") return new Response(null, { status: 405 });
   if (
     !(await authorizedDispatcher(request, Deno.env.get("CHALLENGE_PUSH_DISPATCH_SECRET") ?? ""))
@@ -21,8 +23,12 @@ Deno.serve(async (request: Request) => {
       counts[status] = (counts[status] ?? 0) + 1;
     }
     return Response.json({ processed: result.data?.length ?? 0, counts });
-  } catch {
-    console.error("Challenge push worker failed");
+  } catch (error) {
+    operationalLog("error", "challenge_push_worker", {
+      requestId,
+      phase: "claim_or_delivery",
+      code: safeOperationalCode(error, "worker_failed"),
+    });
     return Response.json({ error: "Push delivery unavailable" }, { status: 503 });
   }
 });

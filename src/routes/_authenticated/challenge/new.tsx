@@ -1,11 +1,12 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { addDays, format, startOfWeek } from "date-fns";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { ChallengePrimer } from "@/components/challenge-rules";
 import { Card, Note, PendingLabel, SectionTitle } from "@/components/ui-kit";
 import { supabase } from "@/integrations/supabase/client";
 import { randomToken, sha256Hex, useAuth } from "@/lib/auth";
+import { userFacingError } from "@/lib/network-errors";
 
 export const Route = createFileRoute("/_authenticated/challenge/new")({
   head: () => ({
@@ -44,42 +45,38 @@ function NewChallenge() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [link, setLink] = useState<string | null>(null);
+  const createLock = useRef(false);
+  const creation = useRef<{ requestId: string; token: string } | null>(null);
 
   const create = async () => {
-    if (!user) return;
+    if (!user || createLock.current) return;
+    createLock.current = true;
     setBusy(true);
     setError(null);
     try {
-      const { data: ch, error: e1 } = await supabase
-        .from("challenges")
-        .insert({
-          created_by: user.id,
-          name,
-          start_date: start,
-          timezone,
-          duration_weeks: Math.max(52, weeks),
-        })
-        .select("id")
-        .single();
-      if (e1) throw e1;
-      const { error: e2 } = await supabase
-        .from("challenge_members")
-        .insert({ challenge_id: ch.id, user_id: user.id });
-      if (e2) throw e2;
-
-      const token = randomToken();
-      const { error: e3 } = await supabase.from("challenge_invitations").insert({
-        challenge_id: ch.id,
-        invited_email: email.trim().toLowerCase(),
-        token_hash: await sha256Hex(token),
-        expires_at: new Date(Date.now() + 14 * 86_400_000).toISOString(),
-        created_by: user.id,
+      const request = creation.current ?? {
+        requestId: crypto.randomUUID(),
+        token: randomToken(),
+      };
+      creation.current = request;
+      const { data: challengeId, error: rpcError } = await supabase.rpc("create_challenge_atomic", {
+        _request_id: request.requestId,
+        _name: name,
+        _start_date: start,
+        _timezone: timezone,
+        _duration_weeks: Math.max(52, weeks),
+        _invited_email: email,
+        _token_hash: await sha256Hex(request.token),
       });
-      if (e3) throw e3;
-      setLink(`${window.location.origin}/invite/challenge/${token}`);
+      if (rpcError) throw rpcError;
+      if (challengeId !== request.requestId) {
+        throw new Error("Challenge creation returned an unexpected result");
+      }
+      setLink(`${window.location.origin}/invite/challenge/${request.token}`);
     } catch (e) {
-      setError(`Could not create the challenge. ${(e as Error).message}`);
+      setError(userFacingError(e, "create the challenge", { inputPreserved: true }));
     } finally {
+      createLock.current = false;
       setBusy(false);
     }
   };

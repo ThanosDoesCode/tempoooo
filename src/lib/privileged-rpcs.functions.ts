@@ -25,3 +25,10 @@ export const getRelatedProfiles = createServerFn({ method: "GET" })
     const { relatedProfilesFor } = await import("./privileged-rpcs.server");
     return relatedProfilesFor(context.userId);
   });
+
+export const getAdminDiagnostics = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { adminDiagnosticsFor } = await import("./privileged-rpcs.server");
+    return adminDiagnosticsFor(context.userId);
+  });

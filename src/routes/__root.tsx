@@ -15,6 +15,7 @@ import { ChallengePushSession } from "../components/ChallengePushSession";
 import { Toaster } from "../components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { clearBulk } from "@/lib/store";
+import { AppCrashBoundary } from "@/components/AppCrashBoundary";
 
 function NotFoundComponent() {
   return (
@@ -162,10 +163,16 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <ChallengePushSession />
-      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <Outlet />
-      <Toaster position="bottom-center" />
+      <AppCrashBoundary
+        onRetry={() => {
+          void queryClient.refetchQueries({ type: "active" });
+        }}
+      >
+        <ChallengePushSession />
+        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+        <Outlet />
+        <Toaster position="bottom-center" />
+      </AppCrashBoundary>
     </QueryClientProvider>
   );
 }

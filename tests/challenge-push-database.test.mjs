@@ -76,6 +76,23 @@ async function count(kind) {
     ).rows[0].n,
   );
 }
+
+async function createChallengeAtomic(
+  uid,
+  requestId,
+  tokenHash,
+  { name = "Atomic challenge", email = "opponent@example.com" } = {},
+) {
+  return asUser(uid, () =>
+    db.query(
+      `SELECT public.create_challenge_atomic(
+        $1, $2, (date_trunc('week', CURRENT_DATE) + interval '7 days')::date,
+        'UTC', 52, $3, $4
+      ) AS id`,
+      [requestId, name, email, tokenHash],
+    ),
+  );
+}
 async function activity(uid, km, challenge = x, type = "run") {
   const durationSeconds = Math.round(type === "run" ? km * 360 : (km / 20) * 3600);
   return asUser(uid, () =>
@@ -201,6 +218,95 @@ test("Bulk data is owner-only and normal users cannot bootstrap owner access", a
       ),
     ),
     /row-level security|permission denied/,
+  );
+});
+
+test("atomic challenge creation writes challenge, own membership and invitation exactly once", async () => {
+  const requestId = randomUUID();
+  const tokenHash = "a".repeat(64);
+  const first = await createChallengeAtomic(a, requestId, tokenHash);
+  const retry = await createChallengeAtomic(a, requestId, tokenHash);
+  assert.equal(first.rows[0].id, requestId);
+  assert.equal(retry.rows[0].id, requestId);
+
+  const state = await db.query(
+    `SELECT
+      (SELECT count(*) FROM public.challenges WHERE id=$1) AS challenges,
+      (SELECT count(*) FROM public.challenge_members WHERE challenge_id=$1) AS members,
+      (SELECT count(*) FROM public.challenge_invitations WHERE challenge_id=$1) AS invitations,
+      (SELECT created_by FROM public.challenges WHERE id=$1) AS creator,
+      (SELECT user_id FROM public.challenge_members WHERE challenge_id=$1) AS member`,
+    [requestId],
+  );
+  assert.deepEqual(
+    {
+      challenges: Number(state.rows[0].challenges),
+      members: Number(state.rows[0].members),
+      invitations: Number(state.rows[0].invitations),
+      creator: state.rows[0].creator,
+      member: state.rows[0].member,
+    },
+    { challenges: 1, members: 1, invitations: 1, creator: a, member: a },
+  );
+
+  await assert.rejects(createChallengeAtomic(b, requestId, tokenHash), /conflicts/);
+  await assert.rejects(
+    asUser(a, () =>
+      db.query("INSERT INTO public.challenge_members(challenge_id,user_id) VALUES ($1,$2)", [
+        requestId,
+        b,
+      ]),
+    ),
+    /permission denied|row-level security/,
+  );
+});
+
+test("atomic creation rolls every row back when the invitation insert fails", async () => {
+  const tokenHash = "b".repeat(64);
+  await createChallengeAtomic(a, randomUUID(), tokenHash);
+  const failedRequest = randomUUID();
+  await assert.rejects(createChallengeAtomic(a, failedRequest, tokenHash), /unique|duplicate/i);
+  const leftovers = await db.query(
+    `SELECT
+      (SELECT count(*) FROM public.challenges WHERE id=$1) AS challenges,
+      (SELECT count(*) FROM public.challenge_members WHERE challenge_id=$1) AS members,
+      (SELECT count(*) FROM public.challenge_invitations WHERE challenge_id=$1) AS invitations`,
+    [failedRequest],
+  );
+  assert.deepEqual(
+    Object.fromEntries(
+      Object.entries(leftovers.rows[0]).map(([key, value]) => [key, Number(value)]),
+    ),
+    { challenges: 0, members: 0, invitations: 0 },
+  );
+});
+
+test("atomic challenge creation rejects unauthenticated and direct partial creation", async () => {
+  await db.query("SELECT set_config('request.jwt.claim.sub', '', false)");
+  await db.exec("SET ROLE authenticated");
+  try {
+    await assert.rejects(
+      db.query(
+        `SELECT public.create_challenge_atomic(
+          $1, 'No owner', (date_trunc('week', CURRENT_DATE) + interval '7 days')::date,
+          'UTC', 52, 'opponent@example.com', $2
+        )`,
+        [randomUUID(), "c".repeat(64)],
+      ),
+      /Not authenticated/,
+    );
+  } finally {
+    await db.exec("RESET ROLE");
+  }
+
+  await assert.rejects(
+    asUser(a, () =>
+      db.query(
+        "INSERT INTO public.challenges(id,created_by,name,start_date,timezone) VALUES ($1,$2,'Partial',CURRENT_DATE,'UTC')",
+        [randomUUID(), a],
+      ),
+    ),
+    /permission denied|row-level security/,
   );
 });
 test("normal activity creation still works without forging audit history", async () => {

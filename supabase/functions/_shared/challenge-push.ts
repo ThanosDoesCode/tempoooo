@@ -1,3 +1,5 @@
+import { operationalLog } from "./observability.ts";
+
 export type PushEvent = {
   id: string;
   challenge_id: string;
@@ -206,8 +208,14 @@ export async function deliverEvent(
     const status = permanent || event.attempts >= 8 ? "failed" : "pending";
     const code = error instanceof ProviderError ? error.message : "delivery_failed";
     await store.finish(event, status, code);
-    // No provider body, tokens, names, IDs, or notification content in logs.
-    console.warn("Challenge push delivery:", code);
+    // No provider body, tokens, names, challenge IDs or notification content in logs.
+    operationalLog(status === "failed" ? "error" : "warn", "challenge_push_delivery", {
+      eventId: event.id,
+      eventKind: event.kind,
+      attempt: event.attempts,
+      outcome: status,
+      code,
+    });
     return status;
   }
 }

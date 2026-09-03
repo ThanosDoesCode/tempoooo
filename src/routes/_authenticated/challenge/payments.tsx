@@ -28,6 +28,7 @@ import {
   weekNumberOf,
 } from "@/lib/challenge";
 import { downloadChallengeCsv } from "@/lib/challenge-export";
+import { userFacingError } from "@/lib/network-errors";
 
 export const Route = createFileRoute("/_authenticated/challenge/payments")({
   head: () => ({
@@ -125,7 +126,7 @@ function Payments() {
             : "Payment returned to unpaid.",
       );
     } catch (e) {
-      setError(`Could not update the payment. ${(e as Error).message}`);
+      setError(userFacingError(e, "update the payment"));
     } finally {
       setPending(null);
     }
@@ -142,7 +143,7 @@ function Payments() {
       setSettleArmed(false);
       setNotice("Your open payments are settled.");
     } catch (e) {
-      setError(`Could not settle your payments. ${(e as Error).message}`);
+      setError(userFacingError(e, "settle your payments"));
     } finally {
       setPending(null);
     }
@@ -157,7 +158,7 @@ function Payments() {
       await refresh();
       setNotice("Payment reopened.");
     } catch (e) {
-      setError(`Could not reopen the payment. ${(e as Error).message}`);
+      setError(userFacingError(e, "reopen the payment"));
     } finally {
       setPending(null);
     }
@@ -183,7 +184,7 @@ function Payments() {
       setPauseCountry("");
       setTravelNotice(`Week ${selectedPauseWeek} is paused for your trip to ${country}.`);
     } catch (e) {
-      setTravelError(`Could not save the travel pause. ${(e as Error).message}`);
+      setTravelError(userFacingError(e, "save the travel pause", { inputPreserved: true }));
     } finally {
       setTravelPending(null);
     }
@@ -199,7 +200,7 @@ function Payments() {
       setPauseRemoveArmed(null);
       setTravelNotice("Travel pause removed. That week is active again.");
     } catch (e) {
-      setTravelError(`Could not remove the travel pause. ${(e as Error).message}`);
+      setTravelError(userFacingError(e, "remove the travel pause"));
     } finally {
       setTravelPending(null);
     }

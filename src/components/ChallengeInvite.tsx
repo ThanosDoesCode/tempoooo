@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, Note, PendingLabel, SectionTitle } from "@/components/ui-kit";
 import { supabase } from "@/integrations/supabase/client";
 import { randomToken, sha256Hex, useAuth } from "@/lib/auth";
+import { userFacingError } from "@/lib/network-errors";
 
 type Invitation = {
   id: string;
@@ -74,7 +75,7 @@ export function ChallengeInviteCard({ challengeId }: { challengeId: string }) {
       await refetch();
       setNotice("Invitation link created.");
     } catch (e) {
-      setError(`Could not create an invitation link. ${(e as Error).message}`);
+      setError(userFacingError(e, "create an invitation link", { inputPreserved: true }));
     } finally {
       setBusy(false);
     }

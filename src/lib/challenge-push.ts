@@ -182,8 +182,9 @@ export async function enableChallengePush(sdk: PushSdk, userId: string) {
     }
   }
 
-  if (!result?.enabled)
+  if (!result?.enabled) {
     throw new Error("Could not enable notifications. Reload and try again.");
+  }
 }
 
 export async function refreshChallengePush(sdk: PushSdk, userId: string) {

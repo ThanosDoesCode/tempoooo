@@ -19,6 +19,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 
 import { finalizeChallenge } from "@/lib/privileged-rpcs.functions";
+import { userFacingError } from "@/lib/network-errors";
 import {
   activityMetrics,
   DEFAULT_TARGET_KM,
@@ -98,7 +99,7 @@ function ChallengeHome() {
       });
       setLeaveArmed(false);
     } catch (e) {
-      setLeaveError(`Could not leave the challenge. ${(e as Error).message}`);
+      setLeaveError(userFacingError(e, "leave the challenge"));
     } finally {
       setLeaving(false);
     }
@@ -115,7 +116,7 @@ function ChallengeHome() {
       setConfirmId(null);
       setActivityMessage("Activity deleted.");
     } catch (error) {
-      setDeleteError(`Could not delete activity. ${(error as Error).message}`);
+      setDeleteError(userFacingError(error, "delete the activity"));
     } finally {
       setDeletingId(null);
     }

@@ -1,7 +1,10 @@
 import { isUuid } from "../_shared/challenge-push.ts";
 import { adminClient, oneSignal } from "../_shared/push-store.ts";
+import { operationalLog, safeOperationalCode } from "../_shared/observability.ts";
 
 Deno.serve(async (request: Request) => {
+  const requestId = crypto.randomUUID();
+  let phase = "request_validation";
   const origin = Deno.env.get("CHALLENGE_PUSH_SITE_URL") ?? "";
   const headers = {
     "Access-Control-Allow-Origin": origin,
@@ -16,12 +19,14 @@ Deno.serve(async (request: Request) => {
   if (request.headers.get("origin") && request.headers.get("origin") !== origin)
     return reply({ error: "Forbidden" }, 403);
   try {
+    phase = "authentication";
     const db = adminClient();
     const token = request.headers.get("authorization")?.replace(/^Bearer /, "");
     if (!token) return reply({ error: "Not authenticated" }, 401);
     const auth = await db.auth.getUser(token);
     if (auth.error || !auth.data.user) return reply({ error: "Not authenticated" }, 401);
     const uid = auth.data.user.id;
+    phase = "payload_validation";
     if (Number(request.headers.get("content-length")) > 2048)
       return reply({ error: "Invalid request" }, 400);
     const raw = await request.text();
@@ -34,6 +39,7 @@ Deno.serve(async (request: Request) => {
       return reply({ error: "Invalid subscription" }, 400);
     // Own-device cleanup remains possible after leaving a challenge.
     if (body["action"] === "detach") {
+      phase = "detach_device";
       const result = await db
         .from("push_subscriptions")
         .update({ is_active: false, updated_at: new Date().toISOString() })
@@ -42,9 +48,11 @@ Deno.serve(async (request: Request) => {
       if (result.error) throw new Error("database_failed");
       return reply({ ok: true });
     }
+    phase = "membership_check";
     const member = await db.from("challenge_members").select("id").eq("user_id", uid).limit(1);
     if (member.error) throw new Error("database_failed");
     if (!member.data?.length) return reply({ error: "Challenge membership required" }, 403);
+    phase = "identity_sync";
     const created = await db
       .from("challenge_push_users")
       .upsert({ user_id: uid }, { onConflict: "user_id", ignoreDuplicates: true });
@@ -69,9 +77,11 @@ Deno.serve(async (request: Request) => {
     // Only an explicit enable action may undo an account-wide opt-out.
     const activate = body["activate"] === true;
     if (!activate && !identity.data.enabled) return reply({ enabled: false });
+    phase = "provider_verification";
     const verified = await oneSignal().subscriptions(identity.data.external_id);
     if (!verified.includes(id as string))
       return reply({ error: "Device not verified yet. Please try again." }, 409);
+    phase = "save_subscription";
     const saved = await db.rpc("register_challenge_push_device", {
       _user: uid,
       _subscription: id,
@@ -80,7 +90,12 @@ Deno.serve(async (request: Request) => {
     });
     if (saved.error) throw new Error("database_failed");
     return reply({ enabled: saved.data === true });
-  } catch {
+  } catch (error) {
+    operationalLog("error", "challenge_push_subscription", {
+      requestId,
+      phase,
+      code: safeOperationalCode(error, "subscription_request_failed"),
+    });
     return reply({ error: "Could not update notifications. Please try again." }, 503);
   }
 });

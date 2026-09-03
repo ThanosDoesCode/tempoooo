@@ -17,6 +17,7 @@ import { Route as AuthenticatedBulkAccessDeniedRouteImport } from './routes/_aut
 import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated/profile'
 import { Route as AuthenticatedBulkIndexRouteImport } from './routes/_authenticated/bulk/index'
 import { Route as AuthenticatedBulkCheckInRouteImport } from './routes/_authenticated/bulk/check-in'
+import { Route as AuthenticatedBulkDiagnosticsRouteImport } from './routes/_authenticated/bulk/diagnostics'
 import { Route as AuthenticatedBulkHistoryRouteImport } from './routes/_authenticated/bulk/history'
 import { Route as AuthenticatedBulkProgressRouteImport } from './routes/_authenticated/bulk/progress'
 import { Route as AuthenticatedBulkTrainingRouteImport } from './routes/_authenticated/bulk/training'
@@ -67,6 +68,12 @@ const AuthenticatedBulkCheckInRoute =
   AuthenticatedBulkCheckInRouteImport.update({
     id: '/check-in',
     path: '/check-in',
+    getParentRoute: () => AuthenticatedBulkRouteRoute,
+  } as any)
+const AuthenticatedBulkDiagnosticsRoute =
+  AuthenticatedBulkDiagnosticsRouteImport.update({
+    id: '/diagnostics',
+    path: '/diagnostics',
     getParentRoute: () => AuthenticatedBulkRouteRoute,
   } as any)
 const AuthenticatedBulkHistoryRoute =
@@ -137,6 +144,7 @@ export interface FileRoutesByFullPath {
   '/bulk-access-denied': typeof AuthenticatedBulkAccessDeniedRoute
   '/profile': typeof AuthenticatedProfileRoute
   '/bulk/check-in': typeof AuthenticatedBulkCheckInRoute
+  '/bulk/diagnostics': typeof AuthenticatedBulkDiagnosticsRoute
   '/bulk/history': typeof AuthenticatedBulkHistoryRoute
   '/bulk/progress': typeof AuthenticatedBulkProgressRoute
   '/bulk/training': typeof AuthenticatedBulkTrainingRoute
@@ -155,6 +163,7 @@ export interface FileRoutesByTo {
   '/bulk-access-denied': typeof AuthenticatedBulkAccessDeniedRoute
   '/profile': typeof AuthenticatedProfileRoute
   '/bulk/check-in': typeof AuthenticatedBulkCheckInRoute
+  '/bulk/diagnostics': typeof AuthenticatedBulkDiagnosticsRoute
   '/bulk/history': typeof AuthenticatedBulkHistoryRoute
   '/bulk/progress': typeof AuthenticatedBulkProgressRoute
   '/bulk/training': typeof AuthenticatedBulkTrainingRoute
@@ -176,6 +185,7 @@ export interface FileRoutesById {
   '/_authenticated/bulk-access-denied': typeof AuthenticatedBulkAccessDeniedRoute
   '/_authenticated/profile': typeof AuthenticatedProfileRoute
   '/_authenticated/bulk/check-in': typeof AuthenticatedBulkCheckInRoute
+  '/_authenticated/bulk/diagnostics': typeof AuthenticatedBulkDiagnosticsRoute
   '/_authenticated/bulk/history': typeof AuthenticatedBulkHistoryRoute
   '/_authenticated/bulk/progress': typeof AuthenticatedBulkProgressRoute
   '/_authenticated/bulk/training': typeof AuthenticatedBulkTrainingRoute
@@ -197,6 +207,7 @@ export interface FileRouteTypes {
     | '/bulk-access-denied'
     | '/profile'
     | '/bulk/check-in'
+    | '/bulk/diagnostics'
     | '/bulk/history'
     | '/bulk/progress'
     | '/bulk/training'
@@ -215,6 +226,7 @@ export interface FileRouteTypes {
     | '/bulk-access-denied'
     | '/profile'
     | '/bulk/check-in'
+    | '/bulk/diagnostics'
     | '/bulk/history'
     | '/bulk/progress'
     | '/bulk/training'
@@ -235,6 +247,7 @@ export interface FileRouteTypes {
     | '/_authenticated/bulk-access-denied'
     | '/_authenticated/profile'
     | '/_authenticated/bulk/check-in'
+    | '/_authenticated/bulk/diagnostics'
     | '/_authenticated/bulk/history'
     | '/_authenticated/bulk/progress'
     | '/_authenticated/bulk/training'
@@ -312,6 +325,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedBulkCheckInRouteImport
       parentRoute: typeof AuthenticatedBulkRouteRoute
     }
+    '/_authenticated/bulk/diagnostics': {
+      id: '/_authenticated/bulk/diagnostics'
+      path: '/diagnostics'
+      fullPath: '/bulk/diagnostics'
+      preLoaderRoute: typeof AuthenticatedBulkDiagnosticsRouteImport
+      parentRoute: typeof AuthenticatedBulkRouteRoute
+    }
     '/_authenticated/bulk/history': {
       id: '/_authenticated/bulk/history'
       path: '/history'
@@ -387,6 +407,7 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedBulkRouteRouteChildren {
   AuthenticatedBulkCheckInRoute: typeof AuthenticatedBulkCheckInRoute
+  AuthenticatedBulkDiagnosticsRoute: typeof AuthenticatedBulkDiagnosticsRoute
   AuthenticatedBulkHistoryRoute: typeof AuthenticatedBulkHistoryRoute
   AuthenticatedBulkProgressRoute: typeof AuthenticatedBulkProgressRoute
   AuthenticatedBulkTrainingRoute: typeof AuthenticatedBulkTrainingRoute
@@ -396,6 +417,7 @@ interface AuthenticatedBulkRouteRouteChildren {
 const AuthenticatedBulkRouteRouteChildren: AuthenticatedBulkRouteRouteChildren =
   {
     AuthenticatedBulkCheckInRoute: AuthenticatedBulkCheckInRoute,
+    AuthenticatedBulkDiagnosticsRoute: AuthenticatedBulkDiagnosticsRoute,
     AuthenticatedBulkHistoryRoute: AuthenticatedBulkHistoryRoute,
     AuthenticatedBulkProgressRoute: AuthenticatedBulkProgressRoute,
     AuthenticatedBulkTrainingRoute: AuthenticatedBulkTrainingRoute,

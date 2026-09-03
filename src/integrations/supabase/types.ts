@@ -639,6 +639,44 @@ export type Database = {
         }
         Relationships: []
       }
+      challenge_travel_pauses: {
+        Row: {
+          challenge_id: string
+          country: string
+          created_at: string
+          id: string
+          updated_at: string
+          user_id: string
+          week_number: number
+        }
+        Insert: {
+          challenge_id: string
+          country: string
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id: string
+          week_number: number
+        }
+        Update: {
+          challenge_id?: string
+          country?: string
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+          week_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "challenge_travel_pauses_challenge_id_fkey"
+            columns: ["challenge_id"]
+            isOneToOne: false
+            referencedRelation: "challenges"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       challenge_week_targets: {
         Row: {
           challenge_id: string
@@ -891,6 +929,18 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      create_challenge_atomic: {
+        Args: {
+          _duration_weeks: number
+          _invited_email: string
+          _name: string
+          _request_id: string
+          _start_date: string
+          _timezone: string
+          _token_hash: string
+        }
+        Returns: string
       }
       disable_challenge_push: { Args: never; Returns: undefined }
       ensure_bulk_profile: { Args: { _caller: string }; Returns: string }

@@ -1,7 +1,17 @@
-import { createFileRoute, Outlet, redirect, useNavigate } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Outlet,
+  redirect,
+  useNavigate,
+  useRouter,
+  type ErrorComponentProps,
+} from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { bulkOwnerQueryOptions, useMemberships } from "@/lib/bulk-access";
 import { clearBulk, loadBulk, prefetchBulk, useBulkMeta } from "@/lib/store";
+import { AppShell, PageHeader } from "@/components/AppShell";
+import { DataError } from "@/components/ui-kit";
+import { userFacingError } from "@/lib/network-errors";
 
 export const Route = createFileRoute("/_authenticated/bulk")({
   beforeLoad: async ({ context }) => {
@@ -10,7 +20,24 @@ export const Route = createFileRoute("/_authenticated/bulk")({
     await prefetchBulk(owners[0]!.bulk_profile_id);
   },
   component: BulkLayout,
+  errorComponent: BulkRouteError,
 });
+
+function BulkRouteError({ error, reset }: ErrorComponentProps) {
+  const router = useRouter();
+  return (
+    <AppShell>
+      <PageHeader title="Bulk unavailable" />
+      <DataError
+        message={userFacingError(error, "load Bulk")}
+        onRetry={() => {
+          reset();
+          void router.invalidate();
+        }}
+      />
+    </AppShell>
+  );
+}
 
 function BulkLayout() {
   const navigate = useNavigate();
@@ -27,12 +54,28 @@ function BulkLayout() {
     }
     const preferred = memberships[0]!;
     if (preferred.bulk_profile_id !== bulkId) {
-      loadBulk(preferred.bulk_profile_id, preferred.role).catch((e: Error) => setError(e.message));
+      loadBulk(preferred.bulk_profile_id, preferred.role).catch((e: Error) =>
+        setError(userFacingError(e, "load Bulk")),
+      );
     }
   }, [memberships, bulkId, navigate]);
 
   if (error) {
-    return <div className="p-6 text-sm text-danger">{error}</div>;
+    return (
+      <AppShell>
+        <PageHeader title="Bulk unavailable" />
+        <DataError
+          message={error}
+          onRetry={() => {
+            setError(null);
+            if (memberships?.[0])
+              void loadBulk(memberships[0].bulk_profile_id, memberships[0].role).catch((e: Error) =>
+                setError(userFacingError(e, "load Bulk")),
+              );
+          }}
+        />
+      </AppShell>
+    );
   }
   if (memberships?.length === 0) return null;
   if (isLoading || (!memberships && !error) || (!!memberships?.length && !bulkId)) {

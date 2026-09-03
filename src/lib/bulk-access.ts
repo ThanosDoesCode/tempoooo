@@ -1,6 +1,7 @@
 import { queryOptions, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { BulkRole } from "./store";
+import { readRetryDelay, shouldRetryRead } from "./network-errors";
 
 export type Membership = {
   bulk_profile_id: string;
@@ -29,7 +30,8 @@ export const bulkOwnerQueryOptions = () =>
     },
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
-    retry: 1,
+    retry: shouldRetryRead,
+    retryDelay: readRetryDelay,
   });
 
 export function useMemberships() {

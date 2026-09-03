@@ -8,6 +8,7 @@ import { Card, DataError, Note, PendingLabel } from "@/components/ui-kit";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { normalizeDecimal, parseDecimal } from "@/lib/numeric";
+import { userFacingError } from "@/lib/network-errors";
 import {
   activityMetrics,
   DEFAULT_TARGET_KM,
@@ -125,7 +126,7 @@ function LogActivity() {
       : null;
 
   const submit = async () => {
-    if (!challenge || !user) return;
+    if (!challenge || !user || busy) return;
     setValidationError(null);
     setRequestError(null);
     if (files.length === 0) {
@@ -184,7 +185,7 @@ function LogActivity() {
       toast.success("Activity saved.");
       void navigate({ to: "/challenge" });
     } catch (e) {
-      setRequestError((e as Error).message);
+      setRequestError(userFacingError(e, "save the activity", { inputPreserved: true }));
     } finally {
       setPending(null);
     }

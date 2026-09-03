@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { addMonths, format, parseISO, endOfMonth } from "date-fns";
 import { useMemo, useRef, useState } from "react";
 import {
@@ -360,6 +360,19 @@ function ProgressPage() {
 
         <TrainingSummary data={data} />
         <PhotosSection data={data} />
+        <Card>
+          <SectionTitle>Operations</SectionTitle>
+          <p className="text-xs text-muted-foreground">
+            Review push delivery failures and retry health without exposing challenge data.
+          </p>
+          <Link
+            to="/bulk/diagnostics"
+            preload="intent"
+            className="mt-3 flex min-h-11 w-full items-center justify-center rounded-xl border border-border bg-elevated px-3 py-2 text-sm font-medium text-foreground active:scale-[0.98]"
+          >
+            Production diagnostics
+          </Link>
+        </Card>
       </div>
     </AppShell>
   );
@@ -461,7 +474,7 @@ function PhotosSection({ data }: { data: AppData }) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `lean-bulk-backup-${iso(new Date())}.json`;
+    link.download = `tempo-bulk-backup-${iso(new Date())}.json`;
     link.click();
     URL.revokeObjectURL(url);
   };
@@ -613,7 +626,6 @@ function PhotosSection({ data }: { data: AppData }) {
           </div>
         ))}
       </div>
-
       <input
         ref={fileRef}
         type="file"
