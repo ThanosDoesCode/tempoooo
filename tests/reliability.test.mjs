@@ -3,6 +3,13 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { isNetworkError, shouldRetryRead, userFacingError } from "../src/lib/network-errors.ts";
 import { safeOperationalCode } from "../supabase/functions/_shared/observability.ts";
+import { CancelledError, QueryClient, QueryObserver } from "@tanstack/react-query";
+import {
+  authenticatedUserChanged,
+  isExpectedQueryCancellation,
+  recoverChallengeRoute,
+  resetUserScopedQueries,
+} from "../src/lib/query-cancellation.ts";
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
@@ -47,6 +54,91 @@ test("app and Bulk routes have independent recovery boundaries", async () => {
   assert.match(boundary, /Try again/);
   assert.match(bulk, /errorComponent: BulkRouteError/);
   assert.match(bulk, /router\.invalidate\(\)/);
+});
+
+test("opening or refreshing Bulk seeds auth identity without cancelling its queries", () => {
+  assert.equal(authenticatedUserChanged(undefined, "owner-a"), false);
+});
+
+test("same-user token refresh does not reset active queries", () => {
+  assert.equal(authenticatedUserChanged("owner-a", "owner-a"), false);
+});
+
+test("actual account changes are recognized for private cache clearing", () => {
+  assert.equal(authenticatedUserChanged("owner-a", "owner-b"), true);
+  assert.equal(authenticatedUserChanged("owner-a", null), true);
+  assert.equal(authenticatedUserChanged(null, "owner-a"), true);
+});
+
+test("account changes clear private query data without removing active queries", async () => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  client.setQueryData(["authenticated-user"], { id: "owner-a" });
+  client.setQueryData(["bulk-memberships"], [{ bulk_profile_id: "private-a" }]);
+  client.setQueryData(["challenge-activities", "challenge-a"], [{ id: "activity-a" }]);
+  client.setQueryData(["public-unrelated"], "keep");
+  const observer = new QueryObserver(client, {
+    queryKey: ["bulk-memberships"],
+    queryFn: async () => [{ bulk_profile_id: "private-b" }],
+    staleTime: Infinity,
+  });
+  const unsubscribe = observer.subscribe(() => undefined);
+
+  await resetUserScopedQueries(client);
+
+  assert.equal(client.getQueryData(["authenticated-user"]), undefined);
+  assert.deepEqual(client.getQueryData(["bulk-memberships"]), [{ bulk_profile_id: "private-b" }]);
+  assert.equal(client.getQueryData(["challenge-activities", "challenge-a"]), undefined);
+  assert.equal(client.getQueryData(["public-unrelated"]), "keep");
+  unsubscribe();
+});
+
+test("TanStack cancellations recover while unexpected errors still reach crash UI", async () => {
+  const [boundary, root, bulk] = await Promise.all([
+    read("src/components/AppCrashBoundary.tsx"),
+    read("src/routes/__root.tsx"),
+    read("src/routes/_authenticated/bulk/route.tsx"),
+  ]);
+
+  assert.equal(isExpectedQueryCancellation(new CancelledError({ silent: true })), true);
+  assert.equal(isExpectedQueryCancellation(new Error("CancelledError")), false);
+  assert.equal(isExpectedQueryCancellation(new Error("database failed")), false);
+  assert.match(boundary, /isExpectedQueryCancellation\(this\.state\.error\)/);
+  assert.match(boundary, /return <QueryCancellationRecovery/);
+  assert.match(boundary, /reportLovableError\(error/);
+  assert.match(root, /if \(cancelled\)[\s\S]*QueryCancellationRecovery/);
+  assert.match(bulk, /isExpectedQueryCancellation\(error\)[\s\S]*QueryCancellationRecovery/);
+});
+
+test("crash recovery navigates to Challenge, clears the boundary and never reloads", async () => {
+  const [boundary, root] = await Promise.all([
+    read("src/components/AppCrashBoundary.tsx"),
+    read("src/routes/__root.tsx"),
+  ]);
+
+  assert.match(boundary, /onClick=\{this\.goToChallenge\}/);
+  assert.match(boundary, /this\.props\.onChallengeHome\(\)\.then/);
+  assert.match(boundary, /this\.setState\(\{ error: null \}\)/);
+  assert.match(boundary, /window\.location\.assign\("\/challenge"\)/);
+  let destination = null;
+  let invalidated = false;
+  await recoverChallengeRoute(
+    async (options) => {
+      destination = options;
+    },
+    async () => {
+      invalidated = true;
+    },
+  );
+  assert.deepEqual(destination, { to: "/challenge", replace: true });
+  assert.equal(invalidated, true);
+  assert.match(root, /recoverChallengeRoute\(/);
+  assert.doesNotMatch(boundary, /window\.location\.reload|<Link/);
+});
+
+test("Bulk owner revocation still clears local data and redirects", async () => {
+  const bulk = await read("src/routes/_authenticated/bulk/route.tsx");
+  assert.match(bulk, /memberships\.length === 0[\s\S]*clearBulk\(\)/);
+  assert.match(bulk, /navigate\(\{ to: "\/bulk-access-denied", replace: true \}\)/);
 });
 
 test("admin diagnostics are server-authorized and return no private notification payload", async () => {

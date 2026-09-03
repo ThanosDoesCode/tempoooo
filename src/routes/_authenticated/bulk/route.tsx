@@ -12,6 +12,8 @@ import { clearBulk, loadBulk, prefetchBulk, useBulkMeta } from "@/lib/store";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { DataError } from "@/components/ui-kit";
 import { userFacingError } from "@/lib/network-errors";
+import { isExpectedQueryCancellation } from "@/lib/query-cancellation";
+import { QueryCancellationRecovery } from "@/components/QueryCancellationRecovery";
 
 export const Route = createFileRoute("/_authenticated/bulk")({
   beforeLoad: async ({ context }) => {
@@ -25,6 +27,16 @@ export const Route = createFileRoute("/_authenticated/bulk")({
 
 function BulkRouteError({ error, reset }: ErrorComponentProps) {
   const router = useRouter();
+  if (isExpectedQueryCancellation(error)) {
+    return (
+      <QueryCancellationRecovery
+        onRecover={() => {
+          reset();
+          void router.invalidate();
+        }}
+      />
+    );
+  }
   return (
     <AppShell>
       <PageHeader title="Bulk unavailable" />

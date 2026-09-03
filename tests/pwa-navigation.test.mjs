@@ -65,8 +65,9 @@ test("navigation prefetch removes avoidable sequential reads", async () => {
   assert.match(home, /prefetchQuery\(weeksQueryOptions/);
   assert.match(home, /prefetchQuery\(paymentsQueryOptions/);
   const root = await read("src/routes/__root.tsx");
-  assert.match(root, /previousUserId\.current === nextUserId/);
-  assert.match(root, /removeQueries\(\{ queryKey: \["bulk-memberships"\] \}\)/);
+  assert.match(root, /authenticatedUserChanged\(previousUserId\.current, nextUserId\)/);
+  assert.match(root, /resetUserScopedQueries\(queryClient\)/);
+  assert.doesNotMatch(root, /removeQueries\(/);
 });
 
 test("Bulk History uses stored snapshots and labels legacy meal limitations", async () => {

@@ -16,6 +16,13 @@ import { Toaster } from "../components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { clearBulk } from "@/lib/store";
 import { AppCrashBoundary } from "@/components/AppCrashBoundary";
+import { QueryCancellationRecovery } from "@/components/QueryCancellationRecovery";
+import {
+  authenticatedUserChanged,
+  isExpectedQueryCancellation,
+  recoverChallengeRoute,
+  resetUserScopedQueries,
+} from "@/lib/query-cancellation";
 
 function NotFoundComponent() {
   return (
@@ -40,11 +47,25 @@ function NotFoundComponent() {
 }
 
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
-  console.error(error);
   const router = useRouter();
+  const cancelled = isExpectedQueryCancellation(error);
   useEffect(() => {
-    reportLovableError(error, { boundary: "tanstack_root_error_component" });
-  }, [error]);
+    if (!cancelled) {
+      console.error(error);
+      reportLovableError(error, { boundary: "tanstack_root_error_component" });
+    }
+  }, [cancelled, error]);
+
+  if (cancelled) {
+    return (
+      <QueryCancellationRecovery
+        onRecover={() => {
+          reset();
+          void router.invalidate();
+        }}
+      />
+    );
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -147,16 +168,19 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
-  const previousUserId = useRef<string | null>(null);
+  const router = useRouter();
+  const previousUserId = useRef<string | null | undefined>(undefined);
 
   useEffect(() => {
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       const nextUserId = session?.user.id ?? null;
-      if (previousUserId.current === nextUserId) return;
+      if (!authenticatedUserChanged(previousUserId.current, nextUserId)) {
+        previousUserId.current = nextUserId;
+        return;
+      }
       previousUserId.current = nextUserId;
       clearBulk();
-      queryClient.removeQueries({ queryKey: ["authenticated-user"] });
-      queryClient.removeQueries({ queryKey: ["bulk-memberships"] });
+      void resetUserScopedQueries(queryClient);
     });
     return () => data.subscription.unsubscribe();
   }, [queryClient]);
@@ -167,6 +191,12 @@ function RootComponent() {
         onRetry={() => {
           void queryClient.refetchQueries({ type: "active" });
         }}
+        onChallengeHome={() =>
+          recoverChallengeRoute(
+            (options) => router.navigate(options),
+            () => router.invalidate(),
+          )
+        }
       >
         <ChallengePushSession />
         {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
