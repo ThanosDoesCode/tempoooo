@@ -10,7 +10,12 @@ const source = await readFile(new URL("../src/lib/challenge-push.ts", import.met
 const compiled = ts.transpileModule(source.replaceAll("import.meta.env", "__testEnv"), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText;
-function browserFixture({ permission = "granted", saved = null } = {}) {
+function browserFixture({
+  permission = "granted",
+  saved = null,
+  scriptFailures = 0,
+  initFailures = 0,
+} = {}) {
   const calls = [];
   const storage = new Map(saved ? [["challenge-push-device", JSON.stringify(saved)]] : []);
   let authListener;
@@ -21,6 +26,10 @@ function browserFixture({ permission = "granted", saved = null } = {}) {
   const sdk = {
     async init(options) {
       calls.push(["init", options]);
+      if (initFailures > 0) {
+        initFailures -= 1;
+        throw new Error("temporary init failure");
+      }
     },
     async login(id) {
       calls.push(["login", id]);
@@ -106,10 +115,16 @@ function browserFixture({ permission = "granted", saved = null } = {}) {
       matchMedia: () => ({ matches: false }),
     },
     document: {
-      createElement: () => ({}),
+      createElement: () => ({ dataset: {}, remove() {} }),
       head: {
-        appendChild() {
+        appendChild(script) {
+          calls.push(["script"]);
           queueMicrotask(() => {
+            if (scriptFailures > 0) {
+              scriptFailures -= 1;
+              script.onerror?.();
+              return;
+            }
             for (const callback of context.window.OneSignalDeferred) void callback(sdk);
           });
         },
@@ -125,6 +140,9 @@ function browserFixture({ permission = "granted", saved = null } = {}) {
     storage,
     fail: () => {
       failure = true;
+    },
+    recoverSdkScript: () => {
+      scriptFailures = 0;
     },
     switchUser: (id) => {
       uid = id;
@@ -144,6 +162,25 @@ test("opening Challenge initializes without permission prompts or opt-in", async
     false,
   );
   assert.equal(await f.api.pushIsEnabled(f.sdk), false);
+});
+test("a transient SDK script failure retries without reloading the PWA", async () => {
+  const f = browserFixture({ scriptFailures: 1 });
+  await f.api.prepareChallengePush("user-a");
+  assert.equal(f.calls.filter(([name]) => name === "script").length, 2);
+  assert.equal(f.calls.filter(([name]) => name === "init").length, 1);
+});
+test("a transient SDK init failure reuses the loaded SDK and recovers", async () => {
+  const f = browserFixture({ initFailures: 1 });
+  await f.api.prepareChallengePush("user-a");
+  assert.equal(f.calls.filter(([name]) => name === "script").length, 1);
+  assert.equal(f.calls.filter(([name]) => name === "init").length, 2);
+});
+test("manual notification retry can recover after the bounded SDK attempts are exhausted", async () => {
+  const f = browserFixture({ scriptFailures: 3 });
+  await assert.rejects(f.api.prepareChallengePush("user-a"), /temporarily unavailable/);
+  f.recoverSdkScript();
+  await f.api.prepareChallengePush("user-a");
+  assert.equal(f.calls.filter(([name]) => name === "script").length, 4);
 });
 test("enable requests permission before any network work and registers only its device", async () => {
   const f = browserFixture();
@@ -193,6 +230,15 @@ test("iPhone outside Home Screen receives installation guidance", () => {
   const f = browserFixture();
   f.context.navigator.userAgent = "iPhone";
   assert.match(f.api.pushUnavailableReason(), /Add to Home Screen/);
+});
+test("unsupported browsers stay distinct from permission denial", () => {
+  const unsupported = browserFixture({ permission: "denied" });
+  unsupported.context.window.isSecureContext = false;
+  assert.match(unsupported.api.pushUnavailableReason(), /not supported/);
+
+  const denied = browserFixture({ permission: "denied" });
+  assert.equal(denied.api.pushUnavailableReason(), null);
+  assert.equal(denied.context.Notification.permission, "denied");
 });
 test("switching accounts while enabling rejects the previous user's registration", async () => {
   const f = browserFixture();

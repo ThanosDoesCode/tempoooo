@@ -25,13 +25,13 @@ import type { AppData, Workout } from "@/lib/types";
 export const Route = createFileRoute("/_authenticated/bulk/check-in")({
   head: () => ({
     meta: [
-      { title: "Check-In — Tempo" },
+      { title: "Tempo" },
       {
         name: "description",
         content:
           "Weekly and monthly lean bulk summaries built for a single clean screenshot to share with ChatGPT.",
       },
-      { property: "og:title", content: "Check-In — Tempo" },
+      { property: "og:title", content: "Tempo" },
       {
         property: "og:description",
         content: "One screenshot with weight trend, nutrition, training, activity and recovery.",

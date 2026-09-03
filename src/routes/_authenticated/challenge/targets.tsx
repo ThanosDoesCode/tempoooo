@@ -6,7 +6,7 @@ import { useMyChallenge } from "@/lib/challenge";
 export const Route = createFileRoute("/_authenticated/challenge/targets")({
   head: () => ({
     meta: [
-      { title: "Weekly target — Tempo" },
+      { title: "Tempo" },
       {
         name: "description",
         content: "The Challenge weekly target is fixed at 15 qualifying challenge kilometres.",

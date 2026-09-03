@@ -19,7 +19,7 @@ import {
 export const Route = createFileRoute("/_authenticated/bulk/history")({
   head: () => ({
     meta: [
-      { title: "Bulk history — Tempo" },
+      { title: "Tempo" },
       { name: "description", content: "Review a saved day of nutrition and training." },
     ],
   }),

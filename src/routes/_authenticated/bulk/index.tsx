@@ -11,12 +11,12 @@ import { RANGES, type MealPlanId, type WorkoutType } from "@/lib/types";
 export const Route = createFileRoute("/_authenticated/bulk/")({
   head: () => ({
     meta: [
-      { title: "Today — Tempo" },
+      { title: "Tempo" },
       {
         name: "description",
         content: "Log bodyweight, nutrition, activity and training in under a minute with Tempo.",
       },
-      { property: "og:title", content: "Today — Tempo" },
+      { property: "og:title", content: "Tempo" },
       {
         property: "og:description",
         content: "Fast daily logging for a 12-month lean bulk.",

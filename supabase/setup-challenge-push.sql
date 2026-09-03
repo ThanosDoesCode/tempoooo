@@ -40,3 +40,39 @@ DROP TRIGGER IF EXISTS challenge_push_wake ON public.challenge_notification_even
 CREATE TRIGGER challenge_push_wake AFTER INSERT ON public.challenge_notification_events
   FOR EACH STATEMENT EXECUTE FUNCTION private.wake_challenge_push();
 SELECT cron.schedule('challenge-push-retry', '* * * * *', 'SELECT private.dispatch_challenge_push();');
+
+-- Finalization attempts evidence cleanup immediately. This scheduled dispatcher
+-- recovers failed attempts and any work missed because that request was interrupted.
+CREATE OR REPLACE FUNCTION private.dispatch_challenge_evidence_cleanup()
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+DECLARE worker_url text; dispatch_secret text;
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM public.challenge_evidence_cleanup
+    WHERE (status IN ('pending', 'failed') AND next_attempt_at <= now())
+       OR (status = 'processing' AND lease_until < now())
+  ) THEN RETURN; END IF;
+  SELECT decrypted_secret INTO worker_url FROM vault.decrypted_secrets
+    WHERE name = 'challenge_evidence_cleanup_worker_url';
+  SELECT decrypted_secret INTO dispatch_secret FROM vault.decrypted_secrets
+    WHERE name = 'challenge_push_dispatch_secret';
+  IF worker_url IS NULL OR dispatch_secret IS NULL OR length(dispatch_secret) < 32 THEN
+    RAISE WARNING 'Challenge evidence cleanup dispatch configuration is missing';
+    RETURN;
+  END IF;
+  PERFORM net.http_post(url := worker_url,
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-challenge-push-secret', dispatch_secret),
+    body := '{}'::jsonb, timeout_milliseconds := 120000);
+END;
+$$;
+REVOKE ALL ON FUNCTION private.dispatch_challenge_evidence_cleanup()
+  FROM PUBLIC, anon, authenticated;
+
+-- Bounded worker batches keep an hourly invocation predictable. If more than one
+-- batch is due, later hourly runs continue draining it without client involvement.
+SELECT cron.schedule(
+  'challenge-evidence-cleanup-retry',
+  '7 * * * *',
+  'SELECT private.dispatch_challenge_evidence_cleanup();'
+);

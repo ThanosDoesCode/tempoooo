@@ -22,6 +22,9 @@ declare global {
 const markerKey = "challenge-push-device";
 type DeviceMarker = { userId: string; id: string };
 let sdkPromise: Promise<PushSdk> | undefined;
+let loadedSdk: PushSdk | undefined;
+const SDK_RETRY_DELAYS_MS = [250, 1000] as const;
+const SDK_LOAD_TIMEOUT_MS = 20_000;
 
 function marker(): DeviceMarker | null {
   try {
@@ -55,43 +58,87 @@ export function pushUnavailableReason(): string | null {
   return null;
 }
 
-function loadSdk(): Promise<PushSdk> {
-  if (sdkPromise) return sdkPromise;
-  sdkPromise = new Promise<PushSdk>((resolve, reject) => {
-    const timeout = window.setTimeout(
-      () => reject(new Error("Notification service could not load. Reload to retry.")),
-      20_000,
-    );
-    window.OneSignalDeferred ??= [];
-    window.OneSignalDeferred.push(async (sdk) => {
+function initSdk(sdk: PushSdk) {
+  return sdk.init({
+    appId: import.meta.env["VITE_ONESIGNAL_APP_ID"],
+    serviceWorkerPath: "OneSignalSDKWorker.js",
+    serviceWorkerParam: { scope: "/" },
+    allowLocalhostAsSecureOrigin: import.meta.env.DEV,
+    autoResubscribe: false,
+    promptOptions: { slidedown: { prompts: [{ type: "push", autoPrompt: false }] } },
+    notifyButton: { enable: false },
+    welcomeNotification: { disable: true },
+  });
+}
+
+function loadSdkAttempt(): Promise<PushSdk> {
+  if (loadedSdk) return initSdk(loadedSdk).then(() => loadedSdk!);
+  return new Promise<PushSdk>((resolve, reject) => {
+    let settled = false;
+    let script: HTMLScriptElement | null = null;
+    const onSdk = async (sdk: PushSdk) => {
+      loadedSdk = sdk;
       try {
-        await sdk.init({
-          appId: import.meta.env["VITE_ONESIGNAL_APP_ID"],
-          serviceWorkerPath: "OneSignalSDKWorker.js",
-          serviceWorkerParam: { scope: "/" },
-          allowLocalhostAsSecureOrigin: import.meta.env.DEV,
-          autoResubscribe: false,
-          promptOptions: { slidedown: { prompts: [{ type: "push", autoPrompt: false }] } },
-          notifyButton: { enable: false },
-          welcomeNotification: { disable: true },
-        });
-        resolve(sdk);
+        await initSdk(sdk);
+        finish(() => resolve(sdk));
       } catch {
-        reject(new Error("Notification service could not load. Reload to retry."));
-      } finally {
-        window.clearTimeout(timeout);
+        finish(() => reject(new Error("notification_sdk_init_failed")));
       }
-    });
-    const script = document.createElement("script");
+    };
+    const cleanup = () => {
+      window.clearTimeout(timeout);
+      const deferred = window.OneSignalDeferred;
+      const index = deferred?.indexOf(onSdk) ?? -1;
+      if (index >= 0) deferred?.splice(index, 1);
+    };
+    const finish = (settle: () => void) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      settle();
+    };
+    const timeout = window.setTimeout(() => {
+      script?.remove();
+      finish(() => reject(new Error("notification_sdk_load_timeout")));
+    }, SDK_LOAD_TIMEOUT_MS);
+    window.OneSignalDeferred ??= [];
+    window.OneSignalDeferred.push(onSdk);
+    script = document.createElement("script");
     script.src = "https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js";
     script.defer = true;
+    script.dataset["tempoOneSignal"] = "true";
     script.onerror = () => {
-      window.clearTimeout(timeout);
-      reject(new Error("Notification service is blocked or unavailable."));
+      script?.remove();
+      finish(() => reject(new Error("notification_sdk_script_failed")));
     };
     document.head.appendChild(script);
   });
-  return sdkPromise;
+}
+
+async function loadSdkWithRetry() {
+  for (let attempt = 0; attempt <= SDK_RETRY_DELAYS_MS.length; attempt += 1) {
+    try {
+      return await loadSdkAttempt();
+    } catch {
+      if (attempt === SDK_RETRY_DELAYS_MS.length) break;
+      await new Promise((resolve) =>
+        window.setTimeout(resolve, SDK_RETRY_DELAYS_MS[attempt] ?? 1000),
+      );
+    }
+  }
+  throw new Error(
+    "Notification service is temporarily unavailable. Check your connection and retry notifications.",
+  );
+}
+
+function loadSdk(): Promise<PushSdk> {
+  if (sdkPromise) return sdkPromise;
+  const pending = loadSdkWithRetry();
+  sdkPromise = pending;
+  void pending.catch(() => {
+    if (sdkPromise === pending) sdkPromise = undefined;
+  });
+  return pending;
 }
 
 async function endpoint<T>(body: Record<string, unknown>): Promise<T> {
@@ -183,7 +230,7 @@ export async function enableChallengePush(sdk: PushSdk, userId: string) {
   }
 
   if (!result?.enabled) {
-    throw new Error("Could not enable notifications. Reload and try again.");
+    throw new Error("Could not enable notifications. Please retry notifications.");
   }
 }
 

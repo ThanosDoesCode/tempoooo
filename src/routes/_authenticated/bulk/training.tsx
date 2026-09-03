@@ -10,12 +10,12 @@ import { useActions, useAppData, useBulkMeta } from "@/lib/store";
 export const Route = createFileRoute("/_authenticated/bulk/training")({
   head: () => ({
     meta: [
-      { title: "Training — Tempo" },
+      { title: "Tempo" },
       {
         name: "description",
         content: "Log sets, reps and weights with last session's numbers side by side.",
       },
-      { property: "og:title", content: "Training — Tempo" },
+      { property: "og:title", content: "Tempo" },
       {
         property: "og:description",
         content: "Exercise logging with progression status and strength history graphs.",

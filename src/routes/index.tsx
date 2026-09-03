@@ -8,17 +8,17 @@ export const Route = createFileRoute("/")({
   },
   head: () => ({
     meta: [
-      { title: "Tempo — bulk and challenge" },
+      { title: "Tempo" },
       {
         name: "description",
         content:
-          "A private lean bulk tracker plus a two-person 52-week running and cycling challenge with weekly targets and penalties.",
+          "A focused two-person 52-week running and cycling challenge with weekly targets and penalties.",
       },
-      { property: "og:title", content: "Tempo — bulk and challenge" },
+      { property: "og:title", content: "Tempo" },
       {
         property: "og:description",
         content:
-          "A private lean bulk tracker plus a two-person 52-week running and cycling challenge with weekly targets and penalties.",
+          "A focused two-person 52-week running and cycling challenge with weekly targets and penalties.",
       },
     ],
   }),

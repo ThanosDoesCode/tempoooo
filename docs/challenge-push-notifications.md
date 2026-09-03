@@ -97,16 +97,18 @@ supabase db push
 supabase secrets set --env-file supabase/functions/.env.local
 supabase functions deploy challenge-push
 supabase functions deploy challenge-push-subscription
+supabase functions deploy challenge-evidence-cleanup
 ```
 
-Both functions disable the gateway's legacy JWT check in `config.toml`, but **neither is unauthenticated**: subscription requests call `auth.getUser` on the bearer token; delivery requires the dedicated dispatch secret and reads committed events itself. Do not change these into publicly callable notification endpoints.
+These functions disable the gateway's legacy JWT check in `config.toml`, but **none is unauthenticated**: subscription requests call `auth.getUser` on the bearer token; push delivery and evidence cleanup require the dedicated dispatch secret and read committed server-side work themselves. Do not change these into publicly callable endpoints.
 
-In the Supabase dashboard, create two Vault secrets:
+In the Supabase dashboard, create three Vault secrets:
 
 - `challenge_push_worker_url`: `https://YOUR_PROJECT_REF.supabase.co/functions/v1/challenge-push`
+- `challenge_evidence_cleanup_worker_url`: `https://YOUR_PROJECT_REF.supabase.co/functions/v1/challenge-evidence-cleanup`
 - `challenge_push_dispatch_secret`: exactly the same random value as `CHALLENGE_PUSH_DISPATCH_SECRET`.
 
-Then run `supabase/setup-challenge-push.sql` in the SQL editor as administrator. This enables `pg_net`/`pg_cron`, adds an after-commit wake-up, and schedules a one-minute retry sweep. The script is separate so applying a schema migration never requires live provider keys or starts sending before setup is ready. It can be run again; the named cron job is updated. Supabase Vault is part of hosted Supabase; enable it first if absent in a custom installation. [Supabase scheduling guidance](https://supabase.com/docs/guides/functions/schedule-functions)
+Then run `supabase/setup-challenge-push.sql` in the SQL editor as administrator. This enables `pg_net`/`pg_cron`, adds the push after-commit wake-up, schedules the one-minute push retry sweep, and schedules finalized evidence cleanup hourly. The evidence worker uses the same server-held dispatch secret, claims no more than 50 due rows per run, and rechecks finalization before deleting private Storage objects. The script is separate so applying a schema migration never requires live provider keys or starts sending before setup is ready. It can be run again; the named cron jobs are updated. Supabase Vault is part of hosted Supabase; enable it first if absent in a custom installation. [Supabase scheduling guidance](https://supabase.com/docs/guides/functions/schedule-functions)
 
 Deploy/rebuild the frontend through the existing Lovable workflow. Check the manifest, worker, icons and exact production origin. If a CSP is used, permit the OneSignal SDK and its required connections/workers according to the provider's documentation; do not disable CSP globally.
 

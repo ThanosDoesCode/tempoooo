@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { PULL_REFRESH_THRESHOLD, pullGesture } from "../src/lib/pull-to-refresh.ts";
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
@@ -61,6 +61,44 @@ test("Tempo manifest and navigation expose Challenge by default and owner-only B
   const denied = await read("src/routes/_authenticated/bulk-access-denied.tsx");
   assert.match(denied, /Bulk access required/);
   assert.match(denied, /only available to authorized administrators/);
+});
+
+test("authenticated routes keep the document title fixed to Tempo", async () => {
+  const routeRoot = new URL("../src/routes/_authenticated/", import.meta.url);
+  const routeFiles = (await readdir(routeRoot, { recursive: true })).filter((file) =>
+    file.endsWith(".tsx"),
+  );
+
+  for (const file of routeFiles) {
+    const source = await read(`src/routes/_authenticated/${file}`);
+    const documentTitles = [...source.matchAll(/\{\s*title:\s*"([^"]+)"\s*\}/g)].map(
+      (match) => match[1],
+    );
+    const previewTitles = [
+      ...source.matchAll(/property:\s*"og:title",\s*content:\s*"([^"]+)"/g),
+    ].map((match) => match[1]);
+    assert.ok(
+      documentTitles.every((title) => title === "Tempo"),
+      `${file} overrides the document title with ${documentTitles.join(", ")}`,
+    );
+    assert.ok(
+      previewTitles.every((title) => title === "Tempo"),
+      `${file} overrides the preview title with ${previewTitles.join(", ")}`,
+    );
+  }
+
+  const root = await read("src/routes/__root.tsx");
+  assert.match(root, /\{ title: "Tempo" \}/);
+  assert.match(root, /property: "og:title", content: "Tempo"/);
+  assert.match(root, /name: "twitter:title", content: "Tempo"/);
+  assert.match(
+    root,
+    /property: "og:image"[\s\S]*content: "https:\/\/trexavlaka\.lovable\.app\/icons\/challenge-512\.png"/,
+  );
+  assert.doesNotMatch(root, /id-preview-|lean bulk tracker/i);
+  const index = await read("src/routes/index.tsx");
+  assert.match(index, /\{ title: "Tempo" \}/);
+  assert.doesNotMatch(index, /lean bulk tracker/i);
 });
 
 test("navigation prefetch removes avoidable sequential reads", async () => {

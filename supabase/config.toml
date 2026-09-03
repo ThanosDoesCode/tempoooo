@@ -7,3 +7,7 @@ verify_jwt = false
 [functions.challenge-push-subscription]
 # Auth is verified with auth.getUser (also supports new Supabase API keys).
 verify_jwt = false
+
+[functions.challenge-evidence-cleanup]
+# This endpoint verifies the existing dedicated, Vault-held dispatch secret itself.
+verify_jwt = false

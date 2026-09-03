@@ -14,6 +14,9 @@ import {
 export function ChallengeNotifications({ userId }: { userId: string }) {
   const [sdk, setSdk] = useState<PushSdk | null>(null);
   const [on, setOn] = useState(false);
+  const [serviceState, setServiceState] = useState<
+    "checking" | "ready" | "unsupported" | "temporary-failure"
+  >("checking");
   const [phase, setPhase] = useState<"checking" | "enabling" | "disabling" | null>("checking");
   const [feedback, setFeedback] = useState<{
     text: string;
@@ -30,13 +33,18 @@ export function ChallengeNotifications({ userId }: { userId: string }) {
       try {
         await refreshChallengePush(current, userId);
         const enabled = await pushIsEnabled(current);
-        if (alive) setOn(enabled);
+        if (alive) {
+          setOn(enabled);
+          setServiceState("ready");
+        }
       } catch {
-        if (alive)
+        if (alive) {
+          setServiceState("temporary-failure");
           setFeedback({
-            text: "Could not check notification status.",
+            text: "Notification status is temporarily unavailable. Retry notifications in a moment.",
             tone: "error",
           });
+        }
       } finally {
         refreshing = false;
       }
@@ -46,6 +54,7 @@ export function ChallengeNotifications({ userId }: { userId: string }) {
     };
     setSdk(null);
     setOn(false);
+    setServiceState("checking");
     setPhase("checking");
     const reason = pushUnavailableReason();
     setFeedback(reason ? { text: reason, tone: "info" } : null);
@@ -62,12 +71,16 @@ export function ChallengeNotifications({ userId }: { userId: string }) {
             window.addEventListener("focus", onChange);
           }
         } catch (error) {
-          if (alive) setFeedback({ text: (error as Error).message, tone: "error" });
+          if (alive) {
+            setServiceState("temporary-failure");
+            setFeedback({ text: (error as Error).message, tone: "error" });
+          }
         } finally {
           if (alive) setPhase(null);
         }
       })();
     } else {
+      setServiceState("unsupported");
       setPhase(null);
     }
     return () => {
@@ -112,6 +125,8 @@ export function ChallengeNotifications({ userId }: { userId: string }) {
   };
   const permissionMissing =
     typeof Notification !== "undefined" && Notification.permission === "default";
+  const permissionDenied =
+    typeof Notification !== "undefined" && Notification.permission === "denied";
   return (
     <div className="card-surface overflow-hidden">
       <details className="group">
@@ -137,10 +152,18 @@ export function ChallengeNotifications({ userId }: { userId: string }) {
                 : phase === "disabling"
                   ? "Disabling…"
                   : feedback?.tone === "error"
-                    ? "Needs attention"
-                    : on
-                      ? "On"
-                      : "Off"}
+                    ? serviceState === "temporary-failure"
+                      ? "Temporarily unavailable"
+                      : "Needs attention"
+                    : serviceState === "unsupported"
+                      ? "Unsupported"
+                      : permissionDenied
+                        ? "Permission denied"
+                        : permissionMissing
+                          ? "Not requested"
+                          : on
+                            ? "On"
+                            : "Off"}
           </span>
           <ChevronRight
             className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-90"
@@ -155,6 +178,12 @@ export function ChallengeNotifications({ userId }: { userId: string }) {
             <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
               Notification permission has not been granted on this device. Tempo asks only after you
               tap Enable notifications.
+            </p>
+          ) : null}
+          {!on && phase === null && permissionDenied ? (
+            <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+              Notification permission is denied on this device. You can allow Tempo in your browser
+              or iPhone notification settings.
             </p>
           ) : null}
           <div className="mt-2 flex flex-wrap gap-2 text-xs">
@@ -206,14 +235,16 @@ export function ChallengeNotifications({ userId }: { userId: string }) {
         >
           <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           <span className="min-w-0 flex-1">{feedback.text}</span>
-          <button
-            type="button"
-            disabled={phase !== null}
-            onClick={() => setRetryKey((key) => key + 1)}
-            className="min-h-11 shrink-0 rounded-lg border border-danger/40 px-3 py-2 font-semibold disabled:opacity-50"
-          >
-            Retry
-          </button>
+          {serviceState === "temporary-failure" ? (
+            <button
+              type="button"
+              disabled={phase !== null}
+              onClick={() => setRetryKey((key) => key + 1)}
+              className="min-h-11 shrink-0 rounded-lg border border-danger/40 px-3 py-2 font-semibold disabled:opacity-50"
+            >
+              Retry notifications
+            </button>
+          ) : null}
         </div>
       ) : null}
     </div>

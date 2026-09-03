@@ -12,12 +12,12 @@ import { resetBulkData } from "@/lib/store";
 export const Route = createFileRoute("/_authenticated/profile")({
   head: () => ({
     meta: [
-      { title: "Profile — Tempo" },
+      { title: "Tempo" },
       {
         name: "description",
         content: "See the account you are signed in with and create or open your lean bulk plan.",
       },
-      { property: "og:title", content: "Profile — Tempo" },
+      { property: "og:title", content: "Tempo" },
       {
         property: "og:description",
         content: "Manage your account and your lean bulk plan access.",

@@ -73,6 +73,8 @@ function fixture(distance, duration = "", type = "run", storageThrows = false) {
       if (name === "@tanstack/react-query")
         return { useQueryClient: () => ({ invalidateQueries: async () => {} }) };
       if (name === "@/lib/numeric") return numeric;
+      if (name === "@/lib/challenge-evidence")
+        return { optimizeEvidenceImage: async (file) => file };
       if (name === "sonner") return { toast: { success: (message) => toasts.push(message) } };
       if (name === "@/lib/auth") return { useAuth: () => ({ user: { id: "test-user" } }) };
       if (name === "@/lib/challenge")

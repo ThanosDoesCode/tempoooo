@@ -11,13 +11,13 @@ import { userFacingError } from "@/lib/network-errors";
 export const Route = createFileRoute("/_authenticated/challenge/new")({
   head: () => ({
     meta: [
-      { title: "Create challenge — Tempo" },
+      { title: "Tempo" },
       {
         name: "description",
         content:
           "Create a private two-person 52-week running and cycling challenge and invite exactly one opponent.",
       },
-      { property: "og:title", content: "Create challenge" },
+      { property: "og:title", content: "Tempo" },
       { property: "og:description", content: "Private, invite-only, 52 weeks, 15 km per week." },
     ],
   }),

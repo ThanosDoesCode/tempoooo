@@ -66,6 +66,14 @@ async function asUser(uid, action) {
     await db.exec("RESET ROLE");
   }
 }
+async function asService(action) {
+  await db.exec("SET ROLE service_role");
+  try {
+    return await action();
+  } finally {
+    await db.exec("RESET ROLE");
+  }
+}
 async function count(kind) {
   return Number(
     (
@@ -600,6 +608,252 @@ test("unrelated edits and bulk tracker writes create no events", async () => {
   );
 });
 let payment;
+test("evidence cleanup is queued only for successfully finalized weeks", async () => {
+  const retentionChallenge = await freshChallenge("Evidence retention");
+  const activityId = (await activity(a, 5, retentionChallenge)).rows[0].id;
+  const storageObjectId = randomUUID();
+  await db.query("INSERT INTO storage.objects(id,bucket_id,name) VALUES ($1,$2,$3)", [
+    storageObjectId,
+    "challenge-evidence",
+    `${retentionChallenge}/${a}/current-week.webp`,
+  ]);
+  const clientDeletion = await asUser(a, () =>
+    db.query("DELETE FROM storage.objects WHERE id=$1 RETURNING id", [storageObjectId]),
+  );
+  assert.equal(clientDeletion.rows.length, 0);
+  assert.equal(
+    Number(
+      (await db.query("SELECT count(*) AS n FROM storage.objects WHERE id=$1", [storageObjectId]))
+        .rows[0].n,
+    ),
+    1,
+  );
+
+  assert.equal(
+    Number(
+      (
+        await db.query(
+          "SELECT count(*) AS n FROM public.challenge_evidence_cleanup WHERE activity_id=$1",
+          [activityId],
+        )
+      ).rows[0].n,
+    ),
+    0,
+  );
+
+  await db.query("UPDATE public.challenges SET start_date=CURRENT_DATE-7 WHERE id=$1", [
+    retentionChallenge,
+  ]);
+  await db.exec(
+    "ALTER TABLE public.challenge_activities DISABLE TRIGGER challenge_activities_guard",
+  );
+  await db.query(
+    "UPDATE public.challenge_activities SET activity_date=CURRENT_DATE-7 WHERE id=$1",
+    [activityId],
+  );
+  await db.exec(
+    "ALTER TABLE public.challenge_activities ENABLE TRIGGER challenge_activities_guard",
+  );
+  const currentActivityId = (await activity(a, 2, retentionChallenge)).rows[0].id;
+
+  await assert.rejects(
+    db.query("SELECT public.finalize_challenge($1,$2)", [c, retentionChallenge]),
+    /Not a member/,
+  );
+  assert.equal(
+    Number(
+      (
+        await db.query(
+          "SELECT count(*) AS n FROM public.challenge_evidence_cleanup WHERE activity_id=$1",
+          [activityId],
+        )
+      ).rows[0].n,
+    ),
+    0,
+  );
+
+  await db.query("SELECT public.finalize_challenge($1,$2)", [a, retentionChallenge]);
+  await db.query("SELECT public.finalize_challenge($1,$2)", [a, retentionChallenge]);
+  const queued = await db.query(
+    "SELECT status,storage_paths FROM public.challenge_evidence_cleanup WHERE activity_id=$1",
+    [activityId],
+  );
+  assert.equal(queued.rows.length, 1);
+  assert.equal(queued.rows[0].status, "pending");
+  assert.deepEqual(queued.rows[0].storage_paths, ["private-test-evidence"]);
+  assert.equal(
+    Number(
+      (
+        await db.query(
+          "SELECT count(*) AS n FROM public.challenge_evidence_cleanup WHERE activity_id=$1",
+          [currentActivityId],
+        )
+      ).rows[0].n,
+    ),
+    0,
+  );
+  assert.equal(
+    Number(
+      (
+        await db.query("SELECT count(*) AS n FROM public.challenge_activities WHERE id=$1", [
+          activityId,
+        ])
+      ).rows[0].n,
+    ),
+    1,
+  );
+  await assert.rejects(
+    asUser(a, () =>
+      db.query("SELECT * FROM public.challenge_evidence_cleanup WHERE activity_id=$1", [
+        activityId,
+      ]),
+    ),
+    /permission denied/,
+  );
+
+  await assert.rejects(
+    asUser(a, () =>
+      db.query("SELECT * FROM public.claim_challenge_evidence_cleanup($1, $2)", [
+        retentionChallenge,
+        50,
+      ]),
+    ),
+    /permission denied/,
+  );
+
+  const firstClaim = await asService(() =>
+    db.query("SELECT * FROM public.claim_challenge_evidence_cleanup($1, $2)", [
+      retentionChallenge,
+      50,
+    ]),
+  );
+  assert.equal(firstClaim.rows.length, 1);
+  assert.equal(firstClaim.rows[0].activity_id, activityId);
+  assert.equal(firstClaim.rows[0].attempts, 1);
+
+  const overlappingClaim = await asService(() =>
+    db.query("SELECT * FROM public.claim_challenge_evidence_cleanup($1, $2)", [
+      retentionChallenge,
+      50,
+    ]),
+  );
+  assert.equal(overlappingClaim.rows.length, 0);
+
+  assert.equal(
+    (
+      await asService(() =>
+        db.query("SELECT public.finish_challenge_evidence_cleanup($1,$2,false) AS finished", [
+          activityId,
+          firstClaim.rows[0].lease_token,
+        ]),
+      )
+    ).rows[0].finished,
+    true,
+  );
+  const failed = await db.query(
+    `SELECT status,attempts,
+      next_attempt_at BETWEEN now() + interval '55 seconds' AND now() + interval '65 seconds'
+        AS waits_for_first_backoff
+     FROM public.challenge_evidence_cleanup WHERE activity_id=$1`,
+    [activityId],
+  );
+  assert.deepEqual(failed.rows[0], {
+    status: "failed",
+    attempts: 1,
+    waits_for_first_backoff: true,
+  });
+
+  const futureRetry = await asService(() =>
+    db.query("SELECT * FROM public.claim_challenge_evidence_cleanup($1, $2)", [
+      retentionChallenge,
+      50,
+    ]),
+  );
+  assert.equal(futureRetry.rows.length, 0);
+
+  await db.query(
+    "UPDATE public.challenge_evidence_cleanup SET next_attempt_at=now()-interval '1 second' WHERE activity_id=$1",
+    [activityId],
+  );
+  const retryClaim = await asService(() =>
+    db.query("SELECT * FROM public.claim_challenge_evidence_cleanup($1, $2)", [
+      retentionChallenge,
+      50,
+    ]),
+  );
+  assert.equal(retryClaim.rows.length, 1);
+  assert.equal(retryClaim.rows[0].attempts, 2);
+  assert.notEqual(retryClaim.rows[0].lease_token, firstClaim.rows[0].lease_token);
+  assert.equal(
+    (
+      await asService(() =>
+        db.query("SELECT public.finish_challenge_evidence_cleanup($1,$2,true) AS finished", [
+          activityId,
+          retryClaim.rows[0].lease_token,
+        ]),
+      )
+    ).rows[0].finished,
+    true,
+  );
+  assert.equal(
+    (
+      await db.query("SELECT status FROM public.challenge_evidence_cleanup WHERE activity_id=$1", [
+        activityId,
+      ])
+    ).rows[0].status,
+    "completed",
+  );
+  assert.equal(
+    (
+      await asService(() =>
+        db.query("SELECT * FROM public.claim_challenge_evidence_cleanup($1, $2)", [
+          retentionChallenge,
+          50,
+        ]),
+      )
+    ).rows.length,
+    0,
+  );
+
+  // Even a server-created bad queue row cannot make an open week eligible.
+  await db.query(
+    "INSERT INTO public.challenge_evidence_cleanup(activity_id,challenge_id,storage_paths) VALUES ($1,$2,$3)",
+    [currentActivityId, retentionChallenge, [`${retentionChallenge}/${a}/open.webp`]],
+  );
+  assert.equal(
+    (
+      await asService(() =>
+        db.query("SELECT * FROM public.claim_challenge_evidence_cleanup($1, $2)", [
+          retentionChallenge,
+          50,
+        ]),
+      )
+    ).rows.length,
+    0,
+  );
+  assert.equal(
+    Number(
+      (
+        await db.query(
+          "SELECT count(*) AS n FROM public.challenge_activities WHERE id IN ($1,$2)",
+          [activityId, currentActivityId],
+        )
+      ).rows[0].n,
+    ),
+    2,
+  );
+  assert.equal(
+    Number(
+      (
+        await db.query(
+          "SELECT count(*) AS n FROM public.challenge_weeks WHERE challenge_id=$1 AND user_id=$2",
+          [retentionChallenge, a],
+        )
+      ).rows[0].n,
+    ),
+    1,
+  );
+});
 test("real finalization creates exactly one €5 penalty event, including repeated calls", async () => {
   // Fixture a closed week through the service role without altering production guards.
   const past = randomUUID();

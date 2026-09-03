@@ -6,7 +6,7 @@ import { Card } from "@/components/ui-kit";
 export const Route = createFileRoute("/_authenticated/bulk-access-denied")({
   head: () => ({
     meta: [
-      { title: "Bulk access required — Tempo" },
+      { title: "Tempo" },
       {
         name: "description",
         content: "Bulk is a private Tempo administration area.",

@@ -37,11 +37,13 @@ import {
   useChallengeMembers,
   useMyChallenge,
   useTravelPauses,
+  useWeeks,
   weeksQueryOptions,
   weekPaused,
   weekBounds,
   weekNumberOf,
 } from "@/lib/challenge";
+import { evidenceWeekFinalized } from "@/lib/challenge-evidence";
 import { ChallengePrimer } from "@/components/challenge-rules";
 import { ChallengeInviteCard } from "@/components/ChallengeInvite";
 import { ChallengeNotifications } from "@/components/ChallengeNotifications";
@@ -49,13 +51,13 @@ import { ChallengeNotifications } from "@/components/ChallengeNotifications";
 export const Route = createFileRoute("/_authenticated/challenge/")({
   head: () => ({
     meta: [
-      { title: "This week — Tempo" },
+      { title: "Tempo" },
       {
         name: "description",
         content:
           "Track this week's equivalent kilometres, live penalty and remaining distance in your private two-person endurance challenge.",
       },
-      { property: "og:title", content: "This week — Tempo" },
+      { property: "og:title", content: "Tempo" },
       {
         property: "og:description",
         content: "15 equivalent km per week, running and cycling, tiered penalties.",
@@ -80,6 +82,8 @@ function ChallengeHome() {
   } = activitiesQuery;
   const pausesQuery = useTravelPauses(challenge?.id);
   const { data: travelPauses, isLoading: pausesLoading, error: pausesError } = pausesQuery;
+  const weeksQuery = useWeeks(challenge?.id);
+  const { data: finalizedWeeks } = weeksQuery;
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -124,8 +128,11 @@ function ChallengeHome() {
 
   // Lazy, deterministic server-side finalization of any closed weeks.
   useEffect(() => {
-    if (challenge) void finalizeChallenge({ data: { challenge: challenge.id } });
-  }, [challenge]);
+    if (!challenge) return;
+    void finalizeChallenge({ data: { challenge: challenge.id } }).then(() =>
+      qc.invalidateQueries({ queryKey: ["challenge-weeks", challenge.id] }),
+    );
+  }, [challenge, qc]);
 
   // The default screen warms the two small secondary datasets used by History and Money.
   useEffect(() => {
@@ -284,6 +291,7 @@ function ChallengeHome() {
                 activity.evidence_path,
                 ...(activity.extra_evidence_paths ?? []),
               ];
+              const evidenceExpired = evidenceWeekFinalized(activity, finalizedWeeks ?? []);
               return (
                 <Card key={activity.id} className="overflow-hidden p-0">
                   <div className="px-3 py-2.5">
@@ -337,7 +345,7 @@ function ChallengeHome() {
                           </p>
                         ) : null}
                         <div className="mt-1 flex flex-wrap items-center gap-1 text-[11px]">
-                          <EvidenceViewer paths={evidencePaths} />
+                          <EvidenceViewer paths={evidencePaths} expired={evidenceExpired} />
                           {activity.external_activity_url ? (
                             <a
                               href={activity.external_activity_url}
@@ -595,7 +603,7 @@ function formatActivityDay(day: string, today: string) {
 }
 
 /** Evidence screenshots are visible to both members so neither can cheat. */
-function EvidenceViewer({ paths }: { paths: string[] }) {
+function EvidenceViewer({ paths, expired }: { paths: string[]; expired: boolean }) {
   const [urls, setUrls] = useState<string[] | null>(null);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -616,6 +624,14 @@ function EvidenceViewer({ paths }: { paths: string[] }) {
 
   if (paths.length === 0) return null;
 
+  if (expired) {
+    return (
+      <span className="inline-flex min-h-11 items-center gap-1 rounded-lg px-2 py-2 text-muted-foreground">
+        <ImageIcon className="h-3 w-3" aria-hidden="true" /> Evidence expired after finalization
+      </span>
+    );
+  }
+
   if (!open) {
     return (
       <button
@@ -624,7 +640,7 @@ function EvidenceViewer({ paths }: { paths: string[] }) {
         aria-label={`View ${paths.length} evidence screenshot${paths.length > 1 ? "s" : ""}`}
         className="inline-flex min-h-11 items-center gap-1 rounded-lg px-2 py-2 font-medium text-muted-foreground hover:bg-elevated"
       >
-        <ImageIcon className="h-3 w-3" aria-hidden="true" /> Evidence
+        <ImageIcon className="h-3 w-3" aria-hidden="true" /> Evidence available
         {paths.length > 1 ? ` ${paths.length}` : ""}
       </button>
     );

@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { normalizeDecimal, parseDecimal } from "@/lib/numeric";
 import { userFacingError } from "@/lib/network-errors";
+import { optimizeEvidenceImage } from "@/lib/challenge-evidence";
 import {
   activityMetrics,
   DEFAULT_TARGET_KM,
@@ -20,12 +21,12 @@ import {
 export const Route = createFileRoute("/_authenticated/challenge/log")({
   head: () => ({
     meta: [
-      { title: "Add activity — Tempo" },
+      { title: "Tempo" },
       {
         name: "description",
         content: "Log a qualifying run or ride with duration and a Strava screenshot as evidence.",
       },
-      { property: "og:title", content: "Add activity — Tempo" },
+      { property: "og:title", content: "Tempo" },
       { property: "og:description", content: "Run or cycle, screenshot required." },
     ],
   }),
@@ -152,10 +153,13 @@ function LogActivity() {
     setPending("uploading");
     try {
       const paths: string[] = [];
-      for (const f of files) {
-        const ext = f.name.split(".").pop() ?? "jpg";
+      for (const selectedFile of files) {
+        const uploadFile = await optimizeEvidenceImage(selectedFile);
+        const ext = uploadFile.name.split(".").pop() ?? "jpg";
         const path = `${challenge.id}/${user.id}/${crypto.randomUUID()}.${ext}`;
-        const up = await supabase.storage.from("challenge-evidence").upload(path, f);
+        const up = await supabase.storage.from("challenge-evidence").upload(path, uploadFile, {
+          contentType: uploadFile.type || "application/octet-stream",
+        });
         if (up.error) throw up.error;
         paths.push(path);
       }

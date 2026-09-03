@@ -7,13 +7,13 @@ import { acceptChallengeInvitation } from "@/lib/privileged-rpcs.functions";
 export const Route = createFileRoute("/_authenticated/invite/challenge/$token")({
   head: () => ({
     meta: [
-      { title: "Challenge invitation — Tempo" },
+      { title: "Tempo" },
       {
         name: "description",
         content:
           "Accept an invitation to a private two-person 52-week running and cycling challenge.",
       },
-      { property: "og:title", content: "Challenge invitation" },
+      { property: "og:title", content: "Tempo" },
       { property: "og:description", content: "15 equivalent km per week, for 52 weeks." },
     ],
   }),

@@ -44,9 +44,19 @@ test("activity failures retain a session draft and distinguish validation from s
 
 test("notification and invitation failures are retryable", async () => {
   const notifications = await read("src/components/ChallengeNotifications.tsx");
+  const push = await read("src/lib/challenge-push.ts");
   const invitation = await read("src/routes/_authenticated/invite.challenge.$token.tsx");
   assert.match(notifications, /Notification permission has not been granted/);
+  assert.match(notifications, /Permission denied/);
+  assert.match(notifications, /Not requested/);
+  assert.match(notifications, /Temporarily unavailable/);
+  assert.match(notifications, /Unsupported/);
+  assert.match(notifications, /Retry notifications/);
   assert.match(notifications, /setRetryKey/);
+  assert.doesNotMatch(notifications, /location\.reload/);
+  assert.match(push, /SDK_RETRY_DELAYS_MS/);
+  assert.match(push, /sdkPromise = undefined/);
+  assert.doesNotMatch(push, /Notification service could not load\. Reload/);
   assert.match(invitation, /Could not accept this invitation/);
   assert.match(invitation, /Try again/);
 });

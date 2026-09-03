@@ -8,7 +8,7 @@ import { getAdminDiagnostics } from "@/lib/privileged-rpcs.functions";
 import { userFacingError } from "@/lib/network-errors";
 
 export const Route = createFileRoute("/_authenticated/bulk/diagnostics")({
-  head: () => ({ meta: [{ title: "Diagnostics — Tempo" }] }),
+  head: () => ({ meta: [{ title: "Tempo" }] }),
   component: DiagnosticsPage,
 });
 
