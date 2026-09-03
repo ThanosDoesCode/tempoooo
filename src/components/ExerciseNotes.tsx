@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/dialog";
 import { DecimalInput } from "./DecimalInput";
 import { NOTE_TAGS, notesPreview } from "@/lib/training";
-import type { ExerciseEntry } from "@/lib/types";
+import { exerciseLabel, type ExerciseEntry } from "@/lib/types";
 import { parseDecimal } from "@/lib/numeric";
 
 export function ExerciseNotes({
@@ -41,7 +41,7 @@ export function ExerciseNotes({
         <button
           type="button"
           disabled={disabled}
-          aria-label={`Notes for ${entry.exercise}`}
+          aria-label={`Notes for ${exerciseLabel(entry.exercise)}`}
           className="mt-2 min-h-11 w-full min-w-0 truncate rounded-xl border border-input bg-elevated px-3 py-2 text-left text-sm text-muted-foreground"
         >
           {preview || "Notes · form, effort, anything to remember"}
@@ -51,7 +51,7 @@ export function ExerciseNotes({
         className="max-h-[85dvh] w-[calc(100%-1.5rem)] overflow-y-auto rounded-2xl p-4 [&>button]:grid [&>button]:min-h-11 [&>button]:min-w-11 [&>button]:place-items-center"
         onOpenAutoFocus={(event) => event.preventDefault()}
       >
-        <DialogTitle className="pr-12 text-base">{entry.exercise} notes</DialogTitle>
+        <DialogTitle className="pr-12 text-base">{exerciseLabel(entry.exercise)} notes</DialogTitle>
         <DialogDescription className="text-xs">
           Optional context for this exercise.
         </DialogDescription>

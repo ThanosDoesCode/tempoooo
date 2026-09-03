@@ -115,6 +115,22 @@ export function repeatPreviousSet(entry: ExerciseEntry, setIndex: number): Exerc
   return { ...entry, reps };
 }
 
+/** Applies the Same shortcut without creating timestamps or changing exercise-level metadata. */
+export function repeatPreviousWorkoutSet(
+  workout: Workout,
+  exercise: string,
+  setIndex: number,
+): Workout {
+  const current = workout.entries.find((entry) => entry.exercise === exercise);
+  if (!current) return workout;
+  const repeated = repeatPreviousSet(current, setIndex);
+  if (repeated === current) return workout;
+  return {
+    ...workout,
+    entries: workout.entries.map((entry) => (entry === current ? repeated : entry)),
+  };
+}
+
 export const restSecondsRemaining = (deadlineMs: number, nowMs = Date.now()) =>
   Math.max(0, Math.ceil((deadlineMs - nowMs) / 1000));
 

@@ -17,6 +17,7 @@ import {
   volumeMultiplier,
   bodyweightMode,
   repeatPreviousSet,
+  repeatPreviousWorkoutSet,
   restSecondsRemaining,
   setSessionBodyweight,
 } from "../src/lib/training.ts";
@@ -176,6 +177,32 @@ test("Same copies only the previous current-session set and never overwrites", (
     1,
   );
   assert.equal(assisted.assistance, 15);
+});
+test("Same changes only local set data and preserves workout timing and exercise metadata", () => {
+  const original = workout(
+    "2026-08-31",
+    [
+      {
+        ...bw(62, [10, undefined, undefined]),
+        loadMode: "added",
+        addedWeight: 5,
+        notes: "Neutral grip",
+        rpe: 8,
+      },
+    ],
+    { status: "draft", sessionBodyweight: 62 },
+  );
+  const repeated = repeatPreviousWorkoutSet(original, "Pull-Ups", 1);
+  assert.deepEqual(repeated.entries[0].reps, [10, 10, undefined]);
+  assert.equal(repeated.entries[0].loadMode, "added");
+  assert.equal(repeated.entries[0].addedWeight, 5);
+  assert.equal(repeated.entries[0].bodyweight, 62);
+  assert.equal(repeated.entries[0].notes, "Neutral grip");
+  assert.equal(repeated.entries[0].rpe, 8);
+  assert.equal(repeated.startedAt, undefined);
+  assert.equal(repeated.durationSeconds, undefined);
+  assert.equal(repeated.status, "draft");
+  assert.equal(repeatPreviousWorkoutSet(repeated, "Pull-Ups", 1), repeated);
 });
 test("rest timer derives remaining time from its deadline after background gaps", () => {
   assert.equal(restSecondsRemaining(120_000, 0), 120);

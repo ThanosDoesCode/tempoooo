@@ -7,11 +7,11 @@ import { Card, SectionTitle } from "@/components/ui-kit";
 import { iso } from "@/lib/calc";
 import { mealPlan } from "@/lib/meals";
 import { useAppData } from "@/lib/store";
+import { exerciseLabel, splitLabel } from "@/lib/types";
 import {
   bodyweightMode,
   entryLoadLabel,
   metricNumber,
-  notesPreview,
   workoutDuration,
   workoutMetrics,
 } from "@/lib/training";
@@ -43,6 +43,14 @@ function BulkHistoryPage() {
   const workout = data.workouts[date];
   const metrics = workout ? workoutMetrics(workout) : null;
   const duration = workout ? workoutDuration(workout) : null;
+  const workoutPerformed = (metrics?.workingSets ?? 0) > 0;
+  const workoutName = workout
+    ? splitLabel(workout.type)
+    : day?.workoutType === "Rest"
+      ? "Rest"
+      : day?.workoutType
+        ? splitLabel(day.workoutType)
+        : "—";
   const configuredPlan = mealPlan(day?.mealPlan);
   const nutrition = day?.mealSnapshot ?? configuredPlan;
   const hasNutrition =
@@ -94,46 +102,98 @@ function BulkHistoryPage() {
           <Summary label="Carbs" value={day?.carbs == null ? "—" : `${day.carbs} g`} />
           <Summary label="Fat" value={day?.fat == null ? "—" : `${day.fat} g`} />
         </div>
+        {day?.note?.trim() ? (
+          <p className="mt-3 whitespace-pre-wrap rounded-xl bg-elevated/70 p-3 text-xs text-muted-foreground">
+            Daily note: {day.note.trim()}
+          </p>
+        ) : null}
       </Card>
 
       <Card className="mt-3">
         <SectionTitle>Workout</SectionTitle>
+        <div className="grid grid-cols-2 gap-2 text-sm">
+          <Summary label="Performed" value={workoutPerformed ? "Yes" : "No"} />
+          <Summary label="Workout" value={workoutName} />
+          <Summary
+            label="Status"
+            value={
+              !workout
+                ? "Not logged"
+                : workout.status === "completed"
+                  ? "Completed"
+                  : workout.status === "draft"
+                    ? "Draft"
+                    : "Legacy record"
+            }
+          />
+          <Summary
+            label="Duration"
+            value={duration == null ? "—" : `${Math.round(duration / 60)} min`}
+          />
+          <Summary
+            label="Total volume"
+            value={metrics?.volume == null ? "—" : `${metricNumber(metrics.volume)} kg`}
+          />
+          <Summary label="Working sets" value={String(metrics?.workingSets ?? 0)} />
+          {workout?.sessionBodyweight != null ? (
+            <Summary label="Session bodyweight" value={`${workout.sessionBodyweight} kg`} />
+          ) : null}
+        </div>
         {!workout ? (
-          <Empty>No workout was logged for this day.</Empty>
+          <div className="mt-3">
+            <Empty>No workout was logged for this day.</Empty>
+          </div>
         ) : (
           <>
-            <p className="text-sm font-semibold">{workout.type}</p>
-            <p className="num mt-1 text-xs text-muted-foreground">
-              {duration == null ? "Duration unavailable" : `${Math.round(duration / 60)} min`} ·{" "}
-              {metrics?.volume == null
-                ? "Volume unavailable"
-                : `${metricNumber(metrics.volume)} kg`}{" "}
-              · {metrics?.workingSets ?? 0} sets
-            </p>
+            {!workoutPerformed ? (
+              <p className="mt-3 rounded-xl bg-warn/10 p-3 text-xs text-warn">
+                This saved workout has no working sets, so it is not counted as performed.
+              </p>
+            ) : null}
             <div className="mt-3 space-y-2">
               {workout.entries.map((entry) => (
                 <div key={entry.exercise} className="rounded-xl bg-elevated/70 p-3">
                   <div className="flex items-start justify-between gap-2">
-                    <p className="text-sm font-semibold">{entry.exercise}</p>
+                    <p className="text-sm font-semibold">{exerciseLabel(entry.exercise)}</p>
                     <span className="num shrink-0 text-xs text-muted-foreground">
                       {entryLoadLabel(entry)}
                     </span>
                   </div>
-                  <p className="num mt-1 text-xs">
-                    Sets: {entry.reps.map((rep) => rep ?? "—").join(" / ")}
-                  </p>
-                  {entry.bodyweight != null ? (
-                    <p className="num mt-1 text-[11px] text-muted-foreground">
-                      {bodyweightMode(entry) === "assisted"
-                        ? `BW ${entry.bodyweight} kg · assistance ${entry.assistance ?? 0} kg`
-                        : bodyweightMode(entry) === "added"
-                          ? `BW ${entry.bodyweight} kg · extra ${entry.addedWeight ?? 0} kg`
-                          : `Bodyweight ${entry.bodyweight} kg`}
+                  <div className="mt-2 grid grid-cols-3 gap-1.5">
+                    {entry.reps.map((rep, index) => (
+                      <div key={index} className="rounded-lg bg-card/60 px-2 py-1.5">
+                        <p className="text-[9px] uppercase tracking-wider text-muted-foreground">
+                          Set {index + 1}
+                        </p>
+                        <p className="num mt-0.5 text-xs font-semibold">
+                          {rep == null ? "—" : `${rep} reps`}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                  <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+                    <HistoryField label="Load" value={entryLoadLabel(entry)} />
+                    {entry.bodyweight != null ? (
+                      <HistoryField label="Bodyweight" value={`${entry.bodyweight} kg`} />
+                    ) : null}
+                    {bodyweightMode(entry) === "added" || entry.addedWeight != null ? (
+                      <HistoryField label="Extra weight" value={`${entry.addedWeight ?? 0} kg`} />
+                    ) : null}
+                    {bodyweightMode(entry) === "assisted" || entry.assistance != null ? (
+                      <HistoryField label="Assistance" value={`${entry.assistance ?? 0} kg`} />
+                    ) : null}
+                    {entry.rpe != null ? (
+                      <HistoryField label="RPE" value={String(entry.rpe)} />
+                    ) : null}
+                  </dl>
+                  {entry.noteTags?.length ? (
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Tags: {entry.noteTags.join(" · ")}
                     </p>
                   ) : null}
-                  {notesPreview(entry) ? (
+                  {entry.notes?.trim() ? (
                     <p className="mt-1 whitespace-pre-wrap text-xs text-muted-foreground">
-                      {notesPreview(entry)}
+                      Notes: {entry.notes.trim()}
                     </p>
                   ) : null}
                 </div>
@@ -162,6 +222,10 @@ function BulkHistoryPage() {
                     Legacy day: these are the foods configured for the selected plan; individual
                     consumption was not stored separately.
                   </p>
+                ) : day?.mealSnapshot ? (
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    Saved plan snapshot for this date.
+                  </p>
                 ) : null}
                 {[...nutrition.base, ...nutrition.meals].length ? (
                   <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
@@ -177,7 +241,10 @@ function BulkHistoryPage() {
                 Custom foods and quantities were not stored for this legacy day.
               </p>
             ) : null}
-            <p className="num mt-3 text-xs text-muted-foreground">
+            <p className="mt-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Stored totals (authoritative)
+            </p>
+            <p className="num mt-1 text-xs text-muted-foreground">
               {day?.calories ?? "—"} kcal · {day?.protein ?? "—"} g protein · {day?.carbs ?? "—"} g
               carbs · {day?.fat ?? "—"} g fat
             </p>
@@ -185,6 +252,15 @@ function BulkHistoryPage() {
         )}
       </Card>
     </AppShell>
+  );
+}
+
+function HistoryField({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="inline font-medium text-foreground">{label}:</dt>{" "}
+      <dd className="inline">{value}</dd>
+    </div>
   );
 }
 

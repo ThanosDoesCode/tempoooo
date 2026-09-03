@@ -36,7 +36,7 @@ import {
   weekStartOf,
 } from "@/lib/calc";
 import { useActions, useAppData, useBulkMeta } from "@/lib/store";
-import { ALL_EXERCISES, type AppData, type PhotoSet } from "@/lib/types";
+import { ALL_EXERCISES, exerciseLabel, type AppData, type PhotoSet } from "@/lib/types";
 
 export const Route = createFileRoute("/_authenticated/bulk/progress")({
   head: () => ({
@@ -346,7 +346,9 @@ function ProgressPage() {
                       : "text-warn";
               return (
                 <div key={def.name} className="flex items-center justify-between gap-3 text-sm">
-                  <span className="min-w-0 truncate text-muted-foreground">{def.name}</span>
+                  <span className="min-w-0 truncate text-muted-foreground">
+                    {exerciseLabel(def.name)}
+                  </span>
                   <span className={`num shrink-0 font-semibold ${tone}`}>
                     {s == null ? "—" : `${arrow} ${pctSigned(s.pct)} · ${s.latest}`}
                   </span>

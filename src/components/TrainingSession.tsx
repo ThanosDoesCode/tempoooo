@@ -15,7 +15,9 @@ import { ExerciseNotes } from "./ExerciseNotes";
 import { exerciseHistory, progressionFor, totalReps } from "@/lib/calc";
 import {
   EXERCISES,
+  exerciseLabel,
   exerciseDef,
+  splitLabel,
   type AppData,
   type ExerciseEntry,
   type SplitType,
@@ -32,7 +34,7 @@ import {
   isBodyweight,
   metricNumber,
   notesPreview,
-  repeatPreviousSet,
+  repeatPreviousWorkoutSet,
   restSecondsRemaining,
   setSessionBodyweight,
   updateExercise,
@@ -68,7 +70,9 @@ export function TrainingSession({
   const current = useRef(workout);
   const revision = useRef(0);
   const failedAttempt = useRef<Workout | null>(null);
-  const [sync, setSync] = useState<"saved" | "saving" | "error">(restored ? "error" : "saved");
+  const [sync, setSync] = useState<"saved" | "saving" | "unsaved" | "error">(
+    restored ? "error" : "saved",
+  );
   const [error, setError] = useState(
     restored ? "Unsynced edits restored on this device. Retry save when connected." : "",
   );
@@ -122,6 +126,14 @@ export function TrainingSession({
     setWorkout(next);
     void persist(next);
   };
+  const changeWithoutSaving = (next: Workout) => {
+    ++revision.current;
+    current.current = next;
+    failedAttempt.current = null;
+    setWorkout(next);
+    setSync("unsaved");
+    setError("");
+  };
   const update = (name: string, patch: Partial<ExerciseEntry>) =>
     change(updateExercise(current.current, name, patch));
   const startRest = () => {
@@ -171,7 +183,7 @@ export function TrainingSession({
               }}
               className={`min-h-11 rounded-full border px-3 py-2 text-sm font-medium disabled:opacity-40 ${workout.type === split ? "border-primary bg-primary text-primary-foreground" : "border-border bg-elevated text-muted-foreground"}`}
             >
-              {split}
+              {splitLabel(split)}
             </button>
           ))}
         </div>
@@ -206,7 +218,14 @@ export function TrainingSession({
               : workout.status === "draft"
                 ? "Draft"
                 : "Historical log"}{" "}
-            · {sync === "saving" ? "Saving…" : sync === "error" ? "Unsynced" : "Saved entries"}
+            ·{" "}
+            {sync === "saving"
+              ? "Saving…"
+              : sync === "error"
+                ? "Unsynced"
+                : sync === "unsaved"
+                  ? "Same not saved yet"
+                  : "Saved entries"}
           </span>
           <span className="num">
             Duration:{" "}
@@ -214,6 +233,15 @@ export function TrainingSession({
               ? "—"
               : `${Math.floor(duration / 60)}:${String(Math.floor(duration % 60)).padStart(2, "0")}`}
           </span>
+          {sync === "unsaved" ? (
+            <button
+              type="button"
+              onClick={() => void persist(current.current)}
+              className="min-h-11 rounded-lg border border-primary/40 px-3 py-2 font-semibold text-primary"
+            >
+              {workout.status === "completed" ? "Save changes" : "Save draft"}
+            </button>
+          ) : null}
         </div>
         {error ? (
           <div role="alert" className="mb-3 rounded-xl bg-danger/10 p-3 text-xs text-danger">
@@ -250,7 +278,7 @@ export function TrainingSession({
               <Card key={def.name}>
                 <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <h3 className="text-base font-semibold">{def.name}</h3>
+                    <h3 className="text-base font-semibold">{exerciseLabel(def.name)}</h3>
                     <p className="mt-0.5 text-[11px] text-muted-foreground">
                       Target: {def.min} to {def.max} reps
                       {volumeMultiplier(def.name) === 2 ? " · kg per dumbbell" : ""}
@@ -344,13 +372,11 @@ export function TrainingSession({
                         <button
                           type="button"
                           disabled={entry.reps[i - 1] == null || entry.reps[i] != null}
+                          aria-label={`Copy Set ${i} reps and current load settings to Set ${i + 1}`}
                           onClick={() => {
-                            const savedEntry =
-                              current.current.entries.find((e) => e.exercise === def.name) ?? entry;
-                            const repeated = repeatPreviousSet(savedEntry, i);
-                            if (repeated === savedEntry) return;
-                            update(def.name, { reps: repeated.reps });
-                            startRest();
+                            const repeated = repeatPreviousWorkoutSet(current.current, def.name, i);
+                            if (repeated === current.current) return;
+                            changeWithoutSaving(repeated);
                           }}
                           className="mt-1 min-h-11 w-full rounded-lg text-[10px] font-semibold text-primary disabled:text-muted-foreground/40"
                         >

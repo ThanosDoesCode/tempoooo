@@ -113,8 +113,8 @@ export const EXERCISES: Record<SplitType, ExerciseDef[]> = {
     { name: "Face Pulls", min: 12, max: 18 },
   ],
   Legs: [
-    { name: "Declined Leg Press", min: 8, max: 12 },
     { name: "Leg Extensions", min: 10, max: 15 },
+    { name: "Declined Leg Press", min: 8, max: 12 },
     { name: "Romanian Deadlifts", min: 6, max: 10 },
     { name: "Leg Curls", min: 10, max: 15 },
     { name: "Calf Raises", min: 12, max: 20 },
@@ -132,7 +132,22 @@ export const EXERCISES: Record<SplitType, ExerciseDef[]> = {
   ],
 };
 
-export const ALL_EXERCISES: ExerciseDef[] = Object.values(EXERCISES).flat();
+const EXERCISE_LABELS: Record<string, string> = {
+  "Incline Dumbbell Press": "Dumbbell Incline Press",
+  "Cable Low-to-High Fly": "Cable Low-to-High",
+  "Incline Dumbbell Curls": "Incline Bicep Curls",
+};
+
+export const exerciseLabel = (name: string) => EXERCISE_LABELS[name] ?? name;
+export const splitLabel = (name: SplitType) => (name === "Arms & Shoulders" ? "Arms" : name);
+
+export const ALL_EXERCISES: ExerciseDef[] = Array.from(
+  new Map(
+    Object.values(EXERCISES)
+      .flat()
+      .map((entry) => [entry.name, entry]),
+  ).values(),
+);
 
 export const exerciseDef = (name: string): ExerciseDef | undefined =>
   ALL_EXERCISES.find((e) => e.name === name);
