@@ -15,8 +15,10 @@ function browserFixture({
   saved = null,
   scriptFailures = 0,
   initFailures = 0,
+  initFailureMessage = "temporary init failure",
 } = {}) {
   const calls = [];
+  const diagnostics = [];
   const storage = new Map(saved ? [["challenge-push-device", JSON.stringify(saved)]] : []);
   let authListener;
   let failure = false;
@@ -28,7 +30,7 @@ function browserFixture({
       calls.push(["init", options]);
       if (initFailures > 0) {
         initFailures -= 1;
-        throw new Error("temporary init failure");
+        throw new Error(initFailureMessage);
       }
     },
     async login(id) {
@@ -90,7 +92,12 @@ function browserFixture({
     exports: {},
     require: () => ({ supabase }),
     __testEnv: { VITE_ONESIGNAL_APP_ID: "app-id", DEV: true },
-    console,
+    console: {
+      ...console,
+      error(message) {
+        diagnostics.push(message);
+      },
+    },
     setTimeout,
     clearTimeout,
     localStorage: {
@@ -135,6 +142,7 @@ function browserFixture({
   return {
     api: context.exports,
     calls,
+    diagnostics,
     sdk,
     context,
     storage,
@@ -174,6 +182,23 @@ test("a transient SDK init failure reuses the loaded SDK and recovers", async ()
   await f.api.prepareChallengePush("user-a");
   assert.equal(f.calls.filter(([name]) => name === "script").length, 1);
   assert.equal(f.calls.filter(([name]) => name === "init").length, 2);
+  assert.deepEqual(JSON.parse(f.diagnostics[0]), {
+    phase: "onesignal_init",
+    error_name: "Error",
+    error_message: "temporary init failure",
+  });
+});
+test("init diagnostics redact identifiers and credential-like values", async () => {
+  const f = browserFixture({
+    initFailures: 1,
+    initFailureMessage:
+      "init rejected token=private-token user_id=11111111-1111-4111-8111-111111111111",
+  });
+  await f.api.prepareChallengePush("user-a");
+  const diagnostic = JSON.parse(f.diagnostics[0]);
+  assert.equal(diagnostic.phase, "onesignal_init");
+  assert.equal(diagnostic.error_message, "init rejected token=[redacted] user_id=[redacted]");
+  assert.doesNotMatch(f.diagnostics[0], /private-token|11111111-1111-4111-8111-111111111111/);
 });
 test("manual notification retry can recover after the bounded SDK attempts are exhausted", async () => {
   const f = browserFixture({ scriptFailures: 3 });

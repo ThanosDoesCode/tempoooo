@@ -58,17 +58,50 @@ export function pushUnavailableReason(): string | null {
   return null;
 }
 
-function initSdk(sdk: PushSdk) {
-  return sdk.init({
-    appId: import.meta.env["VITE_ONESIGNAL_APP_ID"],
-    serviceWorkerPath: "OneSignalSDKWorker.js",
-    serviceWorkerParam: { scope: "/" },
-    allowLocalhostAsSecureOrigin: import.meta.env.DEV,
-    autoResubscribe: false,
-    promptOptions: { slidedown: { prompts: [{ type: "push", autoPrompt: false }] } },
-    notifyButton: { enable: false },
-    welcomeNotification: { disable: true },
-  });
+function safeInitDiagnostic(value: unknown, fallback: string, maxLength: number) {
+  const text = typeof value === "string" && value.trim() ? value.trim() : fallback;
+  return text
+    .replace(
+      /\b((?:authorization|bearer|token|secret|password|api[_ -]?key|user[_ -]?id|subscription[_ -]?id|push[_ -]?token)\s*(?:[:=]\s*|\s+))(?:"[^"]*"|'[^']*'|[^\s,;]+)/gi,
+      "$1[redacted]",
+    )
+    .slice(0, maxLength);
+}
+
+function logOneSignalInitError(error: unknown) {
+  const record =
+    typeof error === "object" && error !== null
+      ? (error as { name?: unknown; message?: unknown })
+      : undefined;
+  console.error(
+    JSON.stringify({
+      phase: "onesignal_init",
+      error_name: safeInitDiagnostic(record?.name, "UnknownError", 80),
+      error_message: safeInitDiagnostic(
+        record?.message ?? (typeof error === "string" ? error : undefined),
+        "OneSignal initialization failed",
+        500,
+      ),
+    }),
+  );
+}
+
+async function initSdk(sdk: PushSdk) {
+  try {
+    await sdk.init({
+      appId: import.meta.env["VITE_ONESIGNAL_APP_ID"],
+      serviceWorkerPath: "OneSignalSDKWorker.js",
+      serviceWorkerParam: { scope: "/" },
+      allowLocalhostAsSecureOrigin: import.meta.env.DEV,
+      autoResubscribe: false,
+      promptOptions: { slidedown: { prompts: [{ type: "push", autoPrompt: false }] } },
+      notifyButton: { enable: false },
+      welcomeNotification: { disable: true },
+    });
+  } catch (error) {
+    logOneSignalInitError(error);
+    throw error;
+  }
 }
 
 function loadSdkAttempt(): Promise<PushSdk> {
@@ -81,8 +114,8 @@ function loadSdkAttempt(): Promise<PushSdk> {
       try {
         await initSdk(sdk);
         finish(() => resolve(sdk));
-      } catch {
-        finish(() => reject(new Error("notification_sdk_init_failed")));
+      } catch (error) {
+        finish(() => reject(error));
       }
     };
     const cleanup = () => {
