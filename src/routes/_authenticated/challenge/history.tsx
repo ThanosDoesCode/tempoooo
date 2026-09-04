@@ -3,6 +3,7 @@ import { AppShell, PageHeader } from "@/components/AppShell";
 import { Card, DataError, Note, SectionTitle } from "@/components/ui-kit";
 import { useAuth } from "@/lib/auth";
 import { owedText, useChallengeMembers, useMyChallenge, useWeeks } from "@/lib/challenge";
+import { countryName } from "@/lib/countries";
 
 export const Route = createFileRoute("/_authenticated/challenge/history")({
   head: () => ({
@@ -90,7 +91,7 @@ function History() {
                   <span className="font-medium">{name(w.user_id)}</span>
                   <span className="num text-muted-foreground">
                     {w.paused
-                      ? `Paused · ${w.pause_country ?? "travel"}`
+                      ? `Paused · ${w.pause_country ? countryName(w.pause_country) : "travel"}`
                       : `${Number(w.equivalent_km).toFixed(1)} / ${Number(w.target_km).toFixed(0)} km`}
                   </span>
                   <span className={w.completed || w.paused ? "text-good" : "text-warn"}>

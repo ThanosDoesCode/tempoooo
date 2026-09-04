@@ -26,6 +26,7 @@ import {
   weekNumberOf,
 } from "@/lib/challenge";
 import { downloadChallengeCsv } from "@/lib/challenge-export";
+import { COUNTRIES, countryListLabel, countryName } from "@/lib/countries";
 import { userFacingError } from "@/lib/network-errors";
 
 export const Route = createFileRoute("/_authenticated/challenge/payments")({
@@ -165,11 +166,17 @@ function Payments() {
     if (!challenge || !user) return;
     const country = pauseCountry.trim();
     if (!country) {
-      setTravelError("Enter the country you are travelling to.");
+      setTravelError("Select the country you are travelling to.");
       return;
     }
-    if (["greece", "sweden", "gr", "se"].includes(country.toLowerCase())) {
-      setTravelError("The challenge remains active in Greece and Sweden.");
+    if (!challenge.travel_pause_enabled) {
+      setTravelError("Travel pauses are disabled for this Challenge.");
+      return;
+    }
+    if (challenge.travel_pause_home_countries.includes(country)) {
+      setTravelError(
+        `The Challenge remains active in ${countryListLabel(challenge.travel_pause_home_countries)}.`,
+      );
       return;
     }
     setTravelPending("save");
@@ -179,7 +186,9 @@ function Payments() {
       await setTravelPause(challenge.id, selectedPauseWeek, country);
       await qc.invalidateQueries({ queryKey: ["challenge-travel-pauses"] });
       setPauseCountry("");
-      setTravelNotice(`Week ${selectedPauseWeek} is paused for your trip to ${country}.`);
+      setTravelNotice(
+        `Week ${selectedPauseWeek} is paused for your trip to ${countryName(country)}.`,
+      );
     } catch (e) {
       setTravelError(userFacingError(e, "save the travel pause", { inputPreserved: true }));
     } finally {
@@ -536,59 +545,72 @@ function Payments() {
             <div className="flex items-start gap-2">
               <Plane className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
               <p className="text-xs text-muted-foreground">
-                Travelling outside Greece or Sweden? Pause your own entire challenge week to make it
-                penalty-free. Your opponent remains active.
+                {challenge.travel_pause_enabled
+                  ? `Travelling outside ${countryListLabel(challenge.travel_pause_home_countries, "disjunction")}? Pause your own entire challenge week for a 0 km target and no penalty. Your opponent remains active.`
+                  : "Travel pauses are not allowed under this Challenge's agreed terms."}
               </p>
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <label>
-                <span className="mb-1 block text-[11px] uppercase tracking-wider text-muted-foreground">
-                  Challenge week
-                </span>
-                <select
-                  value={pauseWeek || String(currentWeek)}
-                  disabled={travelPending !== null}
-                  onChange={(event) => setPauseWeek(event.target.value)}
-                  className="w-full rounded-xl border border-border bg-elevated px-3 py-2.5 text-sm outline-none"
+            {challenge.travel_pause_enabled ? (
+              <>
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="min-w-0">
+                    <span className="mb-1 block text-[11px] uppercase tracking-wider text-muted-foreground">
+                      Challenge week
+                    </span>
+                    <select
+                      value={pauseWeek || String(currentWeek)}
+                      disabled={travelPending !== null}
+                      onChange={(event) => setPauseWeek(event.target.value)}
+                      className="block min-w-0 w-full max-w-full rounded-xl border border-border bg-elevated px-3 py-2.5 text-sm outline-none"
+                    >
+                      {Array.from(
+                        { length: challenge.duration_weeks - Math.max(1, currentWeek) + 1 },
+                        (_, index) => Math.max(1, currentWeek) + index,
+                      ).map((weekNumber) => {
+                        const bounds = weekBounds(challenge, weekNumber);
+                        return (
+                          <option key={weekNumber} value={weekNumber}>
+                            Week {weekNumber} · {bounds.start}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </label>
+                  <label className="min-w-0">
+                    <span className="mb-1 block text-[11px] uppercase tracking-wider text-muted-foreground">
+                      Country
+                    </span>
+                    <select
+                      value={pauseCountry}
+                      disabled={travelPending !== null}
+                      onChange={(event) => setPauseCountry(event.target.value)}
+                      className="block min-w-0 w-full max-w-full rounded-xl border border-border bg-elevated px-3 py-2.5 text-sm outline-none"
+                    >
+                      <option value="">Select…</option>
+                      {COUNTRIES.filter(
+                        (country) => !challenge.travel_pause_home_countries.includes(country.code),
+                      ).map((country) => (
+                        <option key={country.code} value={country.code}>
+                          {country.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <button
+                  type="button"
+                  disabled={travelPending !== null || !pauseCountry}
+                  onClick={() => void saveTravelPause()}
+                  className="w-full rounded-xl bg-primary py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
                 >
-                  {Array.from(
-                    { length: challenge.duration_weeks - Math.max(1, currentWeek) + 1 },
-                    (_, index) => Math.max(1, currentWeek) + index,
-                  ).map((weekNumber) => {
-                    const bounds = weekBounds(challenge, weekNumber);
-                    return (
-                      <option key={weekNumber} value={weekNumber}>
-                        Week {weekNumber} · {bounds.start}
-                      </option>
-                    );
-                  })}
-                </select>
-              </label>
-              <label>
-                <span className="mb-1 block text-[11px] uppercase tracking-wider text-muted-foreground">
-                  Country
-                </span>
-                <input
-                  value={pauseCountry}
-                  disabled={travelPending !== null}
-                  onChange={(event) => setPauseCountry(event.target.value)}
-                  placeholder="e.g. Italy"
-                  className="w-full rounded-xl border border-border bg-elevated px-3 py-2.5 text-sm outline-none"
-                />
-              </label>
-            </div>
-            <button
-              type="button"
-              disabled={travelPending !== null || !pauseCountry.trim()}
-              onClick={() => void saveTravelPause()}
-              className="w-full rounded-xl bg-primary py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-            >
-              {travelPending === "save" ? (
-                <PendingLabel>Pausing your week…</PendingLabel>
-              ) : (
-                "Pause my week"
-              )}
-            </button>
+                  {travelPending === "save" ? (
+                    <PendingLabel>Pausing your week…</PendingLabel>
+                  ) : (
+                    "Pause my week"
+                  )}
+                </button>
+              </>
+            ) : null}
             {travelError ? (
               <p role="alert" className="text-xs text-danger">
                 {travelError}
@@ -610,7 +632,7 @@ function Payments() {
                       {name(pause.user_id)} · Week {pause.week_number}
                     </p>
                     <p className="text-[11px] text-muted-foreground">
-                      {pause.country} · penalty-free
+                      {countryName(pause.country)} · penalty-free
                     </p>
                   </div>
                   {pause.user_id === user.id && pause.week_number >= currentWeek ? (
@@ -656,8 +678,9 @@ function Payments() {
             </div>
           ) : (
             <Note>
-              No travel pauses are scheduled. Keep participating normally unless you travel outside
-              Greece or Sweden and choose to pause your full week.
+              {challenge.travel_pause_enabled
+                ? `No travel pauses are scheduled. Keep participating normally unless you travel outside ${countryListLabel(challenge.travel_pause_home_countries, "disjunction")} and choose to pause your full week.`
+                : "Travel pauses are disabled for this Challenge."}
             </Note>
           )}
         </section>

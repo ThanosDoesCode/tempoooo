@@ -19,6 +19,8 @@ export type Challenge = {
   penalty_medium_custom: string | null;
   penalty_low_custom: string | null;
   legacy_photo_owed: boolean;
+  travel_pause_enabled: boolean;
+  travel_pause_home_countries: string[];
   running_ratio: number;
   cycling_ratio: number;
   max_members: number;
@@ -61,6 +63,8 @@ export type ChallengeTerms = {
   penalty_medium_custom: string | null;
   penalty_low_custom: string | null;
   legacy_photo_owed: boolean;
+  travel_pause_enabled: boolean;
+  travel_pause_home_countries: string[];
 };
 
 export function challengeTerms(terms?: Partial<ChallengeTerms> | null): ChallengeTerms {
@@ -74,6 +78,8 @@ export function challengeTerms(terms?: Partial<ChallengeTerms> | null): Challeng
     penalty_medium_custom: terms?.penalty_medium_custom?.trim() || null,
     penalty_low_custom: terms?.penalty_low_custom?.trim() || null,
     legacy_photo_owed: terms?.legacy_photo_owed === true,
+    travel_pause_enabled: terms?.travel_pause_enabled !== false,
+    travel_pause_home_countries: terms?.travel_pause_home_countries ?? ["GR", "SE"],
   };
 }
 
@@ -226,7 +232,7 @@ export const myChallengeQueryOptions = () =>
       const { data, error } = await supabase
         .from("challenge_members")
         .select(
-          "joined_at, challenges!inner(id, created_by, name, start_date, duration_weeks, timezone, weekly_target_km, penalty_mode, penalty_high_eur, penalty_medium_eur, penalty_low_eur, penalty_high_custom, penalty_medium_custom, penalty_low_custom, legacy_photo_owed, running_ratio, cycling_ratio, max_members, status)",
+          "joined_at, challenges!inner(id, created_by, name, start_date, duration_weeks, timezone, weekly_target_km, penalty_mode, penalty_high_eur, penalty_medium_eur, penalty_low_eur, penalty_high_custom, penalty_medium_custom, penalty_low_custom, legacy_photo_owed, travel_pause_enabled, travel_pause_home_countries, running_ratio, cycling_ratio, max_members, status)",
         )
         .eq("user_id", uid)
         .order("joined_at", { ascending: false })

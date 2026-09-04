@@ -83,6 +83,8 @@ test("challenge CSV preserves summary, activity, finalized-week and travel-pause
       penalty_medium_custom: "Buy dinner",
       penalty_low_custom: "Make breakfast",
       legacy_photo_owed: false,
+      travel_pause_enabled: true,
+      travel_pause_home_countries: ["GR", "SE"],
     },
     [
       { userId: "a", name: "=Alex" },
@@ -139,6 +141,9 @@ test("challenge CSV preserves summary, activity, finalized-week and travel-pause
   assert.match(csv, /"Italy"/);
   assert.match(csv, /"weekly_target_km"/);
   assert.match(csv, /"penalty_high_eur"/);
+  assert.match(csv, /"travel_pause_enabled"/);
+  assert.match(csv, /"travel_pause_home_countries"/);
+  assert.match(csv, /"GR\|SE"/);
   assert.match(csv, /"applied_penalty_consequence"/);
   assert.match(csv, /"Buy dinner"/);
   assert.match(csv, /"30"/);

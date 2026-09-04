@@ -1,5 +1,6 @@
 import { Card, Note, SectionTitle } from "@/components/ui-kit";
 import { challengeTerms, eur, penaltyBands, type ChallengeTerms } from "@/lib/challenge";
+import { countryListLabel } from "@/lib/countries";
 
 export function ChallengePrimer({ terms }: { terms?: Partial<ChallengeTerms> | null }) {
   const configured = challengeTerms(terms);
@@ -22,7 +23,11 @@ export function ChallengePrimer({ terms }: { terms?: Partial<ChallengeTerms> | n
           Finishing below the target applies the agreed consequence. Extra km do not carry over.
         </PrimerStep>
         <PrimerStep number="4" title="Travelling can pause your week">
-          Outside Greece or Sweden, you can pause your own full week so it is penalty-free.
+          {terms
+            ? configured.travel_pause_enabled
+              ? `Outside ${countryListLabel(configured.travel_pause_home_countries, "disjunction")}, you can pause your own full week so it is penalty-free.`
+              : "Travel pauses are disabled for this Challenge."
+            : "The creator decides whether travel pauses are allowed and which countries keep the Challenge active."}
         </PrimerStep>
       </ol>
       <details className="group mt-3 border-t border-border pt-1">
@@ -91,6 +96,7 @@ export function ChallengeTermsSummary({ terms }: { terms?: Partial<ChallengeTerm
 
 function RulesContent({ terms }: { terms?: Partial<ChallengeTerms> | null }) {
   const configured = challengeTerms(terms);
+  const homeCountries = countryListLabel(configured.travel_pause_home_countries);
   return (
     <>
       <RuleGroup title="Weekly target">
@@ -112,12 +118,18 @@ function RulesContent({ terms }: { terms?: Partial<ChallengeTerms> | null }) {
       </div>
 
       <RuleGroup title="Travel">
-        <li>The challenge stays active in Greece and Sweden.</li>
-        <li>
-          When travelling elsewhere, each participant can continue normally or pause their own
-          challenge week.
-        </li>
-        <li>A paused week is penalty-free for that participant only.</li>
+        {configured.travel_pause_enabled ? (
+          <>
+            <li>The challenge stays active in {homeCountries}.</li>
+            <li>
+              Outside {countryListLabel(configured.travel_pause_home_countries, "disjunction")},
+              each participant can continue normally or pause their own full challenge week.
+            </li>
+            <li>A paused week has a 0 km target and no penalty for that participant only.</li>
+          </>
+        ) : (
+          <li>Travel pauses are not allowed for this Challenge.</li>
+        )}
       </RuleGroup>
 
       <RuleGroup title="Evidence">

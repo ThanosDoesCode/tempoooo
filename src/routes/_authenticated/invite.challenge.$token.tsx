@@ -8,6 +8,7 @@ import {
   previewChallengeInvitation,
 } from "@/lib/privileged-rpcs.functions";
 import type { ChallengeInvitationTerms } from "@/lib/privileged-rpcs.server";
+import { countryListLabel } from "@/lib/countries";
 
 export const Route = createFileRoute("/_authenticated/invite/challenge/$token")({
   head: () => ({
@@ -77,7 +78,18 @@ function AcceptChallenge() {
               {terms.duration_weeks} weeks · {Number(terms.weekly_target_km)} challenge km each week
             </p>
             <ChallengeTermsSummary terms={terms} />
-            <Note>These penalty terms and the weekly target cannot change after acceptance.</Note>
+            <div className="mt-3 rounded-xl border border-border bg-elevated p-3 text-xs">
+              <p className="font-semibold">Travel pause terms</p>
+              <p className="mt-1 text-muted-foreground">
+                {terms.travel_pause_enabled
+                  ? `Participants may pause their own full week while travelling outside ${countryListLabel(terms.travel_pause_home_countries, "disjunction")}. A paused week has a 0 km target and no penalty.`
+                  : "Travel pauses are not allowed for this Challenge."}
+              </p>
+            </div>
+            <Note>
+              The weekly target, penalty terms, and travel-pause rules cannot change after
+              acceptance.
+            </Note>
             {error ? (
               <p role="alert" className="mt-3 text-xs text-danger">
                 {error}

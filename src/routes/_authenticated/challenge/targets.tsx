@@ -3,6 +3,7 @@ import { AppShell, PageHeader } from "@/components/AppShell";
 import { ChallengeTermsSummary } from "@/components/challenge-rules";
 import { Card, Note, SectionTitle } from "@/components/ui-kit";
 import { useMyChallenge } from "@/lib/challenge";
+import { countryListLabel } from "@/lib/countries";
 
 export const Route = createFileRoute("/_authenticated/challenge/targets")({
   head: () => ({
@@ -40,8 +41,9 @@ function Targets() {
             <ChallengeTermsSummary terms={challenge} />
           </div>
           <p className="mt-2 text-sm text-muted-foreground">
-            If you travel outside Greece or Sweden, you can pause your own challenge week from the
-            Money page. That week is penalty-free for you; your opponent stays active.
+            {challenge.travel_pause_enabled
+              ? `If you travel outside ${countryListLabel(challenge.travel_pause_home_countries, "disjunction")}, you can pause your own challenge week from the Money page. That week has a 0 km target and no penalty for you; your opponent stays active.`
+              : "Travel pauses are not allowed under this Challenge's agreed terms."}
           </p>
           <Link
             to="/challenge/payments"

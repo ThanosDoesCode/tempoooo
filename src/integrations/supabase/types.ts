@@ -883,6 +883,8 @@ export type Database = {
           start_date: string
           status: Database["public"]["Enums"]["challenge_status"]
           timezone: string
+          travel_pause_enabled: boolean
+          travel_pause_home_countries: string[]
           weekly_target_km: number
         }
         Insert: {
@@ -906,6 +908,8 @@ export type Database = {
           start_date: string
           status?: Database["public"]["Enums"]["challenge_status"]
           timezone?: string
+          travel_pause_enabled?: boolean
+          travel_pause_home_countries?: string[]
           weekly_target_km?: number
         }
         Update: {
@@ -929,6 +933,8 @@ export type Database = {
           start_date?: string
           status?: Database["public"]["Enums"]["challenge_status"]
           timezone?: string
+          travel_pause_enabled?: boolean
+          travel_pause_home_countries?: string[]
           weekly_target_km?: number
         }
         Relationships: []
@@ -1070,6 +1076,8 @@ export type Database = {
           _start_date: string
           _timezone: string
           _token_hash: string
+          _travel_pause_enabled: boolean
+          _travel_pause_home_countries: string[]
           _weekly_target_km: number
         }
         Returns: string
@@ -1110,6 +1118,8 @@ export type Database = {
           penalty_medium_custom: string | null
           penalty_medium_eur: number
           penalty_mode: string
+          travel_pause_enabled: boolean
+          travel_pause_home_countries: string[]
           weekly_target_km: number
         }[]
       }

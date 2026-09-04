@@ -102,13 +102,15 @@ async function createChallengeAtomic(
     customHigh = null,
     customMedium = null,
     customLow = null,
+    travelEnabled = true,
+    homeCountries = ["GR", "SE"],
   } = {},
 ) {
   return asUser(uid, () =>
     db.query(
       `SELECT public.create_challenge_atomic(
         $1, $2, (date_trunc('week', CURRENT_DATE) + interval '7 days')::date,
-        'UTC', 52, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+        'UTC', 52, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
       ) AS id`,
       [
         requestId,
@@ -123,6 +125,8 @@ async function createChallengeAtomic(
         customHigh,
         customMedium,
         customLow,
+        travelEnabled,
+        homeCountries,
       ],
     ),
   );
@@ -308,7 +312,7 @@ test("atomic creation stores immutable challenge-specific target and money penal
   const stored = (
     await db.query(
       `SELECT weekly_target_km,penalty_mode,penalty_high_eur,penalty_medium_eur,
-        penalty_low_eur,legacy_photo_owed
+        penalty_low_eur,legacy_photo_owed,travel_pause_enabled,travel_pause_home_countries
        FROM public.challenges WHERE id=$1`,
       [requestId],
     )
@@ -328,6 +332,8 @@ test("atomic creation stores immutable challenge-specific target and money penal
       penalty_medium_eur: 35,
       penalty_low_eur: 10,
       legacy_photo_owed: false,
+      travel_pause_enabled: true,
+      travel_pause_home_countries: ["GR", "SE"],
     },
   );
 
@@ -390,7 +396,7 @@ test("legacy challenges retain the 15 km and €15/€10/€5 defaults", async (
   const legacy = (
     await db.query(
       `SELECT weekly_target_km,penalty_mode,penalty_high_eur,penalty_medium_eur,
-        penalty_low_eur,legacy_photo_owed
+        penalty_low_eur,legacy_photo_owed,travel_pause_enabled,travel_pause_home_countries
        FROM public.challenges WHERE id=$1`,
       [x],
     )
@@ -410,6 +416,8 @@ test("legacy challenges retain the 15 km and €15/€10/€5 defaults", async (
       penalty_medium_eur: 10,
       penalty_low_eur: 5,
       legacy_photo_owed: true,
+      travel_pause_enabled: true,
+      travel_pause_home_countries: ["GR", "SE"],
     },
   );
 });
@@ -455,6 +463,14 @@ test("incremental custom migration preserves deployed money challenges, weeks an
       ) VALUES ($1,$2,$3,$4,$5,11)`,
       [payment, challenge, week, owner, opponent],
     );
+    await upgradeDb.query("SELECT set_config('request.jwt.claim.sub', $1, false)", [owner]);
+    await upgradeDb.exec("SET ROLE authenticated");
+    await upgradeDb.query(
+      `INSERT INTO public.challenge_travel_pauses(challenge_id,user_id,week_number,country)
+       VALUES ($1,$2,3,'Italy')`,
+      [challenge, owner],
+    );
+    await upgradeDb.exec("RESET ROLE");
 
     const beforeWeek = (
       await upgradeDb.query(
@@ -474,12 +490,16 @@ test("incremental custom migration preserves deployed money challenges, weeks an
     await upgradeDb.exec(
       await readFile(new URL("20260904170000_add_custom_challenge_penalties.sql", root), "utf8"),
     );
+    await upgradeDb.exec(
+      await readFile(new URL("20260904180000_configurable_travel_pause_terms.sql", root), "utf8"),
+    );
 
     const upgraded = (
       await upgradeDb.query(
         `SELECT weekly_target_km,penalty_high_eur,penalty_medium_eur,penalty_low_eur,
           penalty_mode,legacy_photo_owed,penalty_high_custom,penalty_medium_custom,
-          penalty_low_custom FROM public.challenges WHERE id=$1`,
+          penalty_low_custom,travel_pause_enabled,travel_pause_home_countries
+          FROM public.challenges WHERE id=$1`,
         [challenge],
       )
     ).rows[0];
@@ -501,6 +521,8 @@ test("incremental custom migration preserves deployed money challenges, weeks an
         penalty_high_custom: null,
         penalty_medium_custom: null,
         penalty_low_custom: null,
+        travel_pause_enabled: true,
+        travel_pause_home_countries: ["GR", "SE"],
       },
     );
     assert.deepEqual(
@@ -531,6 +553,15 @@ test("incremental custom migration preserves deployed money challenges, weeks an
         )
       ).rows[0],
       { penalty_mode: null, penalty_band: null, penalty_consequence: null },
+    );
+    assert.deepEqual(
+      (
+        await upgradeDb.query(
+          "SELECT week_number,country FROM public.challenge_travel_pauses WHERE challenge_id=$1",
+          [challenge],
+        )
+      ).rows,
+      [{ week_number: 3, country: "Italy" }],
     );
   } finally {
     await upgradeDb.close();
@@ -590,6 +621,100 @@ test("custom challenge creation stores and previews exact immutable consequences
   );
 });
 
+test("atomic creation stores, normalizes and previews immutable travel-pause terms", async () => {
+  await assert.rejects(
+    asUser(a, () => db.query("SELECT private.valid_travel_pause_countries(ARRAY['GR']::text[])")),
+    /permission denied/,
+  );
+  assert.equal(
+    (
+      await asService(() =>
+        db.query("SELECT private.valid_travel_pause_countries(ARRAY['GR','SE']::text[]) AS valid"),
+      )
+    ).rows[0].valid,
+    true,
+  );
+  const disabledId = randomUUID();
+  const disabledToken = "disabled-travel-invitation-token-with-enough-entropy";
+  await createChallengeAtomic(
+    a,
+    disabledId,
+    createHash("sha256").update(disabledToken).digest("hex"),
+    { travelEnabled: false, homeCountries: [] },
+  );
+  assert.deepEqual(
+    (
+      await db.query(
+        "SELECT travel_pause_enabled,travel_pause_home_countries FROM public.challenges WHERE id=$1",
+        [disabledId],
+      )
+    ).rows[0],
+    { travel_pause_enabled: false, travel_pause_home_countries: [] },
+  );
+  const disabledPreview = await asService(() =>
+    db.query("SELECT * FROM public.preview_challenge_invitation($1,$2,$3)", [
+      b,
+      "opponent@example.com",
+      disabledToken,
+    ]),
+  );
+  assert.equal(disabledPreview.rows[0].travel_pause_enabled, false);
+  assert.deepEqual(disabledPreview.rows[0].travel_pause_home_countries, []);
+  await assert.rejects(
+    asUser(a, () =>
+      db.query(
+        "INSERT INTO public.challenge_travel_pauses(challenge_id,user_id,week_number,country) VALUES ($1,$2,1,'IT')",
+        [disabledId, a],
+      ),
+    ),
+    /disabled/i,
+  );
+
+  const oneCountryId = randomUUID();
+  await createChallengeAtomic(a, oneCountryId, "d".repeat(64), {
+    homeCountries: ["se"],
+  });
+  assert.deepEqual(
+    (
+      await db.query("SELECT travel_pause_home_countries FROM public.challenges WHERE id=$1", [
+        oneCountryId,
+      ])
+    ).rows[0].travel_pause_home_countries,
+    ["SE"],
+  );
+
+  const multipleId = randomUUID();
+  const multipleToken = "multiple-country-invitation-token-with-enough-entropy";
+  await createChallengeAtomic(
+    a,
+    multipleId,
+    createHash("sha256").update(multipleToken).digest("hex"),
+    {
+      homeCountries: [" se ", "GR", "de", "GR"],
+    },
+  );
+  assert.deepEqual(
+    (
+      await db.query("SELECT travel_pause_home_countries FROM public.challenges WHERE id=$1", [
+        multipleId,
+      ])
+    ).rows[0].travel_pause_home_countries,
+    ["DE", "GR", "SE"],
+  );
+  const multiplePreview = await asService(() =>
+    db.query(
+      "SELECT travel_pause_enabled,travel_pause_home_countries FROM public.preview_challenge_invitation($1,$2,$3)",
+      [b, "opponent@example.com", multipleToken],
+    ),
+  );
+  assert.equal(multiplePreview.rows[0].travel_pause_enabled, true);
+  assert.deepEqual(multiplePreview.rows[0].travel_pause_home_countries, ["DE", "GR", "SE"]);
+  await assert.rejects(
+    db.query("UPDATE public.challenges SET travel_pause_enabled=false WHERE id=$1", [multipleId]),
+    /immutable/,
+  );
+});
+
 test("atomic creation rejects invalid targets and penalty values without partial state", async () => {
   for (const terms of [
     { target: 0, high: 15, medium: 10, low: 5 },
@@ -607,11 +732,14 @@ test("atomic creation rejects invalid targets and penalty values without partial
     },
     { target: 30, mode: "photo" },
     { target: 30, mode: "money", customHigh: "Unexpected custom term" },
+    { target: 30, travelEnabled: true, homeCountries: [] },
+    { target: 30, travelEnabled: true, homeCountries: ["ZZ"] },
+    { target: 30, travelEnabled: false, homeCountries: ["GR"] },
   ]) {
     const requestId = randomUUID();
     await assert.rejects(
       createChallengeAtomic(a, requestId, randomUUID().replaceAll("-", "").repeat(2), terms),
-      /Weekly target|Penalty amounts|Penalty mode|Custom consequences|Money penalties/,
+      /Weekly target|Penalty amounts|Penalty mode|Custom consequences|Money penalties|Travel pause|home countries/,
     );
     const rows = await db.query(
       `SELECT
@@ -656,7 +784,7 @@ test("atomic challenge creation rejects unauthenticated and direct partial creat
         `SELECT public.create_challenge_atomic(
           $1, 'No owner', (date_trunc('week', CURRENT_DATE) + interval '7 days')::date,
           'UTC', 52, 'opponent@example.com', $2, 15, 'money', 15, 10, 5,
-          null, null, null
+          null, null, null, true, ARRAY['GR','SE']::text[]
         )`,
         [randomUUID(), "c".repeat(64)],
       ),
@@ -1380,7 +1508,7 @@ test("travel pause suppresses a custom consequence and money payment", async () 
   );
   await asUser(a, () =>
     db.query(
-      "INSERT INTO public.challenge_travel_pauses(challenge_id,user_id,week_number,country) VALUES ($1,$2,1,'Italy')",
+      "INSERT INTO public.challenge_travel_pauses(challenge_id,user_id,week_number,country) VALUES ($1,$2,1,'IT')",
       [challenge, a],
     ),
   );
@@ -1641,7 +1769,7 @@ test("an outside-country pause is private to its owner and makes only their week
   await activity(a, 1, challenge);
   const pause = await asUser(a, () =>
     db.query(
-      "INSERT INTO public.challenge_travel_pauses(challenge_id,user_id,week_number,country) VALUES ($1,$2,1,'Italy') RETURNING id",
+      "INSERT INTO public.challenge_travel_pauses(challenge_id,user_id,week_number,country) VALUES ($1,$2,1,'IT') RETURNING id",
       [challenge, a],
     ),
   );
@@ -1649,7 +1777,7 @@ test("an outside-country pause is private to its owner and makes only their week
   await assert.rejects(
     asUser(b, () =>
       db.query(
-        "INSERT INTO public.challenge_travel_pauses(challenge_id,user_id,week_number,country) VALUES ($1,$2,1,'France')",
+        "INSERT INTO public.challenge_travel_pauses(challenge_id,user_id,week_number,country) VALUES ($1,$2,1,'FR')",
         [challenge, a],
       ),
     ),
@@ -1678,11 +1806,11 @@ test("an outside-country pause is private to its owner and makes only their week
   await assert.rejects(
     asUser(a, () =>
       db.query(
-        "INSERT INTO public.challenge_travel_pauses(challenge_id,user_id,week_number,country) VALUES ($1,$2,2,'Sweden')",
+        "INSERT INTO public.challenge_travel_pauses(challenge_id,user_id,week_number,country) VALUES ($1,$2,2,'SE')",
         [challenge, a],
       ),
     ),
-    /stays active/,
+    /only allowed outside/,
   );
   await db.query("UPDATE public.challenges SET start_date=CURRENT_DATE-7 WHERE id=$1", [challenge]);
   await db.exec(
@@ -1709,7 +1837,7 @@ test("an outside-country pause is private to its owner and makes only their week
       target: Number(mine.target_km),
       penalty: Number(mine.penalty_eur),
     },
-    { paused: true, country: "Italy", target: 0, penalty: 0 },
+    { paused: true, country: "IT", target: 0, penalty: 0 },
   );
   assert.deepEqual(
     {
@@ -1718,6 +1846,16 @@ test("an outside-country pause is private to its owner and makes only their week
       penalty: Number(opponent.penalty_eur),
     },
     { paused: false, target: 15, penalty: 15 },
+  );
+  await db.query(
+    "UPDATE public.challenges SET start_date=date_trunc('week',CURRENT_DATE)::date WHERE id=$1",
+    [challenge],
+  );
+  await assert.rejects(
+    asUser(a, () =>
+      db.query("DELETE FROM public.challenge_travel_pauses WHERE id=$1", [pause.rows[0].id]),
+    ),
+    /Finalized travel pauses cannot be changed/,
   );
 });
 test("outbox claim leases prevent duplicate workers; expired leases retry, stale events expire", async () => {

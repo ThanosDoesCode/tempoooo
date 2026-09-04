@@ -30,6 +30,8 @@ export type ChallengeInvitationTerms = {
   penalty_medium_custom: string | null;
   penalty_low_custom: string | null;
   legacy_photo_owed: boolean;
+  travel_pause_enabled: boolean;
+  travel_pause_home_countries: string[];
 };
 
 export async function previewChallengeInvitationFor(caller: string, email: string, token: string) {

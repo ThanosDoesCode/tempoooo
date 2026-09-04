@@ -15,7 +15,8 @@ test("first-use Challenge primer covers the complete scoring path without an ope
   assert.match(rules, /rides\s+count 3:1 from 18 km\/h/);
   assert.match(rules, /duration and a screenshot/);
   assert.match(rules, /applies the agreed consequence/);
-  assert.match(rules, /Outside Greece or Sweden/);
+  assert.match(rules, /Outside \$\{countryListLabel/);
+  assert.match(rules, /Travel pauses are disabled/);
   assert.match(rules, /<details/);
   assert.match(await read("src/routes/_authenticated/challenge/new.tsx"), /ChallengePrimer/);
 });

@@ -7,6 +7,7 @@ import { Card, Note, PendingLabel, SectionTitle } from "@/components/ui-kit";
 import { supabase } from "@/integrations/supabase/client";
 import { randomToken, sha256Hex, useAuth } from "@/lib/auth";
 import type { PenaltyMode } from "@/lib/challenge";
+import { COUNTRIES, countryListLabel } from "@/lib/countries";
 import { userFacingError } from "@/lib/network-errors";
 
 export const Route = createFileRoute("/_authenticated/challenge/new")({
@@ -53,6 +54,9 @@ function NewChallenge() {
   const [highCustom, setHighCustom] = useState("");
   const [mediumCustom, setMediumCustom] = useState("");
   const [lowCustom, setLowCustom] = useState("");
+  const [travelPauseEnabled, setTravelPauseEnabled] = useState(true);
+  const [homeCountries, setHomeCountries] = useState<string[]>(["GR", "SE"]);
+  const [countryToAdd, setCountryToAdd] = useState("");
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -69,6 +73,8 @@ function NewChallenge() {
     penalty_medium_custom: mediumCustom.trim() || null,
     penalty_low_custom: lowCustom.trim() || null,
     legacy_photo_owed: false,
+    travel_pause_enabled: travelPauseEnabled,
+    travel_pause_home_countries: travelPauseEnabled ? homeCountries : [],
   };
   const validDecimal = (value: string) => /^\d+(?:\.\d{1,2})?$/.test(value);
   const customTermsValid = [highCustom, mediumCustom, lowCustom].every(
@@ -86,7 +92,8 @@ function NewChallenge() {
     Number.isFinite(terms.weekly_target_km) &&
     terms.weekly_target_km >= 1 &&
     terms.weekly_target_km <= 500 &&
-    (penaltyMode === "money" ? moneyTermsValid : customTermsValid);
+    (penaltyMode === "money" ? moneyTermsValid : customTermsValid) &&
+    (!travelPauseEnabled || (homeCountries.length >= 1 && homeCountries.length <= 12));
 
   const create = async () => {
     if (!user || createLock.current) return;
@@ -115,6 +122,8 @@ function NewChallenge() {
         _penalty_high_custom: terms.penalty_high_custom,
         _penalty_medium_custom: terms.penalty_medium_custom,
         _penalty_low_custom: terms.penalty_low_custom,
+        _travel_pause_enabled: terms.travel_pause_enabled,
+        _travel_pause_home_countries: terms.travel_pause_home_countries,
       });
       if (rpcError) throw rpcError;
       if (challengeId !== request.requestId) {
@@ -163,7 +172,7 @@ function NewChallenge() {
     <AppShell>
       <PageHeader title="Create challenge" subtitle="Private, two people, minimum 52 weeks." />
       <ChallengePrimer terms={terms} />
-      <Card className="mt-3 space-y-3">
+      <Card className="mt-3 min-w-0 space-y-3">
         <Labelled label="Challenge name">
           <input value={name} onChange={(e) => setName(e.target.value)} className={inputCls} />
         </Labelled>
@@ -255,6 +264,94 @@ function NewChallenge() {
             <CustomInput label="Low shortfall" value={lowCustom} onChange={setLowCustom} />
           </fieldset>
         )}
+        <fieldset className="min-w-0 rounded-xl border border-border p-3">
+          <legend className="px-1 text-[11px] uppercase tracking-wider text-muted-foreground">
+            Travel pause
+          </legend>
+          <div className="grid grid-cols-2 gap-2">
+            {([true, false] as const).map((enabled) => (
+              <button
+                key={String(enabled)}
+                type="button"
+                aria-pressed={travelPauseEnabled === enabled}
+                onClick={() => setTravelPauseEnabled(enabled)}
+                className={`min-h-11 rounded-xl border px-3 py-2 text-sm font-semibold ${
+                  travelPauseEnabled === enabled
+                    ? "border-primary bg-primary/15 text-primary"
+                    : "border-border bg-elevated text-muted-foreground"
+                }`}
+              >
+                {enabled ? "Enabled" : "Disabled"}
+              </button>
+            ))}
+          </div>
+          {travelPauseEnabled ? (
+            <div className="mt-3 min-w-0 space-y-2">
+              <p className="text-xs text-muted-foreground">
+                Participants may pause their own full week only while travelling outside every home
+                country below. A paused week has a 0 km target and no penalty.
+              </p>
+              <div className="flex min-w-0 gap-2">
+                <select
+                  aria-label="Country to add"
+                  value={countryToAdd}
+                  onChange={(event) => setCountryToAdd(event.target.value)}
+                  className={`${inputCls} min-w-0 flex-1`}
+                >
+                  <option value="">Add a home country…</option>
+                  {COUNTRIES.filter((country) => !homeCountries.includes(country.code)).map(
+                    (country) => (
+                      <option key={country.code} value={country.code}>
+                        {country.name}
+                      </option>
+                    ),
+                  )}
+                </select>
+                <button
+                  type="button"
+                  disabled={!countryToAdd || homeCountries.length >= 12}
+                  onClick={() => {
+                    if (!countryToAdd || homeCountries.includes(countryToAdd)) return;
+                    setHomeCountries((countries) => [...countries, countryToAdd].sort());
+                    setCountryToAdd("");
+                  }}
+                  className="min-h-11 shrink-0 rounded-xl border border-border px-3 text-sm font-semibold disabled:opacity-50"
+                >
+                  Add
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2" aria-label="Selected home countries">
+                {homeCountries.map((code) => (
+                  <button
+                    key={code}
+                    type="button"
+                    aria-label={`Remove ${countryListLabel([code])}`}
+                    onClick={() =>
+                      setHomeCountries((countries) => countries.filter((c) => c !== code))
+                    }
+                    className="min-h-11 rounded-full border border-border bg-elevated px-3 text-xs font-medium"
+                  >
+                    {countryListLabel([code])} ×
+                  </button>
+                ))}
+              </div>
+              {homeCountries.length ? (
+                <p className="text-xs text-muted-foreground">
+                  Pause allowed while travelling outside{" "}
+                  {countryListLabel(homeCountries, "disjunction")}.
+                </p>
+              ) : (
+                <p role="alert" className="text-xs text-danger">
+                  Select at least one home country.
+                </p>
+              )}
+            </div>
+          ) : (
+            <p className="mt-3 text-xs text-muted-foreground">
+              Travel pauses will not be allowed for this Challenge.
+            </p>
+          )}
+        </fieldset>
         <div className="rounded-xl bg-elevated p-3">
           <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
             Live penalty summary
@@ -344,11 +441,11 @@ function CustomInput({
 }
 
 const inputCls =
-  "w-full rounded-xl border border-border bg-elevated px-3 py-2.5 text-sm outline-none";
+  "block min-w-0 w-full max-w-full rounded-xl border border-border bg-elevated px-3 py-2.5 text-sm outline-none";
 
 function Labelled({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label className="block">
+    <label className="block min-w-0 w-full max-w-full">
       <span className="mb-1 block text-[11px] uppercase tracking-wider text-muted-foreground">
         {label}
       </span>
