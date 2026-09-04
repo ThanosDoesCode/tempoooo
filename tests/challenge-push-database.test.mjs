@@ -1678,17 +1678,111 @@ test("server registration respects account opt-out, rejects forged identity, and
     asUser(a, () => register(true)),
     /permission denied/,
   );
+  for (const args of [
+    [null, id, external, true],
+    [a, null, external, true],
+    [a, id, null, true],
+    [a, id, "   ", true],
+    [a, id, external, null],
+  ]) {
+    assert.equal(
+      (await db.query("SELECT public.register_challenge_push_device($1,$2,$3,$4) AS enabled", args))
+        .rows[0].enabled,
+      false,
+    );
+  }
   assert.equal((await register(true, "forged")).rows[0].enabled, false);
   assert.equal((await register(false)).rows[0].enabled, false);
   assert.equal((await register(true)).rows[0].enabled, true);
+  assert.equal(
+    (await db.query("SELECT enabled FROM public.challenge_push_users WHERE user_id=$1", [a]))
+      .rows[0].enabled,
+    true,
+  );
   await asUser(a, () => db.exec("SELECT public.disable_challenge_push()"));
   assert.equal((await register(false)).rows[0].enabled, false);
+  assert.equal(
+    (await db.query("SELECT enabled FROM public.challenge_push_users WHERE user_id=$1", [a]))
+      .rows[0].enabled,
+    false,
+  );
   assert.equal(
     (
       await db.query("SELECT is_active FROM public.push_subscriptions WHERE subscription_id=$1", [
         id,
       ])
     ).rows[0].is_active,
+    false,
+  );
+  assert.equal((await register(true)).rows[0].enabled, true);
+  assert.equal(
+    (await db.query("SELECT enabled FROM public.challenge_push_users WHERE user_id=$1", [a]))
+      .rows[0].enabled,
+    true,
+  );
+});
+test("verified background registration restores detached devices and transfers account ownership safely", async () => {
+  const identities = await db.query(
+    "SELECT user_id, external_id FROM public.challenge_push_users WHERE user_id IN ($1,$2)",
+    [a, b],
+  );
+  const external = new Map(identities.rows.map((row) => [row.user_id, row.external_id]));
+  const id = randomUUID();
+  await db.query("UPDATE public.challenge_push_users SET enabled=true WHERE user_id IN ($1,$2)", [
+    a,
+    b,
+  ]);
+  assert.equal(
+    (
+      await db.query("SELECT public.register_challenge_push_device($1,$2,$3,true) AS enabled", [
+        a,
+        id,
+        external.get(a),
+      ])
+    ).rows[0].enabled,
+    true,
+  );
+  await db.query("UPDATE public.push_subscriptions SET is_active=false WHERE subscription_id=$1", [
+    id,
+  ]);
+  assert.equal(
+    (
+      await db.query("SELECT public.register_challenge_push_device($1,$2,$3,false) AS enabled", [
+        a,
+        id,
+        external.get(a),
+      ])
+    ).rows[0].enabled,
+    true,
+  );
+  assert.equal(
+    (
+      await db.query("SELECT public.register_challenge_push_device($1,$2,$3,false) AS enabled", [
+        b,
+        id,
+        external.get(b),
+      ])
+    ).rows[0].enabled,
+    true,
+  );
+  assert.deepEqual(
+    (
+      await db.query(
+        "SELECT user_id, is_active FROM public.push_subscriptions WHERE subscription_id=$1",
+        [id],
+      )
+    ).rows[0],
+    { user_id: b, is_active: true },
+  );
+  await asUser(b, () => db.exec("SELECT public.disable_challenge_push()"));
+  assert.equal(
+    (
+      await db.query("SELECT public.register_challenge_push_device($1,$2,$3,false) AS enabled", [
+        b,
+        id,
+        external.get(b),
+      ])
+    ).rows[0].enabled,
     false,
   );
 });

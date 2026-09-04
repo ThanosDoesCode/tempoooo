@@ -16,13 +16,18 @@ function browserFixture({
   scriptFailures = 0,
   initFailures = 0,
   initFailureMessage = "temporary init failure",
+  accountEnabled: initialAccountEnabled = false,
+  optedIn = false,
+  registerFailures: initialRegisterFailures = 0,
 } = {}) {
   const calls = [];
   const diagnostics = [];
   const storage = new Map(saved ? [["challenge-push-device", JSON.stringify(saved)]] : []);
   let authListener;
   let failure = false;
-  let enabled = false;
+  let accountEnabled = initialAccountEnabled;
+  let deviceActive = initialAccountEnabled && optedIn;
+  let registerFailures = initialRegisterFailures;
   let uid = "user-a";
   const listeners = new Set();
   const sdk = {
@@ -42,7 +47,7 @@ function browserFixture({
     User: {
       PushSubscription: {
         id: "11111111-1111-4111-8111-111111111111",
-        optedIn: false,
+        optedIn,
         async optIn() {
           calls.push(["optIn"]);
           this.optedIn = true;
@@ -64,7 +69,7 @@ function browserFixture({
     auth: {
       async getSession() {
         calls.push(["session"]);
-        return { data: { session: { user: { id: uid } } } };
+        return { data: { session: uid ? { user: { id: uid } } : null } };
       },
       onAuthStateChange(listener) {
         authListener = listener;
@@ -76,15 +81,26 @@ function browserFixture({
         calls.push(["endpoint", body]);
         if (failure) return { error: new Error("secret internal failure") };
         if (body.action === "identity")
-          return { data: { external_id: "private-capability", enabled } };
-        if (body.action === "register") enabled = body.activate || enabled;
-        return { data: { enabled } };
+          return { data: { external_id: `private-capability-${uid}`, enabled: accountEnabled } };
+        if (body.action === "register") {
+          if (registerFailures > 0) {
+            registerFailures -= 1;
+            return { error: new Error("provider synchronization pending") };
+          }
+          if (body.activate) accountEnabled = true;
+          deviceActive = accountEnabled;
+          return { data: { enabled: accountEnabled && deviceActive } };
+        }
+        if (body.action === "status") return { data: { enabled: accountEnabled && deviceActive } };
+        if (body.action === "detach") deviceActive = false;
+        return { data: { enabled: accountEnabled && deviceActive } };
       },
     },
     async rpc() {
       calls.push(["disable"]);
       if (failure) return { error: new Error("failure") };
-      enabled = false;
+      accountEnabled = false;
+      deviceActive = false;
       return { error: null };
     },
   };
@@ -97,8 +113,11 @@ function browserFixture({
       error(message) {
         diagnostics.push(message);
       },
+      info(message) {
+        diagnostics.push(message);
+      },
     },
-    setTimeout,
+    setTimeout: (callback, delay) => setTimeout(callback, Math.min(delay ?? 0, 2)),
     clearTimeout,
     localStorage: {
       getItem: (key) => storage.get(key) ?? null,
@@ -117,7 +136,7 @@ function browserFixture({
       isSecureContext: true,
       Notification: {},
       PushManager: {},
-      setTimeout,
+      setTimeout: (callback, delay) => setTimeout(callback, Math.min(delay ?? 0, 2)),
       clearTimeout,
       matchMedia: () => ({ matches: false }),
     },
@@ -156,6 +175,12 @@ function browserFixture({
       uid = id;
       authListener?.("SIGNED_IN", { user: { id } });
     },
+    emitAuth: (event, id) => {
+      uid = id;
+      authListener?.(event, id ? { user: { id } } : null);
+    },
+    accountEnabled: () => accountEnabled,
+    deviceActive: () => deviceActive,
   };
 }
 test("opening Challenge initializes without permission prompts or opt-in", async () => {
@@ -216,6 +241,7 @@ test("enable requests permission before any network work and registers only its 
   await enabling;
   const body = f.calls.find(([name, data]) => name === "endpoint" && data.action === "register")[1];
   assert.equal(body.subscription_id, f.sdk.User.PushSubscription.id);
+  assert.equal(body.activate, true);
   assert.equal(body.user_id, undefined);
   assert.equal(body.recipient_id, undefined);
   assert.equal(await f.api.pushIsEnabled(f.sdk), true);
@@ -250,6 +276,140 @@ test("account opt-out writes to the database before opting out the browser", asy
     ["disable", "optOut"],
   );
   assert.equal(await f.api.pushIsEnabled(f.sdk), false);
+});
+test("logout detaches ownership without revoking browser permission or subscription", async () => {
+  const f = browserFixture({
+    accountEnabled: true,
+    optedIn: true,
+    saved: { userId: "user-a", id: "11111111-1111-4111-8111-111111111111" },
+  });
+  await f.api.detachChallengePush();
+  assert.equal(
+    f.calls.some(([name]) => name === "permission" || name === "optOut"),
+    false,
+  );
+  assert.equal(f.sdk.User.PushSubscription.optedIn, true);
+  assert.equal(f.storage.has("challenge-push-device"), false);
+  assert.deepEqual(
+    f.calls
+      .filter(([name]) => name === "endpoint" || name === "logout")
+      .map(([name, body]) => [name, body?.action]),
+    [
+      ["endpoint", "detach"],
+      ["logout", undefined],
+    ],
+  );
+  assert.equal(
+    f.calls.some(([name, body]) => name === "endpoint" && body?.activate === true),
+    false,
+  );
+});
+test("same-user login restores a detached, already-authorized device", async () => {
+  const f = browserFixture({
+    accountEnabled: true,
+    optedIn: true,
+    saved: { userId: "user-a", id: "11111111-1111-4111-8111-111111111111" },
+  });
+  await f.api.detachChallengePush();
+  f.calls.length = 0;
+  const result = await f.api.reconcileChallengePush("user-a", { force: true });
+  assert.equal(result.enabled, true);
+  assert.equal(f.deviceActive(), true);
+  assert.ok(f.storage.has("challenge-push-device"));
+  const registration = f.calls.find(
+    ([name, body]) => name === "endpoint" && body.action === "register",
+  );
+  assert.equal(registration[1].activate, false);
+  assert.equal(
+    f.calls.some(([name]) => name === "permission" || name === "optIn" || name === "optOut"),
+    false,
+  );
+});
+test("account switching changes identity without disabling the browser subscription", async () => {
+  const f = browserFixture({
+    accountEnabled: true,
+    optedIn: true,
+    saved: { userId: "user-a", id: "11111111-1111-4111-8111-111111111111" },
+  });
+  f.emitAuth("SIGNED_IN", "user-b");
+  const result = await f.api.reconcileChallengePush("user-b", { force: true });
+  assert.equal(result.enabled, true);
+  assert.equal(
+    f.calls.some(([name]) => name === "optOut"),
+    false,
+  );
+  assert.ok(f.calls.some(([name]) => name === "logout"));
+  assert.ok(
+    f.calls.some(([name, value]) => name === "login" && value === "private-capability-user-b"),
+  );
+  assert.ok(
+    f.calls
+      .filter(([name, body]) => name === "endpoint" && body.action === "register")
+      .every(([, body]) => body.activate === false),
+  );
+});
+test("INITIAL_SESSION on PWA reopen reconciles once and later same-user auth events do not duplicate it", async () => {
+  const f = browserFixture({ accountEnabled: true, optedIn: true });
+  f.api.watchChallengePushSession();
+  f.emitAuth("INITIAL_SESSION", "user-a");
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  const registrations = () =>
+    f.calls.filter(([name, body]) => name === "endpoint" && body.action === "register").length;
+  const initialRegistrations = registrations();
+  assert.equal(initialRegistrations, 1);
+  f.emitAuth("TOKEN_REFRESHED", "user-a");
+  f.emitAuth("USER_UPDATED", "user-a");
+  f.emitAuth("SIGNED_IN", "user-a");
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(registrations(), initialRegistrations);
+  assert.ok(
+    f.calls
+      .filter(([name, body]) => name === "endpoint" && body.action === "register")
+      .every(([, body]) => body.activate === false),
+  );
+});
+test("explicit Off remains authoritative during automatic reconciliation", async () => {
+  const f = browserFixture({ accountEnabled: false, optedIn: true });
+  const result = await f.api.reconcileChallengePush("user-a", { force: true });
+  assert.equal(result.enabled, false);
+  assert.equal(
+    f.calls.some(([name, body]) => name === "endpoint" && body.action === "register"),
+    false,
+  );
+});
+test("default and denied permissions remain distinct and never auto-register", async () => {
+  for (const permission of ["default", "denied"]) {
+    const f = browserFixture({ permission, accountEnabled: true, optedIn: true });
+    const result = await f.api.reconcileChallengePush("user-a", { force: true });
+    assert.equal(result.enabled, false);
+    assert.equal(
+      f.calls.some(([name, body]) => name === "endpoint" && body.action === "register"),
+      false,
+    );
+  }
+});
+test("background synchronization keeps the existing bounded retry and can recover", async () => {
+  const f = browserFixture({ accountEnabled: true, optedIn: true, registerFailures: 8 });
+  await assert.rejects(
+    f.api.reconcileChallengePush("user-a", { force: true }),
+    /Could not update notifications\. Please retry in a moment\./,
+  );
+  assert.equal(
+    f.calls.filter(([name, body]) => name === "endpoint" && body.action === "register").length,
+    8,
+  );
+  const result = await f.api.reconcileChallengePush("user-a", { force: true });
+  assert.equal(result.enabled, true);
+});
+test("push diagnostics contain state only and never user or subscription identifiers", async () => {
+  const f = browserFixture({ accountEnabled: true, optedIn: true });
+  await f.api.reconcileChallengePush("user-a", { force: true });
+  const diagnosticText = f.diagnostics.join("\n");
+  assert.match(diagnosticText, /identity_sync|backend_sync|permission/);
+  assert.doesNotMatch(
+    diagnosticText,
+    /user-a|private-capability|11111111-1111-4111-8111-111111111111/,
+  );
 });
 test("iPhone outside Home Screen receives installation guidance", () => {
   const f = browserFixture();

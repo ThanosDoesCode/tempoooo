@@ -23,8 +23,15 @@ const markerKey = "challenge-push-device";
 type DeviceMarker = { userId: string; id: string };
 let sdkPromise: Promise<PushSdk> | undefined;
 let loadedSdk: PushSdk | undefined;
+let identifiedUserId: string | undefined;
+const accountPreference = new Map<string, boolean>();
+let activeReconciliation:
+  { userId: string; promise: Promise<{ sdk: PushSdk; enabled: boolean }> } | undefined;
+let lastReconciliation:
+  { userId: string; at: number; value: { sdk: PushSdk; enabled: boolean } } | undefined;
 const SDK_RETRY_DELAYS_MS = [250, 1000] as const;
 const SDK_LOAD_TIMEOUT_MS = 20_000;
+const RECONCILIATION_CACHE_MS = 5_000;
 
 function marker(): DeviceMarker | null {
   try {
@@ -84,6 +91,13 @@ function logOneSignalInitError(error: unknown) {
       ),
     }),
   );
+}
+
+function logPushDiagnostic(
+  phase: "auth_event" | "permission" | "identity_sync" | "backend_sync",
+  details: Record<string, string | boolean>,
+) {
+  console.info(JSON.stringify({ phase, ...details }));
 }
 
 async function initSdk(sdk: PushSdk) {
@@ -194,15 +208,23 @@ export async function prepareChallengePush(userId: string) {
   await assertCurrentUser(userId);
   const saved = marker();
   if (saved && saved.userId !== userId) {
-    await sdk.User.PushSubscription.optOut();
     await sdk.logout();
+    identifiedUserId = undefined;
     localStorage.removeItem(markerKey);
   }
   const identity = await endpoint<{ external_id: string; enabled: boolean }>({
     action: "identity",
   });
   await assertCurrentUser(userId);
-  await sdk.login(identity.external_id);
+  accountPreference.set(userId, identity.enabled);
+  if (identifiedUserId !== userId) {
+    await sdk.login(identity.external_id);
+    identifiedUserId = userId;
+  }
+  logPushDiagnostic("identity_sync", {
+    outcome: "complete",
+    account_enabled: identity.enabled,
+  });
   return sdk;
 }
 
@@ -245,14 +267,23 @@ export async function enableChallengePush(sdk: PushSdk, userId: string) {
   const id = await subscriptionId(sdk);
   await assertCurrentUser(userId);
   localStorage.setItem(markerKey, JSON.stringify({ userId, id }));
-  let result: { enabled: boolean } | null = null;
+  const result = await registerWithSynchronizationRetry(id, true);
 
-  for (let attempt = 0; attempt < 8; attempt++) {
+  if (!result?.enabled) {
+    throw new Error("Could not enable notifications. Please retry notifications.");
+  }
+  accountPreference.set(userId, true);
+  lastReconciliation = { userId, at: Date.now(), value: { sdk, enabled: true } };
+}
+
+async function registerWithSynchronizationRetry(subscriptionId: string, activate: boolean) {
+  let result: { enabled: boolean } | null = null;
+  for (let attempt = 0; attempt < 8; attempt += 1) {
     try {
       result = await endpoint<{ enabled: boolean }>({
         action: "register",
-        subscription_id: id,
-        activate: true,
+        subscription_id: subscriptionId,
+        activate,
       });
       break;
     } catch {
@@ -261,29 +292,63 @@ export async function enableChallengePush(sdk: PushSdk, userId: string) {
       await new Promise((resolve) => window.setTimeout(resolve, 1500));
     }
   }
-
-  if (!result?.enabled) {
-    throw new Error("Could not enable notifications. Please retry notifications.");
-  }
+  return result;
 }
 
 export async function refreshChallengePush(sdk: PushSdk, userId: string) {
-  const saved = marker();
-  if (
-    !saved ||
-    saved.userId !== userId ||
-    !sdk.User.PushSubscription.id ||
-    !sdk.User.PushSubscription.optedIn
-  )
-    return;
+  const permission = Notification.permission;
+  logPushDiagnostic("permission", { value: permission });
+  if (permission !== "granted") return false;
+  if (accountPreference.get(userId) === false) return false;
+
+  const id = sdk.User.PushSubscription.id;
+  const optedIn = Boolean(sdk.User.PushSubscription.optedIn);
+  if (!id || !optedIn) {
+    logPushDiagnostic("backend_sync", {
+      outcome: "subscription_unavailable",
+      subscription_present: Boolean(id),
+      opted_in: optedIn,
+    });
+    throw new Error(
+      "Notification status is temporarily unavailable. Retry notifications in a moment.",
+    );
+  }
   await assertCurrentUser(userId);
-  const result = await endpoint<{ enabled: boolean }>({
-    action: "register",
-    subscription_id: sdk.User.PushSubscription.id,
-    activate: false,
+  const result = await registerWithSynchronizationRetry(id, false);
+  if (result?.enabled) {
+    localStorage.setItem(markerKey, JSON.stringify({ userId, id }));
+  }
+  logPushDiagnostic("backend_sync", {
+    outcome: result?.enabled ? "enabled" : "disabled",
+    subscription_present: true,
+    opted_in: true,
   });
-  if (result.enabled)
-    localStorage.setItem(markerKey, JSON.stringify({ userId, id: sdk.User.PushSubscription.id }));
+  return Boolean(result?.enabled);
+}
+
+export function reconcileChallengePush(userId: string, options?: { force?: boolean }) {
+  const now = Date.now();
+  if (activeReconciliation?.userId === userId) return activeReconciliation.promise;
+  if (
+    !options?.force &&
+    lastReconciliation?.userId === userId &&
+    now - lastReconciliation.at < RECONCILIATION_CACHE_MS
+  )
+    return Promise.resolve(lastReconciliation.value);
+
+  const promise = (async () => {
+    const sdk = await prepareChallengePush(userId);
+    const enabled = await refreshChallengePush(sdk, userId);
+    const value = { sdk, enabled };
+    lastReconciliation = { userId, at: Date.now(), value };
+    return value;
+  })();
+  activeReconciliation = { userId, promise };
+  const clearActive = () => {
+    if (activeReconciliation?.promise === promise) activeReconciliation = undefined;
+  };
+  void promise.then(clearActive, clearActive);
+  return promise;
 }
 
 export async function disableChallengePush(sdk: PushSdk | null) {
@@ -291,6 +356,9 @@ export async function disableChallengePush(sdk: PushSdk | null) {
   const { error } = await supabase.rpc("disable_challenge_push");
   if (error) throw new Error("Could not disable notifications. Please try again.");
   localStorage.removeItem(markerKey);
+  const userId = identifiedUserId;
+  if (userId) accountPreference.set(userId, false);
+  lastReconciliation = undefined;
   try {
     await sdk?.User.PushSubscription.optOut();
   } catch {
@@ -300,39 +368,45 @@ export async function disableChallengePush(sdk: PushSdk | null) {
 
 export async function detachChallengePush() {
   const saved = marker();
-  if (!saved) return;
-  // Do not complete normal sign-out until this device is deactivated server-side.
-  await endpoint({ action: "detach", subscription_id: saved.id });
-  localStorage.removeItem(markerKey);
+  if (saved) {
+    // Do not complete normal sign-out until this device is detached server-side.
+    await endpoint({ action: "detach", subscription_id: saved.id });
+    localStorage.removeItem(markerKey);
+  }
   try {
     const sdk = await loadSdk();
-    await sdk.User.PushSubscription.optOut();
     await sdk.logout();
+    identifiedUserId = undefined;
+    lastReconciliation = undefined;
   } catch {
-    /* The database already disabled this device. */
+    /* The database already detached this device. */
   }
 }
 
 /** Handles cross-tab sign-out, session loss and switching accounts on any route. */
 export function watchChallengePushSession() {
-  const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-    const saved = marker();
-    if (!saved || saved.userId === session?.user.id) return;
+  let observedUserId: string | undefined;
+  const { data } = supabase.auth.onAuthStateChange((event, session) => {
+    const nextUserId = session?.user.id;
+    logPushDiagnostic("auth_event", {
+      event,
+      same_user: Boolean(nextUserId && nextUserId === observedUserId),
+      authenticated: Boolean(nextUserId),
+    });
+    if (nextUserId === observedUserId) return;
+    observedUserId = nextUserId;
     // Auth callbacks must not await Supabase calls (auth-lock deadlock).
     window.setTimeout(() => {
       void (async () => {
-        try {
-          const sdk = await loadSdk();
-          // A delayed auth callback must not detach a newly registered account.
-          const latest = marker();
-          if (!latest || latest.userId !== saved.userId || latest.id !== saved.id) return;
-          await sdk.User.PushSubscription.optOut();
-          await sdk.logout();
+        if (!nextUserId) {
           localStorage.removeItem(markerKey);
-        } catch {
-          const worker = await navigator.serviceWorker?.getRegistration("/");
-          await (await worker?.pushManager.getSubscription())?.unsubscribe();
+          const sdk = await loadSdk();
+          await sdk.logout();
+          identifiedUserId = undefined;
+          lastReconciliation = undefined;
+          return;
         }
+        await reconcileChallengePush(nextUserId);
       })().catch(() => {
         /* No credentials or provider details in logs. */
       });

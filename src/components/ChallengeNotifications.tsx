@@ -4,10 +4,8 @@ import { PendingLabel } from "@/components/ui-kit";
 import {
   disableChallengePush,
   enableChallengePush,
-  prepareChallengePush,
-  pushIsEnabled,
   pushUnavailableReason,
-  refreshChallengePush,
+  reconcileChallengePush,
   type PushSdk,
 } from "@/lib/challenge-push";
 
@@ -27,15 +25,17 @@ export function ChallengeNotifications({ userId }: { userId: string }) {
     let alive = true;
     let current: PushSdk | null = null;
     let refreshing = false;
-    const refresh = async () => {
-      if (!current || refreshing) return;
+    const refresh = async (force = false) => {
+      if (refreshing) return;
       refreshing = true;
       try {
-        await refreshChallengePush(current, userId);
-        const enabled = await pushIsEnabled(current);
+        const result = await reconcileChallengePush(userId, { force });
+        current = result.sdk;
         if (alive) {
-          setOn(enabled);
+          setSdk(result.sdk);
+          setOn(result.enabled);
           setServiceState("ready");
+          setFeedback(null);
         }
       } catch {
         if (alive) {
@@ -50,7 +50,7 @@ export function ChallengeNotifications({ userId }: { userId: string }) {
       }
     };
     const onChange = () => {
-      void refresh();
+      void refresh(true);
     };
     setSdk(null);
     setOn(false);
@@ -61,13 +61,15 @@ export function ChallengeNotifications({ userId }: { userId: string }) {
     if (!reason) {
       void (async () => {
         try {
-          const value = await prepareChallengePush(userId);
+          const value = await reconcileChallengePush(userId);
           if (!alive) return;
-          current = value;
-          setSdk(() => value);
-          await refresh();
+          current = value.sdk;
+          setSdk(() => value.sdk);
+          setOn(value.enabled);
+          setServiceState("ready");
+          setFeedback(null);
           if (alive) {
-            value.User.PushSubscription.addEventListener("change", onChange);
+            value.sdk.User.PushSubscription.addEventListener("change", onChange);
             window.addEventListener("focus", onChange);
           }
         } catch (error) {

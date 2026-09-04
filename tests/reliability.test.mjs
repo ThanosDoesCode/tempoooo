@@ -184,6 +184,32 @@ test("push observability stays structured while dedupe and sync retry remain int
   assert.match(delivery, /operationalLog/);
   assert.match(worker, /safeOperationalCode/);
   assert.match(subscription, /phase = "provider_verification"/);
+  const providerVerification = subscription.indexOf(
+    "oneSignal().subscriptions(identity.data.external_id)",
+  );
+  const registrationRpc = subscription.indexOf('db.rpc("register_challenge_push_device"');
+  assert.ok(providerVerification >= 0 && providerVerification < registrationRpc);
+  assert.match(subscription, /if \(!verified\.includes\(id as string\)\)/);
   assert.match(browser, /Device registration is still pending/);
   assert.doesNotMatch(subscription, /console\.(?:error|warn)\([^\n]*uid/);
+});
+
+test("push restoration RPC rejects null identity input and keeps its hardened execution boundary", async () => {
+  const migration = await read(
+    "supabase/migrations/20260904190000_restore_push_device_after_login.sql",
+  );
+  assert.match(migration, /external_id IS DISTINCT FROM _external_id/);
+  assert.match(migration, /_external_id IS NULL/);
+  assert.match(migration, /btrim\(_external_id\) = ''/);
+  assert.match(migration, /_activate IS NULL/);
+  assert.match(migration, /SECURITY DEFINER/);
+  assert.match(migration, /SET search_path = ''/);
+  assert.match(
+    migration,
+    /REVOKE ALL ON FUNCTION public\.register_challenge_push_device[\s\S]*FROM PUBLIC, anon, authenticated/,
+  );
+  assert.match(
+    migration,
+    /GRANT EXECUTE ON FUNCTION public\.register_challenge_push_device[\s\S]*TO service_role/,
+  );
 });
