@@ -4,7 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { Bar, Card, Chip, Field, Note, NumInput, SectionTitle, Stat } from "@/components/ui-kit";
 import { bulkStatus, dayCompletion, fmt, iso, signed, weekDays, weekStartOf } from "@/lib/calc";
-import { MEAL_PLANS, mealPlan } from "@/lib/meals";
+import { MEAL_PLANS, mealPlan, mealPlanSnapshot } from "@/lib/meals";
 import { useActions, useAppData } from "@/lib/store";
 import { RANGES, type MealPlanId, type WorkoutType } from "@/lib/types";
 
@@ -78,9 +78,7 @@ function TodayPage() {
 
   const pickPlan = (id: MealPlanId) => {
     const plan = mealPlan(id);
-    const mealSnapshot = plan
-      ? { name: plan.name, base: [...plan.base], meals: [...plan.meals], macros: plan.macros }
-      : undefined;
+    const mealSnapshot = plan ? mealPlanSnapshot(plan) : undefined;
     if (!plan?.macros) {
       set({ mealPlan: id, mealSnapshot });
       return;
@@ -225,7 +223,7 @@ function TodayPage() {
               </ul>
               {plan.macros ? (
                 <p className="num mt-2 font-medium">
-                  Pre-filled: {plan.macros.calories} kcal · {plan.macros.protein} P ·{" "}
+                  Daily total: ≈ {plan.macros.calories} kcal · {plan.macros.protein} P ·{" "}
                   {plan.macros.carbs} C · {plan.macros.fat} F
                 </p>
               ) : null}
