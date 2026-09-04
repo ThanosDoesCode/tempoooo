@@ -71,7 +71,19 @@ vm.runInNewContext(compiled, context);
 
 test("challenge CSV preserves summary, activity, finalized-week and travel-pause records", () => {
   const csv = context.exports.challengeCsv(
-    { name: "52 week", start_date: "2026-08-31" },
+    {
+      name: "52 week",
+      start_date: "2026-08-31",
+      weekly_target_km: 30,
+      penalty_mode: "custom",
+      penalty_high_eur: 60,
+      penalty_medium_eur: 35,
+      penalty_low_eur: 10,
+      penalty_high_custom: "Send 3 photos",
+      penalty_medium_custom: "Buy dinner",
+      penalty_low_custom: "Make breakfast",
+      legacy_photo_owed: false,
+    },
     [
       { userId: "a", name: "=Alex" },
       { userId: "b", name: "Sam" },
@@ -100,6 +112,9 @@ test("challenge CSV preserves summary, activity, finalized-week and travel-pause
         target_km: 0,
         completed: true,
         penalty_eur: 0,
+        penalty_mode: "custom",
+        penalty_band: "medium",
+        penalty_consequence: "Buy dinner",
         paused: true,
         pause_country: "Italy",
       },
@@ -122,4 +137,12 @@ test("challenge CSV preserves summary, activity, finalized-week and travel-pause
   assert.match(csv, /"21"/);
   assert.match(csv, /"7"/);
   assert.match(csv, /"Italy"/);
+  assert.match(csv, /"weekly_target_km"/);
+  assert.match(csv, /"penalty_high_eur"/);
+  assert.match(csv, /"applied_penalty_consequence"/);
+  assert.match(csv, /"Buy dinner"/);
+  assert.match(csv, /"30"/);
+  assert.match(csv, /"60"/);
+  assert.match(csv, /"35"/);
+  assert.match(csv, /"10"/);
 });

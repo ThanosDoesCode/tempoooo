@@ -6,12 +6,15 @@ const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
 test("first-use Challenge primer covers the complete scoring path without an open rule wall", async () => {
   const rules = await read("src/components/challenge-rules.tsx");
-  assert.match(rules, /Reach 15 challenge km each week/);
+  assert.match(
+    rules,
+    /Reach \$\{formatKm\(configured\.weekly_target_km\)\} challenge km each week/,
+  );
   assert.match(rules, /Equivalent km are your converted progress/);
   assert.match(rules, /runs count 1:1 below 7:00 min\/km/);
   assert.match(rules, /rides\s+count 3:1 from 18 km\/h/);
   assert.match(rules, /duration and a screenshot/);
-  assert.match(rules, /€5, €10, or €15 penalty/);
+  assert.match(rules, /applies the agreed consequence/);
   assert.match(rules, /Outside Greece or Sweden/);
   assert.match(rules, /<details/);
   assert.match(await read("src/routes/_authenticated/challenge/new.tsx"), /ChallengePrimer/);

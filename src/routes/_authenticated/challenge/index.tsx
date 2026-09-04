@@ -14,6 +14,7 @@ import {
   Trophy,
 } from "lucide-react";
 import { AppShell, PageHeader } from "@/components/AppShell";
+import { ChallengeTermsSummary } from "@/components/challenge-rules";
 import { Card, DataError, Note, PendingLabel, SectionTitle } from "@/components/ui-kit";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
@@ -22,14 +23,12 @@ import { finalizeChallenge } from "@/lib/privileged-rpcs.functions";
 import { userFacingError } from "@/lib/network-errors";
 import {
   activityMetrics,
-  DEFAULT_TARGET_KM,
   formatPace,
   hoursLeft,
   leaveChallenge,
   km,
-  owedText,
   paymentsQueryOptions,
-  penaltyFor,
+  penaltyTextFor,
   qualifiedEquivalentKm,
   sumWeek,
   todayIn,
@@ -42,6 +41,7 @@ import {
   weekPaused,
   weekBounds,
   weekNumberOf,
+  type ChallengeTerms,
 } from "@/lib/challenge";
 import { evidenceWeekFinalized } from "@/lib/challenge-evidence";
 import { ChallengePrimer } from "@/components/challenge-rules";
@@ -60,7 +60,7 @@ export const Route = createFileRoute("/_authenticated/challenge/")({
       { property: "og:title", content: "Tempo" },
       {
         property: "og:description",
-        content: "15 equivalent km per week, running and cycling, tiered penalties.",
+        content: "Configurable equivalent km targets, running and cycling, tiered penalties.",
       },
     ],
   }),
@@ -188,7 +188,7 @@ function ChallengeHome() {
   }
 
   const today = todayIn(challenge.timezone);
-  const target = DEFAULT_TARGET_KM;
+  const target = Number(challenge.weekly_target_km);
   const me = members?.find((member) => member.userId === user?.id);
   const opponent = members?.find((member) => member.userId !== user?.id);
   const meTotals =
@@ -243,6 +243,7 @@ function ChallengeHome() {
             label={me ? "Me" : "You"}
             totals={meTotals}
             target={target}
+            terms={challenge}
             paused={mePaused}
             barClass="bg-primary"
             loading={progressLoading}
@@ -251,6 +252,7 @@ function ChallengeHome() {
             label={opponent?.name ?? "Opponent"}
             totals={opponentTotals}
             target={target}
+            terms={challenge}
             paused={opponentPaused}
             barClass="bg-chart-2"
             bordered
@@ -435,13 +437,21 @@ function ChallengeHome() {
       <section className="mt-5">
         <SectionTitle>Challenge settings</SectionTitle>
         <div className="space-y-2">
-          <div className="card-surface flex items-center gap-3 px-3 py-2.5 text-sm">
-            <span className="grid h-8 w-8 place-items-center rounded-lg bg-elevated text-primary">
-              <Trophy className="h-4 w-4" aria-hidden="true" />
-            </span>
-            <span className="font-medium">Weekly target</span>
-            <span className="ml-auto text-xs text-muted-foreground">15 challenge km</span>
-          </div>
+          <details className="group card-surface overflow-hidden">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center gap-3 px-3 py-2.5 text-sm [&::-webkit-details-marker]:hidden">
+              <span className="grid h-8 w-8 place-items-center rounded-lg bg-elevated text-primary">
+                <Trophy className="h-4 w-4" aria-hidden="true" />
+              </span>
+              <span className="font-medium">Weekly terms</span>
+              <span className="ml-auto text-xs text-muted-foreground">
+                {new Intl.NumberFormat("en", { maximumFractionDigits: 2 }).format(target)} km
+              </span>
+              <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-90" />
+            </summary>
+            <div className="border-t border-border p-3">
+              <ChallengeTermsSummary terms={challenge} />
+            </div>
+          </details>
           {user ? <ChallengeNotifications userId={user.id} /> : null}
         </div>
       </section>
@@ -517,6 +527,7 @@ function ParticipantProgress({
   label,
   totals,
   target,
+  terms,
   barClass,
   bordered = false,
   loading = false,
@@ -525,6 +536,7 @@ function ParticipantProgress({
   label: string;
   totals: ProgressTotals | null;
   target: number;
+  terms: ChallengeTerms;
   barClass: string;
   bordered?: boolean;
   loading?: boolean;
@@ -572,7 +584,7 @@ function ParticipantProgress({
                   : `${Math.max(0, target - equivalent).toFixed(1)} km left`}
             </p>
             <p className={complete || paused ? "text-good" : "text-warn"}>
-              Penalty {owedText(paused ? 0 : penaltyFor(equivalent, target))}
+              Penalty {penaltyTextFor(paused ? target : equivalent, terms)}
             </p>
             <p className="truncate text-[10px] text-muted-foreground/80">
               Run {km(totals.running)} · Ride {km(totals.cycling)}

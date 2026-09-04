@@ -11,6 +11,14 @@ export type Challenge = {
   duration_weeks: number;
   timezone: string;
   weekly_target_km: number;
+  penalty_high_eur: number;
+  penalty_medium_eur: number;
+  penalty_low_eur: number;
+  penalty_mode: PenaltyMode;
+  penalty_high_custom: string | null;
+  penalty_medium_custom: string | null;
+  penalty_low_custom: string | null;
+  legacy_photo_owed: boolean;
   running_ratio: number;
   cycling_ratio: number;
   max_members: number;
@@ -39,36 +47,103 @@ export type Activity = {
   updated_at: string;
 };
 
-export const TIERS = [
-  { min: 15, penalty: 0, label: "15.00 km or more" },
-  { min: 10, penalty: 5, label: "10.00 to 14.99 km" },
-  { min: 5, penalty: 10, label: "5.00 to 9.99 km" },
-  { min: 0, penalty: 15, label: "Below 5.00 km" },
-];
-
 export const DEFAULT_TARGET_KM = 15;
+export const DEFAULT_PENALTIES = { high: 15, medium: 10, low: 5 } as const;
+export type PenaltyMode = "money" | "custom";
 
-/** Mirrors the database penalty_for() function. Official values always come from the server. */
-export function penaltyFor(equivalentKm: number, targetKm: number = DEFAULT_TARGET_KM) {
-  if (targetKm <= 0 || equivalentKm >= 15) return 0;
-  if (equivalentKm >= 10) return 5;
-  if (equivalentKm >= 5) return 10;
-  return 15;
+export type ChallengeTerms = {
+  weekly_target_km: number;
+  penalty_mode: PenaltyMode;
+  penalty_high_eur: number;
+  penalty_medium_eur: number;
+  penalty_low_eur: number;
+  penalty_high_custom: string | null;
+  penalty_medium_custom: string | null;
+  penalty_low_custom: string | null;
+  legacy_photo_owed: boolean;
+};
+
+export function challengeTerms(terms?: Partial<ChallengeTerms> | null): ChallengeTerms {
+  return {
+    weekly_target_km: Number(terms?.weekly_target_km ?? DEFAULT_TARGET_KM),
+    penalty_mode: terms?.penalty_mode === "custom" ? "custom" : "money",
+    penalty_high_eur: Number(terms?.penalty_high_eur ?? DEFAULT_PENALTIES.high),
+    penalty_medium_eur: Number(terms?.penalty_medium_eur ?? DEFAULT_PENALTIES.medium),
+    penalty_low_eur: Number(terms?.penalty_low_eur ?? DEFAULT_PENALTIES.low),
+    penalty_high_custom: terms?.penalty_high_custom?.trim() || null,
+    penalty_medium_custom: terms?.penalty_medium_custom?.trim() || null,
+    penalty_low_custom: terms?.penalty_low_custom?.trim() || null,
+    legacy_photo_owed: terms?.legacy_photo_owed === true,
+  };
 }
 
-/** Forfeit rule: one photo for every 5 euro owed. */
+export function penaltyBands(terms?: Partial<ChallengeTerms> | null) {
+  const value = challengeTerms(terms);
+  return {
+    highBelow: value.weekly_target_km / 3,
+    mediumBelow: (value.weekly_target_km * 2) / 3,
+    target: value.weekly_target_km,
+    highPenalty: value.penalty_high_eur,
+    mediumPenalty: value.penalty_medium_eur,
+    lowPenalty: value.penalty_low_eur,
+  };
+}
+
+/** Mirrors the database penalty_for() function. Official values always come from the server. */
+export function penaltyFor(
+  equivalentKm: number,
+  targetKm: number = DEFAULT_TARGET_KM,
+  penalties: { high: number; medium: number; low: number } = DEFAULT_PENALTIES,
+) {
+  if (targetKm <= 0 || equivalentKm >= targetKm) return 0;
+  if (equivalentKm >= (targetKm * 2) / 3) return penalties.low;
+  if (equivalentKm >= targetKm / 3) return penalties.medium;
+  return penalties.high;
+}
+
+export type PenaltyBand = "high" | "medium" | "low";
+
+export function penaltyBandFor(equivalentKm: number, targetKm: number): PenaltyBand | null {
+  if (targetKm <= 0 || equivalentKm >= targetKm) return null;
+  if (equivalentKm >= (targetKm * 2) / 3) return "low";
+  if (equivalentKm >= targetKm / 3) return "medium";
+  return "high";
+}
+
 export const photosFor = (euros: number) => Math.floor(Math.max(0, euros) / 5);
 
 export const photoText = (euros: number) => {
-  const n = photosFor(euros);
-  return n === 0 ? "" : `${n} photo${n > 1 ? "s" : ""}`;
+  const photos = photosFor(euros);
+  return photos === 0 ? "" : `${photos} photo${photos === 1 ? "" : "s"}`;
 };
 
-/** "€10 + 2 photos" for any owed amount, "€0" when nothing is owed. */
-export const owedText = (euros: number) => {
-  const p = photoText(euros);
-  return p ? `${eur(euros)} + ${p}` : eur(euros);
+export const owedText = (euros: number, legacyPhotoOwed = false) => {
+  const photos = legacyPhotoOwed ? photoText(euros) : "";
+  return photos ? `${eur(euros)} + ${photos}` : eur(euros);
 };
+
+export function penaltyTextFor(equivalentKm: number, terms?: Partial<ChallengeTerms> | null) {
+  const configured = challengeTerms(terms);
+  const band = penaltyBandFor(equivalentKm, configured.weekly_target_km);
+  if (!band) return configured.penalty_mode === "money" ? "€0" : "None";
+  if (configured.penalty_mode === "custom") {
+    return (
+      {
+        high: configured.penalty_high_custom,
+        medium: configured.penalty_medium_custom,
+        low: configured.penalty_low_custom,
+      }[band] ?? "Custom consequence"
+    );
+  }
+  return owedText(
+    {
+      high: configured.penalty_high_eur,
+      medium: configured.penalty_medium_eur,
+      low: configured.penalty_low_eur,
+    }[band],
+    configured.legacy_photo_owed,
+  );
+}
 
 export function activityMetrics(activity: {
   activity_type: "run" | "cycle";
@@ -151,7 +226,7 @@ export const myChallengeQueryOptions = () =>
       const { data, error } = await supabase
         .from("challenge_members")
         .select(
-          "joined_at, challenges!inner(id, created_by, name, start_date, duration_weeks, timezone, weekly_target_km, running_ratio, cycling_ratio, max_members, status)",
+          "joined_at, challenges!inner(id, created_by, name, start_date, duration_weeks, timezone, weekly_target_km, penalty_mode, penalty_high_eur, penalty_medium_eur, penalty_low_eur, penalty_high_custom, penalty_medium_custom, penalty_low_custom, legacy_photo_owed, running_ratio, cycling_ratio, max_members, status)",
         )
         .eq("user_id", uid)
         .order("joined_at", { ascending: false })
@@ -352,6 +427,9 @@ export type WeekRow = {
   target_km: number;
   completed: boolean;
   penalty_eur: number;
+  penalty_mode: PenaltyMode | null;
+  penalty_band: PenaltyBand | null;
+  penalty_consequence: string | null;
   paused: boolean;
   pause_country: string | null;
 };
@@ -412,7 +490,8 @@ export function usePayments(challengeId: string | undefined) {
   });
 }
 
-export const eur = (n: number) => `€${n.toFixed(0)}`;
+export const eur = (n: number) =>
+  `€${new Intl.NumberFormat("en", { maximumFractionDigits: 2 }).format(n)}`;
 export const km = (n: number) => `${n.toFixed(1)} km`;
 
 /** Marks every open obligation of the signed-in payer as settled in one step. */

@@ -1,11 +1,16 @@
 import { Card, Note, SectionTitle } from "@/components/ui-kit";
+import { challengeTerms, eur, penaltyBands, type ChallengeTerms } from "@/lib/challenge";
 
-export function ChallengePrimer() {
+export function ChallengePrimer({ terms }: { terms?: Partial<ChallengeTerms> | null }) {
+  const configured = challengeTerms(terms);
   return (
     <Card>
       <SectionTitle>How Tempo works</SectionTitle>
       <ol className="space-y-2 text-sm">
-        <PrimerStep number="1" title="Reach 15 challenge km each week">
+        <PrimerStep
+          number="1"
+          title={`Reach ${formatKm(configured.weekly_target_km)} challenge km each week`}
+        >
           Equivalent km are your converted progress: runs count 1:1 below 7:00 min/km, and rides
           count 3:1 from 18 km/h.
         </PrimerStep>
@@ -14,7 +19,7 @@ export function ChallengePrimer() {
           speed.
         </PrimerStep>
         <PrimerStep number="3" title="Sunday locks the result">
-          Finishing below 15 creates a €5, €10, or €15 penalty. Extra km do not carry over.
+          Finishing below the target applies the agreed consequence. Extra km do not carry over.
         </PrimerStep>
         <PrimerStep number="4" title="Travelling can pause your week">
           Outside Greece or Sweden, you can pause your own full week so it is penalty-free.
@@ -27,28 +32,70 @@ export function ChallengePrimer() {
           <span className="ml-auto hidden text-muted-foreground group-open:inline">−</span>
         </summary>
         <div className="space-y-4 pb-1 pt-2">
-          <RulesContent />
+          <RulesContent terms={configured} />
         </div>
       </details>
     </Card>
   );
 }
 
-export function RulesCard() {
+export function RulesCard({ terms }: { terms?: Partial<ChallengeTerms> | null }) {
   return (
     <Card className="space-y-4">
       <SectionTitle>Challenge rules</SectionTitle>
-      <RulesContent />
+      <RulesContent terms={terms ?? null} />
     </Card>
   );
 }
 
-function RulesContent() {
+export function ChallengeTermsSummary({ terms }: { terms?: Partial<ChallengeTerms> | null }) {
+  const bands = penaltyBands(terms);
+  const configured = challengeTerms(terms);
+  const value = (band: "high" | "medium" | "low") => {
+    if (configured.penalty_mode === "custom") {
+      return (
+        {
+          high: configured.penalty_high_custom,
+          medium: configured.penalty_medium_custom,
+          low: configured.penalty_low_custom,
+        }[band] ?? "—"
+      );
+    }
+    const amount = {
+      high: configured.penalty_high_eur,
+      medium: configured.penalty_medium_eur,
+      low: configured.penalty_low_eur,
+    }[band];
+    if (!configured.legacy_photo_owed) return eur(amount);
+    const photos = Math.floor(Math.max(0, amount) / 5);
+    return photos ? `${eur(amount)} + ${photos} photo${photos === 1 ? "" : "s"}` : eur(amount);
+  };
+  return (
+    <div className="grid gap-2 text-xs sm:grid-cols-2">
+      <Tier
+        label={`${formatKm(bands.target)} km or more`}
+        value={configured.penalty_mode === "money" ? "€0" : "No penalty"}
+      />
+      <Tier
+        label={`≥ ⅔ target (${formatKm(bands.mediumBelow, 4)} km) and <${formatKm(bands.target)} km`}
+        value={value("low")}
+      />
+      <Tier
+        label={`≥ ⅓ target (${formatKm(bands.highBelow, 4)} km) and <⅔ (${formatKm(bands.mediumBelow, 4)} km)`}
+        value={value("medium")}
+      />
+      <Tier label={`Below ⅓ target (${formatKm(bands.highBelow, 4)} km)`} value={value("high")} />
+    </div>
+  );
+}
+
+function RulesContent({ terms }: { terms?: Partial<ChallengeTerms> | null }) {
+  const configured = challengeTerms(terms);
   return (
     <>
       <RuleGroup title="Weekly target">
-        <li>Weekly target is 15 challenge km.</li>
-        <li>Extra distance above 15 does not carry over.</li>
+        <li>Weekly target is {formatKm(configured.weekly_target_km)} challenge km.</li>
+        <li>Extra distance above the target does not carry over.</li>
       </RuleGroup>
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -78,25 +125,25 @@ function RulesContent() {
         <li>The evidence must verify distance and the relevant pace or cycling speed.</li>
       </RuleGroup>
 
-      <RuleGroup title="Photo rule">
-        <li>Every €5 owed is one penalty photo.</li>
-        <li>
-          Photos should become progressively more creative, funny, or unusual as they accumulate.
-        </li>
+      <RuleGroup title={`${configured.penalty_mode === "money" ? "Money" : "Custom"} penalties`}>
+        <li>Penalty bands are one-third and two-thirds of the weekly target.</li>
+        <li>The exact consequences were agreed when this challenge was created.</li>
+        {configured.legacy_photo_owed ? (
+          <li>This legacy Challenge also owes one photo for every €5.</li>
+        ) : null}
       </RuleGroup>
 
-      <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-        <Tier label="15 km or more" value="€0 · 0 photos" />
-        <Tier label="10 to 14.99 km" value="€5 · 1 photo" />
-        <Tier label="5 to 9.99 km" value="€10 · 2 photos" />
-        <Tier label="0 to 4.99 km" value="€15 · 3 photos" />
-      </div>
+      <ChallengeTermsSummary terms={configured} />
       <Note>
         Weeks run Monday 00:00 to Sunday 23:59 in the challenge timezone. Finalized results stay
         locked.
       </Note>
     </>
   );
+}
+
+function formatKm(value: number, maximumFractionDigits = 2) {
+  return new Intl.NumberFormat("en", { maximumFractionDigits }).format(value);
 }
 
 function PrimerStep({
@@ -136,7 +183,7 @@ function Tier({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between rounded-xl border border-border bg-elevated px-3 py-2">
       <span className="text-muted-foreground">{label}</span>
-      <span className="num font-semibold">{value}</span>
+      <span className="max-w-[55%] text-right font-semibold">{value}</span>
     </div>
   );
 }

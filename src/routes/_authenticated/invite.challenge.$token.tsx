@@ -1,8 +1,13 @@
 import { createFileRoute, useNavigate, useParams } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { AppShell, PageHeader } from "@/components/AppShell";
-import { Card, Note, PendingLabel } from "@/components/ui-kit";
-import { acceptChallengeInvitation } from "@/lib/privileged-rpcs.functions";
+import { ChallengeTermsSummary } from "@/components/challenge-rules";
+import { Card, Note, PendingLabel, SectionTitle } from "@/components/ui-kit";
+import {
+  acceptChallengeInvitation,
+  previewChallengeInvitation,
+} from "@/lib/privileged-rpcs.functions";
+import type { ChallengeInvitationTerms } from "@/lib/privileged-rpcs.server";
 
 export const Route = createFileRoute("/_authenticated/invite/challenge/$token")({
   head: () => ({
@@ -14,7 +19,10 @@ export const Route = createFileRoute("/_authenticated/invite/challenge/$token")(
           "Accept an invitation to a private two-person 52-week running and cycling challenge.",
       },
       { property: "og:title", content: "Tempo" },
-      { property: "og:description", content: "15 equivalent km per week, for 52 weeks." },
+      {
+        property: "og:description",
+        content: "Review the weekly target and penalty consequences before joining Tempo.",
+      },
     ],
   }),
   component: AcceptChallenge,
@@ -25,26 +33,68 @@ function AcceptChallenge() {
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
+  const [terms, setTerms] = useState<ChallengeInvitationTerms | null>(null);
+  const [accepting, setAccepting] = useState(false);
 
   useEffect(() => {
     setError(null);
+    setTerms(null);
     void (async () => {
       try {
-        await acceptChallengeInvitation({ data: { token } });
-        void navigate({ to: "/challenge" });
+        setTerms(await previewChallengeInvitation({ data: { token } }));
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : "Could not accept invitation");
+        setError(cause instanceof Error ? cause.message : "Could not load invitation");
       }
     })();
   }, [token, navigate, retryKey]);
 
+  const accept = async () => {
+    if (!terms || accepting) return;
+    setAccepting(true);
+    setError(null);
+    try {
+      await acceptChallengeInvitation({ data: { token } });
+      void navigate({ to: "/challenge" });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not accept this invitation");
+      setAccepting(false);
+    }
+  };
+
   return (
     <AppShell>
-      <PageHeader title="Invitation" subtitle="Checking your invitation." />
+      <PageHeader
+        title="Invitation"
+        subtitle={
+          terms ? "Review the Challenge terms before accepting." : "Checking your invitation."
+        }
+      />
       <Card>
-        {error ? (
+        {terms ? (
+          <div>
+            <SectionTitle>{terms.challenge_name}</SectionTitle>
+            <p className="mb-3 text-xs text-muted-foreground">
+              {terms.duration_weeks} weeks · {Number(terms.weekly_target_km)} challenge km each week
+            </p>
+            <ChallengeTermsSummary terms={terms} />
+            <Note>These penalty terms and the weekly target cannot change after acceptance.</Note>
+            {error ? (
+              <p role="alert" className="mt-3 text-xs text-danger">
+                {error}
+              </p>
+            ) : null}
+            <button
+              type="button"
+              disabled={accepting}
+              onClick={() => void accept()}
+              className="mt-3 min-h-11 w-full rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+            >
+              {accepting ? <PendingLabel>Accepting invitation…</PendingLabel> : "Accept challenge"}
+            </button>
+          </div>
+        ) : error ? (
           <div role="alert">
-            <p className="text-sm font-semibold text-danger">Could not accept this invitation</p>
+            <p className="text-sm font-semibold text-danger">Could not load this invitation</p>
             <p className="mt-1 text-xs text-muted-foreground">{error}</p>
             <button
               type="button"
@@ -56,7 +106,7 @@ function AcceptChallenge() {
           </div>
         ) : (
           <Note>
-            <PendingLabel>Accepting invitation…</PendingLabel>
+            <PendingLabel>Loading invitation terms…</PendingLabel>
           </Note>
         )}
       </Card>

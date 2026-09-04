@@ -2,10 +2,11 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { addDays, format, startOfWeek } from "date-fns";
 import { useRef, useState } from "react";
 import { AppShell, PageHeader } from "@/components/AppShell";
-import { ChallengePrimer } from "@/components/challenge-rules";
+import { ChallengePrimer, ChallengeTermsSummary } from "@/components/challenge-rules";
 import { Card, Note, PendingLabel, SectionTitle } from "@/components/ui-kit";
 import { supabase } from "@/integrations/supabase/client";
 import { randomToken, sha256Hex, useAuth } from "@/lib/auth";
+import type { PenaltyMode } from "@/lib/challenge";
 import { userFacingError } from "@/lib/network-errors";
 
 export const Route = createFileRoute("/_authenticated/challenge/new")({
@@ -18,7 +19,10 @@ export const Route = createFileRoute("/_authenticated/challenge/new")({
           "Create a private two-person 52-week running and cycling challenge and invite exactly one opponent.",
       },
       { property: "og:title", content: "Tempo" },
-      { property: "og:description", content: "Private, invite-only, 52 weeks, 15 km per week." },
+      {
+        property: "og:description",
+        content: "Create a private 52-week challenge with an agreed weekly target.",
+      },
     ],
   }),
   component: NewChallenge,
@@ -41,12 +45,48 @@ function NewChallenge() {
   const [start, setStart] = useState(nextMonday);
   const [timezone, setTimezone] = useState("Europe/Athens");
   const [weeks, setWeeks] = useState(52);
+  const [target, setTarget] = useState("15");
+  const [penaltyMode, setPenaltyMode] = useState<PenaltyMode>("money");
+  const [highPenalty, setHighPenalty] = useState("15");
+  const [mediumPenalty, setMediumPenalty] = useState("10");
+  const [lowPenalty, setLowPenalty] = useState("5");
+  const [highCustom, setHighCustom] = useState("");
+  const [mediumCustom, setMediumCustom] = useState("");
+  const [lowCustom, setLowCustom] = useState("");
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [link, setLink] = useState<string | null>(null);
   const createLock = useRef(false);
   const creation = useRef<{ requestId: string; token: string } | null>(null);
+  const terms = {
+    weekly_target_km: Number(target),
+    penalty_mode: penaltyMode,
+    penalty_high_eur: Number(highPenalty),
+    penalty_medium_eur: Number(mediumPenalty),
+    penalty_low_eur: Number(lowPenalty),
+    penalty_high_custom: highCustom.trim() || null,
+    penalty_medium_custom: mediumCustom.trim() || null,
+    penalty_low_custom: lowCustom.trim() || null,
+    legacy_photo_owed: false,
+  };
+  const validDecimal = (value: string) => /^\d+(?:\.\d{1,2})?$/.test(value);
+  const customTermsValid = [highCustom, mediumCustom, lowCustom].every(
+    (value) => value.trim().length >= 1 && value.trim().length <= 160,
+  );
+  const moneyTermsValid =
+    [highPenalty, mediumPenalty, lowPenalty].every(validDecimal) &&
+    [terms.penalty_high_eur, terms.penalty_medium_eur, terms.penalty_low_eur].every(
+      (amount) => Number.isFinite(amount) && amount >= 0 && amount <= 1000,
+    ) &&
+    terms.penalty_high_eur >= terms.penalty_medium_eur &&
+    terms.penalty_medium_eur >= terms.penalty_low_eur;
+  const termsValid =
+    validDecimal(target) &&
+    Number.isFinite(terms.weekly_target_km) &&
+    terms.weekly_target_km >= 1 &&
+    terms.weekly_target_km <= 500 &&
+    (penaltyMode === "money" ? moneyTermsValid : customTermsValid);
 
   const create = async () => {
     if (!user || createLock.current) return;
@@ -67,6 +107,14 @@ function NewChallenge() {
         _duration_weeks: Math.max(52, weeks),
         _invited_email: email,
         _token_hash: await sha256Hex(request.token),
+        _weekly_target_km: terms.weekly_target_km,
+        _penalty_mode: terms.penalty_mode,
+        _penalty_high_eur: terms.penalty_high_eur,
+        _penalty_medium_eur: terms.penalty_medium_eur,
+        _penalty_low_eur: terms.penalty_low_eur,
+        _penalty_high_custom: terms.penalty_high_custom,
+        _penalty_medium_custom: terms.penalty_medium_custom,
+        _penalty_low_custom: terms.penalty_low_custom,
       });
       if (rpcError) throw rpcError;
       if (challengeId !== request.requestId) {
@@ -114,7 +162,7 @@ function NewChallenge() {
   return (
     <AppShell>
       <PageHeader title="Create challenge" subtitle="Private, two people, minimum 52 weeks." />
-      <ChallengePrimer />
+      <ChallengePrimer terms={terms} />
       <Card className="mt-3 space-y-3">
         <Labelled label="Challenge name">
           <input value={name} onChange={(e) => setName(e.target.value)} className={inputCls} />
@@ -149,6 +197,76 @@ function NewChallenge() {
             className={inputCls}
           />
         </Labelled>
+        <Labelled label="Weekly target (challenge km)">
+          <input
+            type="number"
+            inputMode="decimal"
+            min={1}
+            max={500}
+            step="0.01"
+            value={target}
+            onChange={(event) => setTarget(event.target.value)}
+            className={inputCls}
+          />
+        </Labelled>
+        <fieldset className="rounded-xl border border-border p-3">
+          <legend className="px-1 text-[11px] uppercase tracking-wider text-muted-foreground">
+            Penalty mode
+          </legend>
+          <div className="grid grid-cols-2 gap-2">
+            {(["money", "custom"] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                aria-pressed={penaltyMode === mode}
+                onClick={() => setPenaltyMode(mode)}
+                className={`min-h-11 rounded-xl border px-3 py-2 text-sm font-semibold capitalize ${
+                  penaltyMode === mode
+                    ? "border-primary bg-primary/15 text-primary"
+                    : "border-border bg-elevated text-muted-foreground"
+                }`}
+              >
+                {mode}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+        {penaltyMode === "money" ? (
+          <fieldset className="rounded-xl border border-border p-3">
+            <legend className="px-1 text-[11px] uppercase tracking-wider text-muted-foreground">
+              Weekly money penalties
+            </legend>
+            <div className="grid grid-cols-3 gap-2">
+              <MoneyInput label="High" value={highPenalty} onChange={setHighPenalty} />
+              <MoneyInput label="Medium" value={mediumPenalty} onChange={setMediumPenalty} />
+              <MoneyInput label="Low" value={lowPenalty} onChange={setLowPenalty} />
+            </div>
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              High must be at least medium, and medium at least low.
+            </p>
+          </fieldset>
+        ) : (
+          <fieldset className="space-y-2 rounded-xl border border-border p-3">
+            <legend className="px-1 text-[11px] uppercase tracking-wider text-muted-foreground">
+              Custom consequences
+            </legend>
+            <CustomInput label="High shortfall" value={highCustom} onChange={setHighCustom} />
+            <CustomInput label="Medium shortfall" value={mediumCustom} onChange={setMediumCustom} />
+            <CustomInput label="Low shortfall" value={lowCustom} onChange={setLowCustom} />
+          </fieldset>
+        )}
+        <div className="rounded-xl bg-elevated p-3">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Live penalty summary
+          </p>
+          {termsValid ? (
+            <ChallengeTermsSummary terms={terms} />
+          ) : (
+            <p className="text-xs text-danger">
+              Enter a valid target and complete all {penaltyMode} penalty terms.
+            </p>
+          )}
+        </div>
         <Labelled label="Opponent email">
           <input
             type="email"
@@ -164,7 +282,7 @@ function NewChallenge() {
           </p>
         ) : null}
         <button
-          disabled={busy || !email}
+          disabled={busy || !email || !termsValid}
           onClick={() => void create()}
           className="w-full rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground disabled:opacity-60"
         >
@@ -172,6 +290,56 @@ function NewChallenge() {
         </button>
       </Card>
     </AppShell>
+  );
+}
+
+function MoneyInput({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label>
+      <span className="mb-1 block text-[10px] text-muted-foreground">{label} €</span>
+      <input
+        type="number"
+        inputMode="decimal"
+        min={0}
+        max={1000}
+        step="0.01"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className={inputCls}
+      />
+    </label>
+  );
+}
+
+function CustomInput({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label>
+      <span className="mb-1 block text-[10px] text-muted-foreground">{label}</span>
+      <input
+        type="text"
+        maxLength={160}
+        value={value}
+        placeholder="e.g. Buy dinner"
+        onChange={(event) => onChange(event.target.value)}
+        className={inputCls}
+      />
+    </label>
   );
 }
 

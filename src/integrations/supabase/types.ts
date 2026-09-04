@@ -800,7 +800,10 @@ export type Database = {
           id: string
           pause_country: string | null
           paused: boolean
+          penalty_band: string | null
+          penalty_consequence: string | null
           penalty_eur: number
+          penalty_mode: string | null
           running_km: number
           target_km: number
           user_id: string
@@ -817,7 +820,10 @@ export type Database = {
           id?: string
           pause_country?: string | null
           paused?: boolean
+          penalty_band?: string | null
+          penalty_consequence?: string | null
           penalty_eur?: number
+          penalty_mode?: string | null
           running_km?: number
           target_km?: number
           user_id: string
@@ -834,7 +840,10 @@ export type Database = {
           id?: string
           pause_country?: string | null
           paused?: boolean
+          penalty_band?: string | null
+          penalty_consequence?: string | null
           penalty_eur?: number
+          penalty_mode?: string | null
           running_km?: number
           target_km?: number
           user_id?: string
@@ -859,8 +868,16 @@ export type Database = {
           cycling_ratio: number
           duration_weeks: number
           id: string
+          legacy_photo_owed: boolean
           max_members: number
           name: string
+          penalty_high_custom: string | null
+          penalty_high_eur: number
+          penalty_low_custom: string | null
+          penalty_low_eur: number
+          penalty_medium_custom: string | null
+          penalty_medium_eur: number
+          penalty_mode: string
           rules_locked_at: string
           running_ratio: number
           start_date: string
@@ -874,8 +891,16 @@ export type Database = {
           cycling_ratio?: number
           duration_weeks?: number
           id?: string
+          legacy_photo_owed?: boolean
           max_members?: number
           name: string
+          penalty_high_custom?: string | null
+          penalty_high_eur?: number
+          penalty_low_custom?: string | null
+          penalty_low_eur?: number
+          penalty_medium_custom?: string | null
+          penalty_medium_eur?: number
+          penalty_mode?: string
           rules_locked_at?: string
           running_ratio?: number
           start_date: string
@@ -889,8 +914,16 @@ export type Database = {
           cycling_ratio?: number
           duration_weeks?: number
           id?: string
+          legacy_photo_owed?: boolean
           max_members?: number
           name?: string
+          penalty_high_custom?: string | null
+          penalty_high_eur?: number
+          penalty_low_custom?: string | null
+          penalty_low_eur?: number
+          penalty_medium_custom?: string | null
+          penalty_medium_eur?: number
+          penalty_mode?: string
           rules_locked_at?: string
           running_ratio?: number
           start_date?: string
@@ -1026,10 +1059,18 @@ export type Database = {
           _duration_weeks: number
           _invited_email: string
           _name: string
+          _penalty_high_custom: string | null
+          _penalty_high_eur: number
+          _penalty_low_custom: string | null
+          _penalty_low_eur: number
+          _penalty_medium_custom: string | null
+          _penalty_medium_eur: number
+          _penalty_mode: string
           _request_id: string
           _start_date: string
           _timezone: string
           _token_hash: string
+          _weekly_target_km: number
         }
         Returns: string
       }
@@ -1044,8 +1085,34 @@ export type Database = {
         Returns: boolean
       }
       penalty_for:
-        | { Args: { _km: number }; Returns: number }
         | { Args: { _km: number; _target: number }; Returns: number }
+        | {
+            Args: {
+              _high: number
+              _km: number
+              _low: number
+              _medium: number
+              _target: number
+            }
+            Returns: number
+          }
+      preview_challenge_invitation: {
+        Args: { _caller: string; _email: string; _token: string }
+        Returns: {
+          challenge_id: string
+          challenge_name: string
+          duration_weeks: number
+          legacy_photo_owed: boolean
+          penalty_high_custom: string | null
+          penalty_high_eur: number
+          penalty_low_custom: string | null
+          penalty_low_eur: number
+          penalty_medium_custom: string | null
+          penalty_medium_eur: number
+          penalty_mode: string
+          weekly_target_km: number
+        }[]
+      }
       register_challenge_push_device: {
         Args: {
           _activate: boolean

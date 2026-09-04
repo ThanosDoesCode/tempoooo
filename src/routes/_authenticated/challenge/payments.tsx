@@ -8,10 +8,8 @@ import { Card, DataError, Note, PendingLabel, SectionTitle } from "@/components/
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import {
-  eur,
   formatPace,
   owedText,
-  photoText,
   removeTravelPause,
   reopenPayment,
   setTravelPause,
@@ -36,8 +34,7 @@ export const Route = createFileRoute("/_authenticated/challenge/payments")({
       { title: "Tempo" },
       {
         name: "description",
-        content:
-          "Outstanding penalties, photo forfeits, settle up and recipient confirmation for your two-person endurance challenge.",
+        content: "Challenge penalties, settlements, finalized consequences and travel pauses.",
       },
       { property: "og:title", content: "Tempo" },
       { property: "og:description", content: "Owe, pay, confirm. Nothing is deleted." },
@@ -260,36 +257,68 @@ function Payments() {
     );
   }
 
+  const legacyPhotoOwed = challenge.legacy_photo_owed;
+  const customConsequences = (weeks ?? []).filter(
+    (week) => week.penalty_mode === "custom" && week.penalty_consequence,
+  );
+
   return (
     <AppShell>
       <PageHeader
-        title="Money"
-        subtitle="Penalties are created automatically when a week closes. Every €5 is also 1 photo."
+        title={challenge.penalty_mode === "money" ? "Money" : "Penalties"}
+        subtitle={
+          challenge.penalty_mode === "money"
+            ? "Money penalties are created automatically when a week closes."
+            : "Custom consequences are recorded automatically when a week closes."
+        }
       />
 
-      <div className="grid grid-cols-2 gap-3">
+      {challenge.penalty_mode === "money" ? (
+        <div className="grid grid-cols-2 gap-3">
+          <Card>
+            <p className="text-[11px] uppercase tracking-wider text-muted-foreground">I owe</p>
+            <p className="mt-1 text-xl font-semibold text-warn">
+              {owedText(iOwe, legacyPhotoOwed)}
+            </p>
+            <p className="text-[11px] text-muted-foreground">Open penalties</p>
+          </Card>
+          <Card>
+            <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Owed to me</p>
+            <p className="mt-1 text-xl font-semibold text-good">
+              {owedText(owedToMe, legacyPhotoOwed)}
+            </p>
+            <p className="text-[11px] text-muted-foreground">Open penalties</p>
+          </Card>
+        </div>
+      ) : (
         <Card>
-          <p className="text-[11px] uppercase tracking-wider text-muted-foreground">I owe</p>
-          <p className="num mt-1 text-2xl font-semibold text-warn">{eur(iOwe)}</p>
-          <p className="text-[11px] text-muted-foreground">
-            {photoText(iOwe) ? `+ ${photoText(iOwe)}` : "No photos owed"}
-          </p>
+          <SectionTitle>Finalized custom consequences</SectionTitle>
+          {customConsequences.length ? (
+            <div className="space-y-2">
+              {customConsequences.map((week) => (
+                <div
+                  key={week.id}
+                  className="rounded-xl border border-border bg-elevated px-3 py-2 text-sm"
+                >
+                  <p className="font-medium">
+                    Week {week.week_number} · {name(week.user_id)}
+                  </p>
+                  <p className="mt-0.5 text-xs text-warn">{week.penalty_consequence}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <Note>No custom consequences have been recorded yet.</Note>
+          )}
         </Card>
-        <Card>
-          <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Owed to me</p>
-          <p className="num mt-1 text-2xl font-semibold text-good">{eur(owedToMe)}</p>
-          <p className="text-[11px] text-muted-foreground">
-            {photoText(owedToMe) ? `+ ${photoText(owedToMe)}` : "No photos owed"}
-          </p>
-        </Card>
-      </div>
+      )}
 
-      {iOwe > 0 ? (
+      {challenge.penalty_mode === "money" && iOwe > 0 ? (
         <Card className="mt-3">
           <SectionTitle>Settle up</SectionTitle>
           <p className="text-xs text-muted-foreground">
-            Once you have actually sent {owedText(iOwe)}, clear everything you owe in one step. Your
-            total goes back to zero and the items move to the settled list.
+            Once you have actually sent {owedText(iOwe, legacyPhotoOwed)}, clear everything you owe
+            in one step. Your total goes back to zero and the items move to the settled list.
           </p>
           <button
             disabled={pending !== null}
@@ -307,7 +336,7 @@ function Payments() {
             {pending?.id === "settle" ? (
               <PendingLabel>Settling payments…</PendingLabel>
             ) : settleArmed ? (
-              `Confirm, I have paid ${owedText(iOwe)}`
+              `Confirm, I have paid ${owedText(iOwe, legacyPhotoOwed)}`
             ) : (
               "I have paid, reset my total"
             )}
@@ -326,75 +355,79 @@ function Payments() {
         </p>
       ) : null}
 
-      <div className="mt-4 space-y-2">
-        <SectionTitle>Open obligations</SectionTitle>
-        {open.length === 0 ? (
-          <Note>
-            No penalties are outstanding. New obligations appear only after a finalized week ends
-            below 15 challenge km.
-          </Note>
-        ) : null}
-        {open.map((p) => {
-          const mine = p.payer_id === user?.id;
-          return (
-            <Card key={p.id} className="p-3">
-              <div className="flex items-baseline justify-between">
-                <p className="text-sm font-medium">
-                  {name(p.payer_id)} → {name(p.recipient_id)}
+      {challenge.penalty_mode === "money" ? (
+        <div className="mt-4 space-y-2">
+          <SectionTitle>Open obligations</SectionTitle>
+          {open.length === 0 ? (
+            <Note>
+              No penalties are outstanding. New obligations appear only after a finalized week ends
+              below {Number(challenge.weekly_target_km)} challenge km.
+            </Note>
+          ) : null}
+          {open.map((p) => {
+            const mine = p.payer_id === user?.id;
+            return (
+              <Card key={p.id} className="p-3">
+                <div className="flex items-baseline justify-between">
+                  <p className="text-sm font-medium">
+                    {name(p.payer_id)} → {name(p.recipient_id)}
+                  </p>
+                  <span className="text-sm font-semibold">
+                    {owedText(Number(p.amount_eur), legacyPhotoOwed)}
+                  </span>
+                </div>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Week {weekOf(p.week_id) ?? "?"} ·{" "}
+                  {p.status === "unpaid" ? "Unpaid" : "Marked paid, awaiting confirmation"}
                 </p>
-                <span className="num text-sm font-semibold">{owedText(Number(p.amount_eur))}</span>
-              </div>
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                Week {weekOf(p.week_id) ?? "?"} ·{" "}
-                {p.status === "unpaid" ? "Unpaid" : "Marked paid, awaiting confirmation"}
-              </p>
-              <div className="mt-2 flex gap-2">
-                {mine && p.status === "unpaid" ? (
-                  <button
-                    disabled={pending !== null}
-                    onClick={() => void setStatus(p.id, "marked_paid")}
-                    className="flex-1 rounded-xl bg-primary py-2 text-xs font-semibold text-primary-foreground disabled:opacity-60"
-                  >
-                    {pending?.id === p.id && pending.action === "mark" ? (
-                      <PendingLabel>Marking paid…</PendingLabel>
-                    ) : (
-                      "Mark as paid"
-                    )}
-                  </button>
-                ) : null}
-                {mine && p.status === "marked_paid" ? (
-                  <button
-                    disabled={pending !== null}
-                    onClick={() => void setStatus(p.id, "unpaid")}
-                    className="flex-1 rounded-xl border border-border py-2 text-xs font-medium disabled:opacity-60"
-                  >
-                    {pending?.id === p.id && pending.action === "undo" ? (
-                      <PendingLabel>Undoing…</PendingLabel>
-                    ) : (
-                      "Undo"
-                    )}
-                  </button>
-                ) : null}
-                {!mine && p.status === "marked_paid" ? (
-                  <button
-                    disabled={pending !== null}
-                    onClick={() => void setStatus(p.id, "confirmed_paid")}
-                    className="flex-1 rounded-xl bg-good py-2 text-xs font-semibold text-background disabled:opacity-60"
-                  >
-                    {pending?.id === p.id && pending.action === "confirm" ? (
-                      <PendingLabel>Confirming…</PendingLabel>
-                    ) : (
-                      "Confirm received"
-                    )}
-                  </button>
-                ) : null}
-              </div>
-            </Card>
-          );
-        })}
-      </div>
+                <div className="mt-2 flex gap-2">
+                  {mine && p.status === "unpaid" ? (
+                    <button
+                      disabled={pending !== null}
+                      onClick={() => void setStatus(p.id, "marked_paid")}
+                      className="flex-1 rounded-xl bg-primary py-2 text-xs font-semibold text-primary-foreground disabled:opacity-60"
+                    >
+                      {pending?.id === p.id && pending.action === "mark" ? (
+                        <PendingLabel>Marking paid…</PendingLabel>
+                      ) : (
+                        "Mark as paid"
+                      )}
+                    </button>
+                  ) : null}
+                  {mine && p.status === "marked_paid" ? (
+                    <button
+                      disabled={pending !== null}
+                      onClick={() => void setStatus(p.id, "unpaid")}
+                      className="flex-1 rounded-xl border border-border py-2 text-xs font-medium disabled:opacity-60"
+                    >
+                      {pending?.id === p.id && pending.action === "undo" ? (
+                        <PendingLabel>Undoing…</PendingLabel>
+                      ) : (
+                        "Undo"
+                      )}
+                    </button>
+                  ) : null}
+                  {!mine && p.status === "marked_paid" ? (
+                    <button
+                      disabled={pending !== null}
+                      onClick={() => void setStatus(p.id, "confirmed_paid")}
+                      className="flex-1 rounded-xl bg-good py-2 text-xs font-semibold text-background disabled:opacity-60"
+                    >
+                      {pending?.id === p.id && pending.action === "confirm" ? (
+                        <PendingLabel>Confirming…</PendingLabel>
+                      ) : (
+                        "Confirm received"
+                      )}
+                    </button>
+                  ) : null}
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      ) : null}
 
-      {settled.length ? (
+      {challenge.penalty_mode === "money" && settled.length ? (
         <div className="mt-4">
           <SectionTitle
             right={
@@ -417,7 +450,7 @@ function Payments() {
                       {name(p.payer_id)} → {name(p.recipient_id)}
                     </p>
                     <span className="num text-sm text-muted-foreground">
-                      {owedText(Number(p.amount_eur))}
+                      {owedText(Number(p.amount_eur), legacyPhotoOwed)}
                     </span>
                   </div>
                   <p className="mt-1 text-[11px] text-good">
@@ -631,7 +664,7 @@ function Payments() {
       ) : null}
 
       <section className="mt-5">
-        <RulesCard />
+        <RulesCard terms={challenge} />
       </section>
 
       <Note>

@@ -75,7 +75,7 @@ function History() {
               right={
                 <span className="text-xs text-muted-foreground">
                   {byWeek.get(n)?.[0]?.week_start} to {byWeek.get(n)?.[0]?.week_end} · target{" "}
-                  {Number(byWeek.get(n)?.[0]?.target_km ?? 15).toFixed(0)} km
+                  {formatTarget(byWeek.get(n)?.[0]?.target_km ?? challenge?.weekly_target_km)} km
                 </span>
               }
             >
@@ -94,7 +94,13 @@ function History() {
                       : `${Number(w.equivalent_km).toFixed(1)} / ${Number(w.target_km).toFixed(0)} km`}
                   </span>
                   <span className={w.completed || w.paused ? "text-good" : "text-warn"}>
-                    {w.paused ? "€0" : w.completed ? "Completed" : owedText(Number(w.penalty_eur))}
+                    {w.paused
+                      ? "No penalty"
+                      : w.completed
+                        ? "Completed"
+                        : w.penalty_mode === "custom"
+                          ? (w.penalty_consequence ?? "Custom consequence")
+                          : owedText(Number(w.penalty_eur), challenge?.legacy_photo_owed)}
                   </span>
                 </div>
               ))}
@@ -104,4 +110,9 @@ function History() {
       </div>
     </AppShell>
   );
+}
+
+function formatTarget(value: number | string | null | undefined) {
+  if (value === null || value === undefined) return "—";
+  return new Intl.NumberFormat("en", { maximumFractionDigits: 2 }).format(Number(value));
 }

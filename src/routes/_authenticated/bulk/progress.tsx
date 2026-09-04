@@ -18,7 +18,7 @@ import {
 
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { TrainingSummary } from "@/components/TrainingSummary";
-import { Card, Chip, Note, SectionTitle, Stat } from "@/components/ui-kit";
+import { Card, Chip, Note, PendingLabel, SectionTitle, Stat } from "@/components/ui-kit";
 import {
   avg7,
   bulkStatus,
@@ -36,6 +36,7 @@ import {
   weekStartOf,
 } from "@/lib/calc";
 import { useActions, useAppData, useBulkMeta } from "@/lib/store";
+import { optimizeBulkPhoto } from "@/lib/challenge-evidence";
 import { ALL_EXERCISES, exerciseLabel, type AppData, type PhotoSet } from "@/lib/types";
 
 export const Route = createFileRoute("/_authenticated/bulk/progress")({
@@ -442,6 +443,9 @@ function PhotosSection({ data }: { data: AppData }) {
   const [aId, setAId] = useState<string | null>(null);
   const [bId, setBId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [selectedPhoto, setSelectedPhoto] = useState<File | null>(null);
+  const [photoPhase, setPhotoPhase] = useState<"optimizing" | "uploading" | null>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
 
   const removeSet = async (id: string) => {
     setConfirmDelete(null);
@@ -463,10 +467,22 @@ function PhotosSection({ data }: { data: AppData }) {
   };
 
   const onFile = async (file: File) => {
-    if (!pending) return;
-    const dataUrl = await downscale(file);
-    await setPhotoImage(pending.id, pending.slot, dataUrl);
-    setPending(null);
+    const destination = pending;
+    if (!destination || photoPhase) return;
+    setSelectedPhoto(file);
+    setPhotoError(null);
+    setPhotoPhase("optimizing");
+    try {
+      const optimized = await optimizeBulkPhoto(file);
+      setPhotoPhase("uploading");
+      await setPhotoImage(destination.id, destination.slot, optimized);
+      setPending(null);
+      setSelectedPhoto(null);
+    } catch {
+      setPhotoError("Photo was not uploaded. Your selected photo is still here; retry when ready.");
+    } finally {
+      setPhotoPhase(null);
+    }
   };
 
   const exportBackup = () => {
@@ -504,6 +520,41 @@ function PhotosSection({ data }: { data: AppData }) {
         Take every 4 weeks in the same location, lighting, distance and pose. Photos are stored
         privately in your account, and you can still export a backup file of your logs.
       </Note>
+
+      {photoPhase ? (
+        <p role="status" className="mt-3 text-xs text-primary">
+          <PendingLabel>
+            {photoPhase === "optimizing" ? "Optimizing photo…" : "Uploading photo…"}
+          </PendingLabel>
+        </p>
+      ) : null}
+      {photoError ? (
+        <div role="alert" className="mt-3 rounded-xl border border-danger/30 bg-danger/5 p-3">
+          <p className="text-xs text-danger">{photoError}</p>
+          <div className="mt-2 flex gap-2">
+            <button
+              type="button"
+              disabled={!selectedPhoto || photoPhase !== null}
+              onClick={() => selectedPhoto && void onFile(selectedPhoto)}
+              className="min-h-11 flex-1 rounded-lg border border-danger/40 px-3 py-2 text-xs font-semibold text-danger disabled:opacity-60"
+            >
+              Retry upload
+            </button>
+            <button
+              type="button"
+              disabled={photoPhase !== null}
+              onClick={() => {
+                setPending(null);
+                setSelectedPhoto(null);
+                setPhotoError(null);
+              }}
+              className="min-h-11 rounded-lg px-3 py-2 text-xs font-medium text-muted-foreground"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       <div className="mt-3 grid grid-cols-2 gap-2">
         <button
@@ -603,11 +654,14 @@ function PhotosSection({ data }: { data: AppData }) {
               {(["front", "side", "back"] as const).map((slot) => (
                 <button
                   key={slot}
+                  disabled={photoPhase !== null}
                   onClick={() => {
+                    setPhotoError(null);
+                    setSelectedPhoto(null);
                     setPending({ id: p.id, slot });
                     fileRef.current?.click();
                   }}
-                  className="overflow-hidden rounded-lg border border-border bg-elevated"
+                  className="overflow-hidden rounded-lg border border-border bg-elevated disabled:opacity-60"
                 >
                   {p[slot] ? (
                     <img
@@ -634,23 +688,12 @@ function PhotosSection({ data }: { data: AppData }) {
         onChange={(e) => {
           const f = e.target.files?.[0];
           if (f) void onFile(f);
+          else setPending(null);
           e.target.value = "";
         }}
       />
     </Card>
   );
-}
-
-async function downscale(file: File): Promise<string> {
-  const bitmap = await createImageBitmap(file);
-  const maxW = 640;
-  const scale = Math.min(1, maxW / bitmap.width);
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.round(bitmap.width * scale);
-  canvas.height = Math.round(bitmap.height * scale);
-  const ctx = canvas.getContext("2d");
-  ctx?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-  return canvas.toDataURL("image/jpeg", 0.72);
 }
 
 function PhotoSelect({

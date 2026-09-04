@@ -387,24 +387,40 @@ export function useActions() {
   }, []);
 
   const setPhotoImage = useCallback(
-    async (photoId: string, slot: "front" | "side" | "back", dataUrl: string) => {
-      if (!state || !bulkId || !canWrite()) return;
-      const blob = await (await fetch(dataUrl)).blob();
-      const path = `${bulkId}/${photoId}/${slot}-${Date.now()}.jpg`;
-      const up = await supabase.storage
-        .from("bulk-progress-photos")
-        .upload(path, blob, { contentType: "image/jpeg" });
-      if (up.error) return;
-      await supabase
+    async (photoId: string, slot: "front" | "side" | "back", file: File) => {
+      if (!state || !bulkId || !canWrite()) throw new Error("Bulk photo access denied");
+      const originalExtension = file.name.split(".").at(-1)?.toLowerCase();
+      const extension =
+        file.type === "image/webp"
+          ? "webp"
+          : file.type === "image/jpeg"
+            ? "jpg"
+            : originalExtension?.replace(/[^a-z0-9]/g, "").slice(0, 8) || "image";
+      const path = `${bulkId}/${photoId}/${slot}-${Date.now()}.${extension}`;
+      const bucket = supabase.storage.from("bulk-progress-photos");
+      const up = await bucket.upload(path, file, {
+        contentType: file.type || "application/octet-stream",
+      });
+      if (up.error) throw up.error;
+      const updated = await supabase
         .from("bulk_photos")
         .update(json({ [`${slot}_path`]: path }))
         .eq("id", photoId);
-      const { data } = await supabase.storage
-        .from("bulk-progress-photos")
-        .createSignedUrl(path, 60 * 60);
+      if (updated.error) {
+        await bucket.remove([path]);
+        throw updated.error;
+      }
+      const { data, error } = await bucket.createSignedUrl(path, 60 * 60);
+      if (error || !data?.signedUrl) throw error ?? new Error("Could not load uploaded photo");
       state.photos = state.photos.map((p) =>
-        p.id === photoId ? { ...p, [slot]: data?.signedUrl } : p,
+        p.id === photoId ? { ...p, [slot]: data.signedUrl } : p,
       );
+      photoPaths.set(photoId, [
+        ...(photoPaths.get(photoId) ?? []).filter(
+          (existing) => !existing.split("/").at(-1)?.startsWith(`${slot}-`),
+        ),
+        path,
+      ]);
       emit();
     },
     [],

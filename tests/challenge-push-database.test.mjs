@@ -1,7 +1,7 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { readFile, readdir } from "node:fs/promises";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { PGlite } from "@electric-sql/pglite";
 
 const db = new PGlite();
@@ -12,10 +12,7 @@ const a = randomUUID(),
 const x = randomUUID(),
   y = randomUUID();
 const root = new URL("../supabase/migrations/", import.meta.url);
-before(async () => {
-  // Only Supabase's platform schemas are stubbed; every application migration,
-  // trigger, calculation, table grant and RLS policy below is the real SQL.
-  await db.exec(`SET TIME ZONE 'UTC';
+const platformSchema = `SET TIME ZONE 'UTC';
     CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role BYPASSRLS;
     CREATE SCHEMA auth; CREATE SCHEMA storage; CREATE SCHEMA extensions;
     CREATE TABLE auth.users(id uuid PRIMARY KEY);
@@ -26,7 +23,12 @@ before(async () => {
     CREATE FUNCTION storage.foldername(text) RETURNS text[] LANGUAGE sql AS $$ SELECT string_to_array($1, '/') $$;
     GRANT SELECT, INSERT, UPDATE, DELETE ON storage.objects TO authenticated, service_role;
     GRANT USAGE ON SCHEMA auth, public, storage TO authenticated, anon, service_role;
-    GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA auth TO authenticated, anon, service_role;`);
+    GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA auth TO authenticated, anon, service_role;`;
+
+before(async () => {
+  // Only Supabase's platform schemas are stubbed; every application migration,
+  // trigger, calculation, table grant and RLS policy below is the real SQL.
+  await db.exec(platformSchema);
   for (const file of (await readdir(root)).filter((f) => f.endsWith(".sql")).sort()) {
     try {
       await db.exec(await readFile(new URL(file, root), "utf8"));
@@ -45,7 +47,7 @@ before(async () => {
     [y, c, d],
   ]) {
     await db.query(
-      "INSERT INTO public.challenges(id,created_by,name,start_date,timezone) VALUES ($1,$2,'Private',CURRENT_DATE,'UTC')",
+      "INSERT INTO public.challenges(id,created_by,name,start_date,timezone,legacy_photo_owed) VALUES ($1,$2,'Private',CURRENT_DATE,'UTC',true)",
       [id, creator],
     );
     await db.query(
@@ -89,15 +91,39 @@ async function createChallengeAtomic(
   uid,
   requestId,
   tokenHash,
-  { name = "Atomic challenge", email = "opponent@example.com" } = {},
+  {
+    name = "Atomic challenge",
+    email = "opponent@example.com",
+    target = 15,
+    mode = "money",
+    high = 15,
+    medium = 10,
+    low = 5,
+    customHigh = null,
+    customMedium = null,
+    customLow = null,
+  } = {},
 ) {
   return asUser(uid, () =>
     db.query(
       `SELECT public.create_challenge_atomic(
         $1, $2, (date_trunc('week', CURRENT_DATE) + interval '7 days')::date,
-        'UTC', 52, $3, $4
+        'UTC', 52, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
       ) AS id`,
-      [requestId, name, email, tokenHash],
+      [
+        requestId,
+        name,
+        email,
+        tokenHash,
+        target,
+        mode,
+        high,
+        medium,
+        low,
+        customHigh,
+        customMedium,
+        customLow,
+      ],
     ),
   );
 }
@@ -269,6 +295,338 @@ test("atomic challenge creation writes challenge, own membership and invitation 
   );
 });
 
+test("atomic creation stores immutable challenge-specific target and money penalties", async () => {
+  const requestId = randomUUID();
+  const token = "custom-terms-invitation-token-with-enough-entropy";
+  const tokenHash = createHash("sha256").update(token).digest("hex");
+  await createChallengeAtomic(a, requestId, tokenHash, {
+    target: 30,
+    high: 60,
+    medium: 35,
+    low: 10,
+  });
+  const stored = (
+    await db.query(
+      `SELECT weekly_target_km,penalty_mode,penalty_high_eur,penalty_medium_eur,
+        penalty_low_eur,legacy_photo_owed
+       FROM public.challenges WHERE id=$1`,
+      [requestId],
+    )
+  ).rows[0];
+  assert.deepEqual(
+    {
+      ...stored,
+      weekly_target_km: Number(stored.weekly_target_km),
+      penalty_high_eur: Number(stored.penalty_high_eur),
+      penalty_medium_eur: Number(stored.penalty_medium_eur),
+      penalty_low_eur: Number(stored.penalty_low_eur),
+    },
+    {
+      weekly_target_km: 30,
+      penalty_mode: "money",
+      penalty_high_eur: 60,
+      penalty_medium_eur: 35,
+      penalty_low_eur: 10,
+      legacy_photo_owed: false,
+    },
+  );
+
+  const preview = await asService(() =>
+    db.query("SELECT * FROM public.preview_challenge_invitation($1,$2,$3)", [
+      b,
+      "opponent@example.com",
+      token,
+    ]),
+  );
+  assert.equal(preview.rows[0].challenge_id, requestId);
+  assert.equal(Number(preview.rows[0].weekly_target_km), 30);
+  assert.equal(preview.rows[0].penalty_mode, "money");
+  assert.equal(Number(preview.rows[0].penalty_high_eur), 60);
+  await assert.rejects(
+    asUser(b, () =>
+      db.query("SELECT * FROM public.preview_challenge_invitation($1,$2,$3)", [
+        b,
+        "opponent@example.com",
+        token,
+      ]),
+    ),
+    /permission denied/,
+  );
+  const accepted = await asService(() =>
+    db.query("SELECT public.accept_challenge_invitation($1,$2,$3) AS id", [
+      b,
+      "opponent@example.com",
+      token,
+    ]),
+  );
+  assert.equal(accepted.rows[0].id, requestId);
+  assert.equal(
+    Number(
+      (
+        await db.query(
+          "SELECT count(*) AS n FROM public.challenge_members WHERE challenge_id=$1 AND user_id=$2",
+          [requestId, b],
+        )
+      ).rows[0].n,
+    ),
+    1,
+  );
+  await assert.rejects(
+    db.query("UPDATE public.challenges SET weekly_target_km=40 WHERE id=$1", [requestId]),
+    /immutable/,
+  );
+  await assert.rejects(
+    createChallengeAtomic(a, requestId, tokenHash, {
+      target: 40,
+      high: 60,
+      medium: 35,
+      low: 10,
+    }),
+    /conflicts/,
+  );
+});
+
+test("legacy challenges retain the 15 km and €15/€10/€5 defaults", async () => {
+  const legacy = (
+    await db.query(
+      `SELECT weekly_target_km,penalty_mode,penalty_high_eur,penalty_medium_eur,
+        penalty_low_eur,legacy_photo_owed
+       FROM public.challenges WHERE id=$1`,
+      [x],
+    )
+  ).rows[0];
+  assert.deepEqual(
+    {
+      ...legacy,
+      weekly_target_km: Number(legacy.weekly_target_km),
+      penalty_high_eur: Number(legacy.penalty_high_eur),
+      penalty_medium_eur: Number(legacy.penalty_medium_eur),
+      penalty_low_eur: Number(legacy.penalty_low_eur),
+    },
+    {
+      weekly_target_km: 15,
+      penalty_mode: "money",
+      penalty_high_eur: 15,
+      penalty_medium_eur: 10,
+      penalty_low_eur: 5,
+      legacy_photo_owed: true,
+    },
+  );
+});
+
+test("incremental custom migration preserves deployed money challenges, weeks and payments", async () => {
+  const upgradeDb = new PGlite();
+  const owner = randomUUID();
+  const opponent = randomUUID();
+  const challenge = randomUUID();
+  const week = randomUUID();
+  const payment = randomUUID();
+  try {
+    await upgradeDb.exec(platformSchema);
+    const migrationFiles = (await readdir(root)).filter((file) => file.endsWith(".sql")).sort();
+    for (const file of migrationFiles.filter((file) => file < "20260904170000_")) {
+      await upgradeDb.exec(await readFile(new URL(file, root), "utf8"));
+    }
+    await upgradeDb.query("INSERT INTO auth.users VALUES ($1),($2)", [owner, opponent]);
+    await upgradeDb.query(
+      "INSERT INTO public.profiles(id,display_name) VALUES ($1,'Owner'),($2,'Opponent')",
+      [owner, opponent],
+    );
+    await upgradeDb.query(
+      `INSERT INTO public.challenges(
+        id,created_by,name,start_date,timezone,weekly_target_km,
+        penalty_high_eur,penalty_medium_eur,penalty_low_eur
+      ) VALUES ($1,$2,'Deployed money challenge',CURRENT_DATE-14,'UTC',30,44,22,11)`,
+      [challenge, owner],
+    );
+    await upgradeDb.query(
+      "INSERT INTO public.challenge_members(challenge_id,user_id) VALUES ($1,$2),($1,$3)",
+      [challenge, owner, opponent],
+    );
+    await upgradeDb.query(
+      `INSERT INTO public.challenge_weeks(
+        id,challenge_id,user_id,week_number,week_start,week_end,equivalent_km,target_km,penalty_eur
+      ) VALUES ($1,$2,$3,1,CURRENT_DATE-14,CURRENT_DATE-8,25,30,11)`,
+      [week, challenge, owner],
+    );
+    await upgradeDb.query(
+      `INSERT INTO public.challenge_payments(
+        id,challenge_id,week_id,payer_id,recipient_id,amount_eur
+      ) VALUES ($1,$2,$3,$4,$5,11)`,
+      [payment, challenge, week, owner, opponent],
+    );
+
+    const beforeWeek = (
+      await upgradeDb.query(
+        `SELECT challenge_id,user_id,week_number,equivalent_km,target_km,penalty_eur,completed
+         FROM public.challenge_weeks WHERE id=$1`,
+        [week],
+      )
+    ).rows[0];
+    const beforePayment = (
+      await upgradeDb.query(
+        `SELECT challenge_id,week_id,payer_id,recipient_id,amount_eur,status
+         FROM public.challenge_payments WHERE id=$1`,
+        [payment],
+      )
+    ).rows[0];
+
+    await upgradeDb.exec(
+      await readFile(new URL("20260904170000_add_custom_challenge_penalties.sql", root), "utf8"),
+    );
+
+    const upgraded = (
+      await upgradeDb.query(
+        `SELECT weekly_target_km,penalty_high_eur,penalty_medium_eur,penalty_low_eur,
+          penalty_mode,legacy_photo_owed,penalty_high_custom,penalty_medium_custom,
+          penalty_low_custom FROM public.challenges WHERE id=$1`,
+        [challenge],
+      )
+    ).rows[0];
+    assert.deepEqual(
+      {
+        ...upgraded,
+        weekly_target_km: Number(upgraded.weekly_target_km),
+        penalty_high_eur: Number(upgraded.penalty_high_eur),
+        penalty_medium_eur: Number(upgraded.penalty_medium_eur),
+        penalty_low_eur: Number(upgraded.penalty_low_eur),
+      },
+      {
+        weekly_target_km: 30,
+        penalty_high_eur: 44,
+        penalty_medium_eur: 22,
+        penalty_low_eur: 11,
+        penalty_mode: "money",
+        legacy_photo_owed: true,
+        penalty_high_custom: null,
+        penalty_medium_custom: null,
+        penalty_low_custom: null,
+      },
+    );
+    assert.deepEqual(
+      (
+        await upgradeDb.query(
+          `SELECT challenge_id,user_id,week_number,equivalent_km,target_km,penalty_eur,completed
+           FROM public.challenge_weeks WHERE id=$1`,
+          [week],
+        )
+      ).rows[0],
+      beforeWeek,
+    );
+    assert.deepEqual(
+      (
+        await upgradeDb.query(
+          `SELECT challenge_id,week_id,payer_id,recipient_id,amount_eur,status
+           FROM public.challenge_payments WHERE id=$1`,
+          [payment],
+        )
+      ).rows[0],
+      beforePayment,
+    );
+    assert.deepEqual(
+      (
+        await upgradeDb.query(
+          "SELECT penalty_mode,penalty_band,penalty_consequence FROM public.challenge_weeks WHERE id=$1",
+          [week],
+        )
+      ).rows[0],
+      { penalty_mode: null, penalty_band: null, penalty_consequence: null },
+    );
+  } finally {
+    await upgradeDb.close();
+  }
+});
+
+test("custom challenge creation stores and previews exact immutable consequences", async () => {
+  const requestId = randomUUID();
+  const token = "custom-mode-invitation-token-with-enough-entropy";
+  await createChallengeAtomic(a, requestId, createHash("sha256").update(token).digest("hex"), {
+    target: 45,
+    mode: "custom",
+    customHigh: "Send 3 photos",
+    customMedium: "Buy dinner",
+    customLow: "Make breakfast",
+  });
+  const stored = (
+    await db.query(
+      `SELECT penalty_mode,penalty_high_custom,penalty_medium_custom,penalty_low_custom,
+        legacy_photo_owed FROM public.challenges WHERE id=$1`,
+      [requestId],
+    )
+  ).rows[0];
+  assert.deepEqual(stored, {
+    penalty_mode: "custom",
+    penalty_high_custom: "Send 3 photos",
+    penalty_medium_custom: "Buy dinner",
+    penalty_low_custom: "Make breakfast",
+    legacy_photo_owed: false,
+  });
+  const preview = await asService(() =>
+    db.query("SELECT * FROM public.preview_challenge_invitation($1,$2,$3)", [
+      b,
+      "opponent@example.com",
+      token,
+    ]),
+  );
+  assert.deepEqual(
+    {
+      target: Number(preview.rows[0].weekly_target_km),
+      mode: preview.rows[0].penalty_mode,
+      high: preview.rows[0].penalty_high_custom,
+      medium: preview.rows[0].penalty_medium_custom,
+      low: preview.rows[0].penalty_low_custom,
+    },
+    {
+      target: 45,
+      mode: "custom",
+      high: "Send 3 photos",
+      medium: "Buy dinner",
+      low: "Make breakfast",
+    },
+  );
+  await assert.rejects(
+    db.query("UPDATE public.challenges SET penalty_low_custom='Changed' WHERE id=$1", [requestId]),
+    /immutable/,
+  );
+});
+
+test("atomic creation rejects invalid targets and penalty values without partial state", async () => {
+  for (const terms of [
+    { target: 0, high: 15, medium: 10, low: 5 },
+    { target: 501, high: 15, medium: 10, low: 5 },
+    { target: 30.001, high: 15, medium: 10, low: 5 },
+    { target: 30, high: 5, medium: 10, low: 1 },
+    { target: 30, high: 1001, medium: 10, low: 5 },
+    { target: 30, mode: "custom", customHigh: "", customMedium: "Dinner", customLow: "Tea" },
+    {
+      target: 30,
+      mode: "custom",
+      customHigh: "x".repeat(161),
+      customMedium: "Dinner",
+      customLow: "Tea",
+    },
+    { target: 30, mode: "photo" },
+    { target: 30, mode: "money", customHigh: "Unexpected custom term" },
+  ]) {
+    const requestId = randomUUID();
+    await assert.rejects(
+      createChallengeAtomic(a, requestId, randomUUID().replaceAll("-", "").repeat(2), terms),
+      /Weekly target|Penalty amounts|Penalty mode|Custom consequences|Money penalties/,
+    );
+    const rows = await db.query(
+      `SELECT
+        (SELECT count(*) FROM public.challenges WHERE id=$1) AS challenges,
+        (SELECT count(*) FROM public.challenge_members WHERE challenge_id=$1) AS members,
+        (SELECT count(*) FROM public.challenge_invitations WHERE challenge_id=$1) AS invitations`,
+      [requestId],
+    );
+    assert.deepEqual(
+      Object.fromEntries(Object.entries(rows.rows[0]).map(([key, value]) => [key, Number(value)])),
+      { challenges: 0, members: 0, invitations: 0 },
+    );
+  }
+});
+
 test("atomic creation rolls every row back when the invitation insert fails", async () => {
   const tokenHash = "b".repeat(64);
   await createChallengeAtomic(a, randomUUID(), tokenHash);
@@ -297,7 +655,8 @@ test("atomic challenge creation rejects unauthenticated and direct partial creat
       db.query(
         `SELECT public.create_challenge_atomic(
           $1, 'No owner', (date_trunc('week', CURRENT_DATE) + interval '7 days')::date,
-          'UTC', 52, 'opponent@example.com', $2
+          'UTC', 52, 'opponent@example.com', $2, 15, 'money', 15, 10, 5,
+          null, null, null
         )`,
         [randomUUID(), "c".repeat(64)],
       ),
@@ -567,19 +926,42 @@ test("pace and speed thresholds are authoritative and duration changes are audit
     /Duration is required/,
   );
 });
-test("fixed weekly penalty tiers use only the published 15, 10 and 5 km boundaries", async () => {
+test("weekly penalty tiers use precise target-relative thirds and stored money amounts", async () => {
   const result = await db.query(
-    "SELECT public.penalty_for(15,15) AS full,public.penalty_for(14.99,15) AS five,public.penalty_for(10,15) AS ten_boundary,public.penalty_for(9.99,15) AS ten,public.penalty_for(5,15) AS five_boundary,public.penalty_for(4.99,15) AS fifteen,public.penalty_for(0,0) AS paused",
+    `SELECT
+      public.penalty_for(15,15) AS legacy_full,
+      public.penalty_for(14.99,15) AS legacy_low,
+      public.penalty_for(10,15) AS legacy_two_thirds,
+      public.penalty_for(9.99,15) AS legacy_medium,
+      public.penalty_for(5,15) AS legacy_one_third,
+      public.penalty_for(4.99,15) AS legacy_high,
+      public.penalty_for(9.999,30,90,60,30) AS thirty_high,
+      public.penalty_for(10,30,90,60,30) AS thirty_medium,
+      public.penalty_for(20,30,90,60,30) AS thirty_low,
+      public.penalty_for(30,30,90,60,30) AS thirty_full,
+      public.penalty_for(15,45,90,60,30) AS forty_five_medium,
+      public.penalty_for(30,45,90,60,30) AS forty_five_low,
+      public.penalty_for(6.666666,20,90,60,30) AS arbitrary_high,
+      public.penalty_for(20.0/3,20,90,60,30) AS arbitrary_medium,
+      public.penalty_for(0,0,90,60,30) AS paused`,
   );
   assert.deepEqual(
     Object.fromEntries(Object.entries(result.rows[0]).map(([key, value]) => [key, Number(value)])),
     {
-      full: 0,
-      five: 5,
-      ten_boundary: 5,
-      ten: 10,
-      five_boundary: 10,
-      fifteen: 15,
+      legacy_full: 0,
+      legacy_low: 5,
+      legacy_two_thirds: 5,
+      legacy_medium: 10,
+      legacy_one_third: 10,
+      legacy_high: 15,
+      thirty_high: 90,
+      thirty_medium: 60,
+      thirty_low: 30,
+      thirty_full: 0,
+      forty_five_medium: 60,
+      forty_five_low: 30,
+      arbitrary_high: 90,
+      arbitrary_medium: 60,
       paused: 0,
     },
   );
@@ -852,6 +1234,185 @@ test("evidence cleanup is queued only for successfully finalized weeks", async (
       ).rows[0].n,
     ),
     1,
+  );
+});
+test("finalization uses stored target-relative penalty amounts without rewriting history", async () => {
+  const challenge = randomUUID();
+  await db.query(
+    `INSERT INTO public.challenges(
+      id,created_by,name,start_date,timezone,weekly_target_km,
+      penalty_high_eur,penalty_medium_eur,penalty_low_eur
+    ) VALUES ($1,$2,'Custom finalization',CURRENT_DATE,'UTC',30,60,35,10)`,
+    [challenge, a],
+  );
+  await db.query(
+    "INSERT INTO public.challenge_members(challenge_id,user_id) VALUES ($1,$2),($1,$3)",
+    [challenge, a, b],
+  );
+  await activity(a, 12, challenge);
+  await db.query("UPDATE public.challenges SET start_date=CURRENT_DATE-7 WHERE id=$1", [challenge]);
+  await db.exec(
+    "ALTER TABLE public.challenge_activities DISABLE TRIGGER challenge_activities_guard",
+  );
+  await db.query(
+    "UPDATE public.challenge_activities SET activity_date=CURRENT_DATE-7 WHERE challenge_id=$1",
+    [challenge],
+  );
+  await db.exec(
+    "ALTER TABLE public.challenge_activities ENABLE TRIGGER challenge_activities_guard",
+  );
+  await db.query("SELECT public.finalize_challenge($1,$2)", [a, challenge]);
+  const weeks = await db.query(
+    "SELECT user_id,target_km,equivalent_km,penalty_eur FROM public.challenge_weeks WHERE challenge_id=$1 ORDER BY user_id",
+    [challenge],
+  );
+  const mine = weeks.rows.find((row) => row.user_id === a);
+  const opponent = weeks.rows.find((row) => row.user_id === b);
+  assert.deepEqual(
+    {
+      target: Number(mine.target_km),
+      equivalent: Number(mine.equivalent_km),
+      penalty: Number(mine.penalty_eur),
+    },
+    { target: 30, equivalent: 12, penalty: 35 },
+  );
+  assert.equal(Number(opponent.penalty_eur), 60);
+  assert.deepEqual(
+    (
+      await db.query("SELECT amount_eur FROM public.challenge_payments WHERE challenge_id=$1", [
+        challenge,
+      ])
+    ).rows
+      .map((row) => Number(row.amount_eur))
+      .sort((left, right) => left - right),
+    [35, 60],
+  );
+  await assert.rejects(
+    db.query("UPDATE public.challenge_weeks SET penalty_eur=0 WHERE challenge_id=$1", [challenge]),
+    /immutable/,
+  );
+});
+
+test("custom finalization snapshots every band and creates no money payments", async () => {
+  const cases = [
+    { km: 3, band: "high", consequence: "Send 3 photos" },
+    { km: 12, band: "medium", consequence: "Buy dinner" },
+    { km: 25, band: "low", consequence: "Make breakfast" },
+    { km: 30, band: null, consequence: null },
+  ];
+  for (const expected of cases) {
+    const challenge = randomUUID();
+    await db.query(
+      `INSERT INTO public.challenges(
+        id,created_by,name,start_date,timezone,weekly_target_km,penalty_mode,
+        penalty_high_custom,penalty_medium_custom,penalty_low_custom
+      ) VALUES ($1,$2,'Custom consequences',CURRENT_DATE,'UTC',30,'custom',$3,$4,$5)`,
+      [challenge, a, "Send 3 photos", "Buy dinner", "Make breakfast"],
+    );
+    await db.query(
+      "INSERT INTO public.challenge_members(challenge_id,user_id) VALUES ($1,$2),($1,$3)",
+      [challenge, a, b],
+    );
+    await activity(a, expected.km, challenge);
+    await db.query("UPDATE public.challenges SET start_date=CURRENT_DATE-7 WHERE id=$1", [
+      challenge,
+    ]);
+    await db.exec(
+      "ALTER TABLE public.challenge_activities DISABLE TRIGGER challenge_activities_guard",
+    );
+    await db.query(
+      "UPDATE public.challenge_activities SET activity_date=CURRENT_DATE-7 WHERE challenge_id=$1",
+      [challenge],
+    );
+    await db.exec(
+      "ALTER TABLE public.challenge_activities ENABLE TRIGGER challenge_activities_guard",
+    );
+    await db.query("SELECT public.finalize_challenge($1,$2)", [a, challenge]);
+    const week = (
+      await db.query(
+        `SELECT target_km,penalty_eur,penalty_mode,penalty_band,penalty_consequence
+         FROM public.challenge_weeks WHERE challenge_id=$1 AND user_id=$2`,
+        [challenge, a],
+      )
+    ).rows[0];
+    assert.deepEqual(
+      {
+        target: Number(week.target_km),
+        euros: Number(week.penalty_eur),
+        mode: week.penalty_mode,
+        band: week.penalty_band,
+        consequence: week.penalty_consequence,
+      },
+      {
+        target: 30,
+        euros: 0,
+        mode: "custom",
+        band: expected.band,
+        consequence: expected.consequence,
+      },
+    );
+    assert.equal(
+      Number(
+        (
+          await db.query(
+            "SELECT count(*) AS n FROM public.challenge_payments WHERE challenge_id=$1",
+            [challenge],
+          )
+        ).rows[0].n,
+      ),
+      0,
+    );
+  }
+});
+
+test("travel pause suppresses a custom consequence and money payment", async () => {
+  const challenge = randomUUID();
+  await db.query(
+    `INSERT INTO public.challenges(
+      id,created_by,name,start_date,timezone,weekly_target_km,penalty_mode,
+      penalty_high_custom,penalty_medium_custom,penalty_low_custom
+    ) VALUES ($1,$2,'Paused custom',CURRENT_DATE,'UTC',30,'custom','High','Medium','Low')`,
+    [challenge, a],
+  );
+  await db.query(
+    "INSERT INTO public.challenge_members(challenge_id,user_id) VALUES ($1,$2),($1,$3)",
+    [challenge, a, b],
+  );
+  await asUser(a, () =>
+    db.query(
+      "INSERT INTO public.challenge_travel_pauses(challenge_id,user_id,week_number,country) VALUES ($1,$2,1,'Italy')",
+      [challenge, a],
+    ),
+  );
+  await db.query("UPDATE public.challenges SET start_date=CURRENT_DATE-7 WHERE id=$1", [challenge]);
+  await db.query("SELECT public.finalize_challenge($1,$2)", [a, challenge]);
+  const week = (
+    await db.query(
+      `SELECT target_km,penalty_eur,penalty_band,penalty_consequence,paused
+       FROM public.challenge_weeks WHERE challenge_id=$1 AND user_id=$2`,
+      [challenge, a],
+    )
+  ).rows[0];
+  assert.deepEqual(
+    {
+      target: Number(week.target_km),
+      euros: Number(week.penalty_eur),
+      band: week.penalty_band,
+      consequence: week.penalty_consequence,
+      paused: week.paused,
+    },
+    { target: 0, euros: 0, band: null, consequence: null, paused: true },
+  );
+  assert.equal(
+    Number(
+      (
+        await db.query(
+          "SELECT count(*) AS n FROM public.challenge_payments WHERE challenge_id=$1",
+          [challenge],
+        )
+      ).rows[0].n,
+    ),
+    0,
   );
 });
 test("real finalization creates exactly one €5 penalty event, including repeated calls", async () => {

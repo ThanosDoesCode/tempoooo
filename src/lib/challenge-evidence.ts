@@ -1,6 +1,33 @@
 export const EVIDENCE_MAX_WIDTH = 1600;
 export const EVIDENCE_TARGET_BYTES = 1024 * 1024;
 export const EVIDENCE_WEBP_QUALITY = 0.72;
+export const BULK_PHOTO_MAX_WIDTH = 1600;
+export const BULK_PHOTO_TARGET_BYTES = 400 * 1024;
+export const BULK_PHOTO_WEBP_QUALITY = 0.72;
+
+type ImageOptimizationProfile = {
+  maxWidth: number;
+  targetBytes: number;
+  qualities: readonly number[];
+  resizeAttempts: number;
+  resizeFactor: number;
+};
+
+const CHALLENGE_EVIDENCE_PROFILE: ImageOptimizationProfile = {
+  maxWidth: EVIDENCE_MAX_WIDTH,
+  targetBytes: EVIDENCE_TARGET_BYTES,
+  qualities: [EVIDENCE_WEBP_QUALITY, 0.62, 0.52, 0.42],
+  resizeAttempts: 5,
+  resizeFactor: 0.8,
+};
+
+const BULK_PHOTO_PROFILE: ImageOptimizationProfile = {
+  maxWidth: BULK_PHOTO_MAX_WIDTH,
+  targetBytes: BULK_PHOTO_TARGET_BYTES,
+  qualities: [BULK_PHOTO_WEBP_QUALITY, 0.66, 0.6, 0.54],
+  resizeAttempts: 3,
+  resizeFactor: 0.9,
+};
 
 type DecodedEvidenceImage = {
   width: number;
@@ -83,26 +110,26 @@ async function browserImageRuntime(): Promise<EvidenceImageRuntime> {
 }
 
 /** Returns the original File if decoding or WebP conversion is unsupported. */
-export async function optimizeEvidenceImage(
+async function optimizeImage(
   file: File,
+  profile: ImageOptimizationProfile,
   runtime?: EvidenceImageRuntime,
 ): Promise<File> {
   try {
     const imageRuntime = runtime ?? (await browserImageRuntime());
     const decoded = await imageRuntime.decode(file);
     try {
-      let dimensions = evidenceDimensions(decoded.width, decoded.height);
+      let dimensions = evidenceDimensions(decoded.width, decoded.height, profile.maxWidth);
       let smallest: Blob | null = null;
-      const qualities = [EVIDENCE_WEBP_QUALITY, 0.62, 0.52, 0.42];
 
-      for (let resizeAttempt = 0; resizeAttempt < 5; resizeAttempt += 1) {
+      for (let resizeAttempt = 0; resizeAttempt < profile.resizeAttempts; resizeAttempt += 1) {
         const canvas = imageRuntime.createCanvas(dimensions.width, dimensions.height);
         decoded.draw(canvas, dimensions.width, dimensions.height);
-        for (const quality of qualities) {
+        for (const quality of profile.qualities) {
           const blob = await imageRuntime.encodeWebp(canvas, quality);
           if (!blob || blob.type !== "image/webp" || blob.size === 0) return file;
           if (!smallest || blob.size < smallest.size) smallest = blob;
-          if (blob.size <= EVIDENCE_TARGET_BYTES) {
+          if (blob.size <= profile.targetBytes) {
             return new File([blob], webpName(file.name), {
               type: "image/webp",
               lastModified: file.lastModified,
@@ -110,8 +137,8 @@ export async function optimizeEvidenceImage(
           }
         }
         dimensions = {
-          width: Math.max(1, Math.round(dimensions.width * 0.8)),
-          height: Math.max(1, Math.round(dimensions.height * 0.8)),
+          width: Math.max(1, Math.round(dimensions.width * profile.resizeFactor)),
+          height: Math.max(1, Math.round(dimensions.height * profile.resizeFactor)),
         };
       }
 
@@ -127,6 +154,15 @@ export async function optimizeEvidenceImage(
   } catch {
     return file;
   }
+}
+
+export function optimizeEvidenceImage(file: File, runtime?: EvidenceImageRuntime) {
+  return optimizeImage(file, CHALLENGE_EVIDENCE_PROFILE, runtime);
+}
+
+/** Bulk progress photos are optimized for comparison and retained permanently. */
+export function optimizeBulkPhoto(file: File, runtime?: EvidenceImageRuntime) {
+  return optimizeImage(file, BULK_PHOTO_PROFILE, runtime);
 }
 
 export function evidenceWeekFinalized(

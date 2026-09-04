@@ -17,6 +17,31 @@ async function rpc<T>(name: string, params: Record<string, unknown>): Promise<T>
 export const acceptChallengeInvitationFor = (caller: string, email: string, token: string) =>
   rpc<string>("accept_challenge_invitation", { _caller: caller, _email: email, _token: token });
 
+export type ChallengeInvitationTerms = {
+  challenge_id: string;
+  challenge_name: string;
+  duration_weeks: number;
+  weekly_target_km: number;
+  penalty_mode: "money" | "custom";
+  penalty_high_eur: number;
+  penalty_medium_eur: number;
+  penalty_low_eur: number;
+  penalty_high_custom: string | null;
+  penalty_medium_custom: string | null;
+  penalty_low_custom: string | null;
+  legacy_photo_owed: boolean;
+};
+
+export async function previewChallengeInvitationFor(caller: string, email: string, token: string) {
+  const rows = await rpc<ChallengeInvitationTerms[]>("preview_challenge_invitation", {
+    _caller: caller,
+    _email: email,
+    _token: token,
+  });
+  if (!rows[0]) throw new Error("Invalid invitation");
+  return rows[0];
+}
+
 export async function finalizeChallengeFor(caller: string, challenge: string) {
   const finalized = await rpc<number>("finalize_challenge", { _caller: caller, _c: challenge });
   const { cleanupFinalizedChallengeEvidence } = await import("./challenge-evidence.server");

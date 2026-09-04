@@ -5,8 +5,12 @@ import {
   EVIDENCE_MAX_WIDTH,
   EVIDENCE_TARGET_BYTES,
   EVIDENCE_WEBP_QUALITY,
+  BULK_PHOTO_MAX_WIDTH,
+  BULK_PHOTO_TARGET_BYTES,
+  BULK_PHOTO_WEBP_QUALITY,
   evidenceDimensions,
   evidenceWeekFinalized,
+  optimizeBulkPhoto,
   optimizeEvidenceImage,
 } from "../src/lib/challenge-evidence.ts";
 import { runEvidenceCleanupBatch } from "../supabase/functions/_shared/evidence-cleanup.ts";
@@ -59,6 +63,70 @@ test("failed WebP conversion returns the selected original evidence", async () =
     encodeWebp: async () => null,
   });
   assert.equal(result, original);
+});
+
+test("Bulk photos use a permanent comparison-quality WebP profile without upscaling", async () => {
+  const rendered = [];
+  const qualities = [];
+  const file = new File([new Uint8Array(1_800_000)], "transformation.jpg", {
+    type: "image/jpeg",
+    lastModified: 321,
+  });
+  const optimized = await optimizeBulkPhoto(file, {
+    decode: async () => ({
+      width: 3200,
+      height: 1800,
+      draw: (_canvas, width, height) => rendered.push([width, height]),
+      close: () => {},
+    }),
+    createCanvas: (width, height) => ({ width, height }),
+    encodeWebp: async (_canvas, quality) => {
+      qualities.push(quality);
+      const sizes = new Map([
+        [0.72, 720_000],
+        [0.66, 510_000],
+        [0.6, 350_000],
+      ]);
+      return new Blob([new Uint8Array(sizes.get(quality) ?? 300_000)], { type: "image/webp" });
+    },
+  });
+  assert.equal(BULK_PHOTO_MAX_WIDTH, 1600);
+  assert.equal(BULK_PHOTO_TARGET_BYTES, 400 * 1024);
+  assert.equal(BULK_PHOTO_WEBP_QUALITY, 0.72);
+  assert.deepEqual(rendered[0], [1600, 900]);
+  assert.deepEqual(qualities.slice(0, 3), [0.72, 0.66, 0.6]);
+  assert.equal(optimized.type, "image/webp");
+  assert.equal(optimized.name, "transformation.webp");
+  assert.equal(optimized.size, 350_000);
+});
+
+test("Bulk photo dimensions preserve smaller originals and aspect ratio", async () => {
+  const rendered = [];
+  await optimizeBulkPhoto(new File(["photo"], "small.png", { type: "image/png" }), {
+    decode: async () => ({
+      width: 800,
+      height: 1200,
+      draw: (_canvas, width, height) => rendered.push([width, height]),
+      close: () => {},
+    }),
+    createCanvas: (width, height) => ({ width, height }),
+    encodeWebp: async () => new Blob([new Uint8Array(250_000)], { type: "image/webp" }),
+  });
+  assert.deepEqual(rendered[0], [800, 1200]);
+});
+
+test("failed Bulk optimization returns the exact selected file for upload retry", async () => {
+  const selected = new File(["original transformation"], "original.heic", {
+    type: "image/heic",
+  });
+  const result = await optimizeBulkPhoto(selected, {
+    decode: async () => {
+      throw new Error("unsupported image");
+    },
+    createCanvas: () => ({}),
+    encodeWebp: async () => null,
+  });
+  assert.equal(result, selected);
 });
 
 test("only activities with an immutable finalized-week row are expired", () => {
@@ -166,4 +234,23 @@ test("scheduled cleanup uses the existing server-only cron dispatch pattern", as
   assert.match(migration, /FOR UPDATE OF queue SKIP LOCKED/);
   assert.match(migration, /TO service_role/);
   assert.match(migration, /FROM PUBLIC, anon, authenticated/);
+});
+
+test("Challenge cleanup is structurally unable to delete permanent Bulk photos", async () => {
+  const [worker, queue, store, progress] = await Promise.all([
+    read("supabase/functions/challenge-evidence-cleanup/index.ts"),
+    read("supabase/migrations/20260903170000_challenge_evidence_lifecycle.sql"),
+    read("src/lib/store.ts"),
+    read("src/routes/_authenticated/bulk/progress.tsx"),
+  ]);
+  assert.match(worker, /storage\.from\("challenge-evidence"\)/);
+  assert.doesNotMatch(worker, /bulk-progress-photos/);
+  assert.match(queue, /FROM public\.challenge_activities activity/);
+  assert.doesNotMatch(queue, /bulk_photos|bulk-progress-photos/);
+  assert.match(store, /from\("bulk-progress-photos"\)[\s\S]*\.upload\(path, file/);
+  assert.match(store, /if \(up\.error\) throw up\.error/);
+  assert.match(store, /createSignedUrls\(paths/);
+  assert.match(progress, /Optimizing photo…/);
+  assert.match(progress, /Uploading photo…/);
+  assert.match(progress, /selected photo is still here/);
 });

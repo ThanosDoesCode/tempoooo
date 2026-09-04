@@ -11,6 +11,15 @@ export const acceptChallengeInvitation = createServerFn({ method: "POST" })
     return acceptChallengeInvitationFor(context.userId, email, data.token);
   });
 
+export const previewChallengeInvitation = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data) => z.object({ token: z.string().min(32).max(256) }).parse(data))
+  .handler(async ({ data, context }) => {
+    const email = typeof context.claims.email === "string" ? context.claims.email : "";
+    const { previewChallengeInvitationFor } = await import("./privileged-rpcs.server");
+    return previewChallengeInvitationFor(context.userId, email, data.token);
+  });
+
 export const finalizeChallenge = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data) => z.object({ challenge: z.string().uuid() }).parse(data))
