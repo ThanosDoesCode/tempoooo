@@ -299,6 +299,8 @@ export type Database = {
         Row: {
           activity_date: string
           activity_type: Database["public"]["Enums"]["activity_kind"]
+          average_pace_seconds_per_km: number | null
+          average_speed_kmh: number | null
           challenge_id: string
           created_at: string
           distance_km: number
@@ -309,7 +311,9 @@ export type Database = {
           external_activity_url: string | null
           extra_evidence_paths: string[]
           id: string
+          is_qualified: boolean | null
           note: string | null
+          qualifying_equivalent_km: number | null
           strava_activity_id: string | null
           strava_athlete_id: string | null
           updated_at: string
@@ -319,6 +323,8 @@ export type Database = {
         Insert: {
           activity_date: string
           activity_type: Database["public"]["Enums"]["activity_kind"]
+          average_pace_seconds_per_km?: number | null
+          average_speed_kmh?: number | null
           challenge_id: string
           created_at?: string
           distance_km: number
@@ -329,7 +335,9 @@ export type Database = {
           external_activity_url?: string | null
           extra_evidence_paths?: string[]
           id?: string
+          is_qualified?: boolean | null
           note?: string | null
+          qualifying_equivalent_km?: number | null
           strava_activity_id?: string | null
           strava_athlete_id?: string | null
           updated_at?: string
@@ -339,6 +347,8 @@ export type Database = {
         Update: {
           activity_date?: string
           activity_type?: Database["public"]["Enums"]["activity_kind"]
+          average_pace_seconds_per_km?: number | null
+          average_speed_kmh?: number | null
           challenge_id?: string
           created_at?: string
           distance_km?: number
@@ -349,7 +359,9 @@ export type Database = {
           external_activity_url?: string | null
           extra_evidence_paths?: string[]
           id?: string
+          is_qualified?: boolean | null
           note?: string | null
+          qualifying_equivalent_km?: number | null
           strava_activity_id?: string | null
           strava_athlete_id?: string | null
           updated_at?: string
@@ -377,6 +389,7 @@ export type Database = {
           old_activity_date: string | null
           old_activity_type: Database["public"]["Enums"]["activity_kind"] | null
           old_distance_km: number | null
+          old_duration_seconds: number | null
         }
         Insert: {
           action: string
@@ -390,6 +403,7 @@ export type Database = {
             | Database["public"]["Enums"]["activity_kind"]
             | null
           old_distance_km?: number | null
+          old_duration_seconds?: number | null
         }
         Update: {
           action?: string
@@ -403,10 +417,71 @@ export type Database = {
             | Database["public"]["Enums"]["activity_kind"]
             | null
           old_distance_km?: number | null
+          old_duration_seconds?: number | null
         }
         Relationships: [
           {
             foreignKeyName: "challenge_activity_audit_challenge_id_fkey"
+            columns: ["challenge_id"]
+            isOneToOne: false
+            referencedRelation: "challenges"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      challenge_evidence_cleanup: {
+        Row: {
+          activity_id: string
+          attempts: number
+          challenge_id: string
+          completed_at: string | null
+          created_at: string
+          last_error: string | null
+          lease_token: string | null
+          lease_until: string | null
+          next_attempt_at: string
+          status: string
+          storage_paths: string[]
+          updated_at: string
+        }
+        Insert: {
+          activity_id: string
+          attempts?: number
+          challenge_id: string
+          completed_at?: string | null
+          created_at?: string
+          last_error?: string | null
+          lease_token?: string | null
+          lease_until?: string | null
+          next_attempt_at?: string
+          status?: string
+          storage_paths: string[]
+          updated_at?: string
+        }
+        Update: {
+          activity_id?: string
+          attempts?: number
+          challenge_id?: string
+          completed_at?: string | null
+          created_at?: string
+          last_error?: string | null
+          lease_token?: string | null
+          lease_until?: string | null
+          next_attempt_at?: string
+          status?: string
+          storage_paths?: string[]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "challenge_evidence_cleanup_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: true
+            referencedRelation: "challenge_activities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "challenge_evidence_cleanup_challenge_id_fkey"
             columns: ["challenge_id"]
             isOneToOne: false
             referencedRelation: "challenges"
@@ -723,6 +798,8 @@ export type Database = {
           equivalent_km: number
           finalized_at: string
           id: string
+          pause_country: string | null
+          paused: boolean
           penalty_eur: number
           running_km: number
           target_km: number
@@ -738,6 +815,8 @@ export type Database = {
           equivalent_km?: number
           finalized_at?: string
           id?: string
+          pause_country?: string | null
+          paused?: boolean
           penalty_eur?: number
           running_km?: number
           target_km?: number
@@ -753,6 +832,8 @@ export type Database = {
           equivalent_km?: number
           finalized_at?: string
           id?: string
+          pause_country?: string | null
+          paused?: boolean
           penalty_eur?: number
           running_km?: number
           target_km?: number
@@ -901,6 +982,16 @@ export type Database = {
         Args: { _c: string; _d: string }
         Returns: boolean
       }
+      claim_challenge_evidence_cleanup: {
+        Args: { _challenge?: string; _limit?: number }
+        Returns: {
+          activity_id: string
+          attempts: number
+          challenge_id: string
+          lease_token: string
+          storage_paths: string[]
+        }[]
+      }
       claim_challenge_push_events: {
         Args: never
         Returns: {
@@ -947,6 +1038,10 @@ export type Database = {
       finalize_challenge: {
         Args: { _c: string; _caller: string }
         Returns: number
+      }
+      finish_challenge_evidence_cleanup: {
+        Args: { _activity: string; _lease: string; _succeeded: boolean }
+        Returns: boolean
       }
       penalty_for:
         | { Args: { _km: number }; Returns: number }
