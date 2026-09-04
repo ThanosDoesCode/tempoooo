@@ -274,6 +274,7 @@ export function TrainingSession({
             const bw = isBodyweight(def.name);
             const stats = exerciseMetrics(entry);
             const best = bestRecentSet(data, def.name, date);
+            const history = exerciseHistory(data, def.name).filter((item) => item.date <= date);
             return (
               <Card key={def.name}>
                 <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
@@ -425,55 +426,87 @@ export function TrainingSession({
                 <button
                   type="button"
                   onClick={() => setGraphFor(graphFor === def.name ? null : def.name)}
-                  className="mt-1 min-h-11 text-xs font-medium text-primary"
+                  aria-expanded={graphFor === def.name}
+                  className="mt-1 min-h-11 text-sm font-medium text-primary"
                 >
-                  {graphFor === def.name ? "Hide history" : "History"}
+                  {graphFor === def.name ? "Hide progress" : "View progress"}
                 </button>
                 {graphFor === def.name ? (
-                  <div>
-                    <p className="text-xs text-muted-foreground">
-                      Best set (last 90 days):{" "}
-                      <span className="num font-medium text-foreground">
-                        {best ? `${entryLoadLabel(best.entry)} × ${best.reps}` : "—"}
-                      </span>
-                      {best ? ` · ${format(parseISO(best.date), "d MMM")}` : ""}
-                    </p>
-                    <ExerciseGraph
-                      history={exerciseHistory(data, def.name).filter((h) => h.date <= date)}
-                    />
-                    <div className="mt-3 max-h-64 space-y-3 overflow-y-auto">
-                      {exerciseHistory(data, def.name)
-                        .filter((h) => h.date <= date)
-                        .reverse()
-                        .map((h) => (
-                          <div key={h.date} className="border-t border-border pt-2 text-xs">
-                            <p className="text-muted-foreground">
-                              {format(parseISO(h.date), "d MMM yyyy")} · {entryLoadLabel(h.entry)}
+                  <div className="border-t border-border pt-3">
+                    <div className="rounded-xl bg-elevated/70 p-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        Best set · last 90 days
+                      </p>
+                      {best ? (
+                        <div className="mt-1 flex items-end justify-between gap-3">
+                          <p className="num text-lg font-semibold text-foreground">
+                            {entryLoadLabel(best.entry)} × {best.reps} reps
+                          </p>
+                          <p className="shrink-0 text-xs text-muted-foreground">
+                            {format(parseISO(best.date), "d MMM yyyy")}
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          No qualifying sets logged in the last 90 days.
+                        </p>
+                      )}
+                    </div>
+                    <ExerciseGraph history={history} />
+                    {history.length ? (
+                      <p className="mt-4 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        Past sessions
+                      </p>
+                    ) : null}
+                    <div className="mt-2 max-h-72 space-y-2 overflow-y-auto">
+                      {[...history].reverse().map((h) => (
+                        <div key={h.date} className="rounded-xl border border-border p-3 text-xs">
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="font-medium text-foreground">
+                              {format(parseISO(h.date), "d MMM yyyy")}
                             </p>
-                            <p className="num mt-1">
-                              {h.entry.reps.map((r) => r ?? "—").join(" / ")} ·{" "}
-                              {h.volume == null ? "—" : metricNumber(h.volume)} kg volume
+                            <p className="num shrink-0 font-semibold text-foreground">
+                              {entryLoadLabel(h.entry)}
                             </p>
-                            {h.entry.noteTags?.includes("Pain/discomfort") ? (
-                              <span className="mt-1 inline-block rounded-full bg-danger/15 px-2 py-1 font-semibold text-danger">
-                                Pain/discomfort
-                              </span>
-                            ) : null}
-                            {notesPreview(h.entry) ? (
-                              <p className="mt-1 whitespace-pre-wrap break-words text-muted-foreground">
-                                {notesPreview(h.entry)}
-                              </p>
-                            ) : null}
-                            {h.sessionNote ? (
-                              <p className="mt-1 whitespace-pre-wrap break-words text-muted-foreground">
-                                Session: {h.sessionNote}
-                              </p>
-                            ) : null}
                           </div>
-                        ))}
+                          <dl className="mt-2 grid grid-cols-2 gap-2">
+                            <div>
+                              <dt className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                                Sets
+                              </dt>
+                              <dd className="num mt-0.5 text-foreground">
+                                {h.entry.reps.map((r) => r ?? "—").join(" · ")}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                                Total volume
+                              </dt>
+                              <dd className="num mt-0.5 text-foreground">
+                                {h.volume == null ? "—" : `${metricNumber(h.volume)} kg`}
+                              </dd>
+                            </div>
+                          </dl>
+                          {h.entry.noteTags?.includes("Pain/discomfort") ? (
+                            <span className="mt-1 inline-block rounded-full bg-danger/15 px-2 py-1 font-semibold text-danger">
+                              Pain/discomfort
+                            </span>
+                          ) : null}
+                          {notesPreview(h.entry) ? (
+                            <p className="mt-1 whitespace-pre-wrap break-words text-muted-foreground">
+                              {notesPreview(h.entry)}
+                            </p>
+                          ) : null}
+                          {h.sessionNote ? (
+                            <p className="mt-1 whitespace-pre-wrap break-words text-muted-foreground">
+                              Session: {h.sessionNote}
+                            </p>
+                          ) : null}
+                        </div>
+                      ))}
                     </div>
                     <p className="mt-2 text-[11px] text-muted-foreground">
-                      Open the training date above to edit a historical note.
+                      To update a past session&apos;s notes, choose its date at the top of Training.
                     </p>
                   </div>
                 ) : null}
@@ -726,7 +759,9 @@ function ExerciseGraph({ history }: { history: ReturnType<typeof exerciseHistory
   if (history.length < 2)
     return (
       <p className="mt-3 text-xs text-muted-foreground">
-        Log at least two sessions to see a trend.
+        {history.length === 1
+          ? "1 session logged. Complete this exercise once more to unlock the progress chart."
+          : "No saved sessions yet. Complete this exercise to start tracking progress."}
       </p>
     );
   return (

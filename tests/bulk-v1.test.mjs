@@ -93,6 +93,24 @@ test("Same updates local state without autosaving or starting the rest timer", a
   assert.doesNotMatch(shortcut, /persist\(|startRest\(|update\(/);
 });
 
+test("exercise progress history uses labeled, readable summaries", async () => {
+  const source = await read("src/components/TrainingSession.tsx");
+  for (const copy of [
+    "View progress",
+    "Hide progress",
+    "Best set · last 90 days",
+    "Past sessions",
+    "Sets",
+    "Total volume",
+    "1 session logged. Complete this exercise once more to unlock the progress chart.",
+    "choose its date at the top of Training",
+  ]) {
+    assert.match(source, new RegExp(copy.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
+  assert.doesNotMatch(source, /Best set \(last 90 days\)|Log at least two sessions/);
+  assert.match(source, /const history = exerciseHistory[\s\S]*?<ExerciseGraph history=\{history\}/);
+});
+
 test("Sharing is absent while owner-only Bulk guards remain", async () => {
   const shell = await read("src/components/AppShell.tsx");
   const guard = await read("src/routes/_authenticated/bulk/route.tsx");
