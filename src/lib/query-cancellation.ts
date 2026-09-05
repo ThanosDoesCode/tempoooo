@@ -4,6 +4,7 @@ const USER_SCOPED_QUERY_ROOTS = new Set([
   "authenticated-user",
   "bulk-memberships",
   "bulk-admin",
+  "bulk-exercise-library",
   "admin-diagnostics",
   "challenge",
   "challenge-members",

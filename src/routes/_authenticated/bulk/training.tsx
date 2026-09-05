@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { format, parseISO } from "date-fns";
 import { useState } from "react";
 import { AppShell, PageHeader } from "@/components/AppShell";
@@ -35,6 +35,13 @@ function TrainingPage() {
   return (
     <AppShell>
       <PageHeader title="Training" subtitle={format(parseISO(date), "EEEE, d MMMM")} />
+      <Link
+        to="/bulk/exercises"
+        preload="intent"
+        className="mb-3 flex min-h-11 items-center justify-center rounded-xl border border-border px-3 text-sm font-semibold text-foreground active:scale-[0.98]"
+      >
+        Browse exercise library
+      </Link>
       <label className="mb-3 flex items-center justify-between gap-3 text-xs text-muted-foreground">
         Training date
         <input

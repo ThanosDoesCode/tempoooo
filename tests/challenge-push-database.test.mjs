@@ -492,6 +492,102 @@ test("Bulk data stays owner-only while users can atomically activate one persona
   );
 });
 
+test("Bulk exercise library is seeded once and custom exercises remain owner-only", async () => {
+  const ownerLibrary = await asUser(a, () =>
+    db.query(
+      "SELECT id,name,primary_muscle,equipment,supports_unilateral FROM public.bulk_exercises WHERE is_system ORDER BY name",
+    ),
+  );
+  assert.ok(ownerLibrary.rows.length >= 300);
+  assert.equal(new Set(ownerLibrary.rows.map((row) => row.id)).size, ownerLibrary.rows.length);
+  assert.equal(new Set(ownerLibrary.rows.map((row) => row.name)).size, ownerLibrary.rows.length);
+  assert.ok(ownerLibrary.rows.some((row) => row.name === "Incline Dumbbell Bench Press"));
+  assert.ok(ownerLibrary.rows.some((row) => row.primary_muscle === "abs"));
+  assert.equal(
+    (await asUser(c, () => db.query("SELECT id FROM public.bulk_exercises"))).rows.length,
+    0,
+  );
+
+  const created = await asUser(a, () =>
+    db.query(
+      `INSERT INTO public.bulk_exercises(
+        slug,name,primary_muscle,secondary_muscles,equipment,movement_pattern,supports_unilateral
+      ) VALUES ('my-cable-curl','My Cable Curl','biceps',ARRAY['forearms'],ARRAY['cable'],'other',true)
+      RETURNING id,owner_id,supports_unilateral`,
+    ),
+  );
+  const customId = created.rows[0].id;
+  assert.match(customId, /^custom:/);
+  assert.equal(created.rows[0].owner_id, a);
+  assert.equal(created.rows[0].supports_unilateral, true);
+  assert.equal(
+    (
+      await asUser(a, () =>
+        db.query(
+          "UPDATE public.bulk_exercises SET name='My Updated Cable Curl' WHERE id=$1 RETURNING name",
+          [customId],
+        ),
+      )
+    ).rows[0].name,
+    "My Updated Cable Curl",
+  );
+  assert.equal(
+    (
+      await asUser(d, () =>
+        db.query("SELECT id FROM public.bulk_exercises WHERE id=$1", [customId]),
+      )
+    ).rows.length,
+    0,
+  );
+  assert.equal(
+    (
+      await asUser(d, () =>
+        db.query("UPDATE public.bulk_exercises SET name='Stolen' WHERE id=$1 RETURNING id", [
+          customId,
+        ]),
+      )
+    ).rows.length,
+    0,
+  );
+  assert.equal(
+    (
+      await asUser(d, () =>
+        db.query("DELETE FROM public.bulk_exercises WHERE id=$1 RETURNING id", [customId]),
+      )
+    ).rows.length,
+    0,
+  );
+  assert.equal(
+    (
+      await asUser(a, () =>
+        db.query(
+          "UPDATE public.bulk_exercises SET name='Changed system row' WHERE id='system:pull-up' RETURNING id",
+        ),
+      )
+    ).rows.length,
+    0,
+  );
+  await assert.rejects(
+    asUser(a, () =>
+      db.query(
+        `INSERT INTO public.bulk_exercises(
+          id,owner_id,slug,name,primary_muscle,equipment,movement_pattern,is_system
+        ) VALUES ('custom:forged',$1,'forged','Forged','chest',ARRAY['barbell'],'other',false)`,
+        [d],
+      ),
+    ),
+    /row-level security/,
+  );
+  assert.equal(
+    (
+      await asUser(a, () =>
+        db.query("DELETE FROM public.bulk_exercises WHERE id=$1 RETURNING id", [customId]),
+      )
+    ).rows.length,
+    1,
+  );
+});
+
 test("atomic challenge creation writes challenge, own membership and invitation exactly once", async () => {
   const requestId = randomUUID();
   const tokenHash = "a".repeat(64);

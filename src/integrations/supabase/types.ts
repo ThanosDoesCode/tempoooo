@@ -64,6 +64,66 @@ export type Database = {
           },
         ]
       }
+      bulk_exercises: {
+        Row: {
+          active: boolean
+          category: string
+          created_at: string
+          default_unilateral_mode: string
+          equipment: string[]
+          id: string
+          is_bodyweight: boolean
+          is_system: boolean
+          min_experience: string
+          movement_pattern: string
+          name: string
+          owner_id: string | null
+          primary_muscle: string
+          secondary_muscles: string[]
+          slug: string
+          supports_unilateral: boolean
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          category?: string
+          created_at?: string
+          default_unilateral_mode?: string
+          equipment: string[]
+          id?: string
+          is_bodyweight?: boolean
+          is_system?: boolean
+          min_experience?: string
+          movement_pattern: string
+          name: string
+          owner_id?: string | null
+          primary_muscle: string
+          secondary_muscles?: string[]
+          slug: string
+          supports_unilateral?: boolean
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          category?: string
+          created_at?: string
+          default_unilateral_mode?: string
+          equipment?: string[]
+          id?: string
+          is_bodyweight?: boolean
+          is_system?: boolean
+          min_experience?: string
+          movement_pattern?: string
+          name?: string
+          owner_id?: string | null
+          primary_muscle?: string
+          secondary_muscles?: string[]
+          slug?: string
+          supports_unilateral?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
       bulk_invitations: {
         Row: {
           accepted_at: string | null
