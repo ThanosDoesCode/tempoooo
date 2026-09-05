@@ -94,7 +94,15 @@ function logOneSignalInitError(error: unknown) {
 }
 
 function logPushDiagnostic(
-  phase: "auth_event" | "permission" | "identity_sync" | "backend_sync",
+  phase:
+    | "auth_event"
+    | "permission"
+    | "identity_sync"
+    | "backend_sync"
+    | "subscription_recovery_needed"
+    | "subscription_optin_start"
+    | "subscription_optin_complete"
+    | "subscription_optin_failed",
   details: Record<string, string | boolean>,
 ) {
   console.info(JSON.stringify({ phase, ...details }));
@@ -296,24 +304,47 @@ async function registerWithSynchronizationRetry(subscriptionId: string, activate
 }
 
 export async function refreshChallengePush(sdk: PushSdk, userId: string) {
+  if (accountPreference.get(userId) === false) {
+    logPushDiagnostic("backend_sync", { outcome: "account_disabled" });
+    return false;
+  }
   const permission = Notification.permission;
   logPushDiagnostic("permission", { value: permission });
   if (permission !== "granted") return false;
-  if (accountPreference.get(userId) === false) return false;
 
-  const id = sdk.User.PushSubscription.id;
+  let id = sdk.User.PushSubscription.id;
   const optedIn = Boolean(sdk.User.PushSubscription.optedIn);
-  if (!id || !optedIn) {
+  if (!id) {
     logPushDiagnostic("backend_sync", {
       outcome: "subscription_unavailable",
-      subscription_present: Boolean(id),
+      subscription_present: false,
       opted_in: optedIn,
     });
     throw new Error(
       "Notification status is temporarily unavailable. Retry notifications in a moment.",
     );
   }
+
   await assertCurrentUser(userId);
+  if (!optedIn) {
+    logPushDiagnostic("subscription_recovery_needed", {
+      subscription_present: true,
+      account_enabled: true,
+    });
+    logPushDiagnostic("subscription_optin_start", { outcome: "started" });
+    try {
+      await sdk.User.PushSubscription.optIn();
+      id = await subscriptionId(sdk);
+      logPushDiagnostic("subscription_optin_complete", { outcome: "complete" });
+    } catch {
+      logPushDiagnostic("subscription_optin_failed", { outcome: "failed" });
+      throw new Error(
+        "Notification status is temporarily unavailable. Retry notifications in a moment.",
+      );
+    }
+    await assertCurrentUser(userId);
+  }
+
   const result = await registerWithSynchronizationRetry(id, false);
   if (result?.enabled) {
     localStorage.setItem(markerKey, JSON.stringify({ userId, id }));

@@ -61,7 +61,7 @@ export function ChallengeNotifications({ userId }: { userId: string }) {
     if (!reason) {
       void (async () => {
         try {
-          const value = await reconcileChallengePush(userId);
+          const value = await reconcileChallengePush(userId, { force: retryKey > 0 });
           if (!alive) return;
           current = value.sdk;
           setSdk(() => value.sdk);
