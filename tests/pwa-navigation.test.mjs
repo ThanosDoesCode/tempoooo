@@ -62,8 +62,8 @@ test("Tempo navigation exposes optional Bulk only after persisted activation", a
   assert.match(guard, /clearBulk\(\)/);
   assert.match(guard, /redirect\(\{ to: "\/bulk-onboarding", replace: true \}\)/);
   const onboarding = await read("src/routes/_authenticated/bulk-onboarding.tsx");
-  assert.match(onboarding, /supabase\.rpc\("activate_my_bulk"\)/);
-  assert.match(onboarding, /Activate My Bulk/);
+  assert.match(onboarding, /supabase\.rpc\("complete_bulk_onboarding"/);
+  assert.match(onboarding, /Create My Bulk Plan/);
   assert.match(onboarding, /bulkOwnerQueryOptions/);
   const denied = await read("src/routes/_authenticated/bulk-access-denied.tsx");
   assert.match(denied, /Bulk access required/);

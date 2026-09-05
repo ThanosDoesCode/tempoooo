@@ -1,10 +1,25 @@
-import { useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
-import { Dumbbell } from "lucide-react";
+import { ArrowLeft, Check, Dumbbell } from "lucide-react";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { Card, PendingLabel } from "@/components/ui-kit";
 import { bulkOwnerQueryOptions } from "@/lib/bulk-access";
+import {
+  DEFAULT_NUTRITION_TARGETS,
+  EQUIPMENT_OPTIONS,
+  EXPERIENCE_LEVELS,
+  LEAN_BULK_WEEKLY_GAIN_RANGE,
+  TRAINING_DAY_OPTIONS,
+  TRAINING_SETUP_OPTIONS,
+  WEEKLY_GAIN_OPTIONS,
+  type BulkOnboardingField,
+  type BulkOnboardingValues,
+  type Equipment,
+  type ExperienceLevel,
+  type TrainingSetupPreference,
+  validateBulkOnboarding,
+} from "@/lib/bulk-onboarding";
 import { userFacingError } from "@/lib/network-errors";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -14,32 +29,132 @@ export const Route = createFileRoute("/_authenticated/bulk-onboarding")({
     if (plans.length) throw redirect({ to: "/bulk", replace: true });
   },
   head: () => ({ meta: [{ title: "Tempo" }] }),
-  component: BulkOnboardingPlaceholder,
+  component: BulkOnboarding,
 });
 
-function BulkOnboardingPlaceholder() {
+type Step = 1 | 2 | 3 | 4 | 5;
+type FormState = {
+  currentWeightKg: string;
+  targetWeightKg: string;
+  targetWeeklyGainKg: string;
+  weeklyGainChoice: string;
+  experienceLevel: ExperienceLevel | "";
+  trainingDaysPerWeek: number | null;
+  availableEquipment: Equipment[];
+  trainingSetupPreference: TrainingSetupPreference | "";
+  calories: string;
+  protein: string;
+  carbs: string;
+  fat: string;
+};
+
+const initialForm: FormState = {
+  currentWeightKg: "",
+  targetWeightKg: "",
+  targetWeeklyGainKg: "0.25",
+  weeklyGainChoice: "0.25",
+  experienceLevel: "",
+  trainingDaysPerWeek: null,
+  availableEquipment: [],
+  trainingSetupPreference: "",
+  calories: String(DEFAULT_NUTRITION_TARGETS.calories),
+  protein: String(DEFAULT_NUTRITION_TARGETS.protein),
+  carbs: String(DEFAULT_NUTRITION_TARGETS.carbs),
+  fat: String(DEFAULT_NUTRITION_TARGETS.fat),
+};
+
+const numeric = (value: string) => Number(value.trim().replaceAll(",", "."));
+
+function valuesOf(form: FormState): BulkOnboardingValues {
+  return {
+    currentWeightKg: numeric(form.currentWeightKg),
+    targetWeightKg: numeric(form.targetWeightKg),
+    targetWeeklyGainKg: numeric(form.targetWeeklyGainKg),
+    experienceLevel: form.experienceLevel as ExperienceLevel,
+    trainingDaysPerWeek: form.trainingDaysPerWeek ?? 0,
+    availableEquipment: form.availableEquipment,
+    trainingSetupPreference: form.trainingSetupPreference as TrainingSetupPreference,
+    calories: numeric(form.calories),
+    protein: numeric(form.protein),
+    carbs: numeric(form.carbs),
+    fat: numeric(form.fat),
+  };
+}
+
+const stepFields: Record<Step, BulkOnboardingField[]> = {
+  1: ["currentWeightKg", "targetWeightKg", "targetWeeklyGainKg"],
+  2: ["experienceLevel", "trainingDaysPerWeek", "availableEquipment"],
+  3: ["trainingSetupPreference"],
+  4: ["calories", "protein", "carbs", "fat"],
+  5: [],
+};
+
+function BulkOnboarding() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [step, setStep] = useState<Step>(1);
+  const [form, setForm] = useState<FormState>(initialForm);
+  const [visibleErrors, setVisibleErrors] = useState<Partial<Record<BulkOnboardingField, string>>>(
+    {},
+  );
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const values = useMemo(() => valuesOf(form), [form]);
+  const allErrors = useMemo(() => validateBulkOnboarding(values), [values]);
 
-  const activate = async () => {
+  const update = <K extends keyof FormState>(key: K, value: FormState[K]) => {
+    setForm((current) => ({ ...current, [key]: value }));
+    setVisibleErrors((current) => ({ ...current, [key]: undefined }));
+    setSubmitError(null);
+  };
+
+  const next = () => {
+    const errors = Object.fromEntries(
+      stepFields[step].flatMap((field) => (allErrors[field] ? [[field, allErrors[field]]] : [])),
+    );
+    if (Object.keys(errors).length) {
+      setVisibleErrors(errors);
+      return;
+    }
+    setVisibleErrors({});
+    setStep((current) => Math.min(5, current + 1) as Step);
+  };
+
+  const submit = async () => {
     if (busy) return;
+    const errors = validateBulkOnboarding(values);
+    if (Object.keys(errors).length) {
+      setVisibleErrors(errors);
+      const firstInvalidStep = ([1, 2, 3, 4] as const).find((candidate) =>
+        stepFields[candidate].some((field) => errors[field]),
+      );
+      if (firstInvalidStep) setStep(firstInvalidStep);
+      return;
+    }
     setBusy(true);
-    setError(null);
+    setSubmitError(null);
     try {
-      const { data: planId, error: activationError } = await supabase.rpc("activate_my_bulk");
-      if (activationError || !planId) throw activationError ?? new Error("Bulk activation failed");
-      await queryClient.invalidateQueries({
-        queryKey: ["bulk-memberships"],
-        refetchType: "none",
+      const { data: planId, error } = await supabase.rpc("complete_bulk_onboarding", {
+        _current_weight_kg: values.currentWeightKg,
+        _target_weight_kg: values.targetWeightKg,
+        _target_weekly_gain_kg: values.targetWeeklyGainKg,
+        _experience_level: values.experienceLevel,
+        _training_days_per_week: values.trainingDaysPerWeek,
+        _available_equipment: values.availableEquipment,
+        _training_setup_preference: values.trainingSetupPreference,
+        _calories: values.calories,
+        _protein: values.protein,
+        _carbs: values.carbs,
+        _fat: values.fat,
       });
+      if (error || !planId) throw error ?? new Error("Bulk onboarding failed");
+      await queryClient.invalidateQueries({ queryKey: ["bulk-memberships"], refetchType: "none" });
       const plans = await queryClient.fetchQuery({ ...bulkOwnerQueryOptions(), staleTime: 0 });
       if (!plans.some((plan) => plan.bulk_profile_id === planId))
         throw new Error("Your Bulk plan is still being prepared. Please retry.");
       await navigate({ to: "/bulk", replace: true });
     } catch (cause) {
-      setError(userFacingError(cause, "activate Bulk"));
+      setSubmitError(userFacingError(cause, "create your Bulk plan"));
     } finally {
       setBusy(false);
     }
@@ -47,30 +162,444 @@ function BulkOnboardingPlaceholder() {
 
   return (
     <AppShell>
-      <PageHeader title="Start My Bulk" subtitle="Your personal nutrition and training space" />
-      <Card className="text-center">
-        <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-primary/10 text-primary">
-          <Dumbbell className="h-6 w-6" aria-hidden="true" />
-        </span>
-        <h1 className="mt-4 text-xl font-semibold">Activate your Bulk plan</h1>
-        <p className="mt-2 text-sm leading-6 text-muted-foreground">
-          This creates your private Bulk space. Personalized setup questions will be added in the
-          next step of the rollout.
-        </p>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => void activate()}
-          className="mt-5 flex min-h-11 w-full items-center justify-center rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground active:scale-[0.98] disabled:opacity-60"
-        >
-          {busy ? <PendingLabel>Activating My Bulk...</PendingLabel> : "Activate My Bulk"}
-        </button>
-        {error ? (
-          <p role="alert" className="mt-3 text-sm text-danger">
-            {error}
+      <PageHeader title="Create My Bulk Plan" subtitle={`Step ${step} of 5`} />
+      <div className="mb-4 h-1.5 overflow-hidden rounded-full bg-secondary" aria-hidden="true">
+        <div
+          className="h-full rounded-full bg-primary transition-all"
+          style={{ width: `${step * 20}%` }}
+        />
+      </div>
+      <Card>
+        {step === 1 ? <GoalStep form={form} update={update} errors={visibleErrors} /> : null}
+        {step === 2 ? <TrainingStep form={form} update={update} errors={visibleErrors} /> : null}
+        {step === 3 ? (
+          <PreferenceStep
+            form={form}
+            update={update}
+            error={visibleErrors.trainingSetupPreference}
+          />
+        ) : null}
+        {step === 4 ? <NutritionStep form={form} update={update} errors={visibleErrors} /> : null}
+        {step === 5 ? <ReviewStep values={values} /> : null}
+        {submitError ? (
+          <p role="alert" className="mt-4 text-sm text-danger">
+            {submitError}
           </p>
         ) : null}
+        <div className="mt-6 grid grid-cols-2 gap-2">
+          {step > 1 ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setStep((step - 1) as Step)}
+              className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-border px-4 py-3 text-sm font-medium disabled:opacity-60"
+            >
+              <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Back
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => void navigate({ to: "/profile" })}
+              className="min-h-11 rounded-xl border border-border px-4 py-3 text-sm font-medium"
+            >
+              Cancel
+            </button>
+          )}
+          {step < 5 ? (
+            <button
+              type="button"
+              onClick={next}
+              className="min-h-11 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground active:scale-[0.98]"
+            >
+              Continue
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void submit()}
+              className="flex min-h-11 items-center justify-center rounded-xl bg-primary px-3 py-3 text-sm font-semibold text-primary-foreground active:scale-[0.98] disabled:opacity-60"
+            >
+              {busy ? <PendingLabel>Creating My Bulk Plan...</PendingLabel> : "Create My Bulk Plan"}
+            </button>
+          )}
+        </div>
       </Card>
     </AppShell>
+  );
+}
+
+type Update = <K extends keyof FormState>(key: K, value: FormState[K]) => void;
+
+function Heading({ icon = false, title, copy }: { icon?: boolean; title: string; copy: string }) {
+  return (
+    <div className="mb-5">
+      {icon ? (
+        <span className="mb-3 grid h-11 w-11 place-items-center rounded-xl bg-primary/10 text-primary">
+          <Dumbbell className="h-5 w-5" aria-hidden="true" />
+        </span>
+      ) : null}
+      <h1 className="text-xl font-semibold">{title}</h1>
+      <p className="mt-1 text-sm leading-6 text-muted-foreground">{copy}</p>
+    </div>
+  );
+}
+
+function TextNumber({
+  label,
+  value,
+  onChange,
+  suffix,
+  error,
+  integer = false,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  suffix: string;
+  error?: string | undefined;
+  integer?: boolean;
+}) {
+  return (
+    <label className="block">
+      <span className="text-xs font-medium text-muted-foreground">{label}</span>
+      <div className="mt-1 flex items-center rounded-xl border border-input bg-elevated focus-within:border-ring">
+        <input
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          inputMode={integer ? "numeric" : "decimal"}
+          aria-invalid={!!error}
+          className="num min-h-11 min-w-0 flex-1 bg-transparent px-3 py-2.5 text-lg font-semibold outline-none"
+        />
+        <span className="pr-3 text-xs text-muted-foreground">{suffix}</span>
+      </div>
+      {error ? (
+        <span role="alert" className="mt-1 block text-xs text-danger">
+          {error}
+        </span>
+      ) : null}
+    </label>
+  );
+}
+
+function Choice({
+  selected,
+  onClick,
+  children,
+}: {
+  selected: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={selected}
+      onClick={onClick}
+      className={`flex min-h-11 items-center justify-between rounded-xl border px-3 py-2.5 text-left text-sm font-medium transition-colors ${selected ? "border-primary bg-primary/10 text-primary" : "border-border bg-elevated text-foreground"}`}
+    >
+      <span>{children}</span>
+      {selected ? <Check className="h-4 w-4" aria-hidden="true" /> : null}
+    </button>
+  );
+}
+
+function GoalStep({
+  form,
+  update,
+  errors,
+}: {
+  form: FormState;
+  update: Update;
+  errors: Partial<Record<BulkOnboardingField, string>>;
+}) {
+  return (
+    <>
+      <Heading icon title="Your goal" copy="Set the starting point and pace for your lean bulk." />
+      <div className="space-y-4">
+        <TextNumber
+          label="Current weight"
+          value={form.currentWeightKg}
+          onChange={(value) => update("currentWeightKg", value)}
+          suffix="kg"
+          error={errors.currentWeightKg}
+        />
+        <TextNumber
+          label="Target weight"
+          value={form.targetWeightKg}
+          onChange={(value) => update("targetWeightKg", value)}
+          suffix="kg"
+          error={errors.targetWeightKg}
+        />
+        <div>
+          <p className="text-xs font-medium text-muted-foreground">Target weekly weight gain</p>
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            Recommended lean-bulk range: {LEAN_BULK_WEEKLY_GAIN_RANGE[0].toFixed(2)} to{" "}
+            {LEAN_BULK_WEEKLY_GAIN_RANGE[1].toFixed(2)} kg/week.
+          </p>
+          <div className="mt-2 grid grid-cols-3 gap-2">
+            {WEEKLY_GAIN_OPTIONS.map((gain) => (
+              <Choice
+                key={gain}
+                selected={form.weeklyGainChoice === String(gain)}
+                onClick={() => {
+                  update("weeklyGainChoice", String(gain));
+                  update("targetWeeklyGainKg", String(gain));
+                }}
+              >
+                {gain.toFixed(2)}
+              </Choice>
+            ))}
+            <Choice
+              selected={form.weeklyGainChoice === "custom"}
+              onClick={() => update("weeklyGainChoice", "custom")}
+            >
+              Custom
+            </Choice>
+          </div>
+          {form.weeklyGainChoice === "custom" ? (
+            <div className="mt-3">
+              <TextNumber
+                label="Custom weekly gain"
+                value={form.targetWeeklyGainKg}
+                onChange={(value) => update("targetWeeklyGainKg", value)}
+                suffix="kg/week"
+                error={errors.targetWeeklyGainKg}
+              />
+            </div>
+          ) : errors.targetWeeklyGainKg ? (
+            <p role="alert" className="mt-1 text-xs text-danger">
+              {errors.targetWeeklyGainKg}
+            </p>
+          ) : null}
+        </div>
+      </div>
+    </>
+  );
+}
+
+function TrainingStep({
+  form,
+  update,
+  errors,
+}: {
+  form: FormState;
+  update: Update;
+  errors: Partial<Record<BulkOnboardingField, string>>;
+}) {
+  const toggle = (equipment: Equipment) => {
+    if (equipment === "bodyweight_only") {
+      update("availableEquipment", form.availableEquipment.includes(equipment) ? [] : [equipment]);
+      return;
+    }
+    const current = form.availableEquipment.filter((value) => value !== "bodyweight_only");
+    update(
+      "availableEquipment",
+      current.includes(equipment)
+        ? current.filter((value) => value !== equipment)
+        : [...current, equipment],
+    );
+  };
+  return (
+    <>
+      <Heading
+        title="Your training"
+        copy="Tell Tempo what experience and equipment your future plan can use."
+      />
+      <div className="space-y-5">
+        <div>
+          <p className="text-xs font-medium text-muted-foreground">Experience level</p>
+          <div className="mt-2 grid gap-2">
+            {EXPERIENCE_LEVELS.map((option) => (
+              <Choice
+                key={option.value}
+                selected={form.experienceLevel === option.value}
+                onClick={() => update("experienceLevel", option.value)}
+              >
+                {option.label}
+              </Choice>
+            ))}
+          </div>
+          {errors.experienceLevel ? (
+            <p role="alert" className="mt-1 text-xs text-danger">
+              {errors.experienceLevel}
+            </p>
+          ) : null}
+        </div>
+        <div>
+          <p className="text-xs font-medium text-muted-foreground">Training days per week</p>
+          <div className="mt-2 grid grid-cols-5 gap-2">
+            {TRAINING_DAY_OPTIONS.map((days) => (
+              <Choice
+                key={days}
+                selected={form.trainingDaysPerWeek === days}
+                onClick={() => update("trainingDaysPerWeek", days)}
+              >
+                {days}
+              </Choice>
+            ))}
+          </div>
+          {errors.trainingDaysPerWeek ? (
+            <p role="alert" className="mt-1 text-xs text-danger">
+              {errors.trainingDaysPerWeek}
+            </p>
+          ) : null}
+        </div>
+        <div>
+          <p className="text-xs font-medium text-muted-foreground">Available equipment</p>
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            Choose every option you can reliably use.
+          </p>
+          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+            {EQUIPMENT_OPTIONS.map((option) => (
+              <Choice
+                key={option.value}
+                selected={form.availableEquipment.includes(option.value)}
+                onClick={() => toggle(option.value)}
+              >
+                {option.label}
+              </Choice>
+            ))}
+          </div>
+          {errors.availableEquipment ? (
+            <p role="alert" className="mt-1 text-xs text-danger">
+              {errors.availableEquipment}
+            </p>
+          ) : null}
+        </div>
+      </div>
+    </>
+  );
+}
+
+function PreferenceStep({
+  form,
+  update,
+  error,
+}: {
+  form: FormState;
+  update: Update;
+  error?: string | undefined;
+}) {
+  return (
+    <>
+      <Heading
+        title="How do you want to train?"
+        copy="Choose the setup path you want to use when training plans arrive."
+      />
+      <div className="grid gap-3">
+        {TRAINING_SETUP_OPTIONS.map((option) => (
+          <Choice
+            key={option.value}
+            selected={form.trainingSetupPreference === option.value}
+            onClick={() => update("trainingSetupPreference", option.value)}
+          >
+            {option.label}
+          </Choice>
+        ))}
+      </div>
+      {error ? (
+        <p role="alert" className="mt-2 text-xs text-danger">
+          {error}
+        </p>
+      ) : null}
+      <p className="mt-4 rounded-xl bg-elevated/70 p-3 text-xs leading-5 text-muted-foreground">
+        This choice is saved now. Plan generation, Tempo plans and the custom builder will be added
+        in later rollout segments.
+      </p>
+    </>
+  );
+}
+
+function NutritionStep({
+  form,
+  update,
+  errors,
+}: {
+  form: FormState;
+  update: Update;
+  errors: Partial<Record<BulkOnboardingField, string>>;
+}) {
+  return (
+    <>
+      <Heading
+        title="Nutrition targets"
+        copy="Enter the daily targets you want Tempo to track. You can adjust them later."
+      />
+      <div className="grid grid-cols-2 gap-4">
+        <TextNumber
+          label="Calories"
+          value={form.calories}
+          onChange={(value) => update("calories", value)}
+          suffix="kcal"
+          error={errors.calories}
+          integer
+        />
+        <TextNumber
+          label="Protein"
+          value={form.protein}
+          onChange={(value) => update("protein", value)}
+          suffix="g"
+          error={errors.protein}
+          integer
+        />
+        <TextNumber
+          label="Carbs"
+          value={form.carbs}
+          onChange={(value) => update("carbs", value)}
+          suffix="g"
+          error={errors.carbs}
+          integer
+        />
+        <TextNumber
+          label="Fat"
+          value={form.fat}
+          onChange={(value) => update("fat", value)}
+          suffix="g"
+          error={errors.fat}
+          integer
+        />
+      </div>
+    </>
+  );
+}
+
+function ReviewStep({ values }: { values: BulkOnboardingValues }) {
+  const experience = EXPERIENCE_LEVELS.find(({ value }) => value === values.experienceLevel)?.label;
+  const preference = TRAINING_SETUP_OPTIONS.find(
+    ({ value }) => value === values.trainingSetupPreference,
+  )?.label;
+  const equipment = values.availableEquipment
+    .map((value) => EQUIPMENT_OPTIONS.find((option) => option.value === value)?.label)
+    .filter(Boolean)
+    .join(", ");
+  const rows = [
+    ["Current weight", `${values.currentWeightKg} kg`],
+    ["Target weight", `${values.targetWeightKg} kg`],
+    ["Weekly gain", `${values.targetWeeklyGainKg} kg/week`],
+    ["Experience", experience],
+    ["Training days", `${values.trainingDaysPerWeek} per week`],
+    ["Equipment", equipment],
+    ["Training setup", preference],
+    [
+      "Nutrition",
+      `${values.calories} kcal · ${values.protein} g protein · ${values.carbs} g carbs · ${values.fat} g fat`,
+    ],
+  ];
+  return (
+    <>
+      <Heading
+        title="Review your Bulk plan"
+        copy="Check your setup before creating your private Bulk space."
+      />
+      <dl className="divide-y divide-border rounded-xl bg-elevated/60 px-3">
+        {rows.map(([label, value]) => (
+          <div key={label} className="py-3">
+            <dt className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</dt>
+            <dd className="mt-0.5 text-sm font-medium">{value}</dd>
+          </div>
+        ))}
+      </dl>
+    </>
   );
 }

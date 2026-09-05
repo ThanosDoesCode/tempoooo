@@ -87,6 +87,43 @@ async function count(kind) {
   );
 }
 
+async function completeBulkOnboarding(uid, overrides = {}) {
+  const values = {
+    currentWeight: 70,
+    targetWeight: 78,
+    weeklyGain: 0.25,
+    experience: "intermediate",
+    trainingDays: 4,
+    equipment: ["dumbbells", "cables", "bench"],
+    preference: "generated",
+    calories: 2900,
+    protein: 140,
+    carbs: 360,
+    fat: 90,
+    ...overrides,
+  };
+  return asUser(uid, () =>
+    db.query(
+      `SELECT public.complete_bulk_onboarding(
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11
+      ) AS id`,
+      [
+        values.currentWeight,
+        values.targetWeight,
+        values.weeklyGain,
+        values.experience,
+        values.trainingDays,
+        values.equipment,
+        values.preference,
+        values.calories,
+        values.protein,
+        values.carbs,
+        values.fat,
+      ],
+    ),
+  );
+}
+
 async function createChallengeAtomic(
   uid,
   requestId,
@@ -212,10 +249,7 @@ test("Bulk data stays owner-only while users can atomically activate one persona
     ),
   );
   assert.equal(ownerWrite.rows[0].payload.calories, 3000);
-  assert.equal(
-    (await asUser(a, () => db.query("SELECT public.activate_my_bulk() AS id"))).rows[0].id,
-    bulk,
-  );
+  assert.equal((await completeBulkOnboarding(a)).rows[0].id, bulk);
   assert.equal(
     (await db.query("SELECT payload FROM public.bulk_targets WHERE bulk_profile_id=$1", [bulk]))
       .rows[0].payload.calories,
@@ -270,15 +304,76 @@ test("Bulk data stays owner-only while users can atomically activate one persona
   await db.query("SELECT set_config('request.jwt.claim.sub', '', false)");
   await db.exec("SET ROLE authenticated");
   try {
-    await assert.rejects(db.query("SELECT public.activate_my_bulk()"), /Not authenticated/);
+    await assert.rejects(
+      db.query(
+        "SELECT public.complete_bulk_onboarding(70,78,0.25,'beginner',3,ARRAY['dumbbells'],'generated',2900,140,360,90)",
+      ),
+      /Not authenticated/,
+    );
   } finally {
     await db.exec("RESET ROLE");
   }
 
-  const firstActivation = await asUser(d, () => db.query("SELECT public.activate_my_bulk() AS id"));
-  const secondActivation = await asUser(d, () =>
-    db.query("SELECT public.activate_my_bulk() AS id"),
+  await assert.rejects(
+    asUser(d, () => db.query("SELECT public.activate_my_bulk()")),
+    /permission denied/,
   );
+  await db.exec(`
+    CREATE FUNCTION public.reject_test_bulk_target() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1 FROM public.bulk_profiles
+        WHERE id = NEW.bulk_profile_id AND owner_id = '${c}'::uuid
+      ) THEN RAISE EXCEPTION 'Forced target failure'; END IF;
+      RETURN NEW;
+    END $$;
+    CREATE TRIGGER reject_test_bulk_target
+    BEFORE INSERT ON public.bulk_targets
+    FOR EACH ROW EXECUTE FUNCTION public.reject_test_bulk_target();
+  `);
+  await assert.rejects(completeBulkOnboarding(c), /Forced target failure/);
+  assert.equal(
+    (await db.query("SELECT count(*) AS n FROM public.bulk_profiles WHERE owner_id=$1", [c]))
+      .rows[0].n,
+    0,
+  );
+  assert.equal(
+    (
+      await db.query(
+        "SELECT count(*) AS n FROM public.bulk_members WHERE user_id=$1 AND role='owner'",
+        [c],
+      )
+    ).rows[0].n,
+    0,
+  );
+  await db.exec(`
+    DROP TRIGGER reject_test_bulk_target ON public.bulk_targets;
+    DROP FUNCTION public.reject_test_bulk_target();
+  `);
+  for (const invalid of [
+    { currentWeight: 0 },
+    { targetWeight: 70 },
+    { weeklyGain: 2 },
+    { experience: "expert" },
+    { trainingDays: 7 },
+    { equipment: ["private_home_address"] },
+    { preference: "admin_plan" },
+    { calories: 0 },
+    { protein: 0 },
+  ]) {
+    await assert.rejects(completeBulkOnboarding(c, invalid), /Invalid/);
+  }
+  assert.equal(
+    (await db.query("SELECT count(*) AS n FROM public.bulk_profiles WHERE owner_id=$1", [c]))
+      .rows[0].n,
+    0,
+  );
+  const firstActivation = await completeBulkOnboarding(d);
+  const secondActivation = await completeBulkOnboarding(d, {
+    targetWeight: 99,
+    experience: "advanced",
+  });
   const personalBulk = firstActivation.rows[0].id;
   assert.equal(secondActivation.rows[0].id, personalBulk);
   assert.equal(
@@ -286,15 +381,47 @@ test("Bulk data stays owner-only while users can atomically activate one persona
       .rows[0].n,
     1,
   );
-  assert.equal(
-    (
-      await asUser(d, () =>
-        db.query("SELECT payload FROM public.bulk_targets WHERE bulk_profile_id=$1", [
-          personalBulk,
-        ]),
-      )
-    ).rows.length,
-    1,
+  const personalTargets = await asUser(d, () =>
+    db.query("SELECT payload FROM public.bulk_targets WHERE bulk_profile_id=$1", [personalBulk]),
+  );
+  assert.deepEqual(
+    {
+      startWeight: personalTargets.rows[0].payload.startWeight,
+      targetWeight: personalTargets.rows[0].payload.targetWeight,
+      targetWeeklyGainKg: personalTargets.rows[0].payload.targetWeeklyGainKg,
+      experienceLevel: personalTargets.rows[0].payload.experienceLevel,
+      trainingDaysPerWeek: personalTargets.rows[0].payload.trainingDaysPerWeek,
+      availableEquipment: personalTargets.rows[0].payload.availableEquipment,
+      trainingSetupPreference: personalTargets.rows[0].payload.trainingSetupPreference,
+      calories: personalTargets.rows[0].payload.calories,
+      protein: personalTargets.rows[0].payload.protein,
+      carbs: personalTargets.rows[0].payload.carbs,
+      fat: personalTargets.rows[0].payload.fat,
+    },
+    {
+      startWeight: 70,
+      targetWeight: 78,
+      targetWeeklyGainKg: 0.25,
+      experienceLevel: "intermediate",
+      trainingDaysPerWeek: 4,
+      availableEquipment: ["bench", "cables", "dumbbells"],
+      trainingSetupPreference: "generated",
+      calories: 2900,
+      protein: 140,
+      carbs: 360,
+      fat: 90,
+    },
+  );
+  await assert.rejects(
+    asUser(d, () =>
+      db.query(
+        `UPDATE public.bulk_targets
+         SET payload = payload || '{"targetWeight":60}'::jsonb
+         WHERE bulk_profile_id=$1`,
+        [personalBulk],
+      ),
+    ),
+    /bulk_targets_onboarding_payload_ck/,
   );
   assert.equal(
     (
@@ -315,6 +442,40 @@ test("Bulk data stays owner-only while users can atomically activate one persona
     ).rows.length,
     0,
   );
+
+  for (const setup of [
+    {
+      id: randomUUID(),
+      experience: "beginner",
+      trainingDays: 2,
+      equipment: ["full_gym"],
+      preference: "tempo_preset",
+    },
+    {
+      id: randomUUID(),
+      experience: "advanced",
+      trainingDays: 6,
+      equipment: ["bodyweight_only"],
+      preference: "custom",
+    },
+  ]) {
+    await db.query("INSERT INTO auth.users(id) VALUES ($1)", [setup.id]);
+    await db.query("INSERT INTO public.profiles(id,display_name) VALUES ($1,'New athlete')", [
+      setup.id,
+    ]);
+    const created = await completeBulkOnboarding(setup.id, setup);
+    const saved = (
+      await asUser(setup.id, () =>
+        db.query("SELECT payload FROM public.bulk_targets WHERE bulk_profile_id=$1", [
+          created.rows[0].id,
+        ]),
+      )
+    ).rows[0].payload;
+    assert.equal(saved.experienceLevel, setup.experience);
+    assert.equal(saved.trainingDaysPerWeek, setup.trainingDays);
+    assert.deepEqual(saved.availableEquipment.sort(), setup.equipment.sort());
+    assert.equal(saved.trainingSetupPreference, setup.preference);
+  }
 
   await db.query("INSERT INTO public.bulk_admins(user_id) VALUES ($1)", [a]);
   assert.equal(

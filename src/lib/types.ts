@@ -1,3 +1,10 @@
+import {
+  DEFAULT_NUTRITION_TARGETS,
+  type Equipment,
+  type ExperienceLevel,
+  type TrainingSetupPreference,
+} from "./bulk-onboarding.ts";
+
 export type WorkoutType = "Chest & Back" | "Legs" | "Arms & Shoulders" | "Rest";
 export type SplitType = Exclude<WorkoutType, "Rest">;
 
@@ -78,6 +85,12 @@ export type Targets = {
   water: number;
   startWeight: number;
   targetWeight: number;
+  targetWeeklyGainKg?: number | undefined;
+  experienceLevel?: ExperienceLevel | undefined;
+  trainingDaysPerWeek?: number | undefined;
+  availableEquipment?: Equipment[] | undefined;
+  trainingSetupPreference?: TrainingSetupPreference | undefined;
+  onboardingCompletedAt?: string | undefined;
   exerciseSetupNotes?: Record<string, string> | undefined;
 };
 
@@ -159,10 +172,7 @@ export const DEFAULT_DATA: AppData = {
   photos: [],
   weekNotes: {},
   targets: {
-    calories: 2900,
-    protein: 130,
-    carbs: 380,
-    fat: 88,
+    ...DEFAULT_NUTRITION_TARGETS,
     water: 3,
     startWeight: 61.5,
     targetWeight: 75,

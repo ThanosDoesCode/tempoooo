@@ -1099,6 +1099,22 @@ export type Database = {
       }
       disable_challenge_push: { Args: never; Returns: undefined }
       activate_my_bulk: { Args: never; Returns: string }
+      complete_bulk_onboarding: {
+        Args: {
+          _available_equipment: string[]
+          _calories: number
+          _carbs: number
+          _current_weight_kg: number
+          _experience_level: string
+          _fat: number
+          _protein: number
+          _target_weekly_gain_kg: number
+          _target_weight_kg: number
+          _training_days_per_week: number
+          _training_setup_preference: string
+        }
+        Returns: string
+      }
       ensure_bulk_profile: { Args: { _caller: string }; Returns: string }
       finalize_challenge: {
         Args: { _c: string; _caller: string }

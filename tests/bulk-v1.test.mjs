@@ -116,6 +116,9 @@ test("Sharing is absent while personal Bulk activation guards remain", async () 
   const guard = await read("src/routes/_authenticated/bulk/route.tsx");
   const profile = await read("src/routes/_authenticated/profile.tsx");
   const migration = await read("supabase/migrations/20260905120000_public_bulk_activation.sql");
+  const onboardingMigration = await read(
+    "supabase/migrations/20260905150000_complete_bulk_onboarding.sql",
+  );
   assert.doesNotMatch(shell, /Sharing|\/bulk\/sharing|\/bulk\/invite/);
   assert.match(shell, /"\/bulk\/history", label: "History"/);
   assert.match(guard, /bulkOwnerQueryOptions/);
@@ -133,5 +136,12 @@ test("Sharing is absent while personal Bulk activation guards remain", async () 
   assert.match(
     migration,
     /GRANT EXECUTE ON FUNCTION public\.activate_my_bulk\(\) TO authenticated/,
+  );
+  assert.match(onboardingMigration, /CREATE FUNCTION public\.complete_bulk_onboarding/);
+  assert.match(onboardingMigration, /caller uuid := \(SELECT auth\.uid\(\)\)/);
+  assert.match(onboardingMigration, /SET search_path = ''/);
+  assert.match(
+    onboardingMigration,
+    /REVOKE EXECUTE ON FUNCTION public\.activate_my_bulk\(\) FROM authenticated/,
   );
 });
