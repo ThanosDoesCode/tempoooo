@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { CancelledError } from "@tanstack/react-query";
 import {
   EVIDENCE_MAX_WIDTH,
   EVIDENCE_TARGET_BYTES,
@@ -14,6 +15,10 @@ import {
   optimizeEvidenceImage,
 } from "../src/lib/challenge-evidence.ts";
 import { runEvidenceCleanupBatch } from "../supabase/functions/_shared/evidence-cleanup.ts";
+import {
+  isEvidenceRequestCancellation,
+  resolveEvidenceUrls,
+} from "../src/lib/challenge-evidence-viewer.ts";
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
@@ -207,11 +212,112 @@ test("failed storage deletion records a retry without deleting activity data", a
   assert.deepEqual(activity, { id: "activity", distance: 10, qualified: true });
 });
 
-test("expired evidence renders a stable state without requesting a signed URL", async () => {
-  const week = await read("src/routes/_authenticated/challenge/index.tsx");
-  assert.match(week, /Evidence expired after finalization/);
-  assert.match(week, /Evidence available/);
-  assert.match(week, /if \(expired\)[\s\S]*Evidence expired after finalization[\s\S]*if \(!open\)/);
+test("valid evidence resolves every signed URL for the in-app viewer", async () => {
+  const result = await resolveEvidenceUrls({
+    paths: ["challenge/member/one.webp", "challenge/member/two.webp"],
+    expired: false,
+    sign: async () => ({
+      data: [{ signedUrl: "https://storage.test/one" }, { signedUrl: "https://storage.test/two" }],
+      error: null,
+    }),
+  });
+  assert.deepEqual(result, {
+    status: "ready",
+    urls: ["https://storage.test/one", "https://storage.test/two"],
+  });
+});
+
+test("expired evidence never requests a signed URL", async () => {
+  let requests = 0;
+  const result = await resolveEvidenceUrls({
+    paths: ["challenge/member/expired.webp"],
+    expired: true,
+    sign: async () => {
+      requests += 1;
+      return { data: [], error: null };
+    },
+  });
+  assert.deepEqual(result, { status: "expired" });
+  assert.equal(requests, 0);
+});
+
+test("missing and storage-404 evidence become local unavailable states", async () => {
+  const missing = await resolveEvidenceUrls({
+    paths: ["challenge/member/missing.webp"],
+    expired: false,
+    sign: async () => ({ data: [], error: null }),
+  });
+  const notFound = await resolveEvidenceUrls({
+    paths: ["challenge/member/deleted.webp"],
+    expired: false,
+    sign: async () => ({ data: null, error: { statusCode: "404" } }),
+  });
+  assert.deepEqual(missing, { status: "unavailable", reason: "storage" });
+  assert.deepEqual(notFound, { status: "unavailable", reason: "storage" });
+});
+
+test("aborted evidence requests are recognized without suppressing unexpected failures", async () => {
+  const aborted = new DOMException("request stopped", "AbortError");
+  assert.equal(isEvidenceRequestCancellation(aborted), true);
+  const queryCancellation = new CancelledError();
+  assert.equal(isEvidenceRequestCancellation(queryCancellation), true);
+  const cancellation = await resolveEvidenceUrls({
+    paths: ["challenge/member/evidence.webp"],
+    expired: false,
+    sign: async () => {
+      throw aborted;
+    },
+  });
+  assert.deepEqual(cancellation, { status: "unavailable", reason: "cancelled" });
+
+  const cancelledQuery = await resolveEvidenceUrls({
+    paths: ["challenge/member/evidence.webp"],
+    expired: false,
+    sign: async () => {
+      throw queryCancellation;
+    },
+  });
+  assert.deepEqual(cancelledQuery, { status: "unavailable", reason: "cancelled" });
+
+  const unexpectedError = new Error("programming fault");
+  const unexpected = await resolveEvidenceUrls({
+    paths: ["challenge/member/evidence.webp"],
+    expired: false,
+    sign: async () => {
+      throw unexpectedError;
+    },
+  });
+  assert.equal(unexpected.status, "unavailable");
+  assert.equal(unexpected.reason, "unexpected");
+  assert.equal(unexpected.cause, unexpectedError);
+});
+
+test("Challenge evidence uses a local lightbox with safe close and browser Back behavior", async () => {
+  const [week, viewer] = await Promise.all([
+    read("src/routes/_authenticated/challenge/index.tsx"),
+    read("src/components/ChallengeEvidenceViewer.tsx"),
+  ]);
+  assert.match(week, /ChallengeEvidenceViewer/);
+  assert.doesNotMatch(week, /function EvidenceViewer/);
+  assert.match(viewer, /createPortal/);
+  assert.match(viewer, /role="dialog"/);
+  assert.match(viewer, /aria-modal="true"/);
+  assert.match(viewer, /object-contain/);
+  assert.match(viewer, /Evidence available/);
+  assert.match(viewer, /Evidence expired after finalization/);
+  assert.match(viewer, /Evidence unavailable/);
+  assert.match(viewer, /window\.history\.pushState/);
+  assert.match(viewer, /\.\.\.preservedState/);
+  assert.match(viewer, /window\.history\.back/);
+  assert.match(viewer, /addEventListener\("popstate"/);
+  assert.match(viewer, /onClick=\{close\}/);
+  assert.match(viewer, /document\.body\.style\.overflow = previousOverflow/);
+  assert.match(viewer, /onError=/);
+  assert.match(viewer, /reportLovableError/);
+  assert.doesNotMatch(viewer, /window\.location/);
+  assert.doesNotMatch(viewer, /target="_blank"/);
+  assert.doesNotMatch(viewer, /resetUserScopedQueries|signOut|invalidateQueries/);
+
   const server = await read("src/lib/challenge-evidence.server.ts");
   assert.match(server, /\.from\("challenge-evidence"\)[\s\S]*\.remove\(paths\)/);
   assert.doesNotMatch(server, /challenge_activities[\s\S]*\.delete\(/);

@@ -6,7 +6,6 @@ import {
   Bike,
   ChevronRight,
   Footprints,
-  Image as ImageIcon,
   Link as LinkIcon,
   MoreHorizontal,
   Plus,
@@ -47,6 +46,7 @@ import { evidenceWeekFinalized } from "@/lib/challenge-evidence";
 import { ChallengePrimer } from "@/components/challenge-rules";
 import { ChallengeInviteCard } from "@/components/ChallengeInvite";
 import { ChallengeNotifications } from "@/components/ChallengeNotifications";
+import { ChallengeEvidenceViewer } from "@/components/ChallengeEvidenceViewer";
 
 export const Route = createFileRoute("/_authenticated/challenge/")({
   head: () => ({
@@ -347,7 +347,10 @@ function ChallengeHome() {
                           </p>
                         ) : null}
                         <div className="mt-1 flex flex-wrap items-center gap-1 text-[11px]">
-                          <EvidenceViewer paths={evidencePaths} expired={evidenceExpired} />
+                          <ChallengeEvidenceViewer
+                            paths={evidencePaths}
+                            expired={evidenceExpired}
+                          />
                           {activity.external_activity_url ? (
                             <a
                               href={activity.external_activity_url}
@@ -612,97 +615,4 @@ function formatActivityDay(day: string, today: string) {
   if (difference === 0) return "Today";
   if (difference === 1) return "Yesterday";
   return format(parseISO(day), "d MMM");
-}
-
-/** Evidence screenshots are visible to both members so neither can cheat. */
-function EvidenceViewer({ paths, expired }: { paths: string[]; expired: boolean }) {
-  const [urls, setUrls] = useState<string[] | null>(null);
-  const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const show = async () => {
-    setOpen(true);
-    if (urls) return;
-    setLoading(true);
-    setError(null);
-    const { data, error: e } = await supabase.storage
-      .from("challenge-evidence")
-      .createSignedUrls(paths, 300);
-    if (e) setError(e.message);
-    else setUrls((data ?? []).map((item) => item.signedUrl).filter(Boolean) as string[]);
-    setLoading(false);
-  };
-
-  if (paths.length === 0) return null;
-
-  if (expired) {
-    return (
-      <span className="inline-flex min-h-11 items-center gap-1 rounded-lg px-2 py-2 text-muted-foreground">
-        <ImageIcon className="h-3 w-3" aria-hidden="true" /> Evidence expired after finalization
-      </span>
-    );
-  }
-
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={() => void show()}
-        aria-label={`View ${paths.length} evidence screenshot${paths.length > 1 ? "s" : ""}`}
-        className="inline-flex min-h-11 items-center gap-1 rounded-lg px-2 py-2 font-medium text-muted-foreground hover:bg-elevated"
-      >
-        <ImageIcon className="h-3 w-3" aria-hidden="true" /> Evidence available
-        {paths.length > 1 ? ` ${paths.length}` : ""}
-      </button>
-    );
-  }
-
-  return (
-    <div className="order-last mt-1 basis-full">
-      {error ? (
-        <div
-          role="alert"
-          className="flex items-center justify-between gap-2 text-[11px] text-danger"
-        >
-          <span>Could not load evidence. {error}</span>
-          <button
-            type="button"
-            onClick={() => {
-              setUrls(null);
-              void show();
-            }}
-            className="min-h-11 shrink-0 rounded-lg border border-danger/40 px-3 py-2 font-semibold"
-          >
-            Retry
-          </button>
-        </div>
-      ) : loading ? (
-        <p role="status" className="text-[11px] text-muted-foreground">
-          Loading evidence…
-        </p>
-      ) : urls ? (
-        <div className="space-y-2">
-          {urls.map((url, index) => (
-            <a key={url} href={url} target="_blank" rel="noreferrer">
-              <img
-                src={url}
-                alt={`Activity evidence screenshot ${index + 1}`}
-                className="max-h-72 w-full rounded-xl border border-border bg-elevated object-contain"
-              />
-            </a>
-          ))}
-        </div>
-      ) : (
-        <div className="h-20 animate-pulse rounded-xl bg-elevated" />
-      )}
-      <button
-        type="button"
-        onClick={() => setOpen(false)}
-        className="mt-1 min-h-11 rounded-lg px-2 text-[11px] font-medium text-muted-foreground"
-      >
-        Hide evidence
-      </button>
-    </div>
-  );
 }
