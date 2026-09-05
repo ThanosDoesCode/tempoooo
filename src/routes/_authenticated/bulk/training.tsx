@@ -3,9 +3,13 @@ import { format, parseISO } from "date-fns";
 import { useState } from "react";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { TrainingSession } from "@/components/TrainingSession";
+import { TrainingPlanOverview, TrainingPlanSetup } from "@/components/TrainingPlanSetup";
 import { iso } from "@/lib/calc";
 import { useAuth } from "@/lib/auth";
 import { useActions, useAppData, useBulkMeta } from "@/lib/store";
+import { useActiveTrainingPlan } from "@/lib/training-plans-query";
+import { DataError } from "@/components/ui-kit";
+import { userFacingError } from "@/lib/network-errors";
 
 export const Route = createFileRoute("/_authenticated/bulk/training")({
   head: () => ({
@@ -29,12 +33,17 @@ function TrainingPage() {
   const data = useAppData();
   const { user } = useAuth();
   const { bulkId, role } = useBulkMeta();
+  const usesPlanSetup = !!data?.targets.trainingSetupPreference;
+  const activePlan = useActiveTrainingPlan(usesPlanSetup ? bulkId : null);
   const { saveWorkout, saveTargets } = useActions();
   const today = iso(new Date());
   const [date, setDate] = useState(today);
   return (
     <AppShell>
-      <PageHeader title="Training" subtitle={format(parseISO(date), "EEEE, d MMMM")} />
+      <PageHeader
+        title="Training"
+        {...(!usesPlanSetup ? { subtitle: format(parseISO(date), "EEEE, d MMMM") } : {})}
+      />
       <Link
         to="/bulk/exercises"
         preload="intent"
@@ -42,19 +51,32 @@ function TrainingPage() {
       >
         Browse exercise library
       </Link>
-      <label className="mb-3 flex items-center justify-between gap-3 text-xs text-muted-foreground">
-        Training date
-        <input
-          type="date"
-          value={date}
-          max={today}
-          onChange={(event) => {
-            if (event.target.value && event.target.value <= today) setDate(event.target.value);
-          }}
-          className="min-h-11 min-w-0 rounded-xl border border-input bg-elevated px-3 text-base outline-none focus:border-ring"
+      {!usesPlanSetup ? (
+        <label className="mb-3 flex items-center justify-between gap-3 text-xs text-muted-foreground">
+          Training date
+          <input
+            type="date"
+            value={date}
+            max={today}
+            onChange={(event) => {
+              if (event.target.value && event.target.value <= today) setDate(event.target.value);
+            }}
+            className="min-h-11 min-w-0 rounded-xl border border-input bg-elevated px-3 text-base outline-none focus:border-ring"
+          />
+        </label>
+      ) : null}
+      {usesPlanSetup && activePlan.isLoading ? (
+        <div className="h-48 animate-pulse rounded-2xl bg-card" />
+      ) : usesPlanSetup && activePlan.error ? (
+        <DataError
+          message={userFacingError(activePlan.error, "load your training plan")}
+          onRetry={() => void activePlan.refetch()}
         />
-      </label>
-      {data && bulkId && user ? (
+      ) : usesPlanSetup && activePlan.data ? (
+        <TrainingPlanOverview plan={activePlan.data} />
+      ) : usesPlanSetup && data ? (
+        <TrainingPlanSetup targets={data.targets} />
+      ) : data && bulkId && user ? (
         <TrainingSession
           key={`${user.id}:${bulkId}:${date}`}
           data={data}

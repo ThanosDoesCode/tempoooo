@@ -588,6 +588,148 @@ test("Bulk exercise library is seeded once and custom exercises remain owner-onl
   );
 });
 
+test("Tempo templates are immutable and selection creates one isolated owner plan", async () => {
+  const templates = await asUser(a, () =>
+    db.query(
+      "SELECT id,experience_level,training_days_per_week FROM public.bulk_training_plan_templates ORDER BY id",
+    ),
+  );
+  assert.equal(templates.rows.length, 9);
+  for (const [level, frequencies] of [
+    ["beginner", [2, 3, 4]],
+    ["intermediate", [3, 4, 5]],
+    ["advanced", [4, 5, 6]],
+  ]) {
+    assert.deepEqual(
+      templates.rows
+        .filter((row) => row.experience_level === level)
+        .map((row) => row.training_days_per_week)
+        .sort(),
+      frequencies,
+    );
+  }
+  const invalidReferences = await db.query(`
+    SELECT count(*) AS n
+    FROM public.bulk_training_plan_template_exercises pe
+    JOIN public.bulk_exercises e ON e.id = pe.exercise_id
+    WHERE NOT e.is_system OR e.owner_id IS NOT NULL
+  `);
+  assert.equal(Number(invalidReferences.rows[0].n), 0);
+  const invalidPrescriptions = await db.query(`
+    SELECT count(*) AS n FROM public.bulk_training_plan_template_exercises
+    WHERE sets <= 0 OR rep_min <= 0 OR rep_min > rep_max
+  `);
+  assert.equal(Number(invalidPrescriptions.rows[0].n), 0);
+  const wrongDayCounts = await db.query(`
+    SELECT count(*) AS n FROM public.bulk_training_plan_templates t
+    WHERE (SELECT count(*) FROM public.bulk_training_plan_template_days d WHERE d.template_id=t.id) <> t.training_days_per_week
+  `);
+  assert.equal(Number(wrongDayCounts.rows[0].n), 0);
+  await assert.rejects(
+    asUser(a, () =>
+      db.query("UPDATE public.bulk_training_plan_templates SET name='Forged' RETURNING id"),
+    ),
+    /permission denied|row-level security/,
+  );
+
+  const selected = await asUser(d, () =>
+    db.query(
+      "SELECT public.instantiate_bulk_training_plan('template:intermediate-upper-lower-4','generated') AS id",
+    ),
+  );
+  const planId = selected.rows[0].id;
+  const repeated = await asUser(d, () =>
+    db.query(
+      "SELECT public.instantiate_bulk_training_plan('template:intermediate-upper-lower-4','generated') AS id",
+    ),
+  );
+  assert.equal(repeated.rows[0].id, planId);
+  assert.equal(
+    Number(
+      (
+        await db.query(
+          "SELECT count(*) AS n FROM public.bulk_training_plans WHERE bulk_profile_id=(SELECT id FROM public.bulk_profiles WHERE owner_id=$1) AND active",
+          [d],
+        )
+      ).rows[0].n,
+    ),
+    1,
+  );
+  await assert.rejects(
+    asUser(d, () =>
+      db.query(
+        "SELECT public.instantiate_bulk_training_plan('template:advanced-ppl-6','generated')",
+      ),
+    ),
+    /active training plan already exists/i,
+  );
+  const copied = await asUser(d, () =>
+    db.query(
+      `
+    SELECT d.day_order,e.exercise_order,e.exercise_name,e.sets,e.rep_min,e.rep_max,e.source_system_exercise_id
+    FROM public.bulk_training_plan_days d JOIN public.bulk_training_plan_exercises e ON e.plan_day_id=d.id
+    WHERE d.plan_id=$1 ORDER BY d.day_order,e.exercise_order
+  `,
+      [planId],
+    ),
+  );
+  assert.ok(copied.rows.length > 0);
+  assert.equal(
+    copied.rows.every((row) => row.source_system_exercise_id?.startsWith("system:")),
+    true,
+  );
+  const firstCopiedSetCount = copied.rows[0].sets;
+  await asService(() =>
+    db.query(`
+      UPDATE public.bulk_training_plan_template_exercises
+      SET sets = CASE WHEN sets = 10 THEN 9 ELSE sets + 1 END
+      WHERE template_day_id='template:intermediate-upper-lower-4:day:1' AND exercise_order=1
+    `),
+  );
+  assert.equal(
+    (
+      await db.query(
+        "SELECT sets FROM public.bulk_training_plan_exercises WHERE plan_day_id IN (SELECT id FROM public.bulk_training_plan_days WHERE plan_id=$1) ORDER BY exercise_order LIMIT 1",
+        [planId],
+      )
+    ).rows[0].sets,
+    firstCopiedSetCount,
+  );
+  assert.equal(
+    (
+      await asUser(a, () =>
+        db.query("SELECT id FROM public.bulk_training_plans WHERE id=$1", [planId]),
+      )
+    ).rows.length,
+    0,
+  );
+
+  const customUser = randomUUID();
+  await db.query("INSERT INTO auth.users(id) VALUES ($1)", [customUser]);
+  await db.query("INSERT INTO public.profiles(id,display_name) VALUES ($1,'Custom athlete')", [
+    customUser,
+  ]);
+  await completeBulkOnboarding(customUser, { preference: "custom" });
+  const custom = await asUser(customUser, () =>
+    db.query("SELECT public.create_empty_bulk_training_plan('My Plan') AS id"),
+  );
+  const customAgain = await asUser(customUser, () =>
+    db.query("SELECT public.create_empty_bulk_training_plan('My Plan') AS id"),
+  );
+  assert.equal(customAgain.rows[0].id, custom.rows[0].id);
+  assert.equal(
+    Number(
+      (
+        await db.query(
+          "SELECT count(*) AS n FROM public.bulk_training_plan_days WHERE plan_id=$1",
+          [custom.rows[0].id],
+        )
+      ).rows[0].n,
+    ),
+    0,
+  );
+});
+
 test("atomic challenge creation writes challenge, own membership and invitation exactly once", async () => {
   const requestId = randomUUID();
   const tokenHash = "a".repeat(64);

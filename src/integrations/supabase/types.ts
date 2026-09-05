@@ -124,6 +124,110 @@ export type Database = {
         }
         Relationships: []
       }
+      bulk_training_plan_days: {
+        Row: { day_order: number; id: string; name: string; plan_id: string }
+        Insert: { day_order: number; id?: string; name: string; plan_id: string }
+        Update: { day_order?: number; id?: string; name?: string; plan_id?: string }
+        Relationships: [{
+          foreignKeyName: "bulk_training_plan_days_plan_id_fkey"
+          columns: ["plan_id"]
+          isOneToOne: false
+          referencedRelation: "bulk_training_plans"
+          referencedColumns: ["id"]
+        }]
+      }
+      bulk_training_plan_exercises: {
+        Row: {
+          exercise_id: string | null
+          exercise_name: string
+          exercise_order: number
+          id: string
+          intended_unilateral_mode: string
+          notes: string | null
+          plan_day_id: string
+          rep_max: number
+          rep_min: number
+          sets: number
+          source_system_exercise_id: string | null
+        }
+        Insert: {
+          exercise_id?: string | null; exercise_name: string; exercise_order: number; id?: string
+          intended_unilateral_mode?: string; notes?: string | null; plan_day_id: string
+          rep_max: number; rep_min: number; sets: number; source_system_exercise_id?: string | null
+        }
+        Update: {
+          exercise_id?: string | null; exercise_name?: string; exercise_order?: number; id?: string
+          intended_unilateral_mode?: string; notes?: string | null; plan_day_id?: string
+          rep_max?: number; rep_min?: number; sets?: number; source_system_exercise_id?: string | null
+        }
+        Relationships: [
+          { foreignKeyName: "bulk_training_plan_exercises_plan_day_id_fkey"; columns: ["plan_day_id"]; isOneToOne: false; referencedRelation: "bulk_training_plan_days"; referencedColumns: ["id"] },
+          { foreignKeyName: "bulk_training_plan_exercises_exercise_id_fkey"; columns: ["exercise_id"]; isOneToOne: false; referencedRelation: "bulk_exercises"; referencedColumns: ["id"] },
+        ]
+      }
+      bulk_training_plan_template_days: {
+        Row: { day_order: number; id: string; name: string; template_id: string }
+        Insert: { day_order: number; id: string; name: string; template_id: string }
+        Update: { day_order?: number; id?: string; name?: string; template_id?: string }
+        Relationships: [{ foreignKeyName: "bulk_training_plan_template_days_template_id_fkey"; columns: ["template_id"]; isOneToOne: false; referencedRelation: "bulk_training_plan_templates"; referencedColumns: ["id"] }]
+      }
+      bulk_training_plan_template_exercises: {
+        Row: {
+          exercise_id: string; exercise_order: number; id: string; intended_unilateral_mode: string
+          notes: string | null; rep_max: number; rep_min: number; sets: number; template_day_id: string
+        }
+        Insert: {
+          exercise_id: string; exercise_order: number; id: string; intended_unilateral_mode?: string
+          notes?: string | null; rep_max: number; rep_min: number; sets: number; template_day_id: string
+        }
+        Update: {
+          exercise_id?: string; exercise_order?: number; id?: string; intended_unilateral_mode?: string
+          notes?: string | null; rep_max?: number; rep_min?: number; sets?: number; template_day_id?: string
+        }
+        Relationships: [
+          { foreignKeyName: "bulk_training_plan_template_exercises_template_day_id_fkey"; columns: ["template_day_id"]; isOneToOne: false; referencedRelation: "bulk_training_plan_template_days"; referencedColumns: ["id"] },
+          { foreignKeyName: "bulk_training_plan_template_exercises_exercise_id_fkey"; columns: ["exercise_id"]; isOneToOne: false; referencedRelation: "bulk_exercises"; referencedColumns: ["id"] },
+        ]
+      }
+      bulk_training_plan_templates: {
+        Row: {
+          active: boolean; created_at: string; description: string; experience_level: string; id: string
+          name: string; required_equipment: string[]; slug: string; split_summary: string
+          training_days_per_week: number; updated_at: string
+        }
+        Insert: {
+          active?: boolean; created_at?: string; description: string; experience_level: string; id: string
+          name: string; required_equipment?: string[]; slug: string; split_summary: string
+          training_days_per_week: number; updated_at?: string
+        }
+        Update: {
+          active?: boolean; created_at?: string; description?: string; experience_level?: string; id?: string
+          name?: string; required_equipment?: string[]; slug?: string; split_summary?: string
+          training_days_per_week?: number; updated_at?: string
+        }
+        Relationships: []
+      }
+      bulk_training_plans: {
+        Row: {
+          active: boolean; bulk_profile_id: string; created_at: string; description: string
+          experience_level: string | null; id: string; name: string; plan_type: string
+          source_template_id: string | null; training_days_per_week: number; updated_at: string
+        }
+        Insert: {
+          active?: boolean; bulk_profile_id: string; created_at?: string; description?: string
+          experience_level?: string | null; id?: string; name: string; plan_type: string
+          source_template_id?: string | null; training_days_per_week: number; updated_at?: string
+        }
+        Update: {
+          active?: boolean; bulk_profile_id?: string; created_at?: string; description?: string
+          experience_level?: string | null; id?: string; name?: string; plan_type?: string
+          source_template_id?: string | null; training_days_per_week?: number; updated_at?: string
+        }
+        Relationships: [
+          { foreignKeyName: "bulk_training_plans_bulk_profile_id_fkey"; columns: ["bulk_profile_id"]; isOneToOne: false; referencedRelation: "bulk_profiles"; referencedColumns: ["id"] },
+          { foreignKeyName: "bulk_training_plans_source_template_id_fkey"; columns: ["source_template_id"]; isOneToOne: false; referencedRelation: "bulk_training_plan_templates"; referencedColumns: ["id"] },
+        ]
+      }
       bulk_invitations: {
         Row: {
           accepted_at: string | null
@@ -1175,6 +1279,7 @@ export type Database = {
         }
         Returns: string
       }
+      create_empty_bulk_training_plan: { Args: { _name: string }; Returns: string }
       ensure_bulk_profile: { Args: { _caller: string }; Returns: string }
       finalize_challenge: {
         Args: { _c: string; _caller: string }
@@ -1185,6 +1290,10 @@ export type Database = {
         Returns: boolean
       }
       is_bulk_admin: { Args: never; Returns: boolean }
+      instantiate_bulk_training_plan: {
+        Args: { _plan_type: string; _template_id: string }
+        Returns: string
+      }
       penalty_for:
         | { Args: { _km: number; _target: number }; Returns: number }
         | {
