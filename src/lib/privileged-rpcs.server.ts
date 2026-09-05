@@ -70,14 +70,13 @@ export type AdminDiagnosticEvent = {
 };
 
 export async function adminDiagnosticsFor(caller: string) {
-  const membership = await supabaseAdmin
-    .from("bulk_members")
-    .select("id")
+  const adminRecord = await supabaseAdmin
+    .from("bulk_admins")
+    .select("user_id")
     .eq("user_id", caller)
-    .eq("role", "owner")
     .limit(1);
-  if (membership.error) throw new Error("diagnostics_authorization_failed");
-  if (!membership.data.length) throw new Error("Forbidden");
+  if (adminRecord.error) throw new Error("diagnostics_authorization_failed");
+  if (!adminRecord.data.length) throw new Error("Forbidden");
 
   const now = Date.now();
   const dayAgo = new Date(now - 24 * 60 * 60 * 1_000).toISOString();

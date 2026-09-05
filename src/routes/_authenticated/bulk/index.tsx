@@ -221,10 +221,22 @@ function TodayPage() {
                   <li key={b}>· {b}</li>
                 ))}
               </ul>
+              {plan.extras.length ? (
+                <>
+                  <p className="mt-2 text-[10px] uppercase tracking-wider text-muted-foreground">
+                    Extra
+                  </p>
+                  <ul className="mt-0.5 space-y-0.5 text-muted-foreground">
+                    {plan.extras.map((item) => (
+                      <li key={item}>· {item}</li>
+                    ))}
+                  </ul>
+                </>
+              ) : null}
               {plan.macros ? (
                 <p className="num mt-2 font-medium">
-                  Daily total: ≈ {plan.macros.calories} kcal · {plan.macros.protein} P ·{" "}
-                  {plan.macros.carbs} C · {plan.macros.fat} F
+                  Daily total: ≈ {plan.macros.calories} kcal · ~{plan.macros.protein} g protein · ~
+                  {plan.macros.carbs} g carbs · ~{plan.macros.fat} g fat
                 </p>
               ) : null}
             </div>

@@ -14,6 +14,7 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedBulkRouteRouteImport } from './routes/_authenticated/bulk/route'
 import { Route as AuthenticatedBulkAccessDeniedRouteImport } from './routes/_authenticated/bulk-access-denied'
+import { Route as AuthenticatedBulkOnboardingRouteImport } from './routes/_authenticated/bulk-onboarding'
 import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated/profile'
 import { Route as AuthenticatedBulkIndexRouteImport } from './routes/_authenticated/bulk/index'
 import { Route as AuthenticatedBulkCheckInRouteImport } from './routes/_authenticated/bulk/check-in'
@@ -52,6 +53,12 @@ const AuthenticatedBulkAccessDeniedRoute =
   AuthenticatedBulkAccessDeniedRouteImport.update({
     id: '/bulk-access-denied',
     path: '/bulk-access-denied',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedBulkOnboardingRoute =
+  AuthenticatedBulkOnboardingRouteImport.update({
+    id: '/bulk-onboarding',
+    path: '/bulk-onboarding',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedProfileRoute = AuthenticatedProfileRouteImport.update({
@@ -142,6 +149,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/bulk': typeof AuthenticatedBulkRouteRouteWithChildren
   '/bulk-access-denied': typeof AuthenticatedBulkAccessDeniedRoute
+  '/bulk-onboarding': typeof AuthenticatedBulkOnboardingRoute
   '/profile': typeof AuthenticatedProfileRoute
   '/bulk/check-in': typeof AuthenticatedBulkCheckInRoute
   '/bulk/diagnostics': typeof AuthenticatedBulkDiagnosticsRoute
@@ -161,6 +169,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/bulk-access-denied': typeof AuthenticatedBulkAccessDeniedRoute
+  '/bulk-onboarding': typeof AuthenticatedBulkOnboardingRoute
   '/profile': typeof AuthenticatedProfileRoute
   '/bulk/check-in': typeof AuthenticatedBulkCheckInRoute
   '/bulk/diagnostics': typeof AuthenticatedBulkDiagnosticsRoute
@@ -183,6 +192,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/_authenticated/bulk': typeof AuthenticatedBulkRouteRouteWithChildren
   '/_authenticated/bulk-access-denied': typeof AuthenticatedBulkAccessDeniedRoute
+  '/_authenticated/bulk-onboarding': typeof AuthenticatedBulkOnboardingRoute
   '/_authenticated/profile': typeof AuthenticatedProfileRoute
   '/_authenticated/bulk/check-in': typeof AuthenticatedBulkCheckInRoute
   '/_authenticated/bulk/diagnostics': typeof AuthenticatedBulkDiagnosticsRoute
@@ -205,6 +215,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/bulk'
     | '/bulk-access-denied'
+    | '/bulk-onboarding'
     | '/profile'
     | '/bulk/check-in'
     | '/bulk/diagnostics'
@@ -224,6 +235,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/bulk-access-denied'
+    | '/bulk-onboarding'
     | '/profile'
     | '/bulk/check-in'
     | '/bulk/diagnostics'
@@ -245,6 +257,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/_authenticated/bulk'
     | '/_authenticated/bulk-access-denied'
+    | '/_authenticated/bulk-onboarding'
     | '/_authenticated/profile'
     | '/_authenticated/bulk/check-in'
     | '/_authenticated/bulk/diagnostics'
@@ -302,6 +315,13 @@ declare module '@tanstack/react-router' {
       path: '/bulk-access-denied'
       fullPath: '/bulk-access-denied'
       preLoaderRoute: typeof AuthenticatedBulkAccessDeniedRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/bulk-onboarding': {
+      id: '/_authenticated/bulk-onboarding'
+      path: '/bulk-onboarding'
+      fullPath: '/bulk-onboarding'
+      preLoaderRoute: typeof AuthenticatedBulkOnboardingRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/profile': {
@@ -432,6 +452,7 @@ const AuthenticatedBulkRouteRouteWithChildren =
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedBulkRouteRoute: typeof AuthenticatedBulkRouteRouteWithChildren
   AuthenticatedBulkAccessDeniedRoute: typeof AuthenticatedBulkAccessDeniedRoute
+  AuthenticatedBulkOnboardingRoute: typeof AuthenticatedBulkOnboardingRoute
   AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute
   AuthenticatedChallengeHistoryRoute: typeof AuthenticatedChallengeHistoryRoute
   AuthenticatedChallengeLogRoute: typeof AuthenticatedChallengeLogRoute
@@ -445,6 +466,7 @@ interface AuthenticatedRouteRouteChildren {
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedBulkRouteRoute: AuthenticatedBulkRouteRouteWithChildren,
   AuthenticatedBulkAccessDeniedRoute: AuthenticatedBulkAccessDeniedRoute,
+  AuthenticatedBulkOnboardingRoute: AuthenticatedBulkOnboardingRoute,
   AuthenticatedProfileRoute: AuthenticatedProfileRoute,
   AuthenticatedChallengeHistoryRoute: AuthenticatedChallengeHistoryRoute,
   AuthenticatedChallengeLogRoute: AuthenticatedChallengeLogRoute,

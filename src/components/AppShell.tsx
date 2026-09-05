@@ -62,6 +62,17 @@ export function AppShell({ children }: { children: ReactNode }) {
       <PullToRefresh />
       <div className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur">
         <div className="mx-auto flex w-full max-w-lg items-center gap-2 px-4 py-2">
+          <Link
+            to="/challenge"
+            preload="intent"
+            onPointerDown={() => acknowledge("/challenge")}
+            onClick={() => acknowledge("/challenge")}
+            className={`min-h-11 rounded-lg px-3 py-2.5 text-sm font-semibold active:scale-95 ${
+              showingChallenge ? "bg-elevated text-foreground" : "text-muted-foreground"
+            }`}
+          >
+            Challenge
+          </Link>
           {hasBulk ? (
             <Link
               to="/bulk"
@@ -74,20 +85,9 @@ export function AppShell({ children }: { children: ReactNode }) {
                 showingChallenge ? "text-muted-foreground" : "bg-elevated text-foreground"
               }`}
             >
-              My Bulk
+              Bulk
             </Link>
           ) : null}
-          <Link
-            to="/challenge"
-            preload="intent"
-            onPointerDown={() => acknowledge("/challenge")}
-            onClick={() => acknowledge("/challenge")}
-            className={`min-h-11 rounded-lg px-3 py-2.5 text-sm font-semibold active:scale-95 ${
-              showingChallenge ? "bg-elevated text-foreground" : "text-muted-foreground"
-            }`}
-          >
-            Tempo
-          </Link>
           <Link
             to="/profile"
             preload="intent"

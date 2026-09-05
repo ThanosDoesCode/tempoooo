@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { LogOut, Mail, RotateCcw } from "lucide-react";
+import { Dumbbell, Lock, LogOut, Mail, RotateCcw } from "lucide-react";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { Card, Note, SectionTitle } from "@/components/ui-kit";
 import { ChallengeInviteCard } from "@/components/ChallengeInvite";
@@ -32,7 +32,7 @@ export const Route = createFileRoute("/_authenticated/profile")({
 function ProfilePage() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { data: memberships } = useMemberships();
+  const { data: memberships, isLoading: bulkAccessLoading } = useMemberships();
   const { data: challenge } = useMyChallenge();
   const { data: challengeMembers } = useChallengeMembers(challenge?.id);
   const [busy, setBusy] = useState(false);
@@ -71,18 +71,45 @@ function ProfilePage() {
         </div>
       </Card>
 
-      {ownedPlan ? (
+      {bulkAccessLoading ? (
+        <div
+          className="mt-3 h-36 animate-pulse rounded-2xl bg-card"
+          aria-label="Loading Bulk plan"
+        />
+      ) : ownedPlan ? (
         <Card className="mt-3">
-          <SectionTitle>Private Bulk</SectionTitle>
+          <SectionTitle>My Bulk Plan</SectionTitle>
           <button
             onClick={() => void navigate({ to: "/bulk" })}
             className="min-h-11 w-full rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground"
           >
-            Open my bulk plan
+            Open My Bulk
           </button>
           {error ? <p className="mt-2 text-xs text-danger">{error}</p> : null}
         </Card>
-      ) : null}
+      ) : (
+        <Card className="mt-3 border-dashed">
+          <div className="flex items-start gap-3">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-elevated text-muted-foreground">
+              <Lock className="h-4 w-4" aria-hidden="true" />
+            </span>
+            <div>
+              <SectionTitle>Get My Bulk Plan</SectionTitle>
+              <p className="text-sm leading-6 text-muted-foreground">
+                Build a personalized nutrition and training setup based on your goals, experience
+                and schedule.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => void navigate({ to: "/bulk-onboarding" })}
+            className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground active:scale-[0.98]"
+          >
+            <Dumbbell className="h-4 w-4" aria-hidden="true" /> Start My Bulk
+          </button>
+        </Card>
+      )}
 
       {canInvite ? (
         <div className="mt-3">

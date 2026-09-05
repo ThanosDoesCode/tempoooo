@@ -8,6 +8,10 @@ const repairSql = await readFile(
   new URL("../supabase/scripts/repair_bulk_nutrition_presets_20260904.sql", import.meta.url),
   "utf8",
 );
+const salmonRepairSql = await readFile(
+  new URL("../supabase/scripts/repair_bulk_salmon_preset_20260905.sql", import.meta.url),
+  "utf8",
+);
 
 const plan = (id) => {
   const value = mealPlan(id);
@@ -72,16 +76,22 @@ test("Bulk presets use the corrected canonical daily base, quantities and full-d
   ]);
 
   assert.deepEqual(plan("salmon").macros, {
-    calories: 2830,
-    protein: 118,
-    carbs: 380,
-    fat: 89,
+    calories: 2850,
+    protein: 120,
+    carbs: 369,
+    fat: 96,
   });
+  assert.equal(plan("salmon").name, "SALMON DAY");
   assert.deepEqual(plan("salmon").meals, [
     "Salmon + rice ×2",
-    "125 g salmon each",
-    "150 g dry Ben’s Original rice each",
+    "125 g raw salmon each",
+    "125 g dry Ben’s Original rice each",
   ]);
+  assert.deepEqual(plan("salmon").extras, ["Nature Valley Oats & Honey 42 g ×1"]);
+  assert.equal(plan("salmon").mealsPerDay, 2);
+  assert.match(plan("salmon").batchDescription.join(" | "), /250 g raw salmon/);
+  assert.match(plan("salmon").batchDescription.join(" | "), /250 g dry Ben’s Original rice/);
+  assert.doesNotMatch(JSON.stringify(plan("salmon")), /150 g dry|300 g dry/i);
 
   for (const preset of MEAL_PLANS.filter(({ id }) => id !== "custom")) {
     assert.equal(preset.mealsPerDay, 2);
@@ -100,10 +110,26 @@ test("Bulk History treats saved preset macros as authoritative full-day totals",
   for (const key of ["calories", "protein", "carbs", "fat"]) {
     assert.match(history, new RegExp(`day\\?\\.${key}`));
   }
+  assert.match(history, /day\?\.mealSnapshot \?\? configuredPlan/);
+  assert.match(history, /nutrition\.extras/);
+});
+
+test("Today, logging and export consume the canonical Salmon snapshot", async () => {
+  const [today, progress] = await Promise.all([
+    readFile(new URL("../src/routes/_authenticated/bulk/index.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/routes/_authenticated/bulk/progress.tsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(today, /mealPlan\(id\)/);
+  assert.match(today, /mealPlanSnapshot\(plan\)/);
+  assert.match(today, /mealSnapshot/);
+  assert.match(today, /plan\.extras/);
+  assert.match(progress, /JSON\.stringify\(data\)/);
+  assert.doesNotMatch(today + progress, /150 g dry Ben|300 g dry Ben|Nature Valley Oats/);
 });
 
 test("the optional repair changes only positively identified untouched preset nutrition", async () => {
   assert.doesNotMatch(repairSql, /DELETE\s+FROM|bulk_photos|bulk_workouts|bulk_week_notes/i);
+  assert.doesNotMatch(salmonRepairSql, /DELETE\s+FROM|bulk_photos|bulk_workouts|bulk_week_notes/i);
   const db = new PGlite();
   try {
     await db.exec(`
@@ -225,6 +251,51 @@ test("the optional repair changes only positively identified untouched preset nu
           },
         },
       },
+      {
+        id: "00000000-0000-4000-8000-000000000108",
+        day: "2026-01-08",
+        payload: {
+          date: "2026-01-08",
+          mealPlan: "salmon",
+          calories: 2830,
+          protein: 118,
+          carbs: 380,
+          fat: 89,
+          note: "Manual salmon recipe",
+          mealSnapshot: {
+            name: "My salmon variation",
+            base: [],
+            meals: ["Manually entered salmon plate"],
+            macros: { calories: 2830, protein: 118, carbs: 380, fat: 89 },
+          },
+        },
+      },
+      {
+        id: "00000000-0000-4000-8000-000000000109",
+        day: "2026-01-09",
+        payload: {
+          date: "2026-01-09",
+          mealPlan: "custom",
+          calories: 2830,
+          protein: 118,
+          carbs: 380,
+          fat: 89,
+          note: "Custom values happen to match",
+        },
+      },
+      {
+        id: "00000000-0000-4000-8000-000000000110",
+        day: "2026-01-10",
+        payload: {
+          date: "2026-01-10",
+          mealPlan: "salmon",
+          calories: 2830,
+          protein: 118,
+          carbs: 379,
+          fat: 89,
+          note: "Edited salmon totals",
+        },
+      },
     ];
     for (const row of rows) {
       await db.query(
@@ -241,6 +312,7 @@ test("the optional repair changes only positively identified untouched preset nu
       )
     ).rows;
     await db.exec(repairSql);
+    await db.exec(salmonRepairSql);
     const repaired = (
       await db.query(
         "SELECT id,bulk_profile_id,day,payload,created_at,updated_at FROM public.bulk_days ORDER BY day",
@@ -257,15 +329,16 @@ test("the optional repair changes only positively identified untouched preset nu
         [2900, 141, 375, 87],
         [2800, 123, 362, 81],
         [2835, 135, 343, 95],
-        [2830, 118, 380, 89],
+        [2850, 120, 369, 96],
       ],
     );
     assert.equal(byDay("2026-01-01").payload.note, "Keep this note");
     assert.equal(byDay("2026-01-01").payload.weight, 61.5);
     assert.equal("mealSnapshot" in byDay("2026-01-01").payload, false);
     assert.deepEqual(byDay("2026-01-02").payload.mealSnapshot, mealPlanSnapshot(plan("lentil")));
+    assert.deepEqual(byDay("2026-01-04").payload.mealSnapshot, mealPlanSnapshot(plan("salmon")));
 
-    for (const index of [4, 5, 6]) {
+    for (const index of [4, 5, 6, 7, 8, 9]) {
       assert.deepEqual(repaired[index].payload, untouchedBefore[index].payload);
     }
     for (let index = 0; index < repaired.length; index += 1) {
@@ -277,6 +350,7 @@ test("the optional repair changes only positively identified untouched preset nu
     }
 
     await db.exec(repairSql);
+    await db.exec(salmonRepairSql);
     assert.deepEqual(
       (
         await db.query(

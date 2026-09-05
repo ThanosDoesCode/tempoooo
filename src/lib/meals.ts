@@ -10,6 +10,7 @@ export type MealPlan = {
   mainMealDescription: string;
   batchDescription: string[];
   perMealQuantities: string[];
+  extras: string[];
   mealsPerDay: number;
   meals: string[];
   macros: MacroTotals | null;
@@ -40,11 +41,14 @@ export const DAILY_BASE = {
   macros: MacroTotals;
 };
 
-type PresetDefinition = Omit<MealPlan, "base" | "meals">;
+type PresetDefinition = Omit<MealPlan, "base" | "meals" | "extras"> & {
+  extras?: string[];
+};
 
 function preset(definition: PresetDefinition): MealPlan {
   return {
     ...definition,
+    extras: definition.extras ?? [],
     base: DAILY_BASE.meals.map((meal) => meal.name),
     meals: [
       `${definition.mainMealDescription} ×${definition.mealsPerDay}`,
@@ -111,18 +115,19 @@ export const MEAL_PLANS: MealPlan[] = [
   }),
   preset({
     id: "salmon",
-    name: "Salmon day",
+    name: "SALMON DAY",
     short: "Salmon",
     mainMealDescription: "Salmon + rice",
     batchDescription: [
       "250 g raw salmon",
-      "300 g dry Ben’s Original rice",
+      "250 g dry Ben’s Original rice",
       "No mayo",
       "2 main meals over 1 day",
     ],
-    perMealQuantities: ["125 g salmon each", "150 g dry Ben’s Original rice each"],
+    perMealQuantities: ["125 g raw salmon each", "125 g dry Ben’s Original rice each"],
+    extras: ["Nature Valley Oats & Honey 42 g ×1"],
     mealsPerDay: 2,
-    macros: { calories: 2830, protein: 118, carbs: 380, fat: 89 },
+    macros: { calories: 2850, protein: 120, carbs: 369, fat: 96 },
   }),
   {
     id: "custom",
@@ -132,6 +137,7 @@ export const MEAL_PLANS: MealPlan[] = [
     mainMealDescription: "Manual nutrition",
     batchDescription: [],
     perMealQuantities: [],
+    extras: [],
     mealsPerDay: 0,
     meals: ["Log calories and macros manually"],
     macros: null,
@@ -146,6 +152,7 @@ export function mealPlanSnapshot(plan: MealPlan): MealSnapshot {
     name: plan.name,
     base: [...plan.base],
     meals: [...plan.meals],
+    ...(plan.extras.length ? { extras: [...plan.extras] } : {}),
     macros: plan.macros ? { ...plan.macros } : null,
   };
 }

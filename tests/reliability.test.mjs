@@ -74,6 +74,7 @@ test("account changes clear private query data without removing active queries",
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   client.setQueryData(["authenticated-user"], { id: "owner-a" });
   client.setQueryData(["bulk-memberships"], [{ bulk_profile_id: "private-a" }]);
+  client.setQueryData(["bulk-admin"], true);
   client.setQueryData(["challenge-activities", "challenge-a"], [{ id: "activity-a" }]);
   client.setQueryData(["public-unrelated"], "keep");
   const observer = new QueryObserver(client, {
@@ -87,6 +88,7 @@ test("account changes clear private query data without removing active queries",
 
   assert.equal(client.getQueryData(["authenticated-user"]), undefined);
   assert.deepEqual(client.getQueryData(["bulk-memberships"]), [{ bulk_profile_id: "private-b" }]);
+  assert.equal(client.getQueryData(["bulk-admin"]), undefined);
   assert.equal(client.getQueryData(["challenge-activities", "challenge-a"]), undefined);
   assert.equal(client.getQueryData(["public-unrelated"]), "keep");
   unsubscribe();
@@ -135,21 +137,25 @@ test("crash recovery navigates to Challenge, clears the boundary and never reloa
   assert.doesNotMatch(boundary, /window\.location\.reload|<Link/);
 });
 
-test("Bulk owner revocation still clears local data and redirects", async () => {
+test("Bulk activation revocation still clears local data and redirects", async () => {
   const bulk = await read("src/routes/_authenticated/bulk/route.tsx");
   assert.match(bulk, /memberships\.length === 0[\s\S]*clearBulk\(\)/);
-  assert.match(bulk, /navigate\(\{ to: "\/bulk-access-denied", replace: true \}\)/);
+  assert.match(bulk, /navigate\(\{ to: "\/bulk-onboarding", replace: true \}\)/);
 });
 
 test("admin diagnostics are server-authorized and return no private notification payload", async () => {
-  const [functions, server, route, migration] = await Promise.all([
-    read("src/lib/privileged-rpcs.functions.ts"),
-    read("src/lib/privileged-rpcs.server.ts"),
-    read("src/routes/_authenticated/bulk/diagnostics.tsx"),
-    read("supabase/migrations/20260831120000_challenge_push_notifications.sql"),
-  ]);
+  const [functions, server, route, pushMigration, bulkMigration, access, progress] =
+    await Promise.all([
+      read("src/lib/privileged-rpcs.functions.ts"),
+      read("src/lib/privileged-rpcs.server.ts"),
+      read("src/routes/_authenticated/bulk/diagnostics.tsx"),
+      read("supabase/migrations/20260831120000_challenge_push_notifications.sql"),
+      read("supabase/migrations/20260905120000_public_bulk_activation.sql"),
+      read("src/lib/bulk-access.ts"),
+      read("src/routes/_authenticated/bulk/progress.tsx"),
+    ]);
   assert.match(functions, /getAdminDiagnostics[\s\S]*requireSupabaseAuth/);
-  assert.match(server, /\.eq\("user_id", caller\)[\s\S]*\.eq\("role", "owner"\)/);
+  assert.match(server, /\.from\("bulk_admins"\)[\s\S]*\.eq\("user_id", caller\)/);
   assert.match(
     server,
     /id,kind,status,attempts,last_error,created_at,next_attempt_at,lease_until,finished_at/,
@@ -159,8 +165,16 @@ test("admin diagnostics are server-authorized and return no private notification
     /facts|actor_id|subscription_ids/,
   );
   assert.match(route, /Private operational status/);
+  assert.match(route, /bulkAdminQueryOptions/);
+  assert.match(access, /supabase\.rpc\("is_bulk_admin"\)/);
+  assert.match(progress, /\{isAdmin \? \([\s\S]*Production diagnostics/);
   assert.match(
-    migration,
+    bulkMigration,
+    /INSERT INTO public\.bulk_admins\(user_id\)[\s\S]*FROM public\.bulk_members[\s\S]*WHERE role = 'owner'/,
+  );
+  assert.match(bulkMigration, /REVOKE ALL ON public\.bulk_admins FROM PUBLIC, anon, authenticated/);
+  assert.match(
+    pushMigration,
     /REVOKE ALL ON public\.challenge_notification_events FROM PUBLIC, anon, authenticated/,
   );
 });

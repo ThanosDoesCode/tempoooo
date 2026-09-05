@@ -3,6 +3,7 @@ import { isCancelledError, type Query, type QueryClient } from "@tanstack/react-
 const USER_SCOPED_QUERY_ROOTS = new Set([
   "authenticated-user",
   "bulk-memberships",
+  "bulk-admin",
   "admin-diagnostics",
   "challenge",
   "challenge-members",

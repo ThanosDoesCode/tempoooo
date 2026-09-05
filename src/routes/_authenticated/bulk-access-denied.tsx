@@ -9,7 +9,7 @@ export const Route = createFileRoute("/_authenticated/bulk-access-denied")({
       { title: "Tempo" },
       {
         name: "description",
-        content: "Bulk is a private Tempo administration area.",
+        content: "Activate your optional Tempo Bulk plan.",
       },
     ],
   }),
@@ -25,14 +25,14 @@ function BulkAccessDeniedPage() {
         </span>
         <h1 className="mt-4 text-xl font-semibold">Bulk access required</h1>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">
-          Bulk is private and only available to authorized administrators. Your Tempo Challenge
-          access is unchanged.
+          Bulk is optional. Activate your personal plan from Profile before opening the Bulk
+          dashboard. Your Tempo Challenge access is unchanged.
         </p>
         <Link
-          to="/challenge"
+          to="/bulk-onboarding"
           className="mt-5 inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground active:scale-[0.98]"
         >
-          Return to Challenge
+          Start My Bulk
         </Link>
       </Card>
     </AppShell>

@@ -18,7 +18,7 @@ import { QueryCancellationRecovery } from "@/components/QueryCancellationRecover
 export const Route = createFileRoute("/_authenticated/bulk")({
   beforeLoad: async ({ context }) => {
     const owners = await context.queryClient.ensureQueryData(bulkOwnerQueryOptions());
-    if (!owners.length) throw redirect({ to: "/bulk-access-denied", replace: true });
+    if (!owners.length) throw redirect({ to: "/bulk-onboarding", replace: true });
     await prefetchBulk(owners[0]!.bulk_profile_id);
   },
   component: BulkLayout,
@@ -61,7 +61,7 @@ function BulkLayout() {
     if (!memberships) return;
     if (memberships.length === 0) {
       clearBulk();
-      void navigate({ to: "/bulk-access-denied", replace: true });
+      void navigate({ to: "/bulk-onboarding", replace: true });
       return;
     }
     const preferred = memberships[0]!;

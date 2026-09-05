@@ -1,13 +1,18 @@
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { format, formatDistanceToNowStrict } from "date-fns";
 import { RefreshCw } from "lucide-react";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { Card, DataError, PendingLabel, SectionTitle, Stat } from "@/components/ui-kit";
 import { getAdminDiagnostics } from "@/lib/privileged-rpcs.functions";
 import { userFacingError } from "@/lib/network-errors";
+import { bulkAdminQueryOptions } from "@/lib/bulk-access";
 
 export const Route = createFileRoute("/_authenticated/bulk/diagnostics")({
+  beforeLoad: async ({ context }) => {
+    const isAdmin = await context.queryClient.ensureQueryData(bulkAdminQueryOptions());
+    if (!isAdmin) throw redirect({ to: "/bulk", replace: true });
+  },
   head: () => ({ meta: [{ title: "Tempo" }] }),
   component: DiagnosticsPage,
 });

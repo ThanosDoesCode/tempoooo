@@ -7,6 +7,7 @@ export type MealSnapshot = {
   name: string;
   base: string[];
   meals: string[];
+  extras?: string[] | undefined;
   macros: { calories: number; protein: number; carbs: number; fat: number } | null;
 };
 

@@ -34,6 +34,24 @@ export const bulkOwnerQueryOptions = () =>
     retryDelay: readRetryDelay,
   });
 
+export const bulkAdminQueryOptions = () =>
+  queryOptions({
+    queryKey: ["bulk-admin"],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("is_bulk_admin");
+      if (error) throw error;
+      return data === true;
+    },
+    staleTime: 5 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+    retry: shouldRetryRead,
+    retryDelay: readRetryDelay,
+  });
+
 export function useMemberships() {
   return useQuery(bulkOwnerQueryOptions());
+}
+
+export function useBulkAdmin() {
+  return useQuery(bulkAdminQueryOptions());
 }

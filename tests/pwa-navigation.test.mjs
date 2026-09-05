@@ -24,7 +24,7 @@ test("refresh revalidates data without a destructive browser reload", async () =
   assert.doesNotMatch(await read("src/routes/index.tsx"), /location\.reload/);
 });
 
-test("Tempo manifest and navigation expose Challenge by default and owner-only Bulk History", async () => {
+test("Tempo navigation exposes optional Bulk only after persisted activation", async () => {
   const manifest = JSON.parse(await read("public/manifest.webmanifest"));
   assert.equal(manifest.name, "Tempo");
   assert.equal(manifest.short_name, "Tempo");
@@ -48,6 +48,9 @@ test("Tempo manifest and navigation expose Challenge by default and owner-only B
   const shell = await read("src/components/AppShell.tsx");
   assert.match(shell, /"\/bulk\/history", label: "History"/);
   assert.match(shell, /isBulk && hasBulk \? BULK_NAV : CHALLENGE_NAV/);
+  assert.match(shell, /\{hasBulk \? \([\s\S]*?>\s*Bulk\s*<\/Link>/);
+  assert.match(shell, />\s*Challenge\s*<\/Link>/);
+  assert.doesNotMatch(shell, /disabled[\s\S]{0,120}>\s*Bulk\s*</);
   assert.match(shell, /onPointerDown=\{\(\) => acknowledge/);
   assert.match(shell, /router\.status === "pending"/);
   assert.doesNotMatch(shell, /Sharing|Shared Bulk|\/bulk\/access/);
@@ -57,10 +60,14 @@ test("Tempo manifest and navigation expose Challenge by default and owner-only B
   assert.match(guard, /prefetchBulk/);
   assert.match(guard, /memberships\.length === 0/);
   assert.match(guard, /clearBulk\(\)/);
-  assert.match(guard, /redirect\(\{ to: "\/bulk-access-denied", replace: true \}\)/);
+  assert.match(guard, /redirect\(\{ to: "\/bulk-onboarding", replace: true \}\)/);
+  const onboarding = await read("src/routes/_authenticated/bulk-onboarding.tsx");
+  assert.match(onboarding, /supabase\.rpc\("activate_my_bulk"\)/);
+  assert.match(onboarding, /Activate My Bulk/);
+  assert.match(onboarding, /bulkOwnerQueryOptions/);
   const denied = await read("src/routes/_authenticated/bulk-access-denied.tsx");
   assert.match(denied, /Bulk access required/);
-  assert.match(denied, /only available to authorized administrators/);
+  assert.match(denied, /Bulk is optional/);
 });
 
 test("authenticated routes keep the document title fixed to Tempo", async () => {

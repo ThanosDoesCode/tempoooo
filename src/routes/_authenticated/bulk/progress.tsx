@@ -38,6 +38,7 @@ import {
 import { useActions, useAppData, useBulkMeta } from "@/lib/store";
 import { optimizeBulkPhoto } from "@/lib/challenge-evidence";
 import { ALL_EXERCISES, exerciseLabel, type AppData, type PhotoSet } from "@/lib/types";
+import { useBulkAdmin } from "@/lib/bulk-access";
 
 export const Route = createFileRoute("/_authenticated/bulk/progress")({
   head: () => ({
@@ -61,6 +62,7 @@ const MONTHS = Array.from({ length: 13 }, (_, i) => addMonths(new Date(2026, 8, 
 
 function ProgressPage() {
   const data = useAppData();
+  const { data: isAdmin } = useBulkAdmin();
   const [monthIdx, setMonthIdx] = useState(() => {
     const now = new Date();
     const idx = MONTHS.findIndex((m) => format(m, "yyyy-MM") === format(now, "yyyy-MM"));
@@ -361,19 +363,21 @@ function ProgressPage() {
 
         <TrainingSummary data={data} />
         <PhotosSection data={data} />
-        <Card>
-          <SectionTitle>Operations</SectionTitle>
-          <p className="text-xs text-muted-foreground">
-            Review push delivery failures and retry health without exposing challenge data.
-          </p>
-          <Link
-            to="/bulk/diagnostics"
-            preload="intent"
-            className="mt-3 flex min-h-11 w-full items-center justify-center rounded-xl border border-border bg-elevated px-3 py-2 text-sm font-medium text-foreground active:scale-[0.98]"
-          >
-            Production diagnostics
-          </Link>
-        </Card>
+        {isAdmin ? (
+          <Card>
+            <SectionTitle>Operations</SectionTitle>
+            <p className="text-xs text-muted-foreground">
+              Review push delivery failures and retry health without exposing challenge data.
+            </p>
+            <Link
+              to="/bulk/diagnostics"
+              preload="intent"
+              className="mt-3 flex min-h-11 w-full items-center justify-center rounded-xl border border-border bg-elevated px-3 py-2 text-sm font-medium text-foreground active:scale-[0.98]"
+            >
+              Production diagnostics
+            </Link>
+          </Card>
+        ) : null}
       </div>
     </AppShell>
   );

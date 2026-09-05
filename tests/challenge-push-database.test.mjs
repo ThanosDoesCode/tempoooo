@@ -179,7 +179,7 @@ test("RLS permits A and B's own activities, rejects a third party, and isolates 
     1,
   );
 });
-test("Bulk data is owner-only and normal users cannot bootstrap owner access", async () => {
+test("Bulk data stays owner-only while users can atomically activate one personal plan", async () => {
   const bulk = randomUUID();
   await db.query("INSERT INTO public.bulk_profiles(id,owner_id) VALUES ($1,$2)", [bulk, a]);
   await db.query(
@@ -212,6 +212,15 @@ test("Bulk data is owner-only and normal users cannot bootstrap owner access", a
     ),
   );
   assert.equal(ownerWrite.rows[0].payload.calories, 3000);
+  assert.equal(
+    (await asUser(a, () => db.query("SELECT public.activate_my_bulk() AS id"))).rows[0].id,
+    bulk,
+  );
+  assert.equal(
+    (await db.query("SELECT payload FROM public.bulk_targets WHERE bulk_profile_id=$1", [bulk]))
+      .rows[0].payload.calories,
+    3000,
+  );
 
   for (const user of [b, c, d]) {
     assert.equal(
@@ -256,6 +265,69 @@ test("Bulk data is owner-only and normal users cannot bootstrap owner access", a
       ),
     ),
     /row-level security|permission denied/,
+  );
+
+  await db.query("SELECT set_config('request.jwt.claim.sub', '', false)");
+  await db.exec("SET ROLE authenticated");
+  try {
+    await assert.rejects(db.query("SELECT public.activate_my_bulk()"), /Not authenticated/);
+  } finally {
+    await db.exec("RESET ROLE");
+  }
+
+  const firstActivation = await asUser(d, () => db.query("SELECT public.activate_my_bulk() AS id"));
+  const secondActivation = await asUser(d, () =>
+    db.query("SELECT public.activate_my_bulk() AS id"),
+  );
+  const personalBulk = firstActivation.rows[0].id;
+  assert.equal(secondActivation.rows[0].id, personalBulk);
+  assert.equal(
+    (await db.query("SELECT count(*) AS n FROM public.bulk_profiles WHERE owner_id=$1", [d]))
+      .rows[0].n,
+    1,
+  );
+  assert.equal(
+    (
+      await asUser(d, () =>
+        db.query("SELECT payload FROM public.bulk_targets WHERE bulk_profile_id=$1", [
+          personalBulk,
+        ]),
+      )
+    ).rows.length,
+    1,
+  );
+  assert.equal(
+    (
+      await asUser(d, () =>
+        db.query(
+          "UPDATE public.bulk_targets SET payload=$2::jsonb WHERE bulk_profile_id=$1 RETURNING payload",
+          [personalBulk, JSON.stringify({ calories: 2800 })],
+        ),
+      )
+    ).rows[0].payload.calories,
+    2800,
+  );
+  assert.equal(
+    (
+      await asUser(d, () =>
+        db.query("SELECT payload FROM public.bulk_targets WHERE bulk_profile_id=$1", [bulk]),
+      )
+    ).rows.length,
+    0,
+  );
+
+  await db.query("INSERT INTO public.bulk_admins(user_id) VALUES ($1)", [a]);
+  assert.equal(
+    (await asUser(a, () => db.query("SELECT public.is_bulk_admin() AS ok"))).rows[0].ok,
+    true,
+  );
+  assert.equal(
+    (await asUser(d, () => db.query("SELECT public.is_bulk_admin() AS ok"))).rows[0].ok,
+    false,
+  );
+  await assert.rejects(
+    asUser(d, () => db.query("SELECT * FROM public.bulk_admins")),
+    /permission denied/,
   );
 });
 

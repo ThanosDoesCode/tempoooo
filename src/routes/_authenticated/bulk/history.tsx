@@ -227,11 +227,13 @@ function BulkHistoryPage() {
                     Saved plan snapshot for this date.
                   </p>
                 ) : null}
-                {[...nutrition.base, ...nutrition.meals].length ? (
+                {[...nutrition.base, ...nutrition.meals, ...(nutrition.extras ?? [])].length ? (
                   <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
-                    {[...nutrition.base, ...nutrition.meals].map((item) => (
-                      <li key={item}>· {item}</li>
-                    ))}
+                    {[...nutrition.base, ...nutrition.meals, ...(nutrition.extras ?? [])].map(
+                      (item) => (
+                        <li key={item}>· {item}</li>
+                      ),
+                    )}
                   </ul>
                 ) : null}
               </div>

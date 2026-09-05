@@ -42,18 +42,20 @@ test("Google login uses the existing authorized wrapper and returns to Challenge
   assert.match(oauth, /await supabase\.auth\.setSession\(result\.tokens\)/);
 });
 
-test("authentication does not alter owner-only Bulk authorization", async () => {
-  const [auth, access, guard] = await Promise.all([
+test("authentication does not implicitly activate optional Bulk", async () => {
+  const [auth, access, guard, onboarding] = await Promise.all([
     read("src/routes/auth.tsx"),
     read("src/lib/bulk-access.ts"),
     read("src/routes/_authenticated/bulk/route.tsx"),
+    read("src/routes/_authenticated/bulk-onboarding.tsx"),
   ]);
 
   assert.doesNotMatch(auth, /bulk_members|bulk_profile_id|role.*owner/);
   assert.match(access, /\.from\("bulk_members"\)/);
   assert.match(access, /\.filter\(\(r\) => r\.role === "owner"\)/);
   assert.match(guard, /bulkOwnerQueryOptions\(\)/);
-  assert.match(guard, /bulk-access-denied/);
+  assert.match(guard, /bulk-onboarding/);
+  assert.match(onboarding, /activate_my_bulk/);
 });
 
 test("auth controls expose mobile touch targets and public Challenge copy", async () => {

@@ -111,11 +111,27 @@ test("exercise progress history uses labeled, readable summaries", async () => {
   assert.match(source, /const history = exerciseHistory[\s\S]*?<ExerciseGraph history=\{history\}/);
 });
 
-test("Sharing is absent while owner-only Bulk guards remain", async () => {
+test("Sharing is absent while personal Bulk activation guards remain", async () => {
   const shell = await read("src/components/AppShell.tsx");
   const guard = await read("src/routes/_authenticated/bulk/route.tsx");
+  const profile = await read("src/routes/_authenticated/profile.tsx");
+  const migration = await read("supabase/migrations/20260905120000_public_bulk_activation.sql");
   assert.doesNotMatch(shell, /Sharing|\/bulk\/sharing|\/bulk\/invite/);
   assert.match(shell, /"\/bulk\/history", label: "History"/);
   assert.match(guard, /bulkOwnerQueryOptions/);
-  assert.match(guard, /bulk-access-denied/);
+  assert.match(guard, /bulk-onboarding/);
+  assert.match(profile, /Get My Bulk Plan/);
+  assert.match(profile, /Start My Bulk/);
+  assert.match(profile, /My Bulk Plan/);
+  assert.match(profile, /Open My Bulk/);
+  assert.match(profile, /bulkAccessLoading/);
+  assert.match(profile, /Loading Bulk plan/);
+  assert.match(migration, /CREATE FUNCTION public\.activate_my_bulk\(\)/);
+  assert.match(migration, /caller uuid := \(SELECT auth\.uid\(\)\)/);
+  assert.match(migration, /ON CONFLICT \(owner_id\) DO UPDATE/);
+  assert.match(migration, /REVOKE ALL ON FUNCTION public\.activate_my_bulk\(\) FROM PUBLIC, anon/);
+  assert.match(
+    migration,
+    /GRANT EXECUTE ON FUNCTION public\.activate_my_bulk\(\) TO authenticated/,
+  );
 });
