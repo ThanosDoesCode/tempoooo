@@ -83,7 +83,10 @@ export function PlanExercisePicker({
         equipment: [customEquipment],
         supportsUnilateral: customUnilateral,
       });
-      await queryClient.invalidateQueries({ queryKey: ["bulk-exercise-library"] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["bulk-exercise-library"] }),
+        queryClient.invalidateQueries({ queryKey: ["bulk-muscle-coverage"] }),
+      ]);
       select(exercise);
       setCustomName("");
     } catch (cause) {

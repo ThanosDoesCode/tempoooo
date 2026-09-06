@@ -61,7 +61,10 @@ function ExerciseLibraryPage() {
   const [formError, setFormError] = useState<string | null>(null);
 
   const refreshLibrary = () =>
-    queryClient.invalidateQueries({ queryKey: ["bulk-exercise-library"] });
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["bulk-exercise-library"] }),
+      queryClient.invalidateQueries({ queryKey: ["bulk-muscle-coverage"] }),
+    ]);
 
   const create = async () => {
     if (saving) return;

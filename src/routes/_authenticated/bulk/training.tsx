@@ -18,6 +18,8 @@ import {
 } from "@/lib/bulk-training-sessions";
 import { Button } from "@/components/ui/button";
 import { useBulkProgressionTargets } from "@/lib/bulk-progression-query";
+import { useBulkMuscleCoverage } from "@/lib/bulk-muscle-coverage-query";
+import { BulkMuscleCoverage } from "@/components/BulkMuscleCoverage";
 
 export const Route = createFileRoute("/_authenticated/bulk/training")({
   head: () => ({
@@ -71,6 +73,7 @@ function TrainingPage() {
     progressionInputs,
     activePlan.data?.updatedAt ?? "none",
   );
+  const coverage = useBulkMuscleCoverage(usesPlanSetup ? (activePlan.data ?? null) : null);
 
   async function startWorkout(planDayId: string) {
     setStartingDayId(planDayId);
@@ -143,19 +146,32 @@ function TrainingPage() {
             onCancel={() => setEditingPlan(false)}
             onSaved={async () => {
               await activePlan.refetch();
-              await queryClient.invalidateQueries({ queryKey: ["bulk-progression"] });
+              await Promise.all([
+                queryClient.invalidateQueries({ queryKey: ["bulk-progression"] }),
+                queryClient.invalidateQueries({ queryKey: ["bulk-muscle-coverage"] }),
+              ]);
               setEditingPlan(false);
             }}
           />
         ) : (
-          <TrainingPlanOverview
-            plan={activePlan.data}
-            onEdit={() => setEditingPlan(true)}
-            onStart={(dayId) => void startWorkout(dayId)}
-            startingDayId={startingDayId}
-            workoutActive={!!activeSession.data}
-            progression={progression.data ?? {}}
-          />
+          <>
+            <TrainingPlanOverview
+              plan={activePlan.data}
+              onEdit={() => setEditingPlan(true)}
+              onStart={(dayId) => void startWorkout(dayId)}
+              startingDayId={startingDayId}
+              workoutActive={!!activeSession.data}
+              progression={progression.data ?? {}}
+            />
+            <div className="mt-3">
+              <BulkMuscleCoverage
+                result={coverage.data}
+                loading={coverage.isLoading}
+                error={coverage.error}
+                onRetry={() => void coverage.refetch()}
+              />
+            </div>
+          </>
         )
       ) : usesPlanSetup && data ? (
         <TrainingPlanSetup targets={data.targets} />

@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { readFile, readdir } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
+import { calculateMuscleCoverage } from "../src/lib/bulk-muscle-coverage.ts";
+import { MUSCLE_GROUPS } from "../src/lib/exercise-library.ts";
 
 const db = new PGlite();
 const root = new URL("../supabase/migrations/", import.meta.url);
@@ -846,4 +848,72 @@ test("calorie recommendation application is bounded, idempotent and calorie-only
     ),
     next,
   );
+});
+
+test("all Tempo templates use valid metadata and retain whole-body coverage", async () => {
+  const templates = (
+    await db.query(
+      "SELECT id,experience_level FROM public.bulk_training_plan_templates WHERE active ORDER BY id",
+    )
+  ).rows;
+  const days = (
+    await db.query("SELECT id,template_id FROM public.bulk_training_plan_template_days")
+  ).rows;
+  const planned = (
+    await db.query(
+      "SELECT template_day_id,exercise_id,sets,intended_unilateral_mode FROM public.bulk_training_plan_template_exercises",
+    )
+  ).rows;
+  const metadata = (
+    await db.query(
+      "SELECT id,primary_muscle,secondary_muscles,active FROM public.bulk_exercises WHERE is_system AND active",
+    )
+  ).rows;
+  assert.equal(templates.length, 9);
+  const valid = new Set(MUSCLE_GROUPS);
+  for (const exercise of metadata) {
+    assert.equal(valid.has(exercise.primary_muscle), true, `${exercise.id} primary muscle`);
+    assert.equal(
+      new Set(exercise.secondary_muscles).size,
+      exercise.secondary_muscles.length,
+      `${exercise.id} duplicate secondary muscle`,
+    );
+    assert.equal(
+      exercise.secondary_muscles.includes(exercise.primary_muscle),
+      false,
+      `${exercise.id} duplicates its primary muscle`,
+    );
+    for (const muscle of exercise.secondary_muscles)
+      assert.equal(valid.has(muscle), true, `${exercise.id} secondary muscle`);
+  }
+  for (const template of templates) {
+    const templateDays = days
+      .filter((day) => day.template_id === template.id)
+      .map((day) => ({
+        id: day.id,
+        exercises: planned
+          .filter((entry) => entry.template_day_id === day.id)
+          .map((entry, index) => ({
+            id: `${day.id}:${index}`,
+            exerciseId: entry.exercise_id,
+            name: entry.exercise_id,
+            sets: entry.sets,
+            intendedUnilateralMode: entry.intended_unilateral_mode,
+          })),
+      }));
+    const result = calculateMuscleCoverage({ days: templateDays }, metadata);
+    const effective = (muscle) => result.muscles.find((row) => row.muscle === muscle).effectiveSets;
+    assert.ok(effective("chest") > 0, `${template.id} has chest work`);
+    assert.ok(effective("lats") + effective("upper_back") > 0, `${template.id} has pulling work`);
+    assert.ok(effective("quads") > 0, `${template.id} has knee-dominant work`);
+    assert.ok(effective("hamstrings") > 0, `${template.id} has hamstring work`);
+    assert.ok(effective("glutes") > 0, `${template.id} has glute work`);
+    if (template.experience_level === "beginner") {
+      assert.ok(effective("calves") > 0, `${template.id} has calf work`);
+      assert.ok(
+        effective("abs") + effective("obliques") + effective("lower_back") > 0,
+        `${template.id} has core work`,
+      );
+    }
+  }
 });
