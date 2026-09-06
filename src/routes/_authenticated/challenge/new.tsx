@@ -106,26 +106,27 @@ function NewChallenge() {
         token: randomToken(),
       };
       creation.current = request;
-      const { data: challengeId, error: rpcError } = await supabase.rpc("create_challenge_atomic", {
-        _request_id: request.requestId,
-        _name: name,
-        _start_date: start,
-        _timezone: timezone,
-        _duration_weeks: Math.max(52, weeks),
-        _invited_email: email,
-        _token_hash: await sha256Hex(request.token),
-        _weekly_target_km: terms.weekly_target_km,
-        _penalty_mode: terms.penalty_mode,
-        _penalty_high_eur: terms.penalty_high_eur,
-        _penalty_medium_eur: terms.penalty_medium_eur,
-        _penalty_low_eur: terms.penalty_low_eur,
-        _penalty_high_custom: terms.penalty_high_custom,
-        _penalty_medium_custom: terms.penalty_medium_custom,
-        _penalty_low_custom: terms.penalty_low_custom,
-        _travel_pause_enabled: terms.travel_pause_enabled,
-        _travel_pause_home_countries: terms.travel_pause_home_countries,
+      const challengeId = await createChallenge({
+        data: {
+          requestId: request.requestId,
+          name,
+          startDate: start,
+          timezone,
+          durationWeeks: Math.max(52, weeks),
+          invitedEmail: email,
+          tokenHash: await sha256Hex(request.token),
+          weeklyTargetKm: terms.weekly_target_km,
+          penaltyMode: terms.penalty_mode,
+          penaltyHighEur: terms.penalty_high_eur,
+          penaltyMediumEur: terms.penalty_medium_eur,
+          penaltyLowEur: terms.penalty_low_eur,
+          penaltyHighCustom: terms.penalty_high_custom,
+          penaltyMediumCustom: terms.penalty_medium_custom,
+          penaltyLowCustom: terms.penalty_low_custom,
+          travelPauseEnabled: terms.travel_pause_enabled,
+          travelPauseHomeCountries: terms.travel_pause_home_countries,
+        },
       });
-      if (rpcError) throw rpcError;
       if (challengeId !== request.requestId) {
         throw new Error("Challenge creation returned an unexpected result");
       }
