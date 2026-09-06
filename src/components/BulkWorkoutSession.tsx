@@ -30,6 +30,7 @@ import {
   type EditableSessionSet,
 } from "@/lib/bulk-training-sessions";
 import { isSessionSetComplete, sessionSetLabel } from "@/lib/bulk-training-session-domain";
+import { progressionTargetLabel, type BulkProgressionResult } from "@/lib/bulk-progression";
 
 type SetDraft = EditableSessionSet;
 
@@ -92,7 +93,13 @@ function clearLocalDrafts(session: BulkTrainingSession) {
   }
 }
 
-export function BulkWorkoutSessionView({ session }: { session: BulkTrainingSession }) {
+export function BulkWorkoutSessionView({
+  session,
+  progression,
+}: {
+  session: BulkTrainingSession;
+  progression: Record<string, BulkProgressionResult>;
+}) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [drafts, setDrafts] = useState<Record<string, SetDraft>>(() =>
@@ -232,6 +239,7 @@ export function BulkWorkoutSessionView({ session }: { session: BulkTrainingSessi
       queryClient.invalidateQueries({ queryKey: ["bulk-training-session", session.id] }),
       queryClient.invalidateQueries({ queryKey: ["bulk-training-session", "active"] }),
       queryClient.invalidateQueries({ queryKey: ["bulk-training-sessions"] }),
+      queryClient.invalidateQueries({ queryKey: ["bulk-progression"] }),
     ]);
   }
 
@@ -342,6 +350,20 @@ export function BulkWorkoutSessionView({ session }: { session: BulkTrainingSessi
               </p>
             </div>
           </div>
+          {(() => {
+            const target = progression[exercise.sourcePlanExerciseId ?? `session:${exercise.id}`];
+            const label = target ? progressionTargetLabel(target) : null;
+            return label ? (
+              <div className="mt-2 rounded-lg bg-primary/10 p-2 text-xs text-primary">
+                <p className="font-semibold">{label}</p>
+                {target?.weakerSide && target.weakerSide !== "balanced" ? (
+                  <p className="mt-0.5">
+                    {target.weakerSide === "left" ? "Left" : "Right"} side needs to catch up.
+                  </p>
+                ) : null}
+              </div>
+            ) : null;
+          })()}
           {exercise.notes ? (
             <p className="mt-2 rounded-lg bg-elevated p-2 text-xs text-muted-foreground">
               {exercise.notes}

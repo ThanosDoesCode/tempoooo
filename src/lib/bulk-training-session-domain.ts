@@ -13,6 +13,7 @@ export type BulkTrainingSet = {
 
 export type BulkTrainingSessionExercise = {
   id: string;
+  sourcePlanExerciseId: string | null;
   sourceExerciseId: string | null;
   name: string;
   order: number;

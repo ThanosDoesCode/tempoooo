@@ -19,6 +19,7 @@ import {
 import { userFacingError } from "@/lib/network-errors";
 import { Button } from "@/components/ui/button";
 import { Card, DataError, PendingLabel, SectionTitle } from "@/components/ui-kit";
+import { progressionTargetLabel, type BulkProgressionResult } from "@/lib/bulk-progression";
 
 function PlanDetail({ plan }: { plan: TrainingPlanTemplate }) {
   return (
@@ -272,12 +273,14 @@ export function TrainingPlanOverview({
   onStart,
   startingDayId,
   workoutActive,
+  progression,
 }: {
   plan: UserTrainingPlan;
   onEdit: () => void;
   onStart: (dayId: string) => void;
   startingDayId: string | null;
   workoutActive: boolean;
+  progression: Record<string, BulkProgressionResult>;
 }) {
   return (
     <div className="space-y-3">
@@ -304,14 +307,27 @@ export function TrainingPlanOverview({
             </p>
             <h3 className="mt-1 font-semibold">{day.name}</h3>
             <ul className="mt-3 space-y-2 text-sm">
-              {day.exercises.map((exercise) => (
-                <li key={exercise.id} className="flex justify-between gap-3">
-                  <span className="text-muted-foreground">{exercise.name}</span>
-                  <span className="shrink-0 tabular-nums">
-                    {exercise.sets} × {exercise.repMin}–{exercise.repMax}
-                  </span>
-                </li>
-              ))}
+              {day.exercises.map((exercise) => {
+                const next = progression[exercise.id];
+                return (
+                  <li key={exercise.id}>
+                    <div className="flex justify-between gap-3">
+                      <span className="text-muted-foreground">{exercise.name}</span>
+                      <span className="shrink-0 tabular-nums">
+                        {exercise.sets} × {exercise.repMin}–{exercise.repMax}
+                      </span>
+                    </div>
+                    {next && progressionTargetLabel(next) ? (
+                      <p className="mt-0.5 text-xs text-primary">
+                        {progressionTargetLabel(next)}
+                        {next.weakerSide && next.weakerSide !== "balanced"
+                          ? ` · ${next.weakerSide === "left" ? "Left" : "Right"} side needs to catch up`
+                          : ""}
+                      </p>
+                    ) : null}
+                  </li>
+                );
+              })}
             </ul>
             <Button
               className="mt-4 min-h-11 w-full"

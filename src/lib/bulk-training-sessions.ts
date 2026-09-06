@@ -30,6 +30,7 @@ type SessionRow = {
 type ExerciseRow = {
   id: string;
   session_id: string;
+  source_plan_exercise_id: string | null;
   source_exercise_id: string | null;
   exercise_name_snapshot: string;
   exercise_order: number;
@@ -78,6 +79,7 @@ function mapSessions(
       .sort((a, b) => a.exercise_order - b.exercise_order)
       .map((exercise) => ({
         id: exercise.id,
+        sourcePlanExerciseId: exercise.source_plan_exercise_id,
         sourceExerciseId: exercise.source_exercise_id,
         name: exercise.exercise_name_snapshot,
         order: exercise.exercise_order,
@@ -125,6 +127,18 @@ async function hydrateSessions(sessions: SessionRow[]): Promise<BulkTrainingSess
     : { data: [], error: null };
   if (sets.error) throw sets.error;
   return mapSessions(sessions, (exercises ?? []) as ExerciseRow[], (sets.data ?? []) as SetRow[]);
+}
+
+export async function fetchRecentCompletedBulkTrainingSessions(bulkProfileId: string, limit = 30) {
+  const { data, error } = await supabase
+    .from("bulk_training_sessions")
+    .select("*")
+    .eq("bulk_profile_id", bulkProfileId)
+    .eq("status", "completed")
+    .order("completed_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return hydrateSessions((data ?? []) as SessionRow[]);
 }
 
 export const activeBulkTrainingSessionQueryOptions = (bulkProfileId: string | null) =>

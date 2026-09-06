@@ -19,6 +19,7 @@ const set = (overrides = {}) => ({
 });
 const exercise = (overrides = {}) => ({
   id: "exercise",
+  sourcePlanExerciseId: "plan-exercise",
   sourceExerciseId: "system:test",
   name: "Test movement",
   order: 1,

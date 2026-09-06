@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { TrainingSession } from "@/components/TrainingSession";
 import { TrainingPlanOverview, TrainingPlanSetup } from "@/components/TrainingPlanSetup";
@@ -17,6 +17,7 @@ import {
   useActiveBulkTrainingSession,
 } from "@/lib/bulk-training-sessions";
 import { Button } from "@/components/ui/button";
+import { useBulkProgressionTargets } from "@/lib/bulk-progression-query";
 
 export const Route = createFileRoute("/_authenticated/bulk/training")({
   head: () => ({
@@ -50,6 +51,26 @@ function TrainingPage() {
   const [editingPlan, setEditingPlan] = useState(false);
   const [startingDayId, setStartingDayId] = useState<string | null>(null);
   const activeSession = useActiveBulkTrainingSession(usesPlanSetup ? bulkId : null);
+  const progressionInputs = useMemo(
+    () =>
+      activePlan.data?.days.flatMap((day) =>
+        day.exercises.map((exercise) => ({
+          planExerciseId: exercise.id,
+          exerciseId: exercise.exerciseId,
+          executionMode: exercise.intendedUnilateralMode,
+          isBodyweight: exercise.isBodyweight,
+          targetSets: exercise.sets,
+          repMin: exercise.repMin,
+          repMax: exercise.repMax,
+        })),
+      ) ?? [],
+    [activePlan.data],
+  );
+  const progression = useBulkProgressionTargets(
+    usesPlanSetup ? bulkId : null,
+    progressionInputs,
+    activePlan.data?.updatedAt ?? "none",
+  );
 
   async function startWorkout(planDayId: string) {
     setStartingDayId(planDayId);
@@ -122,6 +143,7 @@ function TrainingPage() {
             onCancel={() => setEditingPlan(false)}
             onSaved={async () => {
               await activePlan.refetch();
+              await queryClient.invalidateQueries({ queryKey: ["bulk-progression"] });
               setEditingPlan(false);
             }}
           />
@@ -132,6 +154,7 @@ function TrainingPage() {
             onStart={(dayId) => void startWorkout(dayId)}
             startingDayId={startingDayId}
             workoutActive={!!activeSession.data}
+            progression={progression.data ?? {}}
           />
         )
       ) : usesPlanSetup && data ? (
