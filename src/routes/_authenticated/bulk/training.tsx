@@ -4,6 +4,7 @@ import { useState } from "react";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { TrainingSession } from "@/components/TrainingSession";
 import { TrainingPlanOverview, TrainingPlanSetup } from "@/components/TrainingPlanSetup";
+import { TrainingPlanEditor } from "@/components/TrainingPlanEditor";
 import { iso } from "@/lib/calc";
 import { useAuth } from "@/lib/auth";
 import { useActions, useAppData, useBulkMeta } from "@/lib/store";
@@ -38,6 +39,7 @@ function TrainingPage() {
   const { saveWorkout, saveTargets } = useActions();
   const today = iso(new Date());
   const [date, setDate] = useState(today);
+  const [editingPlan, setEditingPlan] = useState(false);
   return (
     <AppShell>
       <PageHeader
@@ -73,7 +75,18 @@ function TrainingPage() {
           onRetry={() => void activePlan.refetch()}
         />
       ) : usesPlanSetup && activePlan.data ? (
-        <TrainingPlanOverview plan={activePlan.data} />
+        editingPlan ? (
+          <TrainingPlanEditor
+            plan={activePlan.data}
+            onCancel={() => setEditingPlan(false)}
+            onSaved={async () => {
+              await activePlan.refetch();
+              setEditingPlan(false);
+            }}
+          />
+        ) : (
+          <TrainingPlanOverview plan={activePlan.data} onEdit={() => setEditingPlan(true)} />
+        )
       ) : usesPlanSetup && data ? (
         <TrainingPlanSetup targets={data.targets} />
       ) : data && bulkId && user ? (
@@ -88,6 +101,15 @@ function TrainingPage() {
             if (note) notes[exercise] = note;
             else delete notes[exercise];
             await saveTargets({ ...data.targets, exerciseSetupNotes: notes });
+          }}
+          onReorderExercises={async (split, exerciseNames) => {
+            await saveTargets({
+              ...data.targets,
+              legacyExerciseOrder: {
+                ...(data.targets.legacyExerciseOrder ?? {}),
+                [split]: exerciseNames,
+              },
+            });
           }}
           readOnly={role === "viewer"}
         />

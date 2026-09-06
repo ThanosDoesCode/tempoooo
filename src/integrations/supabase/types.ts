@@ -1294,6 +1294,15 @@ export type Database = {
         Args: { _plan_type: string; _template_id: string }
         Returns: string
       }
+      save_bulk_training_plan: {
+        Args: {
+          _days: Json
+          _expected_updated_at: string
+          _name: string
+          _plan: string
+        }
+        Returns: string
+      }
       penalty_for:
         | { Args: { _km: number; _target: number }; Returns: number }
         | {

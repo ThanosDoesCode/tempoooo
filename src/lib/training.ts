@@ -1,6 +1,7 @@
 import { addDays, format, parseISO, startOfWeek } from "date-fns";
 import {
   EXERCISES,
+  orderedExerciseDefs,
   exerciseDef,
   type AppData,
   type ExerciseEntry,
@@ -85,7 +86,7 @@ export function createWorkout(data: AppData, date: string, type: SplitType): Wor
     type,
     status: "draft",
     ...(sessionBodyweight ? { sessionBodyweight } : {}),
-    entries: EXERCISES[type].map((def) => ({
+    entries: orderedExerciseDefs(data.targets, type).map((def) => ({
       exercise: def.name,
       reps: [undefined, undefined, undefined],
       ...(isBodyweight(def.name)

@@ -92,6 +92,7 @@ export type Targets = {
   trainingSetupPreference?: TrainingSetupPreference | undefined;
   onboardingCompletedAt?: string | undefined;
   exerciseSetupNotes?: Record<string, string> | undefined;
+  legacyExerciseOrder?: Partial<Record<SplitType, string[]>> | undefined;
 };
 
 export type AppData = {
@@ -165,6 +166,20 @@ export const ALL_EXERCISES: ExerciseDef[] = Array.from(
 
 export const exerciseDef = (name: string): ExerciseDef | undefined =>
   ALL_EXERCISES.find((e) => e.name === name);
+
+export function orderedExerciseDefs(targets: Targets, split: SplitType): ExerciseDef[] {
+  const canonical = EXERCISES[split];
+  const saved = targets.legacyExerciseOrder?.[split];
+  if (!saved?.length) return canonical;
+  const byName = new Map(canonical.map((exercise) => [exercise.name, exercise]));
+  const ordered = saved.flatMap((name) => {
+    const exercise = byName.get(name);
+    if (!exercise) return [];
+    byName.delete(name);
+    return [exercise];
+  });
+  return [...ordered, ...byName.values()];
+}
 
 export const DEFAULT_DATA: AppData = {
   days: {},

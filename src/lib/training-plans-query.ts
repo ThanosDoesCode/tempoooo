@@ -19,7 +19,7 @@ type ExerciseRow = {
   intended_unilateral_mode: "bilateral" | "unilateral";
   notes: string | null;
   exercise_name?: string;
-  bulk_exercises?: { name: string } | null;
+  bulk_exercises?: { name?: string; supports_unilateral?: boolean } | null;
 };
 
 function mapExercise(row: ExerciseRow): TrainingPlanExercise {
@@ -34,6 +34,7 @@ function mapExercise(row: ExerciseRow): TrainingPlanExercise {
     repMax: row.rep_max,
     intendedUnilateralMode: row.intended_unilateral_mode,
     notes: row.notes,
+    supportsUnilateral: row.bulk_exercises?.supports_unilateral ?? false,
   };
 }
 
@@ -57,7 +58,7 @@ export const trainingPlanTemplatesQueryOptions = () =>
         supabase
           .from("bulk_training_plan_template_exercises")
           .select(
-            "id,template_day_id,exercise_id,exercise_order,sets,rep_min,rep_max,intended_unilateral_mode,notes,bulk_exercises(name)",
+            "id,template_day_id,exercise_id,exercise_order,sets,rep_min,rep_max,intended_unilateral_mode,notes,bulk_exercises(name,supports_unilateral)",
           )
           .order("exercise_order"),
       ]);
@@ -99,7 +100,7 @@ export const activeTrainingPlanQueryOptions = (bulkProfileId: string | null) =>
       const { data: plan, error } = await supabase
         .from("bulk_training_plans")
         .select(
-          "id,source_template_id,plan_type,name,description,experience_level,training_days_per_week",
+          "id,source_template_id,plan_type,name,description,experience_level,training_days_per_week,updated_at",
         )
         .eq("bulk_profile_id", bulkProfileId)
         .eq("active", true)
@@ -109,7 +110,7 @@ export const activeTrainingPlanQueryOptions = (bulkProfileId: string | null) =>
       const { data: days, error: daysError } = await supabase
         .from("bulk_training_plan_days")
         .select(
-          "id,day_order,name,bulk_training_plan_exercises(id,exercise_id,source_system_exercise_id,exercise_name,exercise_order,sets,rep_min,rep_max,intended_unilateral_mode,notes)",
+          "id,day_order,name,bulk_training_plan_exercises(id,exercise_id,source_system_exercise_id,exercise_name,exercise_order,sets,rep_min,rep_max,intended_unilateral_mode,notes,bulk_exercises!bulk_training_plan_exercises_exercise_id_fkey(supports_unilateral))",
         )
         .eq("plan_id", plan.id)
         .order("day_order");
@@ -122,6 +123,7 @@ export const activeTrainingPlanQueryOptions = (bulkProfileId: string | null) =>
         description: plan.description,
         experienceLevel: plan.experience_level as UserTrainingPlan["experienceLevel"],
         trainingDaysPerWeek: plan.training_days_per_week,
+        updatedAt: plan.updated_at,
         days: (days ?? []).map((day) => ({
           id: day.id,
           order: day.day_order,
@@ -160,6 +162,34 @@ export async function instantiateTrainingPlan(
 export async function createEmptyTrainingPlan(name: string): Promise<string> {
   const { data, error } = await supabase.rpc("create_empty_bulk_training_plan", {
     _name: name,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export type SaveTrainingPlanInput = {
+  id: string;
+  expectedUpdatedAt: string;
+  name: string;
+  days: {
+    name: string;
+    exercises: {
+      exerciseId: string;
+      sets: number;
+      repMin: number;
+      repMax: number;
+      executionMode: "bilateral" | "unilateral";
+      notes: string | null;
+    }[];
+  }[];
+};
+
+export async function saveTrainingPlan(input: SaveTrainingPlanInput): Promise<string> {
+  const { data, error } = await supabase.rpc("save_bulk_training_plan", {
+    _plan: input.id,
+    _expected_updated_at: input.expectedUpdatedAt,
+    _name: input.name,
+    _days: input.days,
   });
   if (error) throw error;
   return data;

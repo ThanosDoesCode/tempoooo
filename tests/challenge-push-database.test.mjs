@@ -730,6 +730,284 @@ test("Tempo templates are immutable and selection creates one isolated owner pla
   );
 });
 
+test("owners transactionally edit only their active plan with valid library exercises", async () => {
+  const owner = randomUUID();
+  const other = randomUUID();
+  for (const user of [owner, other]) {
+    await db.query("INSERT INTO auth.users(id) VALUES ($1)", [user]);
+    await db.query("INSERT INTO public.profiles(id,display_name) VALUES ($1,'Plan editor')", [
+      user,
+    ]);
+    await completeBulkOnboarding(user, { preference: "tempo_preset" });
+  }
+  const planId = (
+    await asUser(owner, () =>
+      db.query(
+        "SELECT public.instantiate_bulk_training_plan('template:beginner-full-body-2','tempo_preset') AS id",
+      ),
+    )
+  ).rows[0].id;
+  const otherCustom = (
+    await asUser(other, () =>
+      db.query(`INSERT INTO public.bulk_exercises(slug,name,primary_muscle,equipment,movement_pattern)
+        VALUES('other-private-move','Other Private Move','biceps',ARRAY['dumbbell'],'other') RETURNING id`),
+    )
+  ).rows[0].id;
+  const ownCustom = (
+    await asUser(owner, () =>
+      db.query(`INSERT INTO public.bulk_exercises(slug,name,primary_muscle,equipment,movement_pattern,supports_unilateral)
+        VALUES('own-private-move','Own Private Move','biceps',ARRAY['dumbbell'],'other',true) RETURNING id`),
+    )
+  ).rows[0].id;
+  const originalTemplateSets = (
+    await db.query(
+      "SELECT sets FROM public.bulk_training_plan_template_exercises WHERE template_day_id='template:beginner-full-body-2:day:1' AND exercise_order=1",
+    )
+  ).rows[0].sets;
+  const workoutCount = Number(
+    (
+      await db.query(
+        "SELECT count(*) AS n FROM public.bulk_workouts WHERE bulk_profile_id=(SELECT bulk_profile_id FROM public.bulk_training_plans WHERE id=$1)",
+        [planId],
+      )
+    ).rows[0].n,
+  );
+  const current = (
+    await asUser(owner, () =>
+      db.query("SELECT updated_at FROM public.bulk_training_plans WHERE id=$1", [planId]),
+    )
+  ).rows[0];
+  const firstPayload = [
+    {
+      name: "Lower First",
+      exercises: [
+        {
+          exerciseId: "system:pull-up",
+          sets: 4,
+          repMin: 6,
+          repMax: 10,
+          executionMode: "bilateral",
+          notes: null,
+        },
+        {
+          exerciseId: ownCustom,
+          sets: 3,
+          repMin: 8,
+          repMax: 12,
+          executionMode: "unilateral",
+          notes: "Neutral grip",
+        },
+        {
+          exerciseId: "system:one-arm-dumbbell-row",
+          sets: 2,
+          repMin: 10,
+          repMax: 15,
+          executionMode: "unilateral",
+          notes: null,
+        },
+      ],
+    },
+    { name: "Upper Second", exercises: [] },
+  ];
+  await asUser(owner, () =>
+    db.query("SELECT public.save_bulk_training_plan($1,$2,'My Edited Plan',$3::jsonb)", [
+      planId,
+      current.updated_at,
+      JSON.stringify(firstPayload),
+    ]),
+  );
+  const saved = await asUser(owner, () =>
+    db.query(
+      `SELECT p.name,p.active,p.updated_at,d.day_order,d.name AS day_name,e.exercise_order,
+      e.exercise_id,e.exercise_name,e.sets,e.rep_min,e.rep_max,e.intended_unilateral_mode,e.notes
+      FROM public.bulk_training_plans p JOIN public.bulk_training_plan_days d ON d.plan_id=p.id
+      LEFT JOIN public.bulk_training_plan_exercises e ON e.plan_day_id=d.id
+      WHERE p.id=$1 ORDER BY d.day_order,e.exercise_order`,
+      [planId],
+    ),
+  );
+  assert.equal(saved.rows[0].name, "My Edited Plan");
+  assert.equal(saved.rows[0].active, true);
+  assert.deepEqual([...new Set(saved.rows.map((row) => row.day_order))], [1, 2]);
+  assert.deepEqual(
+    saved.rows.filter((row) => row.day_order === 1).map((row) => row.exercise_order),
+    [1, 2, 3],
+  );
+  assert.equal(saved.rows[1].exercise_id, ownCustom);
+  assert.equal(saved.rows[1].intended_unilateral_mode, "unilateral");
+  assert.equal(saved.rows[1].notes, "Neutral grip");
+
+  const rejectedPayloads = [
+    [
+      {
+        name: "Day",
+        exercises: [
+          {
+            exerciseId: otherCustom,
+            sets: 3,
+            repMin: 8,
+            repMax: 12,
+            executionMode: "bilateral",
+            notes: null,
+          },
+        ],
+      },
+    ],
+    [
+      {
+        name: "Day",
+        exercises: [
+          {
+            exerciseId: "system:flat-barbell-bench-press",
+            sets: 0,
+            repMin: 8,
+            repMax: 12,
+            executionMode: "bilateral",
+            notes: null,
+          },
+        ],
+      },
+    ],
+    [
+      {
+        name: "Day",
+        exercises: [
+          {
+            exerciseId: "system:flat-barbell-bench-press",
+            sets: 3,
+            repMin: 15,
+            repMax: 8,
+            executionMode: "bilateral",
+            notes: null,
+          },
+        ],
+      },
+    ],
+    [
+      {
+        name: "Day",
+        exercises: [
+          {
+            exerciseId: "system:flat-barbell-bench-press",
+            sets: 3,
+            repMin: 8,
+            repMax: 12,
+            executionMode: "unilateral",
+            notes: null,
+          },
+        ],
+      },
+    ],
+  ];
+  for (const payload of rejectedPayloads) {
+    await assert.rejects(
+      asUser(owner, () =>
+        db.query("SELECT public.save_bulk_training_plan($1,$2,'Invalid',$3::jsonb)", [
+          planId,
+          saved.rows[0].updated_at,
+          JSON.stringify(payload),
+        ]),
+      ),
+      /unavailable|sets|rep range|unilateral/i,
+    );
+  }
+  await assert.rejects(
+    asUser(other, () =>
+      db.query("SELECT public.save_bulk_training_plan($1,$2,'Stolen',$3::jsonb)", [
+        planId,
+        saved.rows[0].updated_at,
+        JSON.stringify(firstPayload),
+      ]),
+    ),
+    /not found/i,
+  );
+  await assert.rejects(
+    asUser(owner, () =>
+      db.query("SELECT public.save_bulk_training_plan($1,'2000-01-01','Stale',$2::jsonb)", [
+        planId,
+        JSON.stringify(firstPayload),
+      ]),
+    ),
+    /changed on another device/i,
+  );
+
+  const replacement = [
+    {
+      name: "Renamed Day",
+      exercises: [
+        {
+          exerciseId: "system:flat-barbell-bench-press",
+          sets: 4,
+          repMin: 6,
+          repMax: 10,
+          executionMode: "bilateral",
+          notes: null,
+        },
+        {
+          exerciseId: "system:one-arm-dumbbell-row",
+          sets: 2,
+          repMin: 10,
+          repMax: 15,
+          executionMode: "bilateral",
+          notes: null,
+        },
+      ],
+    },
+  ];
+  await asUser(owner, () =>
+    db.query("SELECT public.save_bulk_training_plan($1,$2,'My Edited Plan',$3::jsonb)", [
+      planId,
+      saved.rows[0].updated_at,
+      JSON.stringify(replacement),
+    ]),
+  );
+  const finalRows = await db.query(
+    `SELECT d.day_order,d.name,e.exercise_order,e.exercise_id,e.sets,e.rep_min,e.rep_max,e.intended_unilateral_mode
+    FROM public.bulk_training_plan_days d JOIN public.bulk_training_plan_exercises e ON e.plan_day_id=d.id
+    WHERE d.plan_id=$1 ORDER BY d.day_order,e.exercise_order`,
+    [planId],
+  );
+  assert.equal(finalRows.rows.length, 2);
+  assert.deepEqual(
+    finalRows.rows.map((row) => row.exercise_order),
+    [1, 2],
+  );
+  assert.equal(finalRows.rows[0].exercise_id, "system:flat-barbell-bench-press");
+  assert.deepEqual(
+    [finalRows.rows[0].sets, finalRows.rows[0].rep_min, finalRows.rows[0].rep_max],
+    [4, 6, 10],
+  );
+  assert.equal(finalRows.rows[0].intended_unilateral_mode, "bilateral");
+  assert.equal(
+    (
+      await db.query(
+        "SELECT count(*) AS n FROM public.bulk_training_plans WHERE id=$1 AND active",
+        [planId],
+      )
+    ).rows[0].n,
+    1,
+  );
+  assert.equal(
+    (
+      await db.query(
+        "SELECT sets FROM public.bulk_training_plan_template_exercises WHERE template_day_id='template:beginner-full-body-2:day:1' AND exercise_order=1",
+      )
+    ).rows[0].sets,
+    originalTemplateSets,
+  );
+  assert.equal(
+    Number(
+      (
+        await db.query(
+          "SELECT count(*) AS n FROM public.bulk_workouts WHERE bulk_profile_id=(SELECT bulk_profile_id FROM public.bulk_training_plans WHERE id=$1)",
+          [planId],
+        )
+      ).rows[0].n,
+    ),
+    workoutCount,
+  );
+});
+
 test("atomic challenge creation writes challenge, own membership and invitation exactly once", async () => {
   const requestId = randomUUID();
   const tokenHash = "a".repeat(64);

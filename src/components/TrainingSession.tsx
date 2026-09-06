@@ -17,6 +17,7 @@ import {
   EXERCISES,
   exerciseLabel,
   exerciseDef,
+  orderedExerciseDefs,
   splitLabel,
   type AppData,
   type ExerciseEntry,
@@ -53,6 +54,7 @@ export function TrainingSession({
   cacheKey,
   onSave,
   onSaveSetupNote,
+  onReorderExercises,
   readOnly = false,
 }: {
   data: AppData;
@@ -60,6 +62,7 @@ export function TrainingSession({
   cacheKey: string;
   onSave: (workout: Workout) => Promise<void>;
   onSaveSetupNote?: (exercise: string, note: string) => Promise<void>;
+  onReorderExercises?: (split: SplitType, exerciseNames: string[]) => Promise<void>;
   readOnly?: boolean;
 }) {
   const [restored] = useState(() => (readOnly ? null : readWorkoutDraft(cacheKey, date)));
@@ -145,7 +148,7 @@ export function TrainingSession({
     ? workout.entries.map(
         (entry) => exerciseDef(entry.exercise) ?? { name: entry.exercise, min: 1, max: 99 },
       )
-    : EXERCISES[workout.type];
+    : orderedExerciseDefs(data.targets, workout.type);
   const duration = workoutDuration(workout, now);
   const hasContent =
     metrics.workingSets > 0 ||
@@ -264,7 +267,7 @@ export function TrainingSession({
           </p>
         ) : null}
         <div className="space-y-3">
-          {displayedExercises.map((def) => {
+          {displayedExercises.map((def, exerciseIndex) => {
             const entry = workout.entries.find((e) => e.exercise === def.name) ?? {
               exercise: def.name,
               reps: [undefined, undefined, undefined],
@@ -291,6 +294,63 @@ export function TrainingSession({
                     {p.label}
                   </span>
                 </div>
+                {onReorderExercises && !storedAtOpen && !hasContent ? (
+                  <div
+                    className="mb-2 flex justify-end"
+                    aria-label={`Reorder ${exerciseLabel(def.name)}`}
+                  >
+                    <button
+                      type="button"
+                      aria-label={`Move ${exerciseLabel(def.name)} up`}
+                      disabled={exerciseIndex === 0}
+                      onClick={() => {
+                        const next = [...displayedExercises];
+                        const [moved] = next.splice(exerciseIndex, 1);
+                        next.splice(exerciseIndex - 1, 0, moved!);
+                        const nextWorkout = {
+                          ...current.current,
+                          entries: next.map((item) =>
+                            current.current.entries.find((entry) => entry.exercise === item.name)!,
+                          ),
+                        };
+                        current.current = nextWorkout;
+                        setWorkout(nextWorkout);
+                        void onReorderExercises(
+                          workout.type,
+                          next.map((item) => item.name),
+                        ).catch((reason: Error) => setError(reason.message));
+                      }}
+                      className="min-h-11 min-w-11 rounded-lg text-muted-foreground disabled:opacity-30"
+                    >
+                      ↑
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Move ${exerciseLabel(def.name)} down`}
+                      disabled={exerciseIndex === displayedExercises.length - 1}
+                      onClick={() => {
+                        const next = [...displayedExercises];
+                        const [moved] = next.splice(exerciseIndex, 1);
+                        next.splice(exerciseIndex + 1, 0, moved!);
+                        const nextWorkout = {
+                          ...current.current,
+                          entries: next.map((item) =>
+                            current.current.entries.find((entry) => entry.exercise === item.name)!,
+                          ),
+                        };
+                        current.current = nextWorkout;
+                        setWorkout(nextWorkout);
+                        void onReorderExercises(
+                          workout.type,
+                          next.map((item) => item.name),
+                        ).catch((reason: Error) => setError(reason.message));
+                      }}
+                      className="min-h-11 min-w-11 rounded-lg text-muted-foreground disabled:opacity-30"
+                    >
+                      ↓
+                    </button>
+                  </div>
+                ) : null}
                 {p.explanation ? (
                   <p className="mb-2 text-xs text-muted-foreground">{p.explanation}</p>
                 ) : null}

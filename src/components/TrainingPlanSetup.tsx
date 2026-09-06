@@ -266,7 +266,13 @@ export function TrainingPlanSetup({ targets }: { targets: Targets }) {
   );
 }
 
-export function TrainingPlanOverview({ plan }: { plan: UserTrainingPlan }) {
+export function TrainingPlanOverview({
+  plan,
+  onEdit,
+}: {
+  plan: UserTrainingPlan;
+  onEdit: () => void;
+}) {
   return (
     <div className="space-y-3">
       <Card>
@@ -280,6 +286,9 @@ export function TrainingPlanOverview({ plan }: { plan: UserTrainingPlan }) {
         {plan.description ? (
           <p className="mt-3 text-sm text-muted-foreground">{plan.description}</p>
         ) : null}
+        <Button variant="outline" className="mt-4 min-h-11 w-full" onClick={onEdit}>
+          Edit Plan
+        </Button>
       </Card>
       {plan.days.length ? (
         plan.days.map((day) => (
