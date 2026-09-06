@@ -130,3 +130,48 @@ export async function adminDiagnosticsFor(caller: string) {
     backendErrorsAvailable: false,
   };
 }
+
+export type CreateChallengeInput = {
+  requestId: string;
+  name: string;
+  startDate: string;
+  timezone: string;
+  durationWeeks: number;
+  invitedEmail: string;
+  tokenHash: string;
+  weeklyTargetKm: number;
+  penaltyMode: "money" | "custom";
+  penaltyHighEur: number;
+  penaltyMediumEur: number;
+  penaltyLowEur: number;
+  penaltyHighCustom: string | null;
+  penaltyMediumCustom: string | null;
+  penaltyLowCustom: string | null;
+  travelPauseEnabled: boolean;
+  travelPauseHomeCountries: string[];
+};
+
+export const createChallengeFor = (caller: string, input: CreateChallengeInput) =>
+  rpc<string>("create_challenge_atomic", {
+    _caller: caller,
+    _request_id: input.requestId,
+    _name: input.name,
+    _start_date: input.startDate,
+    _timezone: input.timezone,
+    _duration_weeks: input.durationWeeks,
+    _invited_email: input.invitedEmail,
+    _token_hash: input.tokenHash,
+    _weekly_target_km: input.weeklyTargetKm,
+    _penalty_mode: input.penaltyMode,
+    _penalty_high_eur: input.penaltyHighEur,
+    _penalty_medium_eur: input.penaltyMediumEur,
+    _penalty_low_eur: input.penaltyLowEur,
+    _penalty_high_custom: input.penaltyHighCustom,
+    _penalty_medium_custom: input.penaltyMediumCustom,
+    _penalty_low_custom: input.penaltyLowCustom,
+    _travel_pause_enabled: input.travelPauseEnabled,
+    _travel_pause_home_countries: input.travelPauseHomeCountries,
+  });
+
+export const disableChallengePushFor = (caller: string) =>
+  rpc<null>("disable_challenge_push", { _caller: caller });
