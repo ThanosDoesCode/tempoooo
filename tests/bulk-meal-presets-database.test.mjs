@@ -290,3 +290,289 @@ test("server constraints reject unsafe meal and ingredient values without partia
     beforeCount,
   );
 });
+
+test("nutrition logs snapshot targets, presets and ingredients with idempotent retries", async () => {
+  const preset = (
+    await asUser(owner, () =>
+      db.query(
+        `SELECT public.create_bulk_meal_preset(
+          'Snapshot meal','Original',600.25,40.5,60.25,20.75,
+          '[{"name":"Rice","quantity":125.5,"unit":"g"}]'::jsonb
+        ) AS id`,
+      ),
+    )
+  ).rows[0].id;
+  const firstRequest = randomUUID();
+  const secondRequest = randomUUID();
+  const firstEntry = (
+    await asUser(owner, () =>
+      db.query("SELECT public.log_bulk_meal_preset($1,'2026-09-06',$2) AS id", [
+        preset,
+        firstRequest,
+      ]),
+    )
+  ).rows[0].id;
+  const retryEntry = (
+    await asUser(owner, () =>
+      db.query("SELECT public.log_bulk_meal_preset($1,'2026-09-06',$2) AS id", [
+        preset,
+        firstRequest,
+      ]),
+    )
+  ).rows[0].id;
+  const secondEntry = (
+    await asUser(owner, () =>
+      db.query("SELECT public.log_bulk_meal_preset($1,'2026-09-06',$2) AS id", [
+        preset,
+        secondRequest,
+      ]),
+    )
+  ).rows[0].id;
+  assert.equal(retryEntry, firstEntry);
+  assert.notEqual(secondEntry, firstEntry);
+
+  const profile = (await db.query("SELECT id FROM public.bulk_profiles WHERE owner_id=$1", [owner]))
+    .rows[0].id;
+  const days = await db.query(
+    "SELECT * FROM public.bulk_nutrition_days WHERE bulk_profile_id=$1 AND log_date='2026-09-06'",
+    [profile],
+  );
+  assert.equal(days.rows.length, 1);
+  assert.deepEqual(
+    [
+      Number(days.rows[0].target_calories),
+      Number(days.rows[0].target_protein_g),
+      Number(days.rows[0].target_carbs_g),
+      Number(days.rows[0].target_fat_g),
+    ],
+    [2900, 140, 360, 90],
+  );
+  const snapshot = (
+    await db.query("SELECT * FROM public.bulk_nutrition_entries WHERE id=$1", [firstEntry])
+  ).rows[0];
+  assert.equal(snapshot.name_snapshot, "Snapshot meal");
+  assert.deepEqual(
+    [
+      Number(snapshot.calories),
+      Number(snapshot.protein_g),
+      Number(snapshot.carbs_g),
+      Number(snapshot.fat_g),
+    ],
+    [600.25, 40.5, 60.25, 20.75],
+  );
+  assert.deepEqual(snapshot.ingredient_snapshot, [{ name: "Rice", quantity: 125.5, unit: "g" }]);
+
+  const presetUpdated = (
+    await db.query("SELECT updated_at FROM public.bulk_meal_presets WHERE id=$1", [preset])
+  ).rows[0].updated_at;
+  await asUser(owner, () =>
+    db.query(
+      "SELECT public.update_bulk_meal_preset($1,$2,'Changed preset',NULL,700,50,70,30,'[]'::jsonb)",
+      [preset, presetUpdated],
+    ),
+  );
+  assert.equal(
+    Number(
+      (
+        await db.query("SELECT calories FROM public.bulk_nutrition_entries WHERE id=$1", [
+          firstEntry,
+        ])
+      ).rows[0].calories,
+    ),
+    600.25,
+  );
+  await asUser(owner, () => db.query("SELECT public.delete_bulk_meal_preset($1)", [preset]));
+  const afterPresetDelete = (
+    await db.query(
+      "SELECT source_meal_preset_id,name_snapshot,calories,ingredient_snapshot FROM public.bulk_nutrition_entries WHERE id=$1",
+      [firstEntry],
+    )
+  ).rows[0];
+  assert.equal(afterPresetDelete.source_meal_preset_id, null);
+  assert.equal(afterPresetDelete.name_snapshot, "Snapshot meal");
+  assert.equal(Number(afterPresetDelete.calories), 600.25);
+  assert.equal(afterPresetDelete.ingredient_snapshot[0].name, "Rice");
+});
+
+test("custom entries edit independently, aggregate decimals and preserve historical targets", async () => {
+  const profile = (await db.query("SELECT id FROM public.bulk_profiles WHERE owner_id=$1", [owner]))
+    .rows[0].id;
+  const presetCount = Number(
+    (
+      await db.query(
+        "SELECT count(*) AS n FROM public.bulk_meal_presets WHERE bulk_profile_id=$1",
+        [profile],
+      )
+    ).rows[0].n,
+  );
+  const request = randomUUID();
+  const custom = (
+    await asUser(owner, () =>
+      db.query(
+        `SELECT public.create_bulk_nutrition_entry(
+          '2026-09-06',$1,'Protein bar',123.45,12.25,14.5,3.75,'After training'
+        ) AS id`,
+        [request],
+      ),
+    )
+  ).rows[0].id;
+  const retry = (
+    await asUser(owner, () =>
+      db.query(
+        `SELECT public.create_bulk_nutrition_entry(
+          '2026-09-06',$1,'Protein bar',123.45,12.25,14.5,3.75,'After training'
+        ) AS id`,
+        [request],
+      ),
+    )
+  ).rows[0].id;
+  assert.equal(retry, custom);
+  assert.equal(
+    Number(
+      (
+        await db.query(
+          "SELECT count(*) AS n FROM public.bulk_meal_presets WHERE bulk_profile_id=$1",
+          [profile],
+        )
+      ).rows[0].n,
+    ),
+    presetCount,
+  );
+
+  const aggregate = (
+    await db.query(
+      `SELECT sum(e.calories) calories,sum(e.protein_g) protein,
+        sum(e.carbs_g) carbs,sum(e.fat_g) fat
+       FROM public.bulk_nutrition_entries e
+       JOIN public.bulk_nutrition_days d ON d.id=e.nutrition_day_id
+       WHERE d.bulk_profile_id=$1 AND d.log_date='2026-09-06'`,
+      [profile],
+    )
+  ).rows[0];
+  assert.deepEqual(
+    [
+      Number(aggregate.calories),
+      Number(aggregate.protein),
+      Number(aggregate.carbs),
+      Number(aggregate.fat),
+    ],
+    [1323.95, 93.25, 135, 45.25],
+  );
+
+  const updatedAt = (
+    await db.query("SELECT updated_at FROM public.bulk_nutrition_entries WHERE id=$1", [custom])
+  ).rows[0].updated_at;
+  await asUser(owner, () =>
+    db.query(
+      "SELECT public.update_bulk_nutrition_entry($1,$2,'Coffee',45.5,1.25,5.5,2.25,'Edited only here')",
+      [custom, updatedAt],
+    ),
+  );
+  const edited = (
+    await db.query("SELECT * FROM public.bulk_nutrition_entries WHERE id=$1", [custom])
+  ).rows[0];
+  assert.equal(edited.name_snapshot, "Coffee");
+  assert.equal(Number(edited.calories), 45.5);
+  assert.equal(edited.note, "Edited only here");
+
+  await db.query(
+    `UPDATE public.bulk_targets
+     SET payload=jsonb_set(jsonb_set(payload,'{calories}','3100'),'{protein}','160')
+     WHERE bulk_profile_id=$1`,
+    [profile],
+  );
+  const historicalTargets = (
+    await db.query(
+      "SELECT target_calories,target_protein_g FROM public.bulk_nutrition_days WHERE bulk_profile_id=$1 AND log_date='2026-09-06'",
+      [profile],
+    )
+  ).rows[0];
+  assert.deepEqual(
+    [Number(historicalTargets.target_calories), Number(historicalTargets.target_protein_g)],
+    [2900, 140],
+  );
+
+  const countBefore = Number(
+    (await db.query("SELECT count(*) AS n FROM public.bulk_nutrition_entries")).rows[0].n,
+  );
+  assert.equal(
+    (
+      await asUser(owner, () =>
+        db.query("SELECT public.delete_bulk_nutrition_entry($1) AS ok", [custom]),
+      )
+    ).rows[0].ok,
+    true,
+  );
+  assert.equal(
+    Number((await db.query("SELECT count(*) AS n FROM public.bulk_nutrition_entries")).rows[0].n),
+    countBefore - 1,
+  );
+
+  const future = (
+    await asUser(owner, () =>
+      db.query(
+        "SELECT public.create_bulk_nutrition_entry('2099-01-01',$1,'Planned meal',1.5,2.5,3.5,4.5,NULL) AS id",
+        [randomUUID()],
+      ),
+    )
+  ).rows[0].id;
+  assert.ok(future);
+});
+
+test("nutrition RLS and mutation RPCs deny cross-user and anonymous access", async () => {
+  const ownerPreset = (await createMeal(owner, "Owner only preset")).rows[0].id;
+  const ownerEntry = (
+    await asUser(owner, () =>
+      db.query("SELECT public.log_bulk_meal_preset($1,'2026-09-07',$2) AS id", [
+        ownerPreset,
+        randomUUID(),
+      ]),
+    )
+  ).rows[0].id;
+  assert.equal(
+    (await asUser(other, () => db.query("SELECT * FROM public.bulk_nutrition_days"))).rows.length,
+    0,
+  );
+  assert.equal(
+    (await asUser(other, () => db.query("SELECT * FROM public.bulk_nutrition_entries"))).rows
+      .length,
+    0,
+  );
+  await assert.rejects(
+    asUser(other, () =>
+      db.query("SELECT public.log_bulk_meal_preset($1,'2026-09-07',$2)", [
+        ownerPreset,
+        randomUUID(),
+      ]),
+    ),
+    /not found/i,
+  );
+  const ownerUpdated = (
+    await db.query("SELECT updated_at FROM public.bulk_nutrition_entries WHERE id=$1", [ownerEntry])
+  ).rows[0].updated_at;
+  await assert.rejects(
+    asUser(other, () =>
+      db.query("SELECT public.update_bulk_nutrition_entry($1,$2,'Stolen',1,1,1,1,NULL)", [
+        ownerEntry,
+        ownerUpdated,
+      ]),
+    ),
+    /not found/i,
+  );
+  assert.equal(
+    (
+      await asUser(other, () =>
+        db.query("SELECT public.delete_bulk_nutrition_entry($1) AS ok", [ownerEntry]),
+      )
+    ).rows[0].ok,
+    false,
+  );
+  await assert.rejects(
+    asAnon(() => db.query("SELECT * FROM public.bulk_nutrition_days")),
+    /permission denied/i,
+  );
+  await assert.rejects(
+    asAnon(() => db.query("SELECT * FROM public.bulk_nutrition_entries")),
+    /permission denied/i,
+  );
+});

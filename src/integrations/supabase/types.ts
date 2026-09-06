@@ -145,6 +145,117 @@ export type Database = {
           referencedColumns: ["id"]
         }]
       }
+      bulk_nutrition_days: {
+        Row: {
+          bulk_profile_id: string
+          created_at: string
+          id: string
+          log_date: string
+          target_calories: number
+          target_carbs_g: number
+          target_fat_g: number
+          target_protein_g: number
+          updated_at: string
+        }
+        Insert: {
+          bulk_profile_id: string
+          created_at?: string
+          id?: string
+          log_date: string
+          target_calories: number
+          target_carbs_g: number
+          target_fat_g: number
+          target_protein_g: number
+          updated_at?: string
+        }
+        Update: {
+          bulk_profile_id?: string
+          created_at?: string
+          id?: string
+          log_date?: string
+          target_calories?: number
+          target_carbs_g?: number
+          target_fat_g?: number
+          target_protein_g?: number
+          updated_at?: string
+        }
+        Relationships: [{
+          foreignKeyName: "bulk_nutrition_days_bulk_profile_id_fkey"
+          columns: ["bulk_profile_id"]
+          isOneToOne: false
+          referencedRelation: "bulk_profiles"
+          referencedColumns: ["id"]
+        }]
+      }
+      bulk_nutrition_entries: {
+        Row: {
+          calories: number
+          carbs_g: number
+          created_at: string
+          fat_g: number
+          id: string
+          ingredient_snapshot: Json
+          name_snapshot: string
+          note: string | null
+          nutrition_day_id: string
+          protein_g: number
+          request_id: string
+          sort_order: number
+          source_meal_preset_id: string | null
+          source_type: string
+          updated_at: string
+        }
+        Insert: {
+          calories: number
+          carbs_g: number
+          created_at?: string
+          fat_g: number
+          id?: string
+          ingredient_snapshot?: Json
+          name_snapshot: string
+          note?: string | null
+          nutrition_day_id: string
+          protein_g: number
+          request_id: string
+          sort_order: number
+          source_meal_preset_id?: string | null
+          source_type: string
+          updated_at?: string
+        }
+        Update: {
+          calories?: number
+          carbs_g?: number
+          created_at?: string
+          fat_g?: number
+          id?: string
+          ingredient_snapshot?: Json
+          name_snapshot?: string
+          note?: string | null
+          nutrition_day_id?: string
+          protein_g?: number
+          request_id?: string
+          sort_order?: number
+          source_meal_preset_id?: string | null
+          source_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bulk_nutrition_entries_nutrition_day_id_fkey"
+            columns: ["nutrition_day_id"]
+            isOneToOne: false
+            referencedRelation: "bulk_nutrition_days"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bulk_nutrition_entries_source_meal_preset_id_fkey"
+            columns: ["source_meal_preset_id"]
+            isOneToOne: false
+            referencedRelation: "bulk_meal_presets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bulk_exercises: {
         Row: {
           active: boolean
@@ -1463,6 +1574,37 @@ export type Database = {
         Args: { _direction: number; _meal: string }
         Returns: boolean
       }
+      log_bulk_meal_preset: {
+        Args: { _log_date: string; _preset: string; _request_id: string }
+        Returns: string
+      }
+      create_bulk_nutrition_entry: {
+        Args: {
+          _calories: number
+          _carbs: number
+          _fat: number
+          _log_date: string
+          _name: string
+          _note?: string | null
+          _protein: number
+          _request_id: string
+        }
+        Returns: string
+      }
+      update_bulk_nutrition_entry: {
+        Args: {
+          _calories: number
+          _carbs: number
+          _entry: string
+          _expected_updated_at: string
+          _fat: number
+          _name: string
+          _note?: string | null
+          _protein: number
+        }
+        Returns: string
+      }
+      delete_bulk_nutrition_entry: { Args: { _entry: string }; Returns: boolean }
       create_empty_bulk_training_plan: { Args: { _name: string }; Returns: string }
       ensure_bulk_profile: { Args: { _caller: string }; Returns: string }
       finalize_challenge: {
