@@ -30,7 +30,8 @@ import {
   type EditableSessionSet,
 } from "@/lib/bulk-training-sessions";
 import { isSessionSetComplete, sessionSetLabel } from "@/lib/bulk-training-session-domain";
-import { progressionTargetLabel, type BulkProgressionResult } from "@/lib/bulk-progression";
+import type { BulkProgressionResult } from "@/lib/bulk-progression";
+import { buildBulkNextSessionGuidance } from "@/lib/bulk-next-session-guidance";
 
 type SetDraft = EditableSessionSet;
 
@@ -352,17 +353,36 @@ export function BulkWorkoutSessionView({
           </div>
           {(() => {
             const target = progression[exercise.sourcePlanExerciseId ?? `session:${exercise.id}`];
-            const label = target ? progressionTargetLabel(target) : null;
-            return label ? (
-              <div className="mt-2 rounded-lg bg-primary/10 p-2 text-xs text-primary">
-                <p className="font-semibold">{label}</p>
-                {target?.weakerSide && target.weakerSide !== "balanced" ? (
-                  <p className="mt-0.5">
-                    {target.weakerSide === "left" ? "Left" : "Right"} side needs to catch up.
+            const guidance = buildBulkNextSessionGuidance(target, {
+              planExerciseId: exercise.sourcePlanExerciseId ?? `session:${exercise.id}`,
+              exerciseId: exercise.sourceExerciseId,
+              executionMode: exercise.executionMode,
+              isBodyweight: exercise.isBodyweight,
+              targetSets: exercise.targetSets,
+              repMin: exercise.targetRepMin,
+              repMax: exercise.targetRepMax,
+            });
+            return (
+              <div
+                className="mt-2 rounded-lg bg-primary/10 p-2 text-xs leading-relaxed"
+                aria-label={`Next-session guidance for ${exercise.name}`}
+              >
+                {guidance.previousPerformanceText ? (
+                  <p className="text-muted-foreground">
+                    <span className="font-medium text-foreground">Last time:</span>{" "}
+                    {guidance.previousPerformanceText}
                   </p>
                 ) : null}
+                <p
+                  className={
+                    guidance.previousPerformanceText ? "mt-1 text-primary" : "text-primary"
+                  }
+                >
+                  <span className="font-semibold">Target today:</span> {guidance.targetText}
+                </p>
+                <p className="mt-0.5 text-muted-foreground">{guidance.reasonText}</p>
               </div>
-            ) : null;
+            );
           })()}
           {exercise.notes ? (
             <p className="mt-2 rounded-lg bg-elevated p-2 text-xs text-muted-foreground">

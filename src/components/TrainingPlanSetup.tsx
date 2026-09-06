@@ -19,7 +19,8 @@ import {
 import { userFacingError } from "@/lib/network-errors";
 import { Button } from "@/components/ui/button";
 import { Card, DataError, PendingLabel, SectionTitle } from "@/components/ui-kit";
-import { progressionTargetLabel, type BulkProgressionResult } from "@/lib/bulk-progression";
+import type { BulkProgressionResult } from "@/lib/bulk-progression";
+import { buildBulkNextSessionGuidance } from "@/lib/bulk-next-session-guidance";
 
 function PlanDetail({ plan }: { plan: TrainingPlanTemplate }) {
   return (
@@ -309,6 +310,15 @@ export function TrainingPlanOverview({
             <ul className="mt-3 space-y-2 text-sm">
               {day.exercises.map((exercise) => {
                 const next = progression[exercise.id];
+                const guidance = buildBulkNextSessionGuidance(next, {
+                  planExerciseId: exercise.id,
+                  exerciseId: exercise.exerciseId,
+                  executionMode: exercise.intendedUnilateralMode,
+                  isBodyweight: exercise.isBodyweight,
+                  targetSets: exercise.sets,
+                  repMin: exercise.repMin,
+                  repMax: exercise.repMax,
+                });
                 return (
                   <li key={exercise.id}>
                     <div className="flex justify-between gap-3">
@@ -317,14 +327,9 @@ export function TrainingPlanOverview({
                         {exercise.sets} × {exercise.repMin}–{exercise.repMax}
                       </span>
                     </div>
-                    {next && progressionTargetLabel(next) ? (
-                      <p className="mt-0.5 text-xs text-primary">
-                        {progressionTargetLabel(next)}
-                        {next.weakerSide && next.weakerSide !== "balanced"
-                          ? ` · ${next.weakerSide === "left" ? "Left" : "Right"} side needs to catch up`
-                          : ""}
-                      </p>
-                    ) : null}
+                    <p className="mt-0.5 text-xs leading-relaxed text-primary">
+                      <span className="font-medium">Next:</span> {guidance.targetText}
+                    </p>
                   </li>
                 );
               })}

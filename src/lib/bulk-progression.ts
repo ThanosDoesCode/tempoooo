@@ -40,9 +40,20 @@ export type BulkProgressionTargetInput = {
   repMax: number;
 };
 
+export type BulkProgressionPreviousSet = {
+  bilateralLoad: number | null;
+  bilateralReps: number | null;
+  leftLoad: number | null;
+  leftReps: number | null;
+  rightLoad: number | null;
+  rightReps: number | null;
+};
+
 export type BulkProgressionResult = {
   planExerciseId: string;
   exerciseId: string | null;
+  executionMode: "bilateral" | "unilateral";
+  isBodyweight: boolean;
   sourceSessionId: string | null;
   decision: BulkProgressionDecision;
   reasonCode: BulkProgressionReason;
@@ -52,11 +63,13 @@ export type BulkProgressionResult = {
   rightCurrentLoad: number | null;
   leftRecommendedLoad: number | null;
   rightRecommendedLoad: number | null;
+  targetSets: number;
   repTargetMin: number;
   repTargetMax: number;
   targetTotalReps: number | null;
   weakerSide: "left" | "right" | "balanced" | null;
   dataStatus: "none" | "partial" | "usable";
+  previousPerformance: BulkProgressionPreviousSet[] | null;
 };
 
 type Occurrence = {
@@ -71,6 +84,8 @@ const empty = (
 ): BulkProgressionResult => ({
   planExerciseId: target.planExerciseId,
   exerciseId: target.exerciseId,
+  executionMode: target.executionMode,
+  isBodyweight: target.isBodyweight,
   sourceSessionId: null,
   decision: "insufficient_data",
   reasonCode,
@@ -80,11 +95,13 @@ const empty = (
   rightCurrentLoad: null,
   leftRecommendedLoad: null,
   rightRecommendedLoad: null,
+  targetSets: target.targetSets,
   repTargetMin: target.repMin,
   repTargetMax: target.repMax,
   targetTotalReps: null,
   weakerSide: null,
   dataStatus: "none",
+  previousPerformance: null,
 });
 
 export function practicalLoad(value: number) {
@@ -103,6 +120,16 @@ function median(values: number[]) {
 
 const planned = (exercise: BulkTrainingSessionExercise) =>
   exercise.sets.filter((set) => !set.isExtra).slice(0, exercise.targetSets);
+
+const previousPerformance = (exercise: BulkTrainingSessionExercise): BulkProgressionPreviousSet[] =>
+  planned(exercise).map((set) => ({
+    bilateralLoad: set.bilateralWeight,
+    bilateralReps: set.bilateralReps,
+    leftLoad: set.leftWeight,
+    leftReps: set.leftReps,
+    rightLoad: set.rightWeight,
+    rightReps: set.rightReps,
+  }));
 
 function validWeight(value: number | null) {
   return value != null && Number.isFinite(value) && value >= 0 && value <= 1000;
@@ -174,6 +201,7 @@ function commonResult(
     ...empty(target, "build_reps"),
     sourceSessionId: occurrence.sessionId,
     dataStatus: "usable",
+    previousPerformance: previousPerformance(occurrence.exercise),
   };
 }
 
@@ -418,19 +446,4 @@ export function deriveBulkProgressionTargets(
       return [target.planExerciseId, result];
     }),
   ) as Record<string, BulkProgressionResult>;
-}
-
-export function progressionTargetLabel(result: BulkProgressionResult) {
-  if (result.decision === "insufficient_data") return null;
-  if (result.decision === "add_load")
-    return `Target: add ${result.recommendedLoad} kg · ${result.repTargetMin}–${result.repTargetMax} reps`;
-  if (result.decision === "increase_reps")
-    return result.targetTotalReps
-      ? `Target: beat ${result.targetTotalReps - 1} total reps`
-      : `Target: build reps toward ${result.repTargetMax}`;
-  if (result.leftRecommendedLoad != null || result.rightRecommendedLoad != null)
-    return `Target: L ${result.leftRecommendedLoad ?? "—"} kg · R ${result.rightRecommendedLoad ?? "—"} kg · ${result.repTargetMin}–${result.repTargetMax} reps`;
-  if (result.recommendedLoad != null)
-    return `Target: ${result.recommendedLoad} kg · ${result.repTargetMin}–${result.repTargetMax} reps`;
-  return `Target: repeat ${result.repTargetMin}–${result.repTargetMax} reps`;
 }

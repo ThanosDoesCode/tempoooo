@@ -245,7 +245,7 @@ test("public progression integration is batched, derived and invalidated without
   assert.match(sessions, /\.in\("session_exercise_id", exerciseIds\)/);
   assert.doesNotMatch(query, /progressionFor/);
   assert.match(training, /useBulkProgressionTargets/);
-  assert.match(workout, /progressionTargetLabel/);
+  assert.match(workout, /buildBulkNextSessionGuidance/);
   assert.match(workout, /invalidateQueries\(\{ queryKey: \["bulk-progression"\] \}\)/);
   assert.match(legacy, /repDelta >= 2/);
   assert.match(legacy, /repDelta <= -3/);
