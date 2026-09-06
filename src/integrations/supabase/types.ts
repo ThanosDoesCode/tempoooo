@@ -1062,14 +1062,15 @@ export type Database = {
       }
       create_challenge_atomic: {
         Args: {
+          _caller: string
           _duration_weeks: number
           _invited_email: string
           _name: string
-          _penalty_high_custom: string | null
+          _penalty_high_custom: string
           _penalty_high_eur: number
-          _penalty_low_custom: string | null
+          _penalty_low_custom: string
           _penalty_low_eur: number
-          _penalty_medium_custom: string | null
+          _penalty_medium_custom: string
           _penalty_medium_eur: number
           _penalty_mode: string
           _request_id: string
@@ -1082,7 +1083,7 @@ export type Database = {
         }
         Returns: string
       }
-      disable_challenge_push: { Args: never; Returns: undefined }
+      disable_challenge_push: { Args: { _caller: string }; Returns: undefined }
       ensure_bulk_profile: { Args: { _caller: string }; Returns: string }
       finalize_challenge: {
         Args: { _c: string; _caller: string }
@@ -1111,11 +1112,11 @@ export type Database = {
           challenge_name: string
           duration_weeks: number
           legacy_photo_owed: boolean
-          penalty_high_custom: string | null
+          penalty_high_custom: string
           penalty_high_eur: number
-          penalty_low_custom: string | null
+          penalty_low_custom: string
           penalty_low_eur: number
-          penalty_medium_custom: string | null
+          penalty_medium_custom: string
           penalty_medium_eur: number
           penalty_mode: string
           travel_pause_enabled: boolean

@@ -384,8 +384,12 @@ export function reconcileChallengePush(userId: string, options?: { force?: boole
 
 export async function disableChallengePush(sdk: PushSdk | null) {
   // Atomic account-wide opt-out takes effect even if OneSignal is unavailable.
-  const { error } = await supabase.rpc("disable_challenge_push");
-  if (error) throw new Error("Could not disable notifications. Please try again.");
+  try {
+    const { disableChallengePushAccount } = await import("./privileged-rpcs.functions");
+    await disableChallengePushAccount();
+  } catch {
+    throw new Error("Could not disable notifications. Please try again.");
+  }
   localStorage.removeItem(markerKey);
   const userId = identifiedUserId;
   if (userId) accountPreference.set(userId, false);
