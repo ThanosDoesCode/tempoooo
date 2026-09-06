@@ -86,13 +86,16 @@ function CheckInPage() {
       {mode === "weekly" ? (
         <>
           <div className="mb-3 flex items-center justify-between">
-            <button onClick={() => setWeekOffset((w) => w - 1)} className="text-sm text-primary">
+            <button
+              onClick={() => setWeekOffset((w) => w - 1)}
+              className="min-h-11 rounded-lg px-2 text-sm text-primary active:bg-elevated"
+            >
               ← Prev
             </button>
             <span className="text-xs text-muted-foreground">{s.label}</span>
             <button
               onClick={() => setWeekOffset((w) => Math.min(0, w + 1))}
-              className="text-sm text-primary disabled:opacity-30"
+              className="min-h-11 rounded-lg px-2 text-sm text-primary active:bg-elevated disabled:opacity-30"
               disabled={weekOffset >= 0}
             >
               Next →

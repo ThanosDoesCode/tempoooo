@@ -532,7 +532,10 @@ function PhotosSection({ data }: { data: AppData }) {
     <Card>
       <SectionTitle
         right={
-          <button onClick={addSet} className="text-xs font-medium text-primary">
+          <button
+            onClick={addSet}
+            className="min-h-11 rounded-lg px-2 text-xs font-medium text-primary active:bg-elevated"
+          >
             + New set
           </button>
         }
@@ -582,13 +585,13 @@ function PhotosSection({ data }: { data: AppData }) {
       <div className="mt-3 grid grid-cols-2 gap-2">
         <button
           onClick={exportBackup}
-          className="rounded-xl border border-border bg-elevated py-2 text-sm font-medium"
+          className="min-h-11 rounded-xl border border-border bg-elevated px-2 py-2 text-sm font-medium"
         >
           Export backup
         </button>
         <button
           onClick={() => importRef.current?.click()}
-          className="rounded-xl border border-border bg-elevated py-2 text-sm font-medium"
+          className="min-h-11 rounded-xl border border-border bg-elevated px-2 py-2 text-sm font-medium"
         >
           Restore backup
         </button>
@@ -608,7 +611,7 @@ function PhotosSection({ data }: { data: AppData }) {
       {photos.length > 1 ? (
         <button
           onClick={() => setCompare((c) => !c)}
-          className="mt-3 w-full rounded-xl border border-border bg-elevated py-2 text-sm font-medium"
+          className="mt-3 min-h-11 w-full rounded-xl border border-border bg-elevated px-2 py-2 text-sm font-medium"
         >
           {compare ? "Hide comparison" : "Compare two dates"}
         </button>
@@ -662,7 +665,7 @@ function PhotosSection({ data }: { data: AppData }) {
                       if (confirmDelete === p.id) void removeSet(p.id);
                       else setConfirmDelete(p.id);
                     }}
-                    className={`rounded-lg px-2 py-1 text-[11px] font-medium ${
+                    className={`min-h-11 rounded-lg px-2 py-1 text-[11px] font-medium ${
                       confirmDelete === p.id
                         ? "bg-danger text-primary-foreground"
                         : "text-danger hover:bg-danger/10"

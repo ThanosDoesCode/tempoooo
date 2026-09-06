@@ -23,6 +23,7 @@ import {
   recoverChallengeRoute,
   resetUserScopedQueries,
 } from "@/lib/query-cancellation";
+import { clearAccountScopedBrowserData } from "@/lib/browser-data";
 
 function NotFoundComponent() {
   return (
@@ -184,6 +185,7 @@ function RootComponent() {
         return;
       }
       previousUserId.current = nextUserId;
+      clearAccountScopedBrowserData();
       clearBulk();
       void resetUserScopedQueries(queryClient);
     });

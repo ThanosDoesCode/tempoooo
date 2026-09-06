@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { queryOptions } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { clearAccountScopedBrowserData } from "@/lib/browser-data";
 
 export const authenticatedUserQueryOptions = () =>
   queryOptions({
@@ -61,8 +62,12 @@ export async function signOut() {
     );
     return false;
   }
-  localStorage.removeItem("saved-credentials");
-  await supabase.auth.signOut();
+  const { error } = await supabase.auth.signOut();
+  if (error) {
+    window.alert("Could not sign out. Please check your connection and try again.");
+    return false;
+  }
+  clearAccountScopedBrowserData();
   return true;
 }
 

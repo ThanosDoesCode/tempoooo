@@ -19,6 +19,9 @@ import {
   useMyChallenge,
 } from "@/lib/challenge";
 
+const MAX_EVIDENCE_FILES = 4;
+const MAX_EVIDENCE_FILE_BYTES = 15 * 1024 * 1024;
+
 export const Route = createFileRoute("/_authenticated/challenge/log")({
   head: () => ({
     meta: [
@@ -133,6 +136,19 @@ function LogActivity() {
     setRequestError(null);
     if (files.length === 0) {
       setValidationError("Attach at least one screenshot that verifies the activity.");
+      return;
+    }
+    if (files.length > MAX_EVIDENCE_FILES) {
+      setValidationError(`Attach no more than ${MAX_EVIDENCE_FILES} screenshots.`);
+      return;
+    }
+    if (
+      files.some(
+        (file) =>
+          (!!file.type && !file.type.startsWith("image/")) || file.size > MAX_EVIDENCE_FILE_BYTES,
+      )
+    ) {
+      setValidationError("Each screenshot must be an image no larger than 15 MB.");
       return;
     }
     if (!(dist > 0 && dist <= 1000)) {
@@ -317,7 +333,23 @@ function LogActivity() {
               className="hidden"
               onChange={(e) => {
                 const picked = [...(e.target.files ?? [])];
-                if (picked.length) setFiles((prev) => [...prev, ...picked]);
+                if (picked.length) {
+                  const next = [...files, ...picked];
+                  if (next.length > MAX_EVIDENCE_FILES) {
+                    setValidationError(`Attach no more than ${MAX_EVIDENCE_FILES} screenshots.`);
+                  } else if (
+                    picked.some(
+                      (file) =>
+                        (!!file.type && !file.type.startsWith("image/")) ||
+                        file.size > MAX_EVIDENCE_FILE_BYTES,
+                    )
+                  ) {
+                    setValidationError("Each screenshot must be an image no larger than 15 MB.");
+                  } else {
+                    setValidationError(null);
+                    setFiles(next);
+                  }
+                }
                 e.target.value = "";
               }}
             />
@@ -335,7 +367,8 @@ function LogActivity() {
                     type="button"
                     disabled={busy}
                     onClick={() => setFiles((prev) => prev.filter((_, j) => j !== i))}
-                    className="absolute right-1.5 top-1.5 rounded-lg bg-danger px-2 py-0.5 text-[11px] font-medium text-primary-foreground"
+                    aria-label={`Remove evidence screenshot ${i + 1}`}
+                    className="absolute right-1.5 top-1.5 min-h-11 rounded-lg bg-danger px-2 py-0.5 text-[11px] font-medium text-primary-foreground"
                   >
                     Remove
                   </button>
@@ -412,6 +445,7 @@ function LogActivity() {
             <Field label="Note (shared with both members)">
               <input
                 value={note}
+                maxLength={500}
                 disabled={busy}
                 onChange={(e) => setNote(e.target.value)}
                 placeholder="e.g. easy pace, hilly route"

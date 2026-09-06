@@ -148,7 +148,11 @@ function AuthPage() {
         </div>
 
         <form onSubmit={submit} method="post" className="space-y-3">
+          <label htmlFor="auth-email" className="sr-only">
+            Email address
+          </label>
           <input
+            id="auth-email"
             type="email"
             name="email"
             autoComplete="username"
@@ -156,9 +160,13 @@ function AuthPage() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="Email"
-            className="w-full rounded-xl border border-border bg-elevated px-3 py-3 text-sm outline-none"
+            className="w-full rounded-xl border border-border bg-elevated px-3 py-3 text-base outline-none"
           />
+          <label htmlFor="auth-password" className="sr-only">
+            Password
+          </label>
           <input
+            id="auth-password"
             type="password"
             name="password"
             autoComplete={mode === "signin" ? "current-password" : "new-password"}
@@ -167,7 +175,7 @@ function AuthPage() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Password"
-            className="w-full rounded-xl border border-border bg-elevated px-3 py-3 text-sm outline-none"
+            className="w-full rounded-xl border border-border bg-elevated px-3 py-3 text-base outline-none"
           />
           <button
             disabled={pending !== null}
