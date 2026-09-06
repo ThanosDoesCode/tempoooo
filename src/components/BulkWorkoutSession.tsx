@@ -241,6 +241,7 @@ export function BulkWorkoutSessionView({
       queryClient.invalidateQueries({ queryKey: ["bulk-training-session", "active"] }),
       queryClient.invalidateQueries({ queryKey: ["bulk-training-sessions"] }),
       queryClient.invalidateQueries({ queryKey: ["bulk-progression"] }),
+      queryClient.invalidateQueries({ queryKey: ["bulk-progress-summary"] }),
     ]);
   }
 

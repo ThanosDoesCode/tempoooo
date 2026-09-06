@@ -236,6 +236,178 @@ test("meal CRUD, duplication and normalized ordering are transactional", async (
   );
 });
 
+test("public Bulk weight entries are decimal, canonical by date and owner-only", async () => {
+  const ownerProfile = (
+    await db.query("SELECT id FROM public.bulk_profiles WHERE owner_id=$1", [owner])
+  ).rows[0].id;
+  const otherProfile = (
+    await db.query("SELECT id FROM public.bulk_profiles WHERE owner_id=$1", [other])
+  ).rows[0].id;
+  await asUser(owner, () =>
+    db.query(
+      "INSERT INTO public.bulk_weight_entries(bulk_profile_id,log_date,weight_kg,note) VALUES ($1,'2026-09-05',61.75,'Morning')",
+      [ownerProfile],
+    ),
+  );
+  await assert.rejects(
+    asUser(owner, () =>
+      db.query(
+        "INSERT INTO public.bulk_weight_entries(bulk_profile_id,log_date,weight_kg) VALUES ($1,'2026-09-05',62)",
+        [ownerProfile],
+      ),
+    ),
+    /unique|duplicate/i,
+  );
+  await asUser(owner, () =>
+    db.query(
+      "UPDATE public.bulk_weight_entries SET weight_kg=61.25 WHERE bulk_profile_id=$1 AND log_date='2026-09-05'",
+      [ownerProfile],
+    ),
+  );
+  assert.equal(
+    Number(
+      (
+        await asUser(owner, () =>
+          db.query("SELECT weight_kg FROM public.bulk_weight_entries WHERE bulk_profile_id=$1", [
+            ownerProfile,
+          ]),
+        )
+      ).rows[0].weight_kg,
+    ),
+    61.25,
+  );
+  assert.equal(
+    (
+      await asUser(other, () =>
+        db.query("SELECT * FROM public.bulk_weight_entries WHERE bulk_profile_id=$1", [
+          ownerProfile,
+        ]),
+      )
+    ).rows.length,
+    0,
+  );
+  assert.equal(
+    (
+      await asUser(other, () =>
+        db.query("UPDATE public.bulk_weight_entries SET weight_kg=90 WHERE bulk_profile_id=$1", [
+          ownerProfile,
+        ]),
+      )
+    ).affectedRows,
+    0,
+  );
+  await assert.rejects(
+    asUser(owner, () =>
+      db.query(
+        "INSERT INTO public.bulk_weight_entries(bulk_profile_id,log_date,weight_kg) VALUES ($1,'2026-09-04',19)",
+        [ownerProfile],
+      ),
+    ),
+    /weight|check/i,
+  );
+  await assert.rejects(
+    asUser(owner, () =>
+      db.query(
+        "INSERT INTO public.bulk_weight_entries(bulk_profile_id,log_date,weight_kg) VALUES ($1,'2099-09-04',70)",
+        [ownerProfile],
+      ),
+    ),
+    /date|check/i,
+  );
+  await assert.rejects(
+    asUser(owner, () =>
+      db.query(
+        "INSERT INTO public.bulk_weight_entries(bulk_profile_id,log_date,weight_kg) VALUES ($1,'2026-09-03',401)",
+        [ownerProfile],
+      ),
+    ),
+    /weight|check/i,
+  );
+  await assert.rejects(
+    asUser(owner, () =>
+      db.query(
+        "INSERT INTO public.bulk_weight_entries(bulk_profile_id,log_date,weight_kg) VALUES ($1,'2026-09-02',70)",
+        [otherProfile],
+      ),
+    ),
+    /row-level security/i,
+  );
+  await asUser(owner, () =>
+    db.query("DELETE FROM public.bulk_weight_entries WHERE bulk_profile_id=$1", [ownerProfile]),
+  );
+  assert.equal(
+    (
+      await db.query(
+        "SELECT count(*) AS n FROM public.bulk_weight_entries WHERE bulk_profile_id=$1",
+        [ownerProfile],
+      )
+    ).rows[0].n,
+    0,
+  );
+  await assert.rejects(
+    asAnon(() => db.query("SELECT * FROM public.bulk_weight_entries")),
+    /permission denied/i,
+  );
+});
+
+test("public progress photo metadata and storage paths remain private and owner-scoped", async () => {
+  const ownerProfile = (
+    await db.query("SELECT id FROM public.bulk_profiles WHERE owner_id=$1", [owner])
+  ).rows[0].id;
+  const otherProfile = (
+    await db.query("SELECT id FROM public.bulk_profiles WHERE owner_id=$1", [other])
+  ).rows[0].id;
+  const photoId = randomUUID();
+  const path = `${ownerProfile}/public/${photoId}/photo.webp`;
+  await asUser(owner, () =>
+    db.query(
+      "INSERT INTO public.bulk_progress_photos(id,bulk_profile_id,log_date,storage_path,view_type,note) VALUES ($1,$2,'2026-09-05',$3,'front','Check-in')",
+      [photoId, ownerProfile, path],
+    ),
+  );
+  await asUser(owner, () =>
+    db.query(
+      "INSERT INTO storage.objects(id,bucket_id,name) VALUES ($1,'bulk-progress-photos',$2)",
+      [randomUUID(), path],
+    ),
+  );
+  assert.equal(
+    (
+      await asUser(other, () =>
+        db.query("SELECT * FROM public.bulk_progress_photos WHERE id=$1", [photoId]),
+      )
+    ).rows.length,
+    0,
+  );
+  assert.equal(
+    (await asUser(other, () => db.query("SELECT * FROM storage.objects WHERE name=$1", [path])))
+      .rows.length,
+    0,
+  );
+  await assert.rejects(
+    asUser(owner, () =>
+      db.query(
+        "INSERT INTO public.bulk_progress_photos(bulk_profile_id,log_date,storage_path) VALUES ($1,'2026-09-05',$2)",
+        [ownerProfile, `${otherProfile}/public/x/photo.webp`],
+      ),
+    ),
+    /check/i,
+  );
+  await assert.rejects(
+    asAnon(() => db.query("SELECT * FROM public.bulk_progress_photos")),
+    /permission denied/i,
+  );
+  await asUser(owner, () => db.query("DELETE FROM storage.objects WHERE name=$1", [path]));
+  await asUser(owner, () =>
+    db.query("DELETE FROM public.bulk_progress_photos WHERE id=$1", [photoId]),
+  );
+  assert.equal(
+    (await db.query("SELECT count(*) AS n FROM public.bulk_progress_photos WHERE id=$1", [photoId]))
+      .rows[0].n,
+    0,
+  );
+});
+
 test("RLS and RPC ownership prevent cross-user and anonymous meal access", async () => {
   const meal = (await createMeal(owner, "Private meal")).rows[0].id;
   assert.equal(

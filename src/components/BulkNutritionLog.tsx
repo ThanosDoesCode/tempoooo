@@ -63,9 +63,12 @@ export function BulkNutritionLog({
   const today = iso(new Date());
 
   const invalidate = () =>
-    queryClient.invalidateQueries({
-      queryKey: bulkNutritionDayQueryKey(bulkProfileId, selectedDate),
-    });
+    Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: bulkNutritionDayQueryKey(bulkProfileId, selectedDate),
+      }),
+      queryClient.invalidateQueries({ queryKey: ["bulk-progress-summary"] }),
+    ]);
 
   const entries = dayQuery.data?.entries ?? EMPTY_ENTRIES;
   const targets = dayQuery.data?.day?.targets ?? currentTargets;

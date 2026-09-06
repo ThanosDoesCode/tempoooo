@@ -39,6 +39,7 @@ import { useActions, useAppData, useBulkMeta } from "@/lib/store";
 import { optimizeBulkPhoto } from "@/lib/challenge-evidence";
 import { ALL_EXERCISES, exerciseLabel, type AppData, type PhotoSet } from "@/lib/types";
 import { useBulkAdmin } from "@/lib/bulk-access";
+import { PublicBulkProgress } from "@/components/PublicBulkProgress";
 
 export const Route = createFileRoute("/_authenticated/bulk/progress")({
   head: () => ({
@@ -62,12 +63,7 @@ const MONTHS = Array.from({ length: 13 }, (_, i) => addMonths(new Date(2026, 8, 
 
 function ProgressPage() {
   const data = useAppData();
-  const { data: isAdmin } = useBulkAdmin();
-  const [monthIdx, setMonthIdx] = useState(() => {
-    const now = new Date();
-    const idx = MONTHS.findIndex((m) => format(m, "yyyy-MM") === format(now, "yyyy-MM"));
-    return idx >= 0 ? idx : 0;
-  });
+  const { bulkId } = useBulkMeta();
 
   if (!data) {
     return (
@@ -76,6 +72,29 @@ function ProgressPage() {
       </AppShell>
     );
   }
+
+  if (data.targets.trainingSetupPreference && bulkId) {
+    return (
+      <AppShell>
+        <PageHeader
+          title="Progress"
+          subtitle="Weekly trends across weight, training and nutrition."
+        />
+        <PublicBulkProgress bulkProfileId={bulkId} targets={data.targets} />
+      </AppShell>
+    );
+  }
+
+  return <LegacyProgressPage data={data} />;
+}
+
+function LegacyProgressPage({ data }: { data: AppData }) {
+  const { data: isAdmin } = useBulkAdmin();
+  const [monthIdx, setMonthIdx] = useState(() => {
+    const now = new Date();
+    const idx = MONTHS.findIndex((m) => format(m, "yyyy-MM") === format(now, "yyyy-MM"));
+    return idx >= 0 ? idx : 0;
+  });
 
   const month = MONTHS[monthIdx] as Date;
   const all = sortedDays(data);

@@ -620,6 +620,47 @@ export type Database = {
           },
         ]
       }
+      bulk_progress_photos: {
+        Row: {
+          bulk_profile_id: string
+          created_at: string
+          id: string
+          log_date: string
+          note: string | null
+          storage_path: string
+          updated_at: string
+          view_type: string
+        }
+        Insert: {
+          bulk_profile_id: string
+          created_at?: string
+          id?: string
+          log_date: string
+          note?: string | null
+          storage_path: string
+          updated_at?: string
+          view_type?: string
+        }
+        Update: {
+          bulk_profile_id?: string
+          created_at?: string
+          id?: string
+          log_date?: string
+          note?: string | null
+          storage_path?: string
+          updated_at?: string
+          view_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bulk_progress_photos_bulk_profile_id_fkey"
+            columns: ["bulk_profile_id"]
+            isOneToOne: false
+            referencedRelation: "bulk_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bulk_profiles: {
         Row: {
           allow_editor: boolean
@@ -695,6 +736,44 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "bulk_week_notes_bulk_profile_id_fkey"
+            columns: ["bulk_profile_id"]
+            isOneToOne: false
+            referencedRelation: "bulk_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bulk_weight_entries: {
+        Row: {
+          bulk_profile_id: string
+          created_at: string
+          id: string
+          log_date: string
+          note: string | null
+          updated_at: string
+          weight_kg: number
+        }
+        Insert: {
+          bulk_profile_id: string
+          created_at?: string
+          id?: string
+          log_date: string
+          note?: string | null
+          updated_at?: string
+          weight_kg: number
+        }
+        Update: {
+          bulk_profile_id?: string
+          created_at?: string
+          id?: string
+          log_date?: string
+          note?: string | null
+          updated_at?: string
+          weight_kg?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bulk_weight_entries_bulk_profile_id_fkey"
             columns: ["bulk_profile_id"]
             isOneToOne: false
             referencedRelation: "bulk_profiles"
