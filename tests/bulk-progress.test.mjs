@@ -59,6 +59,18 @@ test("weekly change and incomplete-week data quality remain explicit", () => {
     }).weightChangeKg,
     null,
   );
+  assert.equal(
+    weeklyProgressSummary({
+      selectedDay: "2026-09-09",
+      weights: [],
+      nutritionDays: [],
+      completedWorkoutDates: [],
+      plannedWorkouts: null,
+      targetWeeklyGainKg: 0.25,
+      currentTargetCalories: 2900,
+    }).targetCalories,
+    2900,
+  );
 });
 
 test("goal progress prefers weekly average then latest weight and preserves onboarding values", () => {

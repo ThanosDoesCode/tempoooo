@@ -13,8 +13,10 @@ import {
   validateWeight,
   weeklyProgressSummary,
   type BulkProgressPhoto,
+  type BulkWeeklyProgressSummary,
 } from "@/lib/bulk-progress";
 import {
+  applyBulkCalorieRecommendation,
   bulkPhotoQueryKey,
   bulkProgressNutritionQueryKey,
   bulkWeightQueryKey,
@@ -29,6 +31,11 @@ import {
 import { useCompletedBulkTrainingSessions } from "@/lib/bulk-training-sessions";
 import { useActiveTrainingPlan } from "@/lib/training-plans-query";
 import type { Targets } from "@/lib/types";
+import { refreshBulk } from "@/lib/store";
+import {
+  recommendBulkCalories,
+  type BulkWeeklyRecommendation,
+} from "@/lib/bulk-weekly-recommendation";
 
 export function PublicBulkProgress({
   bulkProfileId,
@@ -40,12 +47,15 @@ export function PublicBulkProgress({
   const today = localDay(new Date());
   const currentWeek = bulkWeek(today);
   const from = localDay(addDays(parseISO(currentWeek.start), -84));
+  const lastCompletedEnd = localDay(addDays(parseISO(currentWeek.start), -1));
+  const previousCompletedEnd = localDay(addDays(parseISO(currentWeek.start), -8));
+  const recommendationFrom = localDay(addDays(parseISO(currentWeek.start), -21));
   const queryClient = useQueryClient();
   const weights = useBulkWeights(bulkProfileId, from);
-  const nutrition = useBulkProgressNutrition(bulkProfileId, currentWeek.start, currentWeek.end);
+  const nutrition = useBulkProgressNutrition(bulkProfileId, recommendationFrom, currentWeek.end);
   const sessions = useCompletedBulkTrainingSessions(
     bulkProfileId,
-    `${currentWeek.start}T00:00:00`,
+    `${recommendationFrom}T00:00:00`,
     `${localDay(addDays(parseISO(currentWeek.end), 1))}T00:00:00`,
   );
   const plan = useActiveTrainingPlan(bulkProfileId);
@@ -62,14 +72,81 @@ export function PublicBulkProgress({
         ),
         plannedWorkouts: plan.data?.trainingDaysPerWeek ?? null,
         targetWeeklyGainKg: targets.targetWeeklyGainKg ?? null,
+        currentTargetCalories: targets.calories,
       }),
-    [today, weights.data, nutrition.data, sessions.data, plan.data, targets.targetWeeklyGainKg],
+    [
+      today,
+      weights.data,
+      nutrition.data,
+      sessions.data,
+      plan.data,
+      targets.targetWeeklyGainKg,
+      targets.calories,
+    ],
+  );
+  const completedSummary = useMemo(
+    () =>
+      weeklyProgressSummary({
+        selectedDay: lastCompletedEnd,
+        weights: weights.data ?? [],
+        nutritionDays: nutrition.data ?? [],
+        completedWorkoutDates: (sessions.data ?? []).map((session) =>
+          localDay(new Date(session.completedAt!)),
+        ),
+        plannedWorkouts: plan.data?.trainingDaysPerWeek ?? null,
+        targetWeeklyGainKg: targets.targetWeeklyGainKg ?? null,
+        currentTargetCalories: targets.calories,
+      }),
+    [
+      lastCompletedEnd,
+      weights.data,
+      nutrition.data,
+      sessions.data,
+      plan.data,
+      targets.targetWeeklyGainKg,
+      targets.calories,
+    ],
+  );
+  const priorSummary = useMemo(
+    () =>
+      weeklyProgressSummary({
+        selectedDay: previousCompletedEnd,
+        weights: weights.data ?? [],
+        nutritionDays: nutrition.data ?? [],
+        completedWorkoutDates: (sessions.data ?? []).map((session) =>
+          localDay(new Date(session.completedAt!)),
+        ),
+        plannedWorkouts: plan.data?.trainingDaysPerWeek ?? null,
+        targetWeeklyGainKg: targets.targetWeeklyGainKg ?? null,
+        currentTargetCalories: targets.calories,
+      }),
+    [
+      previousCompletedEnd,
+      weights.data,
+      nutrition.data,
+      sessions.data,
+      plan.data,
+      targets.targetWeeklyGainKg,
+      targets.calories,
+    ],
   );
   const goal = goalProgress(
     weights.data ?? [],
     summary.weightAverageKg,
     targets.startWeight,
     targets.targetWeight,
+  );
+  const recommendation = useMemo(
+    () =>
+      recommendBulkCalories({
+        summary: completedSummary,
+        previousTrendChangeKg: priorSummary.weightChangeKg,
+        previousTrendComparable:
+          priorSummary.weightEntryCount >= 3 && priorSummary.previousWeightEntryCount >= 3,
+        targetWeightReached:
+          goal.currentWeightKg != null && goal.currentWeightKg >= targets.targetWeight,
+      }),
+    [completedSummary, priorSummary, goal.currentWeightKg, targets.targetWeight],
   );
   const invalidateWeights = async () => {
     await Promise.all([
@@ -206,6 +283,12 @@ export function PublicBulkProgress({
         ) : null}
       </Card>
 
+      <WeeklyCheckIn
+        recommendation={recommendation}
+        summary={completedSummary}
+        profileId={bulkProfileId}
+      />
+
       <Card>
         <SectionTitle>Nutrition this week</SectionTitle>
         {nutrition.isLoading ? (
@@ -312,6 +395,139 @@ function Metric({ label, value, hint }: { label: string; value: string; hint: st
       <p className="num mt-1 font-semibold">{value}</p>
       <p className="mt-0.5 text-[11px] text-muted-foreground">{hint}</p>
     </div>
+  );
+}
+
+function WeeklyCheckIn({
+  recommendation,
+  summary,
+  profileId,
+}: {
+  recommendation: BulkWeeklyRecommendation;
+  summary: BulkWeeklyProgressSummary;
+  profileId: string;
+}) {
+  const queryClient = useQueryClient();
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const canApply =
+    recommendation.decision === "increase_calories" ||
+    recommendation.decision === "decrease_calories";
+
+  const apply = async () => {
+    if (
+      !canApply ||
+      recommendation.currentTargetCalories == null ||
+      recommendation.recommendedCalories == null ||
+      pending
+    )
+      return;
+    if (
+      !window.confirm(
+        `Change daily calories from ${Math.round(recommendation.currentTargetCalories).toLocaleString()} to ${recommendation.recommendedCalories.toLocaleString()}? Protein, carbs and fat will stay unchanged.`,
+      )
+    )
+      return;
+    setPending(true);
+    setError(null);
+    try {
+      await applyBulkCalorieRecommendation(
+        recommendation.currentTargetCalories,
+        recommendation.recommendedCalories,
+      );
+      await refreshBulk();
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["bulk-progress-summary"] }),
+        queryClient.invalidateQueries({ queryKey: ["bulk-weekly-recommendation", profileId] }),
+      ]);
+      const { toast } = await import("sonner");
+      toast.success(`Daily calorie target updated to ${recommendation.recommendedCalories} kcal.`);
+    } catch (cause) {
+      setError(userFacingError(cause, "apply the calorie recommendation"));
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return (
+    <Card>
+      <SectionTitle>Weekly Check-in</SectionTitle>
+      <p className="text-xs text-muted-foreground">
+        Based on the completed week {format(parseISO(summary.weekStart), "d MMM")}–
+        {format(parseISO(summary.weekEnd), "d MMM")}.
+      </p>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <Metric
+          label="Target gain"
+          value={
+            summary.targetWeeklyGainKg == null ? "Unavailable" : `+${summary.targetWeeklyGainKg} kg`
+          }
+          hint="per week"
+        />
+        <Metric
+          label="Actual change"
+          value={
+            summary.weightChangeKg == null
+              ? "Unavailable"
+              : `${summary.weightChangeKg >= 0 ? "+" : ""}${summary.weightChangeKg.toFixed(2)} kg`
+          }
+          hint={`${summary.weightEntryCount} + ${summary.previousWeightEntryCount} weigh-ins`}
+        />
+        <Metric
+          label="Calories"
+          value={
+            summary.averageCalories == null
+              ? "Unavailable"
+              : `${Math.round(summary.averageCalories).toLocaleString()} avg`
+          }
+          hint={
+            summary.targetCalories == null
+              ? "No target"
+              : `${Math.round(summary.targetCalories).toLocaleString()} target`
+          }
+        />
+        <Metric
+          label="Training"
+          value={
+            summary.plannedWorkouts == null
+              ? `${summary.completedWorkouts} completed`
+              : `${summary.completedWorkouts} / ${summary.plannedWorkouts}`
+          }
+          hint="completed week"
+        />
+      </div>
+      <div className="mt-3 rounded-xl border border-border bg-elevated p-3" role="status">
+        <p className="text-sm font-semibold">{recommendation.headline}</p>
+        {recommendation.recommendedCalories != null ? (
+          <p className="num mt-1 text-lg font-bold text-primary">
+            {recommendation.recommendedCalories.toLocaleString()} kcal/day
+          </p>
+        ) : null}
+        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+          {recommendation.reasonText}
+        </p>
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          {recommendation.dataQuality === "strong"
+            ? `Based on ${summary.weightEntryCount} recent weigh-ins and ${summary.nutritionLoggedDays} logged nutrition days.`
+            : "Not enough complete data for a normal calorie adjustment yet."}
+        </p>
+      </div>
+      {canApply ? (
+        <Button
+          type="button"
+          disabled={pending}
+          className="mt-3 min-h-11 w-full"
+          onClick={() => void apply()}
+        >
+          {pending ? <PendingLabel>Applying recommendation…</PendingLabel> : "Apply Recommendation"}
+        </Button>
+      ) : null}
+      {error ? (
+        <p role="alert" className="mt-2 text-xs text-danger">
+          {error} Check your current target and try again.
+        </p>
+      ) : null}
+    </Card>
   );
 }
 

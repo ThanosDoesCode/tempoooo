@@ -748,3 +748,102 @@ test("nutrition RLS and mutation RPCs deny cross-user and anonymous access", asy
     /permission denied/i,
   );
 });
+
+test("calorie recommendation application is bounded, idempotent and calorie-only", async () => {
+  const ownerProfile = (
+    await db.query("SELECT id FROM public.bulk_profiles WHERE owner_id=$1", [owner])
+  ).rows[0].id;
+  const otherProfile = (
+    await db.query("SELECT id FROM public.bulk_profiles WHERE owner_id=$1", [other])
+  ).rows[0].id;
+  const before = (
+    await db.query("SELECT payload FROM public.bulk_targets WHERE bulk_profile_id=$1", [
+      ownerProfile,
+    ])
+  ).rows[0].payload;
+  const current = Number(before.calories);
+  const next = Math.floor((current + 150) / 50) * 50;
+  assert.equal(
+    (
+      await asUser(owner, () =>
+        db.query("SELECT public.apply_bulk_calorie_recommendation($1,$2) AS ok", [current, next]),
+      )
+    ).rows[0].ok,
+    true,
+  );
+  assert.equal(
+    (
+      await asUser(owner, () =>
+        db.query("SELECT public.apply_bulk_calorie_recommendation($1,$2) AS ok", [current, next]),
+      )
+    ).rows[0].ok,
+    true,
+  );
+  const after = (
+    await db.query("SELECT payload FROM public.bulk_targets WHERE bulk_profile_id=$1", [
+      ownerProfile,
+    ])
+  ).rows[0].payload;
+  assert.equal(Number(after.calories), next);
+  assert.equal(after.protein, before.protein);
+  assert.equal(after.carbs, before.carbs);
+  assert.equal(after.fat, before.fat);
+  await assert.rejects(
+    asUser(owner, () =>
+      db.query("SELECT public.apply_bulk_calorie_recommendation($1,$2)", [current, next + 50]),
+    ),
+    /another device/i,
+  );
+  await assert.rejects(
+    asUser(owner, () =>
+      db.query("SELECT public.apply_bulk_calorie_recommendation($1,$2)", [next, next + 500]),
+    ),
+    /outside/i,
+  );
+  await assert.rejects(
+    asUser(owner, () =>
+      db.query("SELECT public.apply_bulk_calorie_recommendation($1,$2)", [next, next + 125]),
+    ),
+    /outside/i,
+  );
+  await assert.rejects(
+    asAnon(() =>
+      db.query("SELECT public.apply_bulk_calorie_recommendation($1,$2)", [next, next + 150]),
+    ),
+    /permission denied/i,
+  );
+  assert.equal(
+    Number(
+      (
+        await db.query(
+          "SELECT payload->>'calories' AS calories FROM public.bulk_targets WHERE bulk_profile_id=$1",
+          [otherProfile],
+        )
+      ).rows[0].calories,
+    ),
+    2900,
+  );
+
+  const historical = await db.query(
+    "SELECT target_calories FROM public.bulk_nutrition_days WHERE bulk_profile_id=$1 AND log_date='2026-09-06'",
+    [ownerProfile],
+  );
+  assert.equal(Number(historical.rows[0].target_calories), 2900);
+  await asUser(owner, () =>
+    db.query(
+      "SELECT public.create_bulk_nutrition_entry('2026-09-10',$1,'After adjustment',1,1,1,1,NULL)",
+      [randomUUID()],
+    ),
+  );
+  assert.equal(
+    Number(
+      (
+        await db.query(
+          "SELECT target_calories FROM public.bulk_nutrition_days WHERE bulk_profile_id=$1 AND log_date='2026-09-10'",
+          [ownerProfile],
+        )
+      ).rows[0].target_calories,
+    ),
+    next,
+  );
+});

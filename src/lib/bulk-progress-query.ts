@@ -187,3 +187,15 @@ export async function deleteBulkProgressPhoto(photo: BulkProgressPhoto) {
     .eq("storage_path", photo.storagePath);
   if (deleted.error) throw deleted.error;
 }
+
+export async function applyBulkCalorieRecommendation(
+  expectedCurrentCalories: number,
+  newCalories: number,
+) {
+  const { data, error } = await supabase.rpc("apply_bulk_calorie_recommendation", {
+    _expected_current_calories: expectedCurrentCalories,
+    _new_calories: newCalories,
+  });
+  if (error) throw error;
+  if (!data) throw new Error("Calorie recommendation could not be applied");
+}

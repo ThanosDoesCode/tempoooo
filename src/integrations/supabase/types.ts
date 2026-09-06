@@ -1536,6 +1536,10 @@ export type Database = {
         Args: { _caller: string; _email: string; _token: string }
         Returns: string
       }
+      apply_bulk_calorie_recommendation: {
+        Args: { _expected_current_calories: number; _new_calories: number }
+        Returns: boolean
+      }
       challenge_today: { Args: { _c: string }; Returns: string }
       challenge_week_of: { Args: { _c: string; _d: string }; Returns: number }
       challenge_week_open: {

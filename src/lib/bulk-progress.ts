@@ -135,6 +135,7 @@ export function weeklyProgressSummary(args: {
   completedWorkoutDates: string[];
   plannedWorkouts: number | null;
   targetWeeklyGainKg: number | null;
+  currentTargetCalories?: number | null;
 }): BulkWeeklyProgressSummary {
   const week = bulkWeek(args.selectedDay);
   const previousStart = localDay(addDays(parseISO(week.start), -7));
@@ -162,7 +163,7 @@ export function weeklyProgressSummary(args: {
     averageProtein: nutrition.averageProtein,
     nutritionLoggedDays: nutrition.loggedDays,
     calorieAdherentDays: nutrition.calorieAdherentDays,
-    targetCalories: nutrition.targetCalories,
+    targetCalories: nutrition.targetCalories ?? args.currentTargetCalories ?? null,
     completedWorkouts: training.completed,
     plannedWorkouts: training.planned,
   };
