@@ -1065,11 +1065,11 @@ export type Database = {
           _duration_weeks: number
           _invited_email: string
           _name: string
-          _penalty_high_custom: string | null
+          _penalty_high_custom: string
           _penalty_high_eur: number
-          _penalty_low_custom: string | null
+          _penalty_low_custom: string
           _penalty_low_eur: number
-          _penalty_medium_custom: string | null
+          _penalty_medium_custom: string
           _penalty_medium_eur: number
           _penalty_mode: string
           _request_id: string
@@ -1111,11 +1111,11 @@ export type Database = {
           challenge_name: string
           duration_weeks: number
           legacy_photo_owed: boolean
-          penalty_high_custom: string | null
+          penalty_high_custom: string
           penalty_high_eur: number
-          penalty_low_custom: string | null
+          penalty_low_custom: string
           penalty_low_eur: number
-          penalty_medium_custom: string | null
+          penalty_medium_custom: string
           penalty_medium_eur: number
           penalty_mode: string
           travel_pause_enabled: boolean
