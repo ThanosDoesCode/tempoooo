@@ -5,8 +5,9 @@ import { AppShell, PageHeader } from "@/components/AppShell";
 import { Bar, Card, Chip, Field, Note, NumInput, SectionTitle, Stat } from "@/components/ui-kit";
 import { bulkStatus, dayCompletion, fmt, iso, signed, weekDays, weekStartOf } from "@/lib/calc";
 import { MEAL_PLANS, mealPlan, mealPlanSnapshot } from "@/lib/meals";
-import { useActions, useAppData } from "@/lib/store";
+import { useActions, useAppData, useBulkMeta } from "@/lib/store";
 import { RANGES, type MealPlanId, type WorkoutType } from "@/lib/types";
+import { useActiveTrainingPlan } from "@/lib/training-plans-query";
 
 export const Route = createFileRoute("/_authenticated/bulk/")({
   head: () => ({
@@ -30,6 +31,7 @@ const WORKOUT_TYPES: WorkoutType[] = ["Chest & Back", "Legs", "Arms & Shoulders"
 
 function TodayPage() {
   const data = useAppData();
+  const { bulkId } = useBulkMeta();
   const { saveDay } = useActions();
   const today = iso(new Date());
   const [sync, setSync] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -37,6 +39,8 @@ function TodayPage() {
 
   const day = data?.days[today];
   const targets = data?.targets;
+  const usesPublicTrainingPlan = !!targets?.trainingSetupPreference;
+  const activePlan = useActiveTrainingPlan(usesPublicTrainingPlan ? bulkId : null);
 
   const weekCount = useMemo(() => {
     if (!data) return 0;
@@ -363,28 +367,75 @@ function TodayPage() {
           </Field>
         </Card>
 
-        <Card>
-          <SectionTitle
-            right={
-              <Link to="/bulk/training" className="text-xs font-medium text-primary">
-                Log exercises →
-              </Link>
-            }
-          >
-            Gym
-          </SectionTitle>
-          <div className="flex flex-wrap gap-1.5">
-            {WORKOUT_TYPES.map((t) => (
-              <Chip
-                key={t}
-                active={day?.workoutType === t}
-                onClick={() => set({ workoutType: t, gym: t !== "Rest" })}
-              >
-                {t}
-              </Chip>
-            ))}
-          </div>
-        </Card>
+        {usesPublicTrainingPlan ? (
+          <Card>
+            <SectionTitle>Training</SectionTitle>
+            {activePlan.isLoading ? (
+              <div className="h-20 animate-pulse rounded-xl bg-elevated" />
+            ) : activePlan.data ? (
+              <div>
+                <h3 className="font-semibold">{activePlan.data.name}</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Choose today&apos;s workout from your active plan.
+                </p>
+                {activePlan.data.days.length ? (
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {activePlan.data.days.map((planDay) => (
+                      <span
+                        key={planDay.id}
+                        className="rounded-full bg-elevated px-2.5 py-1 text-xs text-foreground"
+                      >
+                        {planDay.name}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+                <Link
+                  to="/bulk/training"
+                  className="mt-4 flex min-h-11 w-full items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground active:scale-[0.98]"
+                >
+                  Open training
+                </Link>
+              </div>
+            ) : (
+              <div>
+                <p className="text-sm leading-6 text-muted-foreground">
+                  You haven&apos;t chosen a training plan yet. Pick a plan to start tracking your
+                  workouts.
+                </p>
+                <Link
+                  to="/bulk/training"
+                  className="mt-4 flex min-h-11 w-full items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground active:scale-[0.98]"
+                >
+                  Choose training plan
+                </Link>
+              </div>
+            )}
+          </Card>
+        ) : (
+          <Card>
+            <SectionTitle
+              right={
+                <Link to="/bulk/training" className="text-xs font-medium text-primary">
+                  Log exercises →
+                </Link>
+              }
+            >
+              Gym
+            </SectionTitle>
+            <div className="flex flex-wrap gap-1.5">
+              {WORKOUT_TYPES.map((t) => (
+                <Chip
+                  key={t}
+                  active={day?.workoutType === t}
+                  onClick={() => set({ workoutType: t, gym: t !== "Rest" })}
+                >
+                  {t}
+                </Chip>
+              ))}
+            </div>
+          </Card>
+        )}
 
         <div className="card-surface p-4">
           <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">

@@ -34,6 +34,64 @@ export const DEFAULT_NUTRITION_TARGETS = {
   fat: 88,
 } as const;
 
+export type InitialNutritionRecommendation = {
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+};
+
+type RecommendationInput = Pick<
+  BulkOnboardingValues,
+  "currentWeightKg" | "targetWeightKg" | "targetWeeklyGainKg" | "trainingDaysPerWeek"
+>;
+
+const roundTo = (value: number, step: number) => Math.round(value / step) * step;
+const clamp = (value: number, minimum: number, maximum: number) =>
+  Math.min(maximum, Math.max(minimum, value));
+
+/**
+ * Produces conservative starting targets from the information collected during
+ * onboarding. Weekly check-ins remain responsible for later calorie changes.
+ */
+export function recommendInitialNutritionTargets(
+  input: RecommendationInput,
+): InitialNutritionRecommendation | null {
+  const { currentWeightKg, targetWeightKg, targetWeeklyGainKg, trainingDaysPerWeek } = input;
+  if (
+    !Number.isFinite(currentWeightKg) ||
+    !Number.isFinite(targetWeightKg) ||
+    !Number.isFinite(targetWeeklyGainKg) ||
+    !Number.isInteger(trainingDaysPerWeek) ||
+    currentWeightKg < 20 ||
+    currentWeightKg > 400 ||
+    targetWeightKg <= currentWeightKg ||
+    targetWeightKg > 450 ||
+    targetWeeklyGainKg < 0.05 ||
+    targetWeeklyGainKg > 1.5 ||
+    trainingDaysPerWeek < 2 ||
+    trainingDaysPerWeek > 6
+  )
+    return null;
+
+  const protein = roundTo(clamp(currentWeightKg * 1.8, 40, 300), 5);
+  const fat = roundTo(clamp(Math.max(currentWeightKg * 0.8, 50), 40, 180), 5);
+  const goalGapKg = targetWeightKg - currentWeightKg;
+  const planningWeightKg = currentWeightKg + Math.min(goalGapKg * 0.1, 2.5);
+  const maintenanceFactor = 30 + trainingDaysPerWeek * 0.75;
+  const dailySurplus = (targetWeeklyGainKg * 7700) / 7;
+  const macroMinimumCalories = protein * 4 + fat * 9;
+  const calories = clamp(
+    roundTo(planningWeightKg * maintenanceFactor + dailySurplus, 50),
+    Math.max(800, macroMinimumCalories),
+    10000,
+  );
+  const remainingCalories = Math.max(0, calories - macroMinimumCalories);
+  const carbs = Math.min(1000, Math.floor(remainingCalories / 20) * 5);
+
+  return { calories, protein, carbs, fat };
+}
+
 export type ExperienceLevel = (typeof EXPERIENCE_LEVELS)[number]["value"];
 export type Equipment = (typeof EQUIPMENT_OPTIONS)[number]["value"];
 export type TrainingSetupPreference = (typeof TRAINING_SETUP_OPTIONS)[number]["value"];

@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, Check, Dumbbell } from "lucide-react";
@@ -18,6 +18,7 @@ import {
   type Equipment,
   type ExperienceLevel,
   type TrainingSetupPreference,
+  recommendInitialNutritionTargets,
   validateBulkOnboarding,
 } from "@/lib/bulk-onboarding";
 import { userFacingError } from "@/lib/network-errors";
@@ -99,13 +100,61 @@ function BulkOnboarding() {
   );
   const [busy, setBusy] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [nutritionManuallyAdjusted, setNutritionManuallyAdjusted] = useState(false);
   const values = useMemo(() => valuesOf(form), [form]);
   const allErrors = useMemo(() => validateBulkOnboarding(values), [values]);
+  const nutritionRecommendation = useMemo(
+    () =>
+      recommendInitialNutritionTargets({
+        currentWeightKg: numeric(form.currentWeightKg),
+        targetWeightKg: numeric(form.targetWeightKg),
+        targetWeeklyGainKg: numeric(form.targetWeeklyGainKg),
+        trainingDaysPerWeek: form.trainingDaysPerWeek ?? 0,
+      }),
+    [form.currentWeightKg, form.targetWeightKg, form.targetWeeklyGainKg, form.trainingDaysPerWeek],
+  );
+
+  useEffect(() => {
+    if (!nutritionRecommendation || nutritionManuallyAdjusted) return;
+    setForm((current) => ({
+      ...current,
+      calories: String(nutritionRecommendation.calories),
+      protein: String(nutritionRecommendation.protein),
+      carbs: String(nutritionRecommendation.carbs),
+      fat: String(nutritionRecommendation.fat),
+    }));
+  }, [nutritionRecommendation, nutritionManuallyAdjusted]);
 
   const update = <K extends keyof FormState>(key: K, value: FormState[K]) => {
+    if (key === "experienceLevel") setNutritionManuallyAdjusted(false);
     setForm((current) => ({ ...current, [key]: value }));
     setVisibleErrors((current) => ({ ...current, [key]: undefined }));
     setSubmitError(null);
+  };
+
+  const updateNutrition = (key: "calories" | "protein" | "carbs" | "fat", value: string) => {
+    setNutritionManuallyAdjusted(true);
+    update(key, value);
+  };
+
+  const useRecommendation = () => {
+    if (!nutritionRecommendation) return;
+    setNutritionManuallyAdjusted(false);
+    setForm((current) => ({
+      ...current,
+      calories: String(nutritionRecommendation.calories),
+      protein: String(nutritionRecommendation.protein),
+      carbs: String(nutritionRecommendation.carbs),
+      fat: String(nutritionRecommendation.fat),
+    }));
+    setVisibleErrors((current) => {
+      const next = { ...current };
+      delete next.calories;
+      delete next.protein;
+      delete next.carbs;
+      delete next.fat;
+      return next;
+    });
   };
 
   const next = () => {
@@ -179,7 +228,17 @@ function BulkOnboarding() {
             error={visibleErrors.trainingSetupPreference}
           />
         ) : null}
-        {step === 4 ? <NutritionStep form={form} update={update} errors={visibleErrors} /> : null}
+        {step === 4 ? (
+          <NutritionStep
+            form={form}
+            recommendation={nutritionRecommendation}
+            manuallyAdjusted={nutritionManuallyAdjusted}
+            update={updateNutrition}
+            useRecommendation={useRecommendation}
+            onAdjustManually={() => setNutritionManuallyAdjusted(true)}
+            errors={visibleErrors}
+          />
+        ) : null}
         {step === 5 ? <ReviewStep values={values} /> : null}
         {submitError ? (
           <p role="alert" className="mt-4 text-sm text-danger">
@@ -211,7 +270,9 @@ function BulkOnboarding() {
               onClick={next}
               className="min-h-11 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground active:scale-[0.98]"
             >
-              Continue
+              {step === 4 && form.experienceLevel === "beginner" && !nutritionManuallyAdjusted
+                ? "Use these targets"
+                : "Continue"}
             </button>
           ) : (
             <button
@@ -513,53 +574,112 @@ function PreferenceStep({
 
 function NutritionStep({
   form,
+  recommendation,
+  manuallyAdjusted,
   update,
+  useRecommendation,
+  onAdjustManually,
   errors,
 }: {
   form: FormState;
-  update: Update;
+  recommendation: ReturnType<typeof recommendInitialNutritionTargets>;
+  manuallyAdjusted: boolean;
+  update: (key: "calories" | "protein" | "carbs" | "fat", value: string) => void;
+  useRecommendation: () => void;
+  onAdjustManually: () => void;
   errors: Partial<Record<BulkOnboardingField, string>>;
 }) {
+  const beginnerSummary = form.experienceLevel === "beginner" && !manuallyAdjusted;
+  const recommendationRows = recommendation
+    ? [
+        ["Calories", `${recommendation.calories.toLocaleString()} kcal`],
+        ["Protein", `${recommendation.protein} g`],
+        ["Carbs", `${recommendation.carbs} g`],
+        ["Fat", `${recommendation.fat} g`],
+      ]
+    : [];
   return (
     <>
       <Heading
         title="Nutrition targets"
-        copy="Enter the daily targets you want Tempo to track. You can adjust them later."
+        copy={
+          form.experienceLevel === "beginner"
+            ? "Tempo calculated a practical starting point from your goal and training schedule."
+            : form.experienceLevel === "intermediate"
+              ? "Tempo's recommendation is prefilled. Adjust any target you already track."
+              : "Enter the daily targets you want Tempo to track."
+        }
       />
-      <div className="grid grid-cols-2 gap-4">
-        <TextNumber
-          label="Calories"
-          value={form.calories}
-          onChange={(value) => update("calories", value)}
-          suffix="kcal"
-          error={errors.calories}
-          integer
-        />
-        <TextNumber
-          label="Protein"
-          value={form.protein}
-          onChange={(value) => update("protein", value)}
-          suffix="g"
-          error={errors.protein}
-          integer
-        />
-        <TextNumber
-          label="Carbs"
-          value={form.carbs}
-          onChange={(value) => update("carbs", value)}
-          suffix="g"
-          error={errors.carbs}
-          integer
-        />
-        <TextNumber
-          label="Fat"
-          value={form.fat}
-          onChange={(value) => update("fat", value)}
-          suffix="g"
-          error={errors.fat}
-          integer
-        />
-      </div>
+      {beginnerSummary ? (
+        <div>
+          <dl className="grid grid-cols-2 gap-2">
+            {recommendationRows.map(([label, value]) => (
+              <div key={label} className="rounded-xl bg-elevated p-3">
+                <dt className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  {label}
+                </dt>
+                <dd className="num mt-1 text-lg font-semibold">{value}</dd>
+              </div>
+            ))}
+          </dl>
+          <p className="mt-4 text-xs leading-5 text-muted-foreground">
+            These are starting targets. Tempo can adjust calories later using your weekly progress.
+          </p>
+          <button
+            type="button"
+            onClick={onAdjustManually}
+            className="mt-3 min-h-11 w-full rounded-xl border border-border px-4 text-sm font-medium text-foreground active:bg-elevated"
+          >
+            Adjust manually
+          </button>
+        </div>
+      ) : (
+        <div>
+          <div className="grid grid-cols-2 gap-4">
+            <TextNumber
+              label="Calories"
+              value={form.calories}
+              onChange={(value) => update("calories", value)}
+              suffix="kcal"
+              error={errors.calories}
+              integer
+            />
+            <TextNumber
+              label="Protein"
+              value={form.protein}
+              onChange={(value) => update("protein", value)}
+              suffix="g"
+              error={errors.protein}
+              integer
+            />
+            <TextNumber
+              label="Carbs"
+              value={form.carbs}
+              onChange={(value) => update("carbs", value)}
+              suffix="g"
+              error={errors.carbs}
+              integer
+            />
+            <TextNumber
+              label="Fat"
+              value={form.fat}
+              onChange={(value) => update("fat", value)}
+              suffix="g"
+              error={errors.fat}
+              integer
+            />
+          </div>
+          {form.experienceLevel === "advanced" && recommendation ? (
+            <button
+              type="button"
+              onClick={useRecommendation}
+              className="mt-4 min-h-11 w-full rounded-xl border border-border px-4 text-sm font-medium text-foreground active:bg-elevated"
+            >
+              Use Tempo recommendation
+            </button>
+          ) : null}
+        </div>
+      )}
     </>
   );
 }

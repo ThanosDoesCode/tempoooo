@@ -6,6 +6,7 @@ import {
   History,
   Home,
   LineChart,
+  MoreHorizontal,
   Utensils,
   LogOut,
   PlusCircle,
@@ -16,10 +17,10 @@ import {
 import { useEffect, useState, type ReactNode } from "react";
 import { signOut } from "@/lib/auth";
 import { useMemberships } from "@/lib/bulk-access";
-import { prefetchBulk } from "@/lib/store";
+import { prefetchBulk, useIsPublicBulk } from "@/lib/store";
 import { PullToRefresh } from "./PullToRefresh";
 
-const BULK_NAV = [
+const LEGACY_BULK_NAV = [
   { to: "/bulk", label: "Today", icon: Home, exact: true },
   { to: "/bulk/training", label: "Training", icon: Dumbbell, exact: false },
   { to: "/bulk/meals", label: "Meals", icon: Utensils, exact: false },
@@ -27,6 +28,15 @@ const BULK_NAV = [
   { to: "/bulk/check-in", label: "Check-In", icon: CalendarCheck, exact: false },
   { to: "/bulk/history", label: "History", icon: History, exact: false },
 ] as const;
+
+const PUBLIC_BULK_NAV = [
+  { to: "/bulk", label: "Today", icon: Home, exact: true },
+  { to: "/bulk/training", label: "Training", icon: Dumbbell, exact: false },
+  { to: "/bulk/meals", label: "Meals", icon: Utensils, exact: false },
+  { to: "/bulk/more", label: "More", icon: MoreHorizontal, exact: false },
+] as const;
+
+const MORE_DESTINATIONS = ["/bulk/more", "/bulk/progress", "/bulk/check-in", "/bulk/history"];
 
 const CHALLENGE_NAV = [
   { to: "/challenge", label: "Week", icon: Trophy, exact: true },
@@ -42,6 +52,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const isChallenge = pathname.startsWith("/challenge");
   const isBulk = pathname.startsWith("/bulk");
   const { data: memberships } = useMemberships();
+  const usesPublicBulk = useIsPublicBulk();
   const [pendingTo, setPendingTo] = useState<string | null>(null);
 
   useEffect(() => setPendingTo(null), [pathname]);
@@ -50,7 +61,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const owner = memberships?.find((membership) => membership.role === "owner");
   const showingChallenge = pendingTo ? pendingTo.startsWith("/challenge") : isChallenge;
 
-  const nav = isBulk && hasBulk ? BULK_NAV : CHALLENGE_NAV;
+  const nav =
+    isBulk && hasBulk ? (usesPublicBulk ? PUBLIC_BULK_NAV : LEGACY_BULK_NAV) : CHALLENGE_NAV;
   const prefetchDestination = (to: string) => {
     if (to.startsWith("/bulk") && owner) void prefetchBulk(owner.bulk_profile_id);
   };
@@ -127,23 +139,32 @@ export function AppShell({ children }: { children: ReactNode }) {
           className="mx-auto grid max-w-lg px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2"
           style={{ gridTemplateColumns: `repeat(${nav.length}, minmax(0, 1fr))` }}
         >
-          {nav.map(({ to, label, icon: Icon, exact }) => (
-            <Link
-              key={to}
-              to={to}
-              preload="intent"
-              activeOptions={{ exact }}
-              onPointerEnter={() => prefetchDestination(to)}
-              onFocus={() => prefetchDestination(to)}
-              onPointerDown={() => acknowledge(to)}
-              onClick={() => acknowledge(to)}
-              aria-current={pendingTo === to ? "page" : undefined}
-              className={`group flex min-h-11 flex-col items-center gap-1 rounded-xl py-2 text-muted-foreground transition active:scale-95 active:bg-elevated data-[status=active]:text-primary ${pendingTo === to ? "bg-elevated text-primary" : ""}`}
-            >
-              <Icon className="h-5 w-5" strokeWidth={2} />
-              <span className="text-[11px] font-medium">{label}</span>
-            </Link>
-          ))}
+          {nav.map(({ to, label, icon: Icon, exact }) => {
+            const moreSelected =
+              to === "/bulk/more" &&
+              !pendingTo &&
+              MORE_DESTINATIONS.some(
+                (destination) => pathname === destination || pathname.startsWith(`${destination}/`),
+              );
+            const selected = pendingTo === to || moreSelected;
+            return (
+              <Link
+                key={to}
+                to={to}
+                preload="intent"
+                activeOptions={{ exact }}
+                onPointerEnter={() => prefetchDestination(to)}
+                onFocus={() => prefetchDestination(to)}
+                onPointerDown={() => acknowledge(to)}
+                onClick={() => acknowledge(to)}
+                aria-current={selected ? "page" : undefined}
+                className={`group flex min-h-11 flex-col items-center gap-1 rounded-xl py-2 text-muted-foreground transition active:scale-95 active:bg-elevated data-[status=active]:text-primary ${selected ? "bg-elevated text-primary" : ""}`}
+              >
+                <Icon className="h-5 w-5" strokeWidth={2} />
+                <span className="text-[11px] font-medium">{label}</span>
+              </Link>
+            );
+          })}
         </div>
       </nav>
     </div>

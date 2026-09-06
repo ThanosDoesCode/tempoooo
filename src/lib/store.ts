@@ -46,6 +46,14 @@ export function useAppData(): AppData | null {
   );
 }
 
+export function useIsPublicBulk(): boolean {
+  return useSyncExternalStore(
+    subscribe,
+    () => !!state?.targets.trainingSetupPreference,
+    () => false,
+  );
+}
+
 export function useBulkMeta(): { bulkId: string | null; role: BulkRole } {
   return useSyncExternalStore(
     subscribe,

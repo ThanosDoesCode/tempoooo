@@ -22,6 +22,7 @@ import { Route as AuthenticatedBulkDiagnosticsRouteImport } from './routes/_auth
 import { Route as AuthenticatedBulkExercisesRouteImport } from './routes/_authenticated/bulk/exercises'
 import { Route as AuthenticatedBulkHistoryRouteImport } from './routes/_authenticated/bulk/history'
 import { Route as AuthenticatedBulkMealsRouteImport } from './routes/_authenticated/bulk/meals'
+import { Route as AuthenticatedBulkMoreRouteImport } from './routes/_authenticated/bulk/more'
 import { Route as AuthenticatedBulkProgressRouteImport } from './routes/_authenticated/bulk/progress'
 import { Route as AuthenticatedBulkTrainingRouteImport } from './routes/_authenticated/bulk/training'
 import { Route as AuthenticatedChallengeIndexRouteImport } from './routes/_authenticated/challenge/index'
@@ -103,6 +104,11 @@ const AuthenticatedBulkMealsRoute = AuthenticatedBulkMealsRouteImport.update({
   path: '/meals',
   getParentRoute: () => AuthenticatedBulkRouteRoute,
 } as any)
+const AuthenticatedBulkMoreRoute = AuthenticatedBulkMoreRouteImport.update({
+  id: '/more',
+  path: '/more',
+  getParentRoute: () => AuthenticatedBulkRouteRoute,
+} as any)
 const AuthenticatedBulkProgressRoute =
   AuthenticatedBulkProgressRouteImport.update({
     id: '/progress',
@@ -176,6 +182,7 @@ export interface FileRoutesByFullPath {
   '/bulk/exercises': typeof AuthenticatedBulkExercisesRoute
   '/bulk/history': typeof AuthenticatedBulkHistoryRoute
   '/bulk/meals': typeof AuthenticatedBulkMealsRoute
+  '/bulk/more': typeof AuthenticatedBulkMoreRoute
   '/bulk/progress': typeof AuthenticatedBulkProgressRoute
   '/bulk/training': typeof AuthenticatedBulkTrainingRoute
   '/challenge/history': typeof AuthenticatedChallengeHistoryRoute
@@ -199,6 +206,7 @@ export interface FileRoutesByTo {
   '/bulk/exercises': typeof AuthenticatedBulkExercisesRoute
   '/bulk/history': typeof AuthenticatedBulkHistoryRoute
   '/bulk/meals': typeof AuthenticatedBulkMealsRoute
+  '/bulk/more': typeof AuthenticatedBulkMoreRoute
   '/bulk/progress': typeof AuthenticatedBulkProgressRoute
   '/bulk/training': typeof AuthenticatedBulkTrainingRoute
   '/challenge/history': typeof AuthenticatedChallengeHistoryRoute
@@ -225,6 +233,7 @@ export interface FileRoutesById {
   '/_authenticated/bulk/exercises': typeof AuthenticatedBulkExercisesRoute
   '/_authenticated/bulk/history': typeof AuthenticatedBulkHistoryRoute
   '/_authenticated/bulk/meals': typeof AuthenticatedBulkMealsRoute
+  '/_authenticated/bulk/more': typeof AuthenticatedBulkMoreRoute
   '/_authenticated/bulk/progress': typeof AuthenticatedBulkProgressRoute
   '/_authenticated/bulk/training': typeof AuthenticatedBulkTrainingRoute
   '/_authenticated/challenge/history': typeof AuthenticatedChallengeHistoryRoute
@@ -251,6 +260,7 @@ export interface FileRouteTypes {
     | '/bulk/exercises'
     | '/bulk/history'
     | '/bulk/meals'
+    | '/bulk/more'
     | '/bulk/progress'
     | '/bulk/training'
     | '/challenge/history'
@@ -274,6 +284,7 @@ export interface FileRouteTypes {
     | '/bulk/exercises'
     | '/bulk/history'
     | '/bulk/meals'
+    | '/bulk/more'
     | '/bulk/progress'
     | '/bulk/training'
     | '/challenge/history'
@@ -299,6 +310,7 @@ export interface FileRouteTypes {
     | '/_authenticated/bulk/exercises'
     | '/_authenticated/bulk/history'
     | '/_authenticated/bulk/meals'
+    | '/_authenticated/bulk/more'
     | '/_authenticated/bulk/progress'
     | '/_authenticated/bulk/training'
     | '/_authenticated/challenge/history'
@@ -411,6 +423,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedBulkMealsRouteImport
       parentRoute: typeof AuthenticatedBulkRouteRoute
     }
+    '/_authenticated/bulk/more': {
+      id: '/_authenticated/bulk/more'
+      path: '/more'
+      fullPath: '/bulk/more'
+      preLoaderRoute: typeof AuthenticatedBulkMoreRouteImport
+      parentRoute: typeof AuthenticatedBulkRouteRoute
+    }
     '/_authenticated/bulk/progress': {
       id: '/_authenticated/bulk/progress'
       path: '/progress'
@@ -490,6 +509,7 @@ interface AuthenticatedBulkRouteRouteChildren {
   AuthenticatedBulkExercisesRoute: typeof AuthenticatedBulkExercisesRoute
   AuthenticatedBulkHistoryRoute: typeof AuthenticatedBulkHistoryRoute
   AuthenticatedBulkMealsRoute: typeof AuthenticatedBulkMealsRoute
+  AuthenticatedBulkMoreRoute: typeof AuthenticatedBulkMoreRoute
   AuthenticatedBulkProgressRoute: typeof AuthenticatedBulkProgressRoute
   AuthenticatedBulkTrainingRoute: typeof AuthenticatedBulkTrainingRoute
   AuthenticatedBulkIndexRoute: typeof AuthenticatedBulkIndexRoute
@@ -503,6 +523,7 @@ const AuthenticatedBulkRouteRouteChildren: AuthenticatedBulkRouteRouteChildren =
     AuthenticatedBulkExercisesRoute: AuthenticatedBulkExercisesRoute,
     AuthenticatedBulkHistoryRoute: AuthenticatedBulkHistoryRoute,
     AuthenticatedBulkMealsRoute: AuthenticatedBulkMealsRoute,
+    AuthenticatedBulkMoreRoute: AuthenticatedBulkMoreRoute,
     AuthenticatedBulkProgressRoute: AuthenticatedBulkProgressRoute,
     AuthenticatedBulkTrainingRoute: AuthenticatedBulkTrainingRoute,
     AuthenticatedBulkIndexRoute: AuthenticatedBulkIndexRoute,

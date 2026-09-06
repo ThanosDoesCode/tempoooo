@@ -47,7 +47,10 @@ test("Tempo navigation exposes optional Bulk only after persisted activation", a
   assert.doesNotMatch(index, /window\.location/);
   const shell = await read("src/components/AppShell.tsx");
   assert.match(shell, /"\/bulk\/history", label: "History"/);
-  assert.match(shell, /isBulk && hasBulk \? BULK_NAV : CHALLENGE_NAV/);
+  assert.match(
+    shell,
+    /isBulk && hasBulk \? \(usesPublicBulk \? PUBLIC_BULK_NAV : LEGACY_BULK_NAV\) : CHALLENGE_NAV/,
+  );
   assert.match(shell, /\{hasBulk \? \([\s\S]*?>\s*Bulk\s*<\/Link>/);
   assert.match(shell, />\s*Challenge\s*<\/Link>/);
   assert.doesNotMatch(shell, /disabled[\s\S]{0,120}>\s*Bulk\s*</);
@@ -68,6 +71,40 @@ test("Tempo navigation exposes optional Bulk only after persisted activation", a
   const denied = await read("src/routes/_authenticated/bulk-access-denied.tsx");
   assert.match(denied, /Bulk access required/);
   assert.match(denied, /Bulk is optional/);
+});
+
+test("public Bulk uses four primary tabs and More keeps secondary routes reachable", async () => {
+  const [shell, more, today] = await Promise.all([
+    read("src/components/AppShell.tsx"),
+    read("src/routes/_authenticated/bulk/more.tsx"),
+    read("src/routes/_authenticated/bulk/index.tsx"),
+  ]);
+  const publicNav = shell.match(/const PUBLIC_BULK_NAV = \[[\s\S]*?\] as const;/)?.[0];
+  assert.ok(publicNav);
+  assert.deepEqual(
+    [...publicNav.matchAll(/label: "([^"]+)"/g)].map((match) => match[1]),
+    ["Today", "Training", "Meals", "More"],
+  );
+  assert.doesNotMatch(publicNav, /Progress|Check-In|History/);
+  for (const destination of ["/bulk/progress", "/bulk/check-in", "/bulk/history"]) {
+    assert.match(more, new RegExp(destination.replace("/", "\\/")));
+    assert.match(shell, new RegExp(destination.replace("/", "\\/")));
+  }
+  assert.match(more, /min-h-16/);
+  assert.match(shell, /MORE_DESTINATIONS/);
+
+  assert.match(today, /You haven&apos;t chosen a training plan yet/);
+  assert.match(today, /Choose training plan/);
+  assert.match(today, /activePlan\.data\.days\.map/);
+  assert.match(today, /planDay\.name/);
+  assert.match(today, /usesPublicTrainingPlan[\s\S]*WORKOUT_TYPES\.map/);
+
+  const legacyNav = shell.match(/const LEGACY_BULK_NAV = \[[\s\S]*?\] as const;/)?.[0];
+  assert.ok(legacyNav);
+  assert.deepEqual(
+    [...legacyNav.matchAll(/label: "([^"]+)"/g)].map((match) => match[1]),
+    ["Today", "Training", "Meals", "Progress", "Check-In", "History"],
+  );
 });
 
 test("authenticated routes keep the document title fixed to Tempo", async () => {
