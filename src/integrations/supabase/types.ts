@@ -165,6 +165,77 @@ export type Database = {
           { foreignKeyName: "bulk_training_plan_exercises_exercise_id_fkey"; columns: ["exercise_id"]; isOneToOne: false; referencedRelation: "bulk_exercises"; referencedColumns: ["id"] },
         ]
       }
+      bulk_training_sessions: {
+        Row: {
+          bulk_profile_id: string; completed_at: string | null; created_at: string; id: string
+          plan_name_snapshot: string; source_plan_day_id: string | null; started_at: string
+          status: string; training_plan_id: string | null; updated_at: string
+          workout_day_name_snapshot: string; workout_day_order_snapshot: number
+        }
+        Insert: {
+          bulk_profile_id: string; completed_at?: string | null; created_at?: string; id?: string
+          plan_name_snapshot: string; source_plan_day_id?: string | null; started_at?: string
+          status?: string; training_plan_id?: string | null; updated_at?: string
+          workout_day_name_snapshot: string; workout_day_order_snapshot: number
+        }
+        Update: {
+          bulk_profile_id?: string; completed_at?: string | null; created_at?: string; id?: string
+          plan_name_snapshot?: string; source_plan_day_id?: string | null; started_at?: string
+          status?: string; training_plan_id?: string | null; updated_at?: string
+          workout_day_name_snapshot?: string; workout_day_order_snapshot?: number
+        }
+        Relationships: [
+          { foreignKeyName: "bulk_training_sessions_bulk_profile_id_fkey"; columns: ["bulk_profile_id"]; isOneToOne: false; referencedRelation: "bulk_profiles"; referencedColumns: ["id"] },
+          { foreignKeyName: "bulk_training_sessions_training_plan_id_fkey"; columns: ["training_plan_id"]; isOneToOne: false; referencedRelation: "bulk_training_plans"; referencedColumns: ["id"] },
+          { foreignKeyName: "bulk_training_sessions_source_plan_day_id_fkey"; columns: ["source_plan_day_id"]; isOneToOne: false; referencedRelation: "bulk_training_plan_days"; referencedColumns: ["id"] },
+        ]
+      }
+      bulk_training_session_exercises: {
+        Row: {
+          exercise_name_snapshot: string; exercise_order: number; execution_mode: string; id: string
+          is_bodyweight: boolean; notes_snapshot: string | null; session_id: string
+          source_exercise_id: string | null; source_plan_exercise_id: string | null
+          target_rep_max: number; target_rep_min: number; target_sets: number
+        }
+        Insert: {
+          exercise_name_snapshot: string; exercise_order: number; execution_mode: string; id?: string
+          is_bodyweight: boolean; notes_snapshot?: string | null; session_id: string
+          source_exercise_id?: string | null; source_plan_exercise_id?: string | null
+          target_rep_max: number; target_rep_min: number; target_sets: number
+        }
+        Update: {
+          exercise_name_snapshot?: string; exercise_order?: number; execution_mode?: string; id?: string
+          is_bodyweight?: boolean; notes_snapshot?: string | null; session_id?: string
+          source_exercise_id?: string | null; source_plan_exercise_id?: string | null
+          target_rep_max?: number; target_rep_min?: number; target_sets?: number
+        }
+        Relationships: [
+          { foreignKeyName: "bulk_training_session_exercises_session_id_fkey"; columns: ["session_id"]; isOneToOne: false; referencedRelation: "bulk_training_sessions"; referencedColumns: ["id"] },
+          { foreignKeyName: "bulk_training_session_exercises_source_plan_exercise_id_fkey"; columns: ["source_plan_exercise_id"]; isOneToOne: false; referencedRelation: "bulk_training_plan_exercises"; referencedColumns: ["id"] },
+          { foreignKeyName: "bulk_training_session_exercises_source_exercise_id_fkey"; columns: ["source_exercise_id"]; isOneToOne: false; referencedRelation: "bulk_exercises"; referencedColumns: ["id"] },
+        ]
+      }
+      bulk_training_session_sets: {
+        Row: {
+          bilateral_reps: number | null; bilateral_weight: number | null; id: string
+          is_complete: boolean; is_extra: boolean; left_reps: number | null
+          left_weight: number | null; right_reps: number | null; right_weight: number | null
+          session_exercise_id: string; set_order: number; updated_at: string
+        }
+        Insert: {
+          bilateral_reps?: number | null; bilateral_weight?: number | null; id?: string
+          is_complete?: boolean; is_extra?: boolean; left_reps?: number | null
+          left_weight?: number | null; right_reps?: number | null; right_weight?: number | null
+          session_exercise_id: string; set_order: number; updated_at?: string
+        }
+        Update: {
+          bilateral_reps?: number | null; bilateral_weight?: number | null; id?: string
+          is_complete?: boolean; is_extra?: boolean; left_reps?: number | null
+          left_weight?: number | null; right_reps?: number | null; right_weight?: number | null
+          session_exercise_id?: string; set_order?: number; updated_at?: string
+        }
+        Relationships: [{ foreignKeyName: "bulk_training_session_sets_session_exercise_id_fkey"; columns: ["session_exercise_id"]; isOneToOne: false; referencedRelation: "bulk_training_session_exercises"; referencedColumns: ["id"] }]
+      }
       bulk_training_plan_template_days: {
         Row: { day_order: number; id: string; name: string; template_id: string }
         Insert: { day_order: number; id: string; name: string; template_id: string }
@@ -1303,6 +1374,20 @@ export type Database = {
         }
         Returns: string
       }
+      start_bulk_training_session: { Args: { _plan_day: string }; Returns: string }
+      save_bulk_training_session_set: {
+        Args: {
+          _bilateral_reps: number | null; _bilateral_weight: number | null
+          _left_reps: number | null; _left_weight: number | null
+          _right_reps: number | null; _right_weight: number | null
+          _session: string; _set: string
+        }
+        Returns: string
+      }
+      add_bulk_training_session_set: { Args: { _exercise: string; _session: string }; Returns: string }
+      remove_bulk_training_session_set: { Args: { _session: string; _set: string }; Returns: boolean }
+      finish_bulk_training_session: { Args: { _confirm_incomplete?: boolean; _session: string }; Returns: string }
+      discard_bulk_training_session: { Args: { _session: string }; Returns: boolean }
       penalty_for:
         | { Args: { _km: number; _target: number }; Returns: number }
         | {

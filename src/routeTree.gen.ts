@@ -29,6 +29,7 @@ import { Route as AuthenticatedChallengeLogRouteImport } from './routes/_authent
 import { Route as AuthenticatedChallengeNewRouteImport } from './routes/_authenticated/challenge/new'
 import { Route as AuthenticatedChallengePaymentsRouteImport } from './routes/_authenticated/challenge/payments'
 import { Route as AuthenticatedChallengeTargetsRouteImport } from './routes/_authenticated/challenge/targets'
+import { Route as AuthenticatedBulkWorkoutSessionIdRouteImport } from './routes/_authenticated/bulk/workout.$sessionId'
 import { Route as AuthenticatedInviteChallengeTokenRouteImport } from './routes/_authenticated/invite.challenge.$token'
 
 const IndexRoute = IndexRouteImport.update({
@@ -144,6 +145,12 @@ const AuthenticatedChallengeTargetsRoute =
     path: '/challenge/targets',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedBulkWorkoutSessionIdRoute =
+  AuthenticatedBulkWorkoutSessionIdRouteImport.update({
+    id: '/workout/$sessionId',
+    path: '/workout/$sessionId',
+    getParentRoute: () => AuthenticatedBulkRouteRoute,
+  } as any)
 const AuthenticatedInviteChallengeTokenRoute =
   AuthenticatedInviteChallengeTokenRouteImport.update({
     id: '/invite/challenge/$token',
@@ -171,6 +178,7 @@ export interface FileRoutesByFullPath {
   '/challenge/targets': typeof AuthenticatedChallengeTargetsRoute
   '/bulk/': typeof AuthenticatedBulkIndexRoute
   '/challenge/': typeof AuthenticatedChallengeIndexRoute
+  '/bulk/workout/$sessionId': typeof AuthenticatedBulkWorkoutSessionIdRoute
   '/invite/challenge/$token': typeof AuthenticatedInviteChallengeTokenRoute
 }
 export interface FileRoutesByTo {
@@ -192,6 +200,7 @@ export interface FileRoutesByTo {
   '/challenge/targets': typeof AuthenticatedChallengeTargetsRoute
   '/bulk': typeof AuthenticatedBulkIndexRoute
   '/challenge': typeof AuthenticatedChallengeIndexRoute
+  '/bulk/workout/$sessionId': typeof AuthenticatedBulkWorkoutSessionIdRoute
   '/invite/challenge/$token': typeof AuthenticatedInviteChallengeTokenRoute
 }
 export interface FileRoutesById {
@@ -216,6 +225,7 @@ export interface FileRoutesById {
   '/_authenticated/challenge/targets': typeof AuthenticatedChallengeTargetsRoute
   '/_authenticated/bulk/': typeof AuthenticatedBulkIndexRoute
   '/_authenticated/challenge/': typeof AuthenticatedChallengeIndexRoute
+  '/_authenticated/bulk/workout/$sessionId': typeof AuthenticatedBulkWorkoutSessionIdRoute
   '/_authenticated/invite/challenge/$token': typeof AuthenticatedInviteChallengeTokenRoute
 }
 export interface FileRouteTypes {
@@ -240,6 +250,7 @@ export interface FileRouteTypes {
     | '/challenge/targets'
     | '/bulk/'
     | '/challenge/'
+    | '/bulk/workout/$sessionId'
     | '/invite/challenge/$token'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -261,6 +272,7 @@ export interface FileRouteTypes {
     | '/challenge/targets'
     | '/bulk'
     | '/challenge'
+    | '/bulk/workout/$sessionId'
     | '/invite/challenge/$token'
   id:
     | '__root__'
@@ -284,6 +296,7 @@ export interface FileRouteTypes {
     | '/_authenticated/challenge/targets'
     | '/_authenticated/bulk/'
     | '/_authenticated/challenge/'
+    | '/_authenticated/bulk/workout/$sessionId'
     | '/_authenticated/invite/challenge/$token'
   fileRoutesById: FileRoutesById
 }
@@ -435,6 +448,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedChallengeTargetsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/bulk/workout/$sessionId': {
+      id: '/_authenticated/bulk/workout/$sessionId'
+      path: '/workout/$sessionId'
+      fullPath: '/bulk/workout/$sessionId'
+      preLoaderRoute: typeof AuthenticatedBulkWorkoutSessionIdRouteImport
+      parentRoute: typeof AuthenticatedBulkRouteRoute
+    }
     '/_authenticated/invite/challenge/$token': {
       id: '/_authenticated/invite/challenge/$token'
       path: '/invite/challenge/$token'
@@ -453,6 +473,7 @@ interface AuthenticatedBulkRouteRouteChildren {
   AuthenticatedBulkProgressRoute: typeof AuthenticatedBulkProgressRoute
   AuthenticatedBulkTrainingRoute: typeof AuthenticatedBulkTrainingRoute
   AuthenticatedBulkIndexRoute: typeof AuthenticatedBulkIndexRoute
+  AuthenticatedBulkWorkoutSessionIdRoute: typeof AuthenticatedBulkWorkoutSessionIdRoute
 }
 
 const AuthenticatedBulkRouteRouteChildren: AuthenticatedBulkRouteRouteChildren =
@@ -464,6 +485,8 @@ const AuthenticatedBulkRouteRouteChildren: AuthenticatedBulkRouteRouteChildren =
     AuthenticatedBulkProgressRoute: AuthenticatedBulkProgressRoute,
     AuthenticatedBulkTrainingRoute: AuthenticatedBulkTrainingRoute,
     AuthenticatedBulkIndexRoute: AuthenticatedBulkIndexRoute,
+    AuthenticatedBulkWorkoutSessionIdRoute:
+      AuthenticatedBulkWorkoutSessionIdRoute,
   }
 
 const AuthenticatedBulkRouteRouteWithChildren =

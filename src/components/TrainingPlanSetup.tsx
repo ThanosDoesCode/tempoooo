@@ -269,9 +269,15 @@ export function TrainingPlanSetup({ targets }: { targets: Targets }) {
 export function TrainingPlanOverview({
   plan,
   onEdit,
+  onStart,
+  startingDayId,
+  workoutActive,
 }: {
   plan: UserTrainingPlan;
   onEdit: () => void;
+  onStart: (dayId: string) => void;
+  startingDayId: string | null;
+  workoutActive: boolean;
 }) {
   return (
     <div className="space-y-3">
@@ -307,6 +313,19 @@ export function TrainingPlanOverview({
                 </li>
               ))}
             </ul>
+            <Button
+              className="mt-4 min-h-11 w-full"
+              disabled={startingDayId !== null || workoutActive}
+              onClick={() => onStart(day.id)}
+            >
+              {startingDayId === day.id ? (
+                <PendingLabel>Starting workout</PendingLabel>
+              ) : workoutActive ? (
+                "Workout already in progress"
+              ) : (
+                "Start Workout"
+              )}
+            </Button>
           </Card>
         ))
       ) : (

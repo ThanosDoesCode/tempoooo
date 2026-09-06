@@ -1,4 +1,5 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
 import { useState } from "react";
 import { AppShell, PageHeader } from "@/components/AppShell";
@@ -9,8 +10,13 @@ import { iso } from "@/lib/calc";
 import { useAuth } from "@/lib/auth";
 import { useActions, useAppData, useBulkMeta } from "@/lib/store";
 import { useActiveTrainingPlan } from "@/lib/training-plans-query";
-import { DataError } from "@/components/ui-kit";
+import { Card, DataError, PendingLabel } from "@/components/ui-kit";
 import { userFacingError } from "@/lib/network-errors";
+import {
+  startBulkTrainingSession,
+  useActiveBulkTrainingSession,
+} from "@/lib/bulk-training-sessions";
+import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/_authenticated/bulk/training")({
   head: () => ({
@@ -34,12 +40,31 @@ function TrainingPage() {
   const data = useAppData();
   const { user } = useAuth();
   const { bulkId, role } = useBulkMeta();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const usesPlanSetup = !!data?.targets.trainingSetupPreference;
   const activePlan = useActiveTrainingPlan(usesPlanSetup ? bulkId : null);
   const { saveWorkout, saveTargets } = useActions();
   const today = iso(new Date());
   const [date, setDate] = useState(today);
   const [editingPlan, setEditingPlan] = useState(false);
+  const [startingDayId, setStartingDayId] = useState<string | null>(null);
+  const activeSession = useActiveBulkTrainingSession(usesPlanSetup ? bulkId : null);
+
+  async function startWorkout(planDayId: string) {
+    setStartingDayId(planDayId);
+    try {
+      const sessionId = await startBulkTrainingSession(planDayId);
+      await queryClient.invalidateQueries({ queryKey: ["bulk-training-session"] });
+      await navigate({ to: "/bulk/workout/$sessionId", params: { sessionId } });
+    } catch (error) {
+      const message = userFacingError(error, "start your workout");
+      const { toast } = await import("sonner");
+      toast.error(message);
+    } finally {
+      setStartingDayId(null);
+    }
+  }
   return (
     <AppShell>
       <PageHeader
@@ -53,6 +78,22 @@ function TrainingPage() {
       >
         Browse exercise library
       </Link>
+      {usesPlanSetup && activeSession.isLoading ? (
+        <div className="mb-3 h-20 animate-pulse rounded-2xl bg-card" />
+      ) : activeSession.data ? (
+        <Card className="mb-3 border-primary/40 bg-primary/5">
+          <p className="text-xs font-semibold uppercase tracking-wider text-primary">
+            Workout in progress
+          </p>
+          <p className="mt-1 font-semibold">{activeSession.data.workoutDayName}</p>
+          <p className="text-xs text-muted-foreground">{activeSession.data.planName}</p>
+          <Button asChild className="mt-3 min-h-11 w-full">
+            <Link to="/bulk/workout/$sessionId" params={{ sessionId: activeSession.data.id }}>
+              Resume Workout
+            </Link>
+          </Button>
+        </Card>
+      ) : null}
       {!usesPlanSetup ? (
         <label className="mb-3 flex items-center justify-between gap-3 text-xs text-muted-foreground">
           Training date
@@ -85,7 +126,13 @@ function TrainingPage() {
             }}
           />
         ) : (
-          <TrainingPlanOverview plan={activePlan.data} onEdit={() => setEditingPlan(true)} />
+          <TrainingPlanOverview
+            plan={activePlan.data}
+            onEdit={() => setEditingPlan(true)}
+            onStart={(dayId) => void startWorkout(dayId)}
+            startingDayId={startingDayId}
+            workoutActive={!!activeSession.data}
+          />
         )
       ) : usesPlanSetup && data ? (
         <TrainingPlanSetup targets={data.targets} />

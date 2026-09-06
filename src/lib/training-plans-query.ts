@@ -19,7 +19,11 @@ type ExerciseRow = {
   intended_unilateral_mode: "bilateral" | "unilateral";
   notes: string | null;
   exercise_name?: string;
-  bulk_exercises?: { name?: string; supports_unilateral?: boolean } | null;
+  bulk_exercises?: {
+    name?: string;
+    supports_unilateral?: boolean;
+    is_bodyweight?: boolean;
+  } | null;
 };
 
 function mapExercise(row: ExerciseRow): TrainingPlanExercise {
@@ -35,6 +39,7 @@ function mapExercise(row: ExerciseRow): TrainingPlanExercise {
     intendedUnilateralMode: row.intended_unilateral_mode,
     notes: row.notes,
     supportsUnilateral: row.bulk_exercises?.supports_unilateral ?? false,
+    isBodyweight: row.bulk_exercises?.is_bodyweight ?? false,
   };
 }
 
@@ -58,7 +63,7 @@ export const trainingPlanTemplatesQueryOptions = () =>
         supabase
           .from("bulk_training_plan_template_exercises")
           .select(
-            "id,template_day_id,exercise_id,exercise_order,sets,rep_min,rep_max,intended_unilateral_mode,notes,bulk_exercises(name,supports_unilateral)",
+            "id,template_day_id,exercise_id,exercise_order,sets,rep_min,rep_max,intended_unilateral_mode,notes,bulk_exercises(name,supports_unilateral,is_bodyweight)",
           )
           .order("exercise_order"),
       ]);
@@ -110,7 +115,7 @@ export const activeTrainingPlanQueryOptions = (bulkProfileId: string | null) =>
       const { data: days, error: daysError } = await supabase
         .from("bulk_training_plan_days")
         .select(
-          "id,day_order,name,bulk_training_plan_exercises(id,exercise_id,source_system_exercise_id,exercise_name,exercise_order,sets,rep_min,rep_max,intended_unilateral_mode,notes,bulk_exercises!bulk_training_plan_exercises_exercise_id_fkey(supports_unilateral))",
+          "id,day_order,name,bulk_training_plan_exercises(id,exercise_id,source_system_exercise_id,exercise_name,exercise_order,sets,rep_min,rep_max,intended_unilateral_mode,notes,bulk_exercises!bulk_training_plan_exercises_exercise_id_fkey(supports_unilateral,is_bodyweight))",
         )
         .eq("plan_id", plan.id)
         .order("day_order");

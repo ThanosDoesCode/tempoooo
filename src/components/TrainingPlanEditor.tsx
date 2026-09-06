@@ -45,6 +45,7 @@ function fromLibrary(exercise: LibraryExercise): TrainingPlanExercise {
     intendedUnilateralMode: "bilateral",
     notes: null,
     supportsUnilateral: exercise.supports_unilateral,
+    isBodyweight: exercise.is_bodyweight,
   };
 }
 

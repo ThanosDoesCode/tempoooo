@@ -18,6 +18,7 @@ export type TrainingPlanExercise = {
   intendedUnilateralMode: UnilateralMode;
   notes: string | null;
   supportsUnilateral: boolean;
+  isBodyweight: boolean;
 };
 
 export type TrainingPlanDay = {
@@ -71,6 +72,7 @@ export function replaceTrainingPlanExercise(
     sourceSystemExerciseId: replacement.is_system ? replacement.id : null,
     name: replacement.name,
     supportsUnilateral: replacement.supports_unilateral,
+    isBodyweight: replacement.is_bodyweight,
     intendedUnilateralMode:
       replacement.supports_unilateral && current.intendedUnilateralMode === "unilateral"
         ? "unilateral"

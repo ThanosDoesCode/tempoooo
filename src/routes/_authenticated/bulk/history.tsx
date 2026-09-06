@@ -3,10 +3,11 @@ import { addDays, format, parseISO } from "date-fns";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useState } from "react";
 import { AppShell, PageHeader } from "@/components/AppShell";
-import { Card, SectionTitle } from "@/components/ui-kit";
+import { CompletedWorkout } from "@/components/BulkWorkoutSession";
+import { Card, DataError, SectionTitle } from "@/components/ui-kit";
 import { iso } from "@/lib/calc";
 import { mealPlan } from "@/lib/meals";
-import { useAppData } from "@/lib/store";
+import { useAppData, useBulkMeta } from "@/lib/store";
 import { exerciseLabel, splitLabel } from "@/lib/types";
 import {
   bodyweightMode,
@@ -15,6 +16,8 @@ import {
   workoutDuration,
   workoutMetrics,
 } from "@/lib/training";
+import { useCompletedBulkTrainingSessions } from "@/lib/bulk-training-sessions";
+import { userFacingError } from "@/lib/network-errors";
 
 export const Route = createFileRoute("/_authenticated/bulk/history")({
   head: () => ({
@@ -28,8 +31,12 @@ export const Route = createFileRoute("/_authenticated/bulk/history")({
 
 function BulkHistoryPage() {
   const data = useAppData();
+  const { bulkId } = useBulkMeta();
   const today = iso(new Date());
   const [date, setDate] = useState(today);
+  const from = new Date(`${date}T00:00:00`).toISOString();
+  const to = new Date(`${iso(addDays(parseISO(date), 1))}T00:00:00`).toISOString();
+  const publicSessions = useCompletedBulkTrainingSessions(bulkId, from, to);
 
   if (!data) {
     return (
@@ -207,6 +214,24 @@ function BulkHistoryPage() {
           </>
         )}
       </Card>
+
+      {publicSessions.isLoading ? (
+        <div className="mt-3 h-40 animate-pulse rounded-2xl bg-card" />
+      ) : publicSessions.error ? (
+        <div className="mt-3">
+          <DataError
+            message={userFacingError(publicSessions.error, "load completed plan workouts")}
+            onRetry={() => void publicSessions.refetch()}
+          />
+        </div>
+      ) : publicSessions.data?.length ? (
+        <div className="mt-3 space-y-3">
+          <SectionTitle>Completed plan workouts</SectionTitle>
+          {publicSessions.data.map((session) => (
+            <CompletedWorkout key={session.id} session={session} showBackLink={false} />
+          ))}
+        </div>
+      ) : null}
 
       <Card className="mt-3">
         <SectionTitle>Nutrition</SectionTitle>
