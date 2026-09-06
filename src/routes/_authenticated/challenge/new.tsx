@@ -4,11 +4,11 @@ import { useRef, useState } from "react";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { ChallengePrimer, ChallengeTermsSummary } from "@/components/challenge-rules";
 import { Card, Note, PendingLabel, SectionTitle } from "@/components/ui-kit";
-import { supabase } from "@/integrations/supabase/client";
 import { randomToken, sha256Hex, useAuth } from "@/lib/auth";
 import type { PenaltyMode } from "@/lib/challenge";
 import { COUNTRIES, countryListLabel } from "@/lib/countries";
 import { userFacingError } from "@/lib/network-errors";
+import { createChallenge } from "@/lib/privileged-rpcs.functions";
 
 export const Route = createFileRoute("/_authenticated/challenge/new")({
   head: () => ({
