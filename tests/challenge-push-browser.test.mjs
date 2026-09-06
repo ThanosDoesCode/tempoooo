@@ -11,6 +11,14 @@ const notificationComponent = await readFile(
   new URL("../src/components/ChallengeNotifications.tsx", import.meta.url),
   "utf8",
 );
+const privilegedFunctions = await readFile(
+  new URL("../src/lib/privileged-rpcs.functions.ts", import.meta.url),
+  "utf8",
+);
+const privilegedServer = await readFile(
+  new URL("../src/lib/privileged-rpcs.server.ts", import.meta.url),
+  "utf8",
+);
 const compiled = ts.transpileModule(source.replaceAll("import.meta.env", "__testEnv"), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText;
@@ -107,16 +115,23 @@ function browserFixture({
       },
     },
     async rpc() {
-      calls.push(["disable"]);
-      if (failure) return { error: new Error("failure") };
-      accountEnabled = false;
-      deviceActive = false;
-      return { error: null };
+      calls.push(["direct-rpc"]);
+      throw new Error("privileged RPC must not be called by the browser");
     },
+  };
+  const disableChallengePushAccount = async () => {
+    calls.push(["server-disable"]);
+    if (failure) throw new Error("failure");
+    accountEnabled = false;
+    deviceActive = false;
+    return { ok: true };
   };
   const context = {
     exports: {},
-    require: () => ({ supabase }),
+    require: (specifier) =>
+      specifier.includes("privileged-rpcs.functions")
+        ? { disableChallengePushAccount }
+        : { supabase },
     __testEnv: { VITE_ONESIGNAL_APP_ID: "app-id", DEV: true },
     console: {
       ...console,
@@ -276,6 +291,14 @@ test("registration failure never reports success, and retains a marker for safe 
   assert.ok(f.storage.has("challenge-push-device"));
 });
 test("account opt-out writes to the database before opting out the browser", async () => {
+  const handler = privilegedFunctions.match(
+    /export const disableChallengePushAccount =[\s\S]*?return \{ ok: true \};\n  \}\);/,
+  )?.[0];
+  assert.ok(handler);
+  assert.match(handler, /middleware\(\[requireSupabaseAuth\]\)/);
+  assert.match(handler, /disableChallengePushFor\(context\.userId\)/);
+  assert.doesNotMatch(handler, /data\.(?:caller|userId|owner)/);
+  assert.match(privilegedServer, /disable_challenge_push", \{ _caller: caller \}/);
   const f = browserFixture();
   await f.api.prepareChallengePush("user-a");
   await f.api.enableChallengePush(f.sdk, "user-a");
@@ -283,7 +306,11 @@ test("account opt-out writes to the database before opting out the browser", asy
   await f.api.disableChallengePush(f.sdk);
   assert.deepEqual(
     f.calls.map(([name]) => name),
-    ["disable", "optOut"],
+    ["server-disable", "optOut"],
+  );
+  assert.equal(
+    f.calls.some(([name]) => name === "direct-rpc"),
+    false,
   );
   assert.equal(await f.api.pushIsEnabled(f.sdk), false);
 });

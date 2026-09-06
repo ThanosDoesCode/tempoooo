@@ -155,13 +155,14 @@ async function createChallengeAtomic(
     homeCountries = ["GR", "SE"],
   } = {},
 ) {
-  return asUser(uid, () =>
+  return asService(() =>
     db.query(
       `SELECT public.create_challenge_atomic(
-        $1, $2, (date_trunc('week', CURRENT_DATE) + interval '7 days')::date,
-        'UTC', 52, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
+        $1, $2, $3, (date_trunc('week', CURRENT_DATE) + interval '7 days')::date,
+        'UTC', 52, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
       ) AS id`,
       [
+        uid,
         requestId,
         name,
         email,
@@ -1850,23 +1851,44 @@ test("atomic creation rolls every row back when the invitation insert fails", as
 });
 
 test("atomic challenge creation rejects unauthenticated and direct partial creation", async () => {
-  await db.query("SELECT set_config('request.jwt.claim.sub', '', false)");
-  await db.exec("SET ROLE authenticated");
-  try {
-    await assert.rejects(
-      db.query(
-        `SELECT public.create_challenge_atomic(
-          $1, 'No owner', (date_trunc('week', CURRENT_DATE) + interval '7 days')::date,
-          'UTC', 52, 'opponent@example.com', $2, 15, 'money', 15, 10, 5,
-          null, null, null, true, ARRAY['GR','SE']::text[]
-        )`,
-        [randomUUID(), "c".repeat(64)],
-      ),
-      /Not authenticated/,
+  const callWithCaller = (caller) =>
+    db.query(
+      `SELECT public.create_challenge_atomic(
+        $1, $2, 'No owner', (date_trunc('week', CURRENT_DATE) + interval '7 days')::date,
+        'UTC', 52, 'opponent@example.com', $3, 15, 'money', 15, 10, 5,
+        null, null, null, true, ARRAY['GR','SE']::text[]
+      )`,
+      [caller, randomUUID(), "c".repeat(64)],
     );
-  } finally {
-    await db.exec("RESET ROLE");
-  }
+  await assert.rejects(
+    asAnon(() => callWithCaller(a)),
+    /permission denied/,
+  );
+  await assert.rejects(
+    asUser(a, () => callWithCaller(a)),
+    /permission denied/,
+  );
+  const callPrivateWithCaller = (caller) =>
+    db.query(
+      `SELECT private.create_challenge_atomic(
+        $1, $2, 'No owner', (date_trunc('week', CURRENT_DATE) + interval '7 days')::date,
+        'UTC', 52, 'opponent@example.com', $3, 15, 'money', 15, 10, 5,
+        null, null, null, true, ARRAY['GR','SE']::text[]
+      )`,
+      [caller, randomUUID(), "c".repeat(64)],
+    );
+  await assert.rejects(
+    asAnon(() => callPrivateWithCaller(a)),
+    /permission denied/,
+  );
+  await assert.rejects(
+    asUser(a, () => callPrivateWithCaller(a)),
+    /permission denied/,
+  );
+  await assert.rejects(
+    asService(() => callWithCaller(null)),
+    /Not authenticated/,
+  );
 
   await assert.rejects(
     asUser(a, () =>
@@ -2718,7 +2740,23 @@ test("own subscription reads/deletes only; device forgery/identity edits/outbox 
     asUser(a, () => db.exec("INSERT INTO public.challenge_notification_events DEFAULT VALUES")),
     /permission denied/,
   );
-  await asUser(a, () => db.exec("SELECT public.disable_challenge_push()"));
+  await assert.rejects(
+    asUser(a, () => db.query("SELECT public.disable_challenge_push($1)", [a])),
+    /permission denied/,
+  );
+  await assert.rejects(
+    asAnon(() => db.query("SELECT public.disable_challenge_push($1)", [a])),
+    /permission denied/,
+  );
+  await assert.rejects(
+    asUser(a, () => db.query("SELECT private.disable_challenge_push($1)", [a])),
+    /permission denied/,
+  );
+  await assert.rejects(
+    asAnon(() => db.query("SELECT private.disable_challenge_push($1)", [a])),
+    /permission denied/,
+  );
+  await asService(() => db.query("SELECT public.disable_challenge_push($1)", [a]));
   assert.equal(
     (await db.query("SELECT enabled FROM public.challenge_push_users WHERE user_id=$1", [a]))
       .rows[0].enabled,
@@ -2773,7 +2811,7 @@ test("server registration respects account opt-out, rejects forged identity, and
       .rows[0].enabled,
     true,
   );
-  await asUser(a, () => db.exec("SELECT public.disable_challenge_push()"));
+  await asService(() => db.query("SELECT public.disable_challenge_push($1)", [a]));
   assert.equal((await register(false)).rows[0].enabled, false);
   assert.equal(
     (await db.query("SELECT enabled FROM public.challenge_push_users WHERE user_id=$1", [a]))
@@ -2848,7 +2886,7 @@ test("verified background registration restores detached devices and transfers a
     ).rows[0],
     { user_id: b, is_active: true },
   );
-  await asUser(b, () => db.exec("SELECT public.disable_challenge_push()"));
+  await asService(() => db.query("SELECT public.disable_challenge_push($1)", [b]));
   assert.equal(
     (
       await db.query("SELECT public.register_challenge_push_device($1,$2,$3,false) AS enabled", [

@@ -4,11 +4,13 @@ import { readFile } from "node:fs/promises";
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
-test("Challenge creation uses one authenticated atomic RPC", async () => {
+test("Challenge creation uses the authenticated server function and no browser RPC", async () => {
   const source = await read("src/routes/_authenticated/challenge/new.tsx");
   const createBlock = source.match(/const create = async \(\) => \{[\s\S]*?\n  \};/)?.[0];
   assert.ok(createBlock);
-  assert.match(createBlock, /supabase\.rpc\(\s*"create_challenge_atomic"/);
+  assert.match(source, /import \{ createChallenge \} from "@\/lib\/privileged-rpcs\.functions"/);
+  assert.match(createBlock, /await createChallenge\(\{\s*data:/);
+  assert.doesNotMatch(createBlock, /supabase\.rpc\(\s*"create_challenge_atomic"/);
   assert.doesNotMatch(
     createBlock,
     /\.from\("challenges"\)|\.from\("challenge_members"\)|\.from\("challenge_invitations"\)/,
@@ -18,37 +20,48 @@ test("Challenge creation uses one authenticated atomic RPC", async () => {
   assert.match(createBlock, /challengeId !== request\.requestId/);
   assert.match(createBlock, /setLink[\s\S]*request\.token/);
   for (const field of [
-    "_weekly_target_km",
-    "_penalty_mode",
-    "_penalty_high_eur",
-    "_penalty_medium_eur",
-    "_penalty_low_eur",
-    "_penalty_high_custom",
-    "_penalty_medium_custom",
-    "_penalty_low_custom",
-    "_travel_pause_enabled",
-    "_travel_pause_home_countries",
+    "weeklyTargetKm",
+    "penaltyMode",
+    "penaltyHighEur",
+    "penaltyMediumEur",
+    "penaltyLowEur",
+    "penaltyHighCustom",
+    "penaltyMediumCustom",
+    "penaltyLowCustom",
+    "travelPauseEnabled",
+    "travelPauseHomeCountries",
   ]) {
     assert.match(createBlock, new RegExp(field));
   }
 });
 
-test("atomic RPC derives its owner, locks search_path and exposes minimum privilege", async () => {
-  const sql = await read("supabase/migrations/20260904180000_configurable_travel_pause_terms.sql");
-  const create = sql.match(/CREATE FUNCTION public\.create_challenge_atomic\([\s\S]*?\n\$\$;/)?.[0];
-  assert.ok(create);
-  assert.match(create, /caller uuid := auth\.uid\(\)/);
-  assert.match(create, /SECURITY DEFINER[\s\S]*SET search_path = ''/);
-  assert.match(create, /pg_advisory_xact_lock/);
-  assert.match(
-    sql,
-    /REVOKE ALL ON FUNCTION public\.create_challenge_atomic[\s\S]*FROM PUBLIC, anon, service_role/,
-  );
-  assert.match(
-    sql,
-    /GRANT EXECUTE ON FUNCTION public\.create_challenge_atomic[\s\S]*TO authenticated/,
-  );
-  assert.doesNotMatch(create, /_caller|_owner|_user/);
+test("server auth supplies caller and privileged RPCs remain service-role only", async () => {
+  const [functions, server, implementation, wrapper] = await Promise.all([
+    read("src/lib/privileged-rpcs.functions.ts"),
+    read("src/lib/privileged-rpcs.server.ts"),
+    read("supabase/migrations/20260906203135_29222c8c-372a-43b8-acaa-6b8731640d9b.sql"),
+    read("supabase/migrations/20260906203157_29dffced-45c0-45df-ba84-79daadddd328.sql"),
+  ]);
+  const handler = functions.match(
+    /export const createChallenge =[\s\S]*?return createChallengeFor\(context\.userId, data\);\n  \}\);/,
+  )?.[0];
+  assert.ok(handler);
+  assert.match(handler, /middleware\(\[requireSupabaseAuth\]\)/);
+  assert.doesNotMatch(handler, /data\.(?:caller|userId|owner)/);
+  assert.match(server, /_caller: caller/);
+  assert.match(implementation, /caller uuid := _caller/);
+  assert.match(implementation, /SECURITY DEFINER[\s\S]*SET search_path TO ''/);
+  assert.match(implementation, /pg_advisory_xact_lock/);
+  for (const sql of [implementation, wrapper]) {
+    assert.match(
+      sql,
+      /REVOKE ALL ON FUNCTION (?:private|public)\.create_challenge_atomic[\s\S]*FROM PUBLIC, anon, authenticated/,
+    );
+    assert.match(
+      sql,
+      /GRANT EXECUTE ON FUNCTION (?:private|public)\.create_challenge_atomic[\s\S]*TO service_role/,
+    );
+  }
 });
 
 test("creator configures terms and invitee reviews them before explicit acceptance", async () => {
