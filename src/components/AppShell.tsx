@@ -6,6 +6,7 @@ import {
   History,
   Home,
   LineChart,
+  Utensils,
   LogOut,
   PlusCircle,
   Trophy,
@@ -21,6 +22,7 @@ import { PullToRefresh } from "./PullToRefresh";
 const BULK_NAV = [
   { to: "/bulk", label: "Today", icon: Home, exact: true },
   { to: "/bulk/training", label: "Training", icon: Dumbbell, exact: false },
+  { to: "/bulk/meals", label: "Meals", icon: Utensils, exact: false },
   { to: "/bulk/progress", label: "Progress", icon: LineChart, exact: false },
   { to: "/bulk/check-in", label: "Check-In", icon: CalendarCheck, exact: false },
   { to: "/bulk/history", label: "History", icon: History, exact: false },

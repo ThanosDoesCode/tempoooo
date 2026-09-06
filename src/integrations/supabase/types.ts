@@ -64,6 +64,87 @@ export type Database = {
           },
         ]
       }
+      bulk_meal_preset_ingredients: {
+        Row: {
+          id: string
+          meal_preset_id: string
+          name: string
+          quantity: number
+          sort_order: number
+          unit: string
+        }
+        Insert: {
+          id?: string
+          meal_preset_id: string
+          name: string
+          quantity: number
+          sort_order: number
+          unit: string
+        }
+        Update: {
+          id?: string
+          meal_preset_id?: string
+          name?: string
+          quantity?: number
+          sort_order?: number
+          unit?: string
+        }
+        Relationships: [{
+          foreignKeyName: "bulk_meal_preset_ingredients_meal_preset_id_fkey"
+          columns: ["meal_preset_id"]
+          isOneToOne: false
+          referencedRelation: "bulk_meal_presets"
+          referencedColumns: ["id"]
+        }]
+      }
+      bulk_meal_presets: {
+        Row: {
+          bulk_profile_id: string
+          calories: number
+          carbs_g: number
+          created_at: string
+          description: string | null
+          fat_g: number
+          id: string
+          name: string
+          protein_g: number
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          bulk_profile_id: string
+          calories: number
+          carbs_g: number
+          created_at?: string
+          description?: string | null
+          fat_g: number
+          id?: string
+          name: string
+          protein_g: number
+          sort_order: number
+          updated_at?: string
+        }
+        Update: {
+          bulk_profile_id?: string
+          calories?: number
+          carbs_g?: number
+          created_at?: string
+          description?: string | null
+          fat_g?: number
+          id?: string
+          name?: string
+          protein_g?: number
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [{
+          foreignKeyName: "bulk_meal_presets_bulk_profile_id_fkey"
+          columns: ["bulk_profile_id"]
+          isOneToOne: false
+          referencedRelation: "bulk_profiles"
+          referencedColumns: ["id"]
+        }]
+      }
       bulk_exercises: {
         Row: {
           active: boolean
@@ -1349,6 +1430,38 @@ export type Database = {
           _training_setup_preference: string
         }
         Returns: string
+      }
+      create_bulk_meal_preset: {
+        Args: {
+          _calories: number
+          _carbs: number
+          _description: string | null
+          _fat: number
+          _ingredients?: Json
+          _name: string
+          _protein: number
+        }
+        Returns: string
+      }
+      update_bulk_meal_preset: {
+        Args: {
+          _calories: number
+          _carbs: number
+          _description: string | null
+          _expected_updated_at: string
+          _fat: number
+          _ingredients?: Json
+          _meal: string
+          _name: string
+          _protein: number
+        }
+        Returns: string
+      }
+      duplicate_bulk_meal_preset: { Args: { _meal: string }; Returns: string }
+      delete_bulk_meal_preset: { Args: { _meal: string }; Returns: boolean }
+      move_bulk_meal_preset: {
+        Args: { _direction: number; _meal: string }
+        Returns: boolean
       }
       create_empty_bulk_training_plan: { Args: { _name: string }; Returns: string }
       ensure_bulk_profile: { Args: { _caller: string }; Returns: string }
