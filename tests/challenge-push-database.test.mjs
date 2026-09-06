@@ -18,6 +18,9 @@ const platformSchema = `SET TIME ZONE 'UTC';
     CREATE TABLE auth.users(id uuid PRIMARY KEY);
     CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
     CREATE FUNCTION auth.jwt() RETURNS jsonb LANGUAGE sql STABLE AS $$ SELECT '{}'::jsonb $$;
+    CREATE TABLE storage.buckets(id text PRIMARY KEY, public boolean NOT NULL DEFAULT false);
+    INSERT INTO storage.buckets(id, public) VALUES
+      ('challenge-evidence', true),('bulk-progress-photos', true),('payment-evidence', true);
     CREATE TABLE storage.objects(id uuid PRIMARY KEY, bucket_id text, name text);
     ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
     CREATE FUNCTION storage.foldername(text) RETURNS text[] LANGUAGE sql AS $$ SELECT string_to_array($1, '/') $$;
@@ -70,6 +73,15 @@ async function asUser(uid, action) {
 }
 async function asService(action) {
   await db.exec("SET ROLE service_role");
+  try {
+    return await action();
+  } finally {
+    await db.exec("RESET ROLE");
+  }
+}
+async function asAnon(action) {
+  await db.query("SELECT set_config('request.jwt.claim.sub', '', false)");
+  await db.exec("SET ROLE anon");
   try {
     return await action();
   } finally {
@@ -3041,5 +3053,387 @@ test("outbox claim leases prevent duplicate workers; expired leases retry, stale
       ])
     ).rows[0].status,
     "failed",
+  );
+});
+
+test("security audit blocks direct cross-user, anon, unsafe-link and legacy function attacks", async () => {
+  const owner = randomUUID();
+  const attacker = randomUUID();
+  for (const [id, email] of [
+    [owner, "security-owner@example.com"],
+    [attacker, "security-attacker@example.com"],
+  ]) {
+    await db.query("INSERT INTO auth.users(id) VALUES ($1)", [id]);
+    await db.query(
+      "INSERT INTO public.profiles(id,email,display_name) VALUES ($1,$2,'Security athlete')",
+      [id, email],
+    );
+    await completeBulkOnboarding(id, { preference: "custom" });
+  }
+  const ownerBulk = (
+    await db.query("SELECT id FROM public.bulk_profiles WHERE owner_id=$1", [owner])
+  ).rows[0].id;
+  const attackerBulk = (
+    await db.query("SELECT id FROM public.bulk_profiles WHERE owner_id=$1", [attacker])
+  ).rows[0].id;
+
+  await db.query(
+    `INSERT INTO public.bulk_days(bulk_profile_id,day,payload)
+     VALUES ($1,CURRENT_DATE,'{"weight":75}')`,
+    [ownerBulk],
+  );
+  await db.query(
+    `INSERT INTO public.bulk_workouts(bulk_profile_id,day,payload)
+     VALUES ($1,CURRENT_DATE,'{"status":"completed"}')`,
+    [ownerBulk],
+  );
+  await db.query(
+    `INSERT INTO public.bulk_week_notes(bulk_profile_id,week_start,note)
+     VALUES ($1,date_trunc('week',CURRENT_DATE)::date,'private')`,
+    [ownerBulk],
+  );
+  await db.query(
+    `INSERT INTO public.bulk_photos(bulk_profile_id,taken_on,front_path)
+     VALUES ($1,CURRENT_DATE,$2)`,
+    [ownerBulk, `${ownerBulk}/photo/front.webp`],
+  );
+  const photoObject = randomUUID();
+  await db.query(
+    "INSERT INTO storage.objects(id,bucket_id,name) VALUES ($1,'bulk-progress-photos',$2)",
+    [photoObject, `${ownerBulk}/photo/front.webp`],
+  );
+  const customExercise = `custom:${randomUUID()}`;
+  await asUser(owner, () =>
+    db.query(
+      `INSERT INTO public.bulk_exercises(
+        id,owner_id,slug,name,primary_muscle,equipment,movement_pattern
+      ) VALUES ($1,$2,$3,'Private Row','upper_back',ARRAY['dumbbell'],'horizontal_pull')`,
+      [customExercise, owner, `private-row-${owner.slice(0, 8)}`],
+    ),
+  );
+  const ownerPlan = (
+    await asUser(owner, () =>
+      db.query("SELECT public.create_empty_bulk_training_plan('Security plan') AS id"),
+    )
+  ).rows[0].id;
+  const ownerPlanVersion = (
+    await db.query("SELECT updated_at FROM public.bulk_training_plans WHERE id=$1", [ownerPlan])
+  ).rows[0].updated_at;
+  await asUser(owner, () =>
+    db.query("SELECT public.save_bulk_training_plan($1,$2,'Security plan',$3::jsonb)", [
+      ownerPlan,
+      ownerPlanVersion,
+      JSON.stringify([
+        {
+          name: "Private day",
+          exercises: [
+            {
+              exerciseId: customExercise,
+              sets: 3,
+              repMin: 8,
+              repMax: 12,
+              executionMode: "bilateral",
+              notes: "private setup",
+            },
+          ],
+        },
+      ]),
+    ]),
+  );
+  const ownerDay = (
+    await db.query("SELECT id FROM public.bulk_training_plan_days WHERE plan_id=$1", [ownerPlan])
+  ).rows[0].id;
+  const ownerPlanExercise = (
+    await db.query("SELECT id FROM public.bulk_training_plan_exercises WHERE plan_day_id=$1", [
+      ownerDay,
+    ])
+  ).rows[0].id;
+  const ownerSession = (
+    await asUser(owner, () =>
+      db.query("SELECT public.start_bulk_training_session($1) AS id", [ownerDay]),
+    )
+  ).rows[0].id;
+  const ownerSessionExercise = (
+    await db.query("SELECT id FROM public.bulk_training_session_exercises WHERE session_id=$1", [
+      ownerSession,
+    ])
+  ).rows[0].id;
+  const ownerSet = (
+    await db.query(
+      "SELECT id FROM public.bulk_training_session_sets WHERE session_exercise_id=$1 LIMIT 1",
+      [ownerSessionExercise],
+    )
+  ).rows[0].id;
+
+  for (const [table, where, value] of [
+    ["bulk_profiles", "id", ownerBulk],
+    ["bulk_members", "bulk_profile_id", ownerBulk],
+    ["bulk_targets", "bulk_profile_id", ownerBulk],
+    ["bulk_days", "bulk_profile_id", ownerBulk],
+    ["bulk_workouts", "bulk_profile_id", ownerBulk],
+    ["bulk_week_notes", "bulk_profile_id", ownerBulk],
+    ["bulk_photos", "bulk_profile_id", ownerBulk],
+    ["bulk_exercises", "id", customExercise],
+    ["bulk_training_plans", "id", ownerPlan],
+    ["bulk_training_plan_days", "id", ownerDay],
+    ["bulk_training_plan_exercises", "id", ownerPlanExercise],
+    ["bulk_training_sessions", "id", ownerSession],
+    ["bulk_training_session_exercises", "id", ownerSessionExercise],
+    ["bulk_training_session_sets", "id", ownerSet],
+  ]) {
+    const rows = await asUser(attacker, () =>
+      db.query(`SELECT * FROM public.${table} WHERE ${where}=$1`, [value]),
+    );
+    assert.equal(rows.rows.length, 0, `${table} leaked across accounts`);
+  }
+  assert.equal(
+    (await asUser(attacker, () => db.query("SELECT id FROM public.profiles WHERE id=$1", [owner])))
+      .rows.length,
+    0,
+  );
+  assert.equal(
+    (
+      await asUser(attacker, () =>
+        db.query("UPDATE public.bulk_training_plans SET name='Stolen' WHERE id=$1 RETURNING id", [
+          ownerPlan,
+        ]),
+      )
+    ).rows.length,
+    0,
+  );
+  assert.equal(
+    (
+      await asUser(attacker, () =>
+        db.query("SELECT id FROM storage.objects WHERE id=$1", [photoObject]),
+      )
+    ).rows.length,
+    0,
+  );
+  assert.equal(
+    (
+      await asUser(attacker, () =>
+        db.query(
+          "UPDATE public.bulk_targets SET payload='{}' WHERE bulk_profile_id=$1 RETURNING bulk_profile_id",
+          [ownerBulk],
+        ),
+      )
+    ).rows.length,
+    0,
+  );
+  await assert.rejects(
+    asUser(attacker, () =>
+      db.query("SELECT public.save_bulk_training_session_set($1,$2,20,10,NULL,NULL,NULL,NULL)", [
+        ownerSession,
+        ownerSet,
+      ]),
+    ),
+    /not found/i,
+  );
+  await assert.rejects(
+    asUser(attacker, () =>
+      db.query("SELECT public.finish_bulk_training_session($1,true)", [ownerSession]),
+    ),
+    /not found/i,
+  );
+  await assert.rejects(
+    asUser(attacker, () =>
+      db.query("SELECT public.discard_bulk_training_session($1)", [ownerSession]),
+    ),
+    /not found/i,
+  );
+
+  const attackerPlan = (
+    await asUser(attacker, () =>
+      db.query("SELECT public.create_empty_bulk_training_plan('Attacker plan') AS id"),
+    )
+  ).rows[0].id;
+  const attackerPlanVersion = (
+    await db.query("SELECT updated_at FROM public.bulk_training_plans WHERE id=$1", [attackerPlan])
+  ).rows[0].updated_at;
+  await assert.rejects(
+    asUser(attacker, () =>
+      db.query("SELECT public.save_bulk_training_plan($1,$2,'Attacker plan',$3::jsonb)", [
+        attackerPlan,
+        attackerPlanVersion,
+        JSON.stringify([
+          {
+            name: "Stolen",
+            exercises: [
+              {
+                exerciseId: customExercise,
+                sets: 3,
+                repMin: 8,
+                repMax: 12,
+                executionMode: "bilateral",
+                notes: null,
+              },
+            ],
+          },
+        ]),
+      ]),
+    ),
+    /unavailable/i,
+  );
+
+  assert.equal(
+    (await asUser(attacker, () => db.query("SELECT * FROM public.challenges WHERE id=$1", [x])))
+      .rows.length,
+    0,
+  );
+  for (const table of [
+    "challenge_members",
+    "challenge_invitations",
+    "challenge_activities",
+    "challenge_activity_audit",
+    "challenge_weeks",
+    "challenge_payments",
+    "challenge_travel_pauses",
+  ]) {
+    const rows = await asUser(attacker, () =>
+      db.query(`SELECT * FROM public.${table} WHERE challenge_id=$1`, [x]),
+    );
+    assert.equal(rows.rows.length, 0, `${table} leaked outside Challenge membership`);
+  }
+  const challengeObject = randomUUID();
+  await db.query(
+    "INSERT INTO storage.objects(id,bucket_id,name) VALUES ($1,'challenge-evidence',$2)",
+    [challengeObject, `${x}/${a}/evidence.webp`],
+  );
+  assert.equal(
+    (
+      await asUser(attacker, () =>
+        db.query("SELECT id FROM storage.objects WHERE id=$1", [challengeObject]),
+      )
+    ).rows.length,
+    0,
+  );
+  await assert.rejects(
+    asUser(attacker, () => db.query("SELECT * FROM public.challenge_notification_events")),
+    /permission denied/i,
+  );
+  const privateSubscription = randomUUID();
+  await db.query("INSERT INTO public.push_subscriptions(user_id,subscription_id) VALUES ($1,$2)", [
+    a,
+    privateSubscription,
+  ]);
+  assert.equal(
+    (
+      await asUser(attacker, () =>
+        db.query("SELECT id FROM public.push_subscriptions WHERE subscription_id=$1", [
+          privateSubscription,
+        ]),
+      )
+    ).rows.length,
+    0,
+  );
+  await assert.rejects(
+    asUser(attacker, () =>
+      db.query(
+        "INSERT INTO public.challenge_activities(challenge_id,user_id,activity_type,distance_km,duration_seconds,activity_date,evidence_path) VALUES ($1,$2,'run',1,300,CURRENT_DATE,'forged')",
+        [x, attacker],
+      ),
+    ),
+    /row-level security|Not a member/i,
+  );
+
+  const invitation = randomUUID();
+  await db.query(
+    `INSERT INTO public.challenge_invitations(
+      id,challenge_id,invited_email,token_hash,expires_at,created_by
+    ) VALUES ($1,$2,'private-invite@example.com',$3,now()+interval '1 day',$4)`,
+    [invitation, x, createHash("sha256").update(invitation).digest("hex"), a],
+  );
+  assert.equal(
+    (
+      await asUser(b, () =>
+        db.query(
+          "UPDATE public.challenge_invitations SET invited_email='changed@example.com' WHERE id=$1 RETURNING id",
+          [invitation],
+        ),
+      )
+    ).rows.length,
+    0,
+  );
+  const related = await asService(() => db.query("SELECT * FROM public.related_profiles($1)", [a]));
+  assert.ok(related.rows.length >= 2);
+  assert.ok(related.rows.every((profile) => profile.email === null));
+
+  await assert.rejects(
+    asUser(a, () =>
+      db.query(
+        "INSERT INTO public.challenge_activities(challenge_id,user_id,activity_type,distance_km,duration_seconds,activity_date,evidence_path,external_activity_url) VALUES ($1,$2,'run',1,300,CURRENT_DATE,'unsafe-url','javascript:alert(1)')",
+        [x, a],
+      ),
+    ),
+    /external_url_security_ck|check constraint/i,
+  );
+
+  const publicTables = await db.query(`
+    SELECT c.relname
+    FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+    WHERE n.nspname='public' AND c.relkind='r' AND NOT c.relrowsecurity
+  `);
+  assert.deepEqual(publicTables.rows, []);
+  assert.equal(
+    Number(
+      (
+        await db.query(`
+          SELECT count(*) AS n
+          FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+          WHERE n.nspname='public' AND c.relkind='r'
+            AND has_table_privilege('anon',c.oid,'SELECT,INSERT,UPDATE,DELETE')
+        `)
+      ).rows[0].n,
+    ),
+    0,
+  );
+  await assert.rejects(
+    asAnon(() => db.query("SELECT * FROM public.bulk_profiles")),
+    /permission denied/i,
+  );
+  await assert.rejects(
+    asAnon(() =>
+      db.query(
+        "SELECT public.complete_bulk_onboarding(70,78,0.25,'beginner',3,ARRAY['dumbbells'],'custom',2900,140,360,90)",
+      ),
+    ),
+    /permission denied/i,
+  );
+  await assert.rejects(
+    asAnon(() => db.query("SELECT * FROM storage.objects")),
+    /permission denied/i,
+  );
+
+  const unsafeDefiners = await db.query(`
+    SELECT n.nspname,p.proname
+    FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+    WHERE n.nspname IN ('public','private') AND p.prosecdef
+      AND NOT coalesce(p.proconfig,'{}'::text[]) @> ARRAY['search_path=""']
+  `);
+  assert.deepEqual(unsafeDefiners.rows, []);
+  for (const name of ["challenge_today", "challenge_week_of", "challenge_week_open"])
+    assert.equal(
+      (
+        await db.query(
+          "SELECT has_function_privilege('authenticated',p.oid,'EXECUTE') AS allowed FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.proname=$1",
+          [name],
+        )
+      ).rows[0].allowed,
+      false,
+    );
+  assert.equal(
+    (
+      await db.query(
+        "SELECT has_function_privilege('authenticated','public.activate_my_bulk()','EXECUTE') AS allowed",
+      )
+    ).rows[0].allowed,
+    false,
+  );
+  assert.ok(
+    (
+      await db.query(
+        "SELECT bool_and(NOT public) AS private FROM storage.buckets WHERE id IN ('challenge-evidence','bulk-progress-photos','payment-evidence')",
+      )
+    ).rows[0].private,
   );
 });

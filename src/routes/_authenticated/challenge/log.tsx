@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { normalizeDecimal, parseDecimal } from "@/lib/numeric";
 import { userFacingError } from "@/lib/network-errors";
+import { safeStravaUrl } from "@/lib/safe-url";
 import { optimizeEvidenceImage } from "@/lib/challenge-evidence";
 import {
   activityMetrics,
@@ -138,6 +139,11 @@ function LogActivity() {
       setValidationError("Enter a distance above 0 and no greater than 1,000 km.");
       return;
     }
+    const externalActivityUrl = url.trim() ? safeStravaUrl(url.trim()) : null;
+    if (url.trim() && !externalActivityUrl) {
+      setValidationError("Enter a valid HTTPS Strava URL.");
+      return;
+    }
     const seconds = durationSeconds;
     if (
       parsedDuration.kind !== "value" ||
@@ -173,7 +179,7 @@ function LogActivity() {
         duration_seconds: seconds,
         evidence_path: paths[0]!,
         extra_evidence_paths: paths.slice(1),
-        external_activity_url: url || null,
+        external_activity_url: externalActivityUrl,
         note: note || null,
         verification_source: "manual_strava_screenshot",
       });

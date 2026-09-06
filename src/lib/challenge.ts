@@ -276,9 +276,7 @@ export function useChallengeMembers(challengeId: string | undefined) {
         getRelatedProfiles(),
       ]);
       if (members.error) throw members.error;
-      const names = new Map(
-        (profiles ?? []).map((p) => [p.id, p.display_name || p.email || "Athlete"]),
-      );
+      const names = new Map((profiles ?? []).map((p) => [p.id, p.display_name || "Athlete"]));
       return (members.data ?? []).map((m) => ({
         userId: m.user_id,
         name: names.get(m.user_id) ?? "Athlete",

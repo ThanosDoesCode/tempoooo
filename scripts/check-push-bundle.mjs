@@ -8,6 +8,13 @@ const secrets = [
   "ONESIGNAL_REST_API_KEY",
   "CHALLENGE_PUSH_DISPATCH_SECRET",
   "SUPABASE_SERVICE_ROLE_KEY",
+  "DATABASE_URL",
+  "DATABASE_PASSWORD",
+  "SMTP_PASSWORD",
+  "GITHUB_TOKEN",
+  "VERCEL_TOKEN",
+  "CLOUDFLARE_API_TOKEN",
+  "OAUTH_CLIENT_SECRET",
 ];
 const canaries = Object.fromEntries(
   secrets.map((key) => [key, `private-bundle-canary-${key.toLowerCase()}`]),
@@ -45,5 +52,5 @@ async function scan(dir) {
 }
 for (const directory of directories) await scan(directory);
 console.log(
-  `PASS: ${scanned} client assets contain no push/server secret references or test canaries.`,
+  `PASS: ${scanned} client assets contain no server secret references, values or test canaries.`,
 );

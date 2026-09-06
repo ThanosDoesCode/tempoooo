@@ -43,6 +43,7 @@ import {
   type ChallengeTerms,
 } from "@/lib/challenge";
 import { evidenceWeekFinalized } from "@/lib/challenge-evidence";
+import { safeStravaUrl } from "@/lib/safe-url";
 import { ChallengePrimer } from "@/components/challenge-rules";
 import { ChallengeInviteCard } from "@/components/ChallengeInvite";
 import { ChallengeNotifications } from "@/components/ChallengeNotifications";
@@ -351,9 +352,9 @@ function ChallengeHome() {
                             paths={evidencePaths}
                             expired={evidenceExpired}
                           />
-                          {activity.external_activity_url ? (
+                          {safeStravaUrl(activity.external_activity_url) ? (
                             <a
-                              href={activity.external_activity_url}
+                              href={safeStravaUrl(activity.external_activity_url)!}
                               target="_blank"
                               rel="noreferrer"
                               className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 font-medium text-primary"

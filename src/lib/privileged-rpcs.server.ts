@@ -1,6 +1,6 @@
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
-type RelatedProfile = { id: string; display_name: string | null; email: string | null };
+type RelatedProfile = { id: string; display_name: string | null };
 
 async function rpc<T>(name: string, params: Record<string, unknown>): Promise<T> {
   const client = supabaseAdmin as unknown as {
@@ -51,8 +51,15 @@ export async function finalizeChallengeFor(caller: string, challenge: string) {
   return finalized;
 }
 
-export const relatedProfilesFor = (caller: string) =>
-  rpc<RelatedProfile[]>("related_profiles", { _caller: caller });
+export async function relatedProfilesFor(caller: string): Promise<RelatedProfile[]> {
+  const profiles = await rpc<Array<RelatedProfile & { email?: string | null }>>(
+    "related_profiles",
+    {
+      _caller: caller,
+    },
+  );
+  return profiles.map(({ id, display_name }) => ({ id, display_name }));
+}
 
 const DIAGNOSTIC_FIELDS =
   "id,kind,status,attempts,last_error,created_at,next_attempt_at,lease_until,finished_at" as const;

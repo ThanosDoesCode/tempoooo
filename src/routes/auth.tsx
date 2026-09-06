@@ -41,9 +41,7 @@ function AuthPage() {
     void supabase.auth.getSession().then(async ({ data }) => {
       if (data.session?.user) {
         await syncProfile(data.session.user);
-        const next = sessionStorage.getItem("post-auth-path");
-        sessionStorage.removeItem("post-auth-path");
-        await navigate({ to: next ?? "/challenge", replace: true });
+        await navigate({ to: "/challenge", replace: true });
         return;
       }
     });
