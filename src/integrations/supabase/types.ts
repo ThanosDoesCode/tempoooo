@@ -1060,29 +1060,6 @@ export type Database = {
           isSetofReturn: true
         }
       }
-      create_challenge_atomic: {
-        Args: {
-          _duration_weeks: number
-          _invited_email: string
-          _name: string
-          _penalty_high_custom: string
-          _penalty_high_eur: number
-          _penalty_low_custom: string
-          _penalty_low_eur: number
-          _penalty_medium_custom: string
-          _penalty_medium_eur: number
-          _penalty_mode: string
-          _request_id: string
-          _start_date: string
-          _timezone: string
-          _token_hash: string
-          _travel_pause_enabled: boolean
-          _travel_pause_home_countries: string[]
-          _weekly_target_km: number
-        }
-        Returns: string
-      }
-      disable_challenge_push: { Args: never; Returns: undefined }
       ensure_bulk_profile: { Args: { _caller: string }; Returns: string }
       finalize_challenge: {
         Args: { _c: string; _caller: string }
