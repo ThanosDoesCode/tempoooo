@@ -1,5 +1,6 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useDeferredValue, useState } from "react";
+import { z } from "zod";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { Card, DataError, PendingLabel, SectionTitle } from "@/components/ui-kit";
 import {
@@ -17,8 +18,16 @@ import {
 } from "@/lib/exercise-library";
 import { useQueryClient } from "@tanstack/react-query";
 import { userFacingError } from "@/lib/network-errors";
+import { useActions, useAppData } from "@/lib/store";
+import { useAuth } from "@/lib/auth";
+import { orderedExerciseDefs, type ExerciseDef, type SplitType } from "@/lib/types";
+import { updateExercise } from "@/lib/training";
 
 export const Route = createFileRoute("/_authenticated/bulk/exercises")({
+  validateSearch: z.object({
+    addTo: z.enum(["Chest & Back", "Legs", "Arms & Shoulders"]).optional(),
+    date: z.string().optional(),
+  }),
   head: () => ({ meta: [{ title: "Tempo" }] }),
   component: ExerciseLibraryPage,
 });
@@ -30,6 +39,11 @@ const label = (value: string) =>
     .join(" ");
 
 function ExerciseLibraryPage() {
+  const { addTo, date } = Route.useSearch();
+  const navigate = useNavigate();
+  const data = useAppData();
+  const { user } = useAuth();
+  const { saveTargets, saveWorkout } = useActions();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search);
@@ -57,6 +71,7 @@ function ExerciseLibraryPage() {
   const [customUnilateral, setCustomUnilateral] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [addingId, setAddingId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -114,11 +129,70 @@ function ExerciseLibraryPage() {
 
   const resetPage = () => setPage(0);
 
+  const addToLegacyWorkout = async (
+    item: NonNullable<typeof library.data>["exercises"][number],
+  ) => {
+    if (!addTo || !date || !data || !user || addingId) return;
+    const existing = data.workouts[date];
+    if (existing?.status === "completed") {
+      setFormError("Completed workouts cannot be changed.");
+      return;
+    }
+    const definitionAlreadySaved = orderedExerciseDefs(data.targets, addTo).some(
+      (exercise) => exercise.name === item.name,
+    );
+    const workoutAlreadyUpdated =
+      existing?.entries.some((entry) => entry.exercise === item.name) ?? false;
+    if (definitionAlreadySaved && (!existing || workoutAlreadyUpdated)) {
+      setFormError("That exercise is already in this workout.");
+      return;
+    }
+    setAddingId(item.id);
+    setFormError(null);
+    const definition: ExerciseDef = {
+      name: item.name,
+      min: 8,
+      max: 12,
+      ...(item.is_bodyweight ? { loadKind: "bodyweight" as const } : {}),
+    };
+    const currentDefinitions = data.targets.legacyExerciseDefinitions?.[addTo] ?? [];
+    const currentOrder = orderedExerciseDefs(data.targets, addTo).map((exercise) => exercise.name);
+    try {
+      if (!definitionAlreadySaved) {
+        await saveTargets({
+          ...data.targets,
+          legacyExerciseDefinitions: {
+            ...(data.targets.legacyExerciseDefinitions ?? {}),
+            [addTo]: [...currentDefinitions, definition],
+          },
+          legacyExerciseOrder: {
+            ...(data.targets.legacyExerciseOrder ?? {}),
+            [addTo]: [...currentOrder, item.name],
+          },
+        });
+      }
+      if (existing && existing.type === addTo && !workoutAlreadyUpdated) {
+        await saveWorkout(updateExercise(existing, item.name, {}), user.id);
+      }
+      await navigate({ to: "/bulk/training", replace: true });
+    } catch (error) {
+      setFormError(userFacingError(error, "add this exercise", { inputPreserved: true }));
+    } finally {
+      setAddingId(null);
+    }
+  };
+
   return (
     <AppShell>
       <PageHeader
-        title="Exercise library"
-        subtitle="Browse Tempo exercises or save movements that are unique to your setup."
+        title={addTo ? "Add to workout" : "Exercise library"}
+        subtitle={
+          addTo
+            ? `Choose an exercise for ${addTo}.`
+            : "Browse Tempo exercises or save movements that are unique to your setup."
+        }
+        backTo="/bulk/training"
+        backLabel="Training"
       />
 
       <Card>
@@ -316,6 +390,20 @@ function ExerciseLibraryPage() {
                     </button>
                   ) : null}
                 </div>
+                {addTo ? (
+                  <button
+                    type="button"
+                    disabled={addingId !== null}
+                    onClick={() => void addToLegacyWorkout(item)}
+                    className="mt-3 min-h-11 w-full rounded-xl bg-primary px-3 text-sm font-semibold text-primary-foreground active:scale-[0.98] disabled:opacity-60"
+                  >
+                    {addingId === item.id ? (
+                      <PendingLabel>Adding...</PendingLabel>
+                    ) : (
+                      "Add to workout"
+                    )}
+                  </button>
+                ) : null}
               </div>
             ))}
           </div>
@@ -343,13 +431,6 @@ function ExerciseLibraryPage() {
           </button>
         </div>
       </section>
-
-      <Link
-        to="/bulk/training"
-        className="mt-4 flex min-h-11 items-center justify-center rounded-xl text-sm font-medium text-muted-foreground"
-      >
-        Back to Training
-      </Link>
     </AppShell>
   );
 }

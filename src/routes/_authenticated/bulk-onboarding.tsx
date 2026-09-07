@@ -24,6 +24,7 @@ import {
   validateBulkOnboarding,
 } from "@/lib/bulk-onboarding";
 import { userFacingError } from "@/lib/network-errors";
+import { useAcknowledgeGoal } from "@/lib/goal-discovery";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/_authenticated/bulk-onboarding")({
@@ -98,6 +99,7 @@ const stepFields: Record<Step, BulkOnboardingField[]> = {
 function BulkOnboarding() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const acknowledgeGoal = useAcknowledgeGoal();
   const [step, setStep] = useState<Step>(1);
   const [form, setForm] = useState<FormState>(initialForm);
   const [visibleErrors, setVisibleErrors] = useState<Partial<Record<BulkOnboardingField, string>>>(
@@ -224,6 +226,7 @@ function BulkOnboarding() {
       const plans = await queryClient.fetchQuery({ ...bulkOwnerQueryOptions(), staleTime: 0 });
       if (!plans.some((plan) => plan.bulk_profile_id === planId))
         throw new Error("Your Goal plan is still being prepared. Please retry.");
+      await acknowledgeGoal().catch(() => undefined);
       await navigate({ to: "/bulk", replace: true });
     } catch (cause) {
       setSubmitError(userFacingError(cause, "create your Goal plan"));
@@ -234,7 +237,11 @@ function BulkOnboarding() {
 
   return (
     <AppShell>
-      <PageHeader title="Create My Goal Plan" subtitle={`Step ${step} of 5`} />
+      <PageHeader
+        title="Create My Goal Plan"
+        subtitle={`Step ${step} of 5`}
+        {...(step === 1 ? { backTo: "/profile", backLabel: "Profile" } : {})}
+      />
       <div className="mb-4 h-1.5 overflow-hidden rounded-full bg-secondary" aria-hidden="true">
         <div
           className="h-full rounded-full bg-primary transition-all"

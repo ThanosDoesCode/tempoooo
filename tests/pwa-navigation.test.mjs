@@ -2,8 +2,72 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile, readdir } from "node:fs/promises";
 import { PULL_REFRESH_THRESHOLD, pullGesture } from "../src/lib/pull-to-refresh.ts";
+import { canDismissStartupScreen } from "../src/lib/startup.ts";
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
+
+test("PWA launch cover follows real session and route readiness", async () => {
+  const [root, styles] = await Promise.all([read("src/routes/__root.tsx"), read("src/styles.css")]);
+
+  assert.match(root, /className="tempo-startup" role="status" aria-label="Loading Tempo"/);
+  assert.match(root, /className="tempo-startup-mark">T</);
+  assert.match(root, /supabase\.auth\.getSession\(\)/);
+  assert.match(root, /state\.status === "pending"/);
+  assert.match(root, /requestAnimationFrame/);
+  assert.doesNotMatch(root, /location\.reload|setTimeout/);
+  assert.match(
+    styles,
+    /\.tempo-startup[\s\S]*position: fixed;[\s\S]*background: var\(--color-background\)/,
+  );
+  assert.match(styles, /env\(safe-area-inset-top\)/);
+  assert.match(styles, /@media \(prefers-reduced-motion: reduce\)[\s\S]*\.tempo-startup-ring/);
+
+  assert.equal(
+    canDismissStartupScreen({
+      sessionRestored: false,
+      routePending: false,
+      pathname: "/challenge",
+      sessionUserId: null,
+    }),
+    false,
+  );
+  assert.equal(
+    canDismissStartupScreen({
+      sessionRestored: true,
+      routePending: true,
+      pathname: "/challenge",
+      sessionUserId: "user-a",
+    }),
+    false,
+  );
+  assert.equal(
+    canDismissStartupScreen({
+      sessionRestored: true,
+      routePending: false,
+      pathname: "/auth",
+      sessionUserId: "user-a",
+    }),
+    false,
+  );
+  assert.equal(
+    canDismissStartupScreen({
+      sessionRestored: true,
+      routePending: false,
+      pathname: "/challenge",
+      sessionUserId: "user-a",
+    }),
+    true,
+  );
+  assert.equal(
+    canDismissStartupScreen({
+      sessionRestored: true,
+      routePending: false,
+      pathname: "/auth",
+      sessionUserId: null,
+    }),
+    true,
+  );
+});
 
 test("pull-to-refresh ignores tiny, horizontal and mid-scroll gestures", () => {
   assert.equal(pullGesture({ x: 0, y: 0 }, { x: 0, y: 10 }, 0).distance, 0);
@@ -24,7 +88,7 @@ test("refresh revalidates data without a destructive browser reload", async () =
   assert.doesNotMatch(await read("src/routes/index.tsx"), /location\.reload/);
 });
 
-test("Tempo navigation exposes optional Bulk only after persisted activation", async () => {
+test("Tempo navigation exposes the four product areas only after persisted Goal activation", async () => {
   const manifest = JSON.parse(await read("public/manifest.webmanifest"));
   assert.equal(manifest.name, "Tempo");
   assert.equal(manifest.short_name, "Tempo");
@@ -46,13 +110,12 @@ test("Tempo navigation exposes optional Bulk only after persisted activation", a
   assert.match(index, /data\.session \? "\/challenge" : "\/auth"/);
   assert.doesNotMatch(index, /window\.location/);
   const shell = await read("src/components/AppShell.tsx");
-  assert.match(shell, /"\/bulk\/history", label: "History"/);
-  assert.match(
-    shell,
-    /isBulk && hasBulk \? \(publicPlan \? PUBLIC_BULK_NAV : LEGACY_BULK_NAV\) : CHALLENGE_NAV/,
-  );
-  assert.match(shell, /\{publicPlan \? "Goal" : "Bulk"\}/);
-  assert.match(shell, />\s*Challenge\s*<\/Link>/);
+  for (const label of ["Challenge", "Training", "Meals", "Goal"])
+    assert.match(shell, new RegExp(`label: "${label}"`));
+  assert.match(shell, /item\.area !== "challenge" && !hasBulk \? null/);
+  assert.match(shell, /aria-label=\{item\.label\}/);
+  assert.match(shell, /min-h-11/);
+  assert.doesNotMatch(shell, /label: "Bulk"/);
   assert.doesNotMatch(shell, /disabled[\s\S]{0,120}>\s*Bulk\s*</);
   assert.match(shell, /onPointerDown=\{\(\) => acknowledge/);
   assert.match(shell, /router\.status === "pending"/);
@@ -69,29 +132,32 @@ test("Tempo navigation exposes optional Bulk only after persisted activation", a
   assert.match(onboarding, /Create My Goal Plan/);
   assert.match(onboarding, /bulkOwnerQueryOptions/);
   const denied = await read("src/routes/_authenticated/bulk-access-denied.tsx");
-  assert.match(denied, /Bulk access required/);
-  assert.match(denied, /Bulk is optional/);
+  assert.match(denied, /Goal plan required/);
+  assert.match(denied, /Goal is optional/);
 });
 
-test("public Bulk uses four primary tabs and More keeps secondary routes reachable", async () => {
+test("each product area has four contextual destinations and legacy/public data paths remain", async () => {
   const [shell, more, today] = await Promise.all([
     read("src/components/AppShell.tsx"),
     read("src/routes/_authenticated/bulk/more.tsx"),
     read("src/routes/_authenticated/bulk/index.tsx"),
   ]);
-  const publicNav = shell.match(/const PUBLIC_BULK_NAV = \[[\s\S]*?\] as const;/)?.[0];
-  assert.ok(publicNav);
-  assert.deepEqual(
-    [...publicNav.matchAll(/label: "([^"]+)"/g)].map((match) => match[1]),
-    ["Today", "Training", "Meals", "More"],
-  );
-  assert.doesNotMatch(publicNav, /Progress|Check-In|History/);
+  const labels = (constant) => {
+    const source = shell.match(new RegExp(`const ${constant} = \\[([\\s\\S]*?)\\] as const;`))?.[1];
+    assert.ok(source, `${constant} missing`);
+    return [...source.matchAll(/label: "([^"]+)"/g)].map((match) => match[1]);
+  };
+  assert.deepEqual(labels("CHALLENGE_NAV"), ["Week", "Add", "History", "Money"]);
+  assert.deepEqual(labels("TRAINING_NAV"), ["Today", "Plan", "PRs", "More"]);
+  assert.deepEqual(labels("MEALS_NAV"), ["Today", "Presets", "History", "More"]);
+  assert.deepEqual(labels("GOAL_NAV"), ["Today", "Progress", "Check-In", "More"]);
   for (const destination of ["/bulk/progress", "/bulk/check-in", "/bulk/history"]) {
     assert.match(more, new RegExp(destination.replace("/", "\\/")));
     assert.match(shell, new RegExp(destination.replace("/", "\\/")));
   }
   assert.match(more, /min-h-16/);
-  assert.match(shell, /MORE_DESTINATIONS/);
+  assert.match(shell, /pathname\.startsWith\("\/bulk\/prs"\)/);
+  assert.doesNotMatch(shell, /location\.reload/);
 
   assert.match(today, /You haven&apos;t chosen a training plan yet/);
   assert.match(today, /Choose training plan/);
@@ -99,12 +165,8 @@ test("public Bulk uses four primary tabs and More keeps secondary routes reachab
   assert.match(today, /planDay\.name/);
   assert.match(today, /usesPublicTrainingPlan[\s\S]*WORKOUT_TYPES\.map/);
 
-  const legacyNav = shell.match(/const LEGACY_BULK_NAV = \[[\s\S]*?\] as const;/)?.[0];
-  assert.ok(legacyNav);
-  assert.deepEqual(
-    [...legacyNav.matchAll(/label: "([^"]+)"/g)].map((match) => match[1]),
-    ["Today", "Training", "Meals", "Progress", "Check-In", "History"],
-  );
+  assert.match(shell, /hasBulk/);
+  assert.doesNotMatch(shell, /PUBLIC_BULK_NAV|LEGACY_BULK_NAV/);
 });
 
 test("authenticated routes keep the document title fixed to Tempo", async () => {

@@ -41,7 +41,12 @@ function Targets() {
 
   return (
     <AppShell>
-      <PageHeader title="Weekly terms" subtitle="Base terms stay fixed; future targets can vary." />
+      <PageHeader
+        title="Weekly terms"
+        subtitle="Base terms stay fixed; future targets can vary."
+        backTo="/challenge/payments"
+        backLabel="Money"
+      />
       {isLoading || (challenge && targetsQuery.isLoading) ? (
         <div className="h-40 animate-pulse rounded-2xl bg-card" aria-label="Loading weekly terms" />
       ) : null}

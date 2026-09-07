@@ -132,76 +132,78 @@ function TrainingPage() {
           />
         </label>
       ) : null}
-      {usesPlanSetup && activePlan.isLoading ? (
-        <div className="h-48 animate-pulse rounded-2xl bg-card" />
-      ) : usesPlanSetup && activePlan.error ? (
-        <DataError
-          message={userFacingError(activePlan.error, "load your training plan")}
-          onRetry={() => void activePlan.refetch()}
-        />
-      ) : usesPlanSetup && activePlan.data ? (
-        editingPlan ? (
-          <TrainingPlanEditor
-            plan={activePlan.data}
-            onCancel={() => setEditingPlan(false)}
-            onSaved={async () => {
-              await activePlan.refetch();
-              await Promise.all([
-                queryClient.invalidateQueries({ queryKey: ["bulk-progression"] }),
-                queryClient.invalidateQueries({ queryKey: ["bulk-muscle-coverage"] }),
-              ]);
-              setEditingPlan(false);
+      <div id="plan">
+        {usesPlanSetup && activePlan.isLoading ? (
+          <div className="h-48 animate-pulse rounded-2xl bg-card" />
+        ) : usesPlanSetup && activePlan.error ? (
+          <DataError
+            message={userFacingError(activePlan.error, "load your training plan")}
+            onRetry={() => void activePlan.refetch()}
+          />
+        ) : usesPlanSetup && activePlan.data ? (
+          editingPlan ? (
+            <TrainingPlanEditor
+              plan={activePlan.data}
+              onCancel={() => setEditingPlan(false)}
+              onSaved={async () => {
+                await activePlan.refetch();
+                await Promise.all([
+                  queryClient.invalidateQueries({ queryKey: ["bulk-progression"] }),
+                  queryClient.invalidateQueries({ queryKey: ["bulk-muscle-coverage"] }),
+                ]);
+                setEditingPlan(false);
+              }}
+            />
+          ) : (
+            <>
+              <TrainingPlanOverview
+                plan={activePlan.data}
+                onEdit={() => setEditingPlan(true)}
+                onStart={(dayId) => void startWorkout(dayId)}
+                startingDayId={startingDayId}
+                workoutActive={!!activeSession.data}
+                progression={progression.data ?? {}}
+              />
+              <div className="mt-3">
+                <BulkMuscleCoverage
+                  result={coverage.data}
+                  loading={coverage.isLoading}
+                  error={coverage.error}
+                  onRetry={() => void coverage.refetch()}
+                />
+              </div>
+            </>
+          )
+        ) : usesPlanSetup && data ? (
+          <TrainingPlanSetup targets={data.targets} />
+        ) : data && bulkId && user ? (
+          <TrainingSession
+            key={`${user.id}:${bulkId}:${date}`}
+            data={data}
+            date={date}
+            cacheKey={`training-draft:${user.id}:${bulkId}:${date}`}
+            onSave={(workout) => saveWorkout(workout, user.id)}
+            onSaveSetupNote={async (exercise, note) => {
+              const notes = { ...(data.targets.exerciseSetupNotes ?? {}) };
+              if (note) notes[exercise] = note;
+              else delete notes[exercise];
+              await saveTargets({ ...data.targets, exerciseSetupNotes: notes });
             }}
+            onReorderExercises={async (split, exerciseNames) => {
+              await saveTargets({
+                ...data.targets,
+                legacyExerciseOrder: {
+                  ...(data.targets.legacyExerciseOrder ?? {}),
+                  [split]: exerciseNames,
+                },
+              });
+            }}
+            readOnly={role === "viewer"}
           />
         ) : (
-          <>
-            <TrainingPlanOverview
-              plan={activePlan.data}
-              onEdit={() => setEditingPlan(true)}
-              onStart={(dayId) => void startWorkout(dayId)}
-              startingDayId={startingDayId}
-              workoutActive={!!activeSession.data}
-              progression={progression.data ?? {}}
-            />
-            <div className="mt-3">
-              <BulkMuscleCoverage
-                result={coverage.data}
-                loading={coverage.isLoading}
-                error={coverage.error}
-                onRetry={() => void coverage.refetch()}
-              />
-            </div>
-          </>
-        )
-      ) : usesPlanSetup && data ? (
-        <TrainingPlanSetup targets={data.targets} />
-      ) : data && bulkId && user ? (
-        <TrainingSession
-          key={`${user.id}:${bulkId}:${date}`}
-          data={data}
-          date={date}
-          cacheKey={`training-draft:${user.id}:${bulkId}:${date}`}
-          onSave={(workout) => saveWorkout(workout, user.id)}
-          onSaveSetupNote={async (exercise, note) => {
-            const notes = { ...(data.targets.exerciseSetupNotes ?? {}) };
-            if (note) notes[exercise] = note;
-            else delete notes[exercise];
-            await saveTargets({ ...data.targets, exerciseSetupNotes: notes });
-          }}
-          onReorderExercises={async (split, exerciseNames) => {
-            await saveTargets({
-              ...data.targets,
-              legacyExerciseOrder: {
-                ...(data.targets.legacyExerciseOrder ?? {}),
-                [split]: exerciseNames,
-              },
-            });
-          }}
-          readOnly={role === "viewer"}
-        />
-      ) : (
-        <div className="h-40 animate-pulse rounded-2xl bg-card" />
-      )}
+          <div className="h-40 animate-pulse rounded-2xl bg-card" />
+        )}
+      </div>
     </AppShell>
   );
 }

@@ -4,10 +4,11 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
+  useRouterState,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -24,6 +25,7 @@ import {
   resetUserScopedQueries,
 } from "@/lib/query-cancellation";
 import { clearAccountScopedBrowserData } from "@/lib/browser-data";
+import { canDismissStartupScreen } from "@/lib/startup";
 
 function NotFoundComponent() {
   return (
@@ -165,6 +167,14 @@ function RootShell({ children }: { children: ReactNode }) {
         <HeadContent />
       </head>
       <body>
+        <div className="tempo-startup" role="status" aria-label="Loading Tempo">
+          <div className="tempo-startup-content">
+            <div className="tempo-startup-ring" aria-hidden="true">
+              <span className="tempo-startup-mark">T</span>
+            </div>
+            <span className="tempo-startup-label">Loading Tempo</span>
+          </div>
+        </div>
         {children}
         <Scripts />
       </body>
@@ -175,11 +185,19 @@ function RootShell({ children }: { children: ReactNode }) {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const router = useRouter();
+  const routePending = useRouterState({ select: (state) => state.status === "pending" });
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
   const previousUserId = useRef<string | null | undefined>(undefined);
+  const startupDismissed = useRef(false);
+  const [startupSession, setStartupSession] = useState<{
+    restored: boolean;
+    userId: string | null;
+  }>({ restored: false, userId: null });
 
   useEffect(() => {
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       const nextUserId = session?.user.id ?? null;
+      setStartupSession({ restored: true, userId: nextUserId });
       if (!authenticatedUserChanged(previousUserId.current, nextUserId)) {
         previousUserId.current = nextUserId;
         return;
@@ -189,8 +207,34 @@ function RootComponent() {
       clearBulk();
       void resetUserScopedQueries(queryClient);
     });
+    void supabase.auth.getSession().then(({ data: sessionData }) => {
+      setStartupSession({
+        restored: true,
+        userId: sessionData.session?.user.id ?? null,
+      });
+    });
     return () => data.subscription.unsubscribe();
   }, [queryClient]);
+
+  useEffect(() => {
+    if (
+      startupDismissed.current ||
+      !canDismissStartupScreen({
+        sessionRestored: startupSession.restored,
+        sessionUserId: startupSession.userId,
+        routePending,
+        pathname,
+      })
+    ) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      document.documentElement.dataset["tempoReady"] = "true";
+      startupDismissed.current = true;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [pathname, routePending, startupSession]);
 
   return (
     <QueryClientProvider client={queryClient}>

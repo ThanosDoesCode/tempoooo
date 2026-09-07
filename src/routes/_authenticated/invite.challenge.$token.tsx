@@ -69,6 +69,8 @@ function AcceptChallenge() {
         subtitle={
           terms ? "Review the Challenge terms before accepting." : "Checking your invitation."
         }
+        backTo="/challenge"
+        backLabel="Challenge"
       />
       <Card>
         {terms ? (

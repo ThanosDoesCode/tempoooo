@@ -3735,3 +3735,23 @@ test("security audit blocks direct cross-user, anon, unsafe-link and legacy func
     ).rows[0].private,
   );
 });
+
+test("Goal acknowledgement is writable only on the authenticated user's profile", async () => {
+  const own = await asUser(a, () =>
+    db.query("UPDATE public.profiles SET goal_seen_at=now() WHERE id=$1 RETURNING goal_seen_at", [
+      a,
+    ]),
+  );
+  assert.equal(own.rows.length, 1);
+
+  const forged = await asUser(b, () =>
+    db.query("UPDATE public.profiles SET goal_seen_at=now() WHERE id=$1 RETURNING goal_seen_at", [
+      a,
+    ]),
+  );
+  assert.equal(forged.rows.length, 0);
+  const stored = await asService(() =>
+    db.query("SELECT goal_seen_at FROM public.profiles WHERE id=$1", [a]),
+  );
+  assert.ok(stored.rows[0].goal_seen_at);
+});

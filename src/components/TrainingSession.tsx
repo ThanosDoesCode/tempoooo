@@ -1,4 +1,5 @@
 import { format, parseISO } from "date-fns";
+import { Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import {
   CartesianGrid,
@@ -190,6 +191,15 @@ export function TrainingSession({
             </button>
           ))}
         </div>
+        {!readOnly && workout.status !== "completed" ? (
+          <Link
+            to="/bulk/exercises"
+            search={{ addTo: workout.type, date }}
+            className="mb-3 flex min-h-11 items-center justify-center rounded-xl border border-border px-3 text-sm font-semibold text-foreground active:scale-[0.98]"
+          >
+            Add exercise
+          </Link>
+        ) : null}
         {hasContent ? (
           <p className="mb-2 text-[11px] text-muted-foreground">
             One split per date. Logged sets and notes keep this session’s split.

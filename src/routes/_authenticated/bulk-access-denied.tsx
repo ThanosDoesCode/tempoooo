@@ -9,7 +9,7 @@ export const Route = createFileRoute("/_authenticated/bulk-access-denied")({
       { title: "Tempo" },
       {
         name: "description",
-        content: "Activate your optional Tempo Bulk plan.",
+        content: "Activate your optional Tempo Goal plan.",
       },
     ],
   }),
@@ -23,16 +23,16 @@ function BulkAccessDeniedPage() {
         <span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-warn/10 text-warn">
           <ShieldAlert className="h-6 w-6" aria-hidden="true" />
         </span>
-        <h1 className="mt-4 text-xl font-semibold">Bulk access required</h1>
+        <h1 className="mt-4 text-xl font-semibold">Goal plan required</h1>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">
-          Bulk is optional. Activate your personal plan from Profile before opening the Bulk
+          Goal is optional. Activate your personal plan from Profile before opening your Goal
           dashboard. Your Tempo Challenge access is unchanged.
         </p>
         <Link
           to="/bulk-onboarding"
           className="mt-5 inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground active:scale-[0.98]"
         >
-          Start My Bulk
+          Start My Goal
         </Link>
       </Card>
     </AppShell>

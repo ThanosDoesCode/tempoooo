@@ -142,7 +142,12 @@ function NewChallenge() {
   if (link) {
     return (
       <AppShell>
-        <PageHeader title="Challenge created" subtitle="Send this invitation to your opponent." />
+        <PageHeader
+          title="Challenge created"
+          subtitle="Send this invitation to your opponent."
+          backTo="/challenge"
+          backLabel="Challenge"
+        />
         <Card>
           <SectionTitle>One-time invitation link</SectionTitle>
           <p className="break-all rounded-xl border border-border bg-elevated p-3 text-xs">
@@ -171,7 +176,12 @@ function NewChallenge() {
 
   return (
     <AppShell>
-      <PageHeader title="Create challenge" subtitle="Private, two people, minimum 52 weeks." />
+      <PageHeader
+        title="Create challenge"
+        subtitle="Private, two people, minimum 52 weeks."
+        backTo="/challenge"
+        backLabel="Challenge"
+      />
       <ChallengePrimer terms={terms} />
       <Card className="mt-3 min-w-0 space-y-3">
         <Labelled label="Challenge name">

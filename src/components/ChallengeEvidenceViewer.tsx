@@ -35,20 +35,29 @@ export function ChallengeEvidenceViewer({ paths, expired }: { paths: string[]; e
     const activeRequest = ++requestId.current;
     setFailedUrls(new Set());
     setState({ status: "loading" });
-    const result = await resolveEvidenceUrls({
-      paths,
-      expired,
-      sign: (storagePaths) =>
-        supabase.storage.from("challenge-evidence").createSignedUrls(storagePaths, 300),
-    });
-    if (activeRequest !== requestId.current) return;
-    if (result.status === "unavailable" && result.reason === "unexpected") {
-      reportLovableError(result.cause, {
-        boundary: "challenge_evidence_viewer",
-        phase: "signed_url",
+    try {
+      const result = await resolveEvidenceUrls({
+        paths,
+        expired,
+        sign: (storagePaths) =>
+          supabase.storage.from("challenge-evidence").createSignedUrls(storagePaths, 300),
       });
+      if (activeRequest !== requestId.current) return;
+      if (result.status === "unavailable" && result.reason === "unexpected") {
+        reportLovableError(result.cause, {
+          boundary: "challenge_evidence_viewer",
+          phase: "signed_url",
+        });
+      }
+      setState(result);
+    } catch (error) {
+      if (activeRequest !== requestId.current) return;
+      reportLovableError(error, {
+        boundary: "challenge_evidence_viewer",
+        phase: "local_recovery",
+      });
+      setState({ status: "unavailable", reason: "unexpected", cause: error });
     }
-    setState(result);
   };
 
   const show = () => {

@@ -32,6 +32,8 @@ function DiagnosticsPage() {
       <PageHeader
         title="Diagnostics"
         subtitle="Private operational status for Tempo administrators."
+        backTo="/profile"
+        backLabel="Profile"
       />
       {query.isLoading ? (
         <div className="space-y-3" aria-label="Loading diagnostics">

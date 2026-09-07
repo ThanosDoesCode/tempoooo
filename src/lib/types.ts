@@ -95,6 +95,7 @@ export type Targets = {
   onboardingCompletedAt?: string | undefined;
   exerciseSetupNotes?: Record<string, string> | undefined;
   legacyExerciseOrder?: Partial<Record<SplitType, string[]>> | undefined;
+  legacyExerciseDefinitions?: Partial<Record<SplitType, ExerciseDef[]>> | undefined;
 };
 
 export type AppData = {
@@ -170,7 +171,12 @@ export const exerciseDef = (name: string): ExerciseDef | undefined =>
   ALL_EXERCISES.find((e) => e.name === name);
 
 export function orderedExerciseDefs(targets: Targets, split: SplitType): ExerciseDef[] {
-  const canonical = EXERCISES[split];
+  const canonical = [
+    ...EXERCISES[split],
+    ...(targets.legacyExerciseDefinitions?.[split] ?? []).filter(
+      (candidate) => !EXERCISES[split].some((exercise) => exercise.name === candidate.name),
+    ),
+  ];
   const saved = targets.legacyExerciseOrder?.[split];
   if (!saved?.length) return canonical;
   const byName = new Map(canonical.map((exercise) => [exercise.name, exercise]));

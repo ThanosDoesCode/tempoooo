@@ -38,7 +38,7 @@ function BulkWorkoutPage() {
   );
   return (
     <AppShell>
-      <PageHeader title="Workout" />
+      <PageHeader title="Workout" backTo="/bulk/training" backLabel="Training" />
       {session.isLoading ? (
         <div className="space-y-3">
           <div className="h-28 animate-pulse rounded-2xl bg-card" />

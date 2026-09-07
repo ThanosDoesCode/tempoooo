@@ -1,11 +1,11 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useLocation } from "@tanstack/react-router";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { BulkMealPresets } from "@/components/BulkMealPresets";
 import { BulkNutritionLog } from "@/components/BulkNutritionLog";
 import { Chip } from "@/components/ui-kit";
 import { iso } from "@/lib/calc";
 import { useAppData, useBulkMeta } from "@/lib/store";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export const Route = createFileRoute("/_authenticated/bulk/meals")({
   head: () => ({ meta: [{ title: "Tempo" }] }),
@@ -16,8 +16,14 @@ function BulkMealsPage() {
   const { bulkId } = useBulkMeta();
   const data = useAppData();
   const [view, setView] = useState<"daily" | "presets">("daily");
+  const { hash } = useLocation();
   const [selectedDate, setSelectedDate] = useState(() => iso(new Date()));
   const publicNutrition = !!data?.targets.trainingSetupPreference;
+
+  useEffect(() => {
+    if (hash === "presets") setView("presets");
+    else if (!hash) setView("daily");
+  }, [hash]);
 
   return (
     <AppShell>
@@ -52,7 +58,7 @@ function BulkMealsPage() {
               }}
             />
           </div>
-          <div hidden={view !== "presets"}>
+          <div id="presets" hidden={view !== "presets"}>
             <BulkMealPresets bulkProfileId={bulkId} />
           </div>
         </>

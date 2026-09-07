@@ -1,5 +1,6 @@
-import { Link, useLocation, useNavigate, useRouterState } from "@tanstack/react-router";
+import { Link, useLocation, useRouterState } from "@tanstack/react-router";
 import {
+  ArrowLeft,
   CalendarCheck,
   Dumbbell,
   Euro,
@@ -8,35 +9,17 @@ import {
   LineChart,
   MoreHorizontal,
   Utensils,
-  LogOut,
   PlusCircle,
+  Salad,
   Trophy,
   User,
 } from "lucide-react";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { signOut } from "@/lib/auth";
 import { useMemberships } from "@/lib/bulk-access";
-import { prefetchBulk, useIsPublicBulk } from "@/lib/store";
+import { prefetchBulk } from "@/lib/store";
+import { useGoalDiscovery } from "@/lib/goal-discovery";
 import { PullToRefresh } from "./PullToRefresh";
-
-const LEGACY_BULK_NAV = [
-  { to: "/bulk", label: "Today", icon: Home, exact: true },
-  { to: "/bulk/training", label: "Training", icon: Dumbbell, exact: false },
-  { to: "/bulk/meals", label: "Meals", icon: Utensils, exact: false },
-  { to: "/bulk/progress", label: "Progress", icon: LineChart, exact: false },
-  { to: "/bulk/check-in", label: "Check-In", icon: CalendarCheck, exact: false },
-  { to: "/bulk/history", label: "History", icon: History, exact: false },
-] as const;
-
-const PUBLIC_BULK_NAV = [
-  { to: "/bulk", label: "Today", icon: Home, exact: true },
-  { to: "/bulk/training", label: "Training", icon: Dumbbell, exact: false },
-  { to: "/bulk/meals", label: "Meals", icon: Utensils, exact: false },
-  { to: "/bulk/more", label: "More", icon: MoreHorizontal, exact: false },
-] as const;
-
-const MORE_DESTINATIONS = ["/bulk/more", "/bulk/progress", "/bulk/check-in", "/bulk/history"];
 
 const CHALLENGE_NAV = [
   { to: "/challenge", label: "Week", icon: Trophy, exact: true },
@@ -45,24 +28,64 @@ const CHALLENGE_NAV = [
   { to: "/challenge/payments", label: "Money", icon: Euro, exact: false },
 ] as const;
 
+const TRAINING_NAV = [
+  { to: "/bulk/training", label: "Today", icon: Dumbbell, exact: true },
+  { to: "/bulk/training", hash: "plan", label: "Plan", icon: CalendarCheck, exact: true },
+  { to: "/bulk/prs", label: "PRs", icon: Trophy, exact: false },
+  { to: "/bulk/exercises", label: "More", icon: MoreHorizontal, exact: false },
+] as const;
+
+const MEALS_NAV = [
+  { to: "/bulk/meals", label: "Today", icon: Utensils, exact: true },
+  { to: "/bulk/meals", hash: "presets", label: "Presets", icon: Salad, exact: true },
+  { to: "/bulk/history", label: "History", icon: History, exact: false },
+  { to: "/bulk/more", label: "More", icon: MoreHorizontal, exact: false },
+] as const;
+
+const GOAL_NAV = [
+  { to: "/bulk", label: "Today", icon: Home, exact: true },
+  { to: "/bulk/progress", label: "Progress", icon: LineChart, exact: false },
+  { to: "/bulk/check-in", label: "Check-In", icon: CalendarCheck, exact: false },
+  { to: "/bulk/more", label: "More", icon: MoreHorizontal, exact: false },
+] as const;
+
+type ProductArea = "challenge" | "training" | "meals" | "goal";
+
+function productArea(pathname: string): ProductArea {
+  if (pathname.startsWith("/challenge")) return "challenge";
+  if (
+    pathname.startsWith("/bulk/training") ||
+    pathname.startsWith("/bulk/workout") ||
+    pathname.startsWith("/bulk/exercises") ||
+    pathname.startsWith("/bulk/prs")
+  )
+    return "training";
+  if (pathname.startsWith("/bulk/meals")) return "meals";
+  if (pathname.startsWith("/bulk")) return "goal";
+  return "challenge";
+}
+
 export function AppShell({ children }: { children: ReactNode }) {
-  const navigate = useNavigate();
-  const { pathname } = useLocation();
+  const { pathname, hash } = useLocation();
   const navigationPending = useRouterState({ select: (router) => router.status === "pending" });
   const isChallenge = pathname.startsWith("/challenge");
-  const isBulk = pathname.startsWith("/bulk");
   const { data: memberships } = useMemberships();
-  const usesPublicBulk = useIsPublicBulk();
+  const goalDiscovery = useGoalDiscovery();
   const [pendingTo, setPendingTo] = useState<string | null>(null);
 
   useEffect(() => setPendingTo(null), [pathname]);
 
   const hasBulk = memberships?.some((membership) => membership.role === "owner") ?? false;
   const owner = memberships?.find((membership) => membership.role === "owner");
-  const publicPlan = owner?.is_public ?? usesPublicBulk;
-  const showingChallenge = pendingTo ? pendingTo.startsWith("/challenge") : isChallenge;
-
-  const nav = isBulk && hasBulk ? (publicPlan ? PUBLIC_BULK_NAV : LEGACY_BULK_NAV) : CHALLENGE_NAV;
+  const area = pendingTo ? productArea(pendingTo) : productArea(pathname);
+  const nav =
+    area === "challenge"
+      ? CHALLENGE_NAV
+      : area === "training"
+        ? TRAINING_NAV
+        : area === "meals"
+          ? MEALS_NAV
+          : GOAL_NAV;
   const prefetchDestination = (to: string) => {
     if (to.startsWith("/bulk") && owner) void prefetchBulk(owner.bulk_profile_id);
   };
@@ -75,52 +98,47 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-background">
       <PullToRefresh />
       <div className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-lg items-center gap-2 px-4 py-2">
-          <Link
-            to="/challenge"
-            preload="intent"
-            onPointerDown={() => acknowledge("/challenge")}
-            onClick={() => acknowledge("/challenge")}
-            className={`min-h-11 rounded-lg px-3 py-2.5 text-sm font-semibold active:scale-95 ${
-              showingChallenge ? "bg-elevated text-foreground" : "text-muted-foreground"
-            }`}
-          >
-            Challenge
-          </Link>
-          {hasBulk ? (
-            <Link
-              to="/bulk"
-              preload="intent"
-              onPointerEnter={() => prefetchDestination("/bulk")}
-              onFocus={() => prefetchDestination("/bulk")}
-              onPointerDown={() => acknowledge("/bulk")}
-              onClick={() => acknowledge("/bulk")}
-              className={`min-h-11 rounded-lg px-3 py-2.5 text-sm font-medium active:scale-95 ${
-                showingChallenge ? "text-muted-foreground" : "bg-elevated text-foreground"
-              }`}
-            >
-              {publicPlan ? "Goal" : "Bulk"}
-            </Link>
-          ) : null}
+        <div className="mx-auto flex w-full max-w-lg items-center gap-1 px-2 py-2">
+          {(
+            [
+              { to: "/challenge", label: "Challenge", icon: Trophy, area: "challenge" },
+              { to: "/bulk/training", label: "Training", icon: Dumbbell, area: "training" },
+              { to: "/bulk/meals", label: "Meals", icon: Utensils, area: "meals" },
+              { to: "/bulk", label: "Goal", icon: LineChart, area: "goal" },
+            ] as const
+          ).map((item) =>
+            item.area !== "challenge" && !hasBulk ? null : (
+              <Link
+                key={item.area}
+                to={item.to}
+                preload="intent"
+                aria-label={item.label}
+                aria-current={area === item.area ? "page" : undefined}
+                onPointerEnter={() => prefetchDestination(item.to)}
+                onFocus={() => prefetchDestination(item.to)}
+                onPointerDown={() => acknowledge(item.to)}
+                onClick={() => acknowledge(item.to)}
+                className={`flex min-h-11 min-w-0 flex-1 flex-col items-center justify-center rounded-xl px-1 text-[10px] font-semibold transition active:scale-95 ${area === item.area ? "bg-elevated text-primary" : "text-muted-foreground"}`}
+              >
+                <item.icon className="h-4 w-4" aria-hidden="true" />
+                <span className="mt-0.5 truncate">{item.label}</span>
+              </Link>
+            ),
+          )}
           <Link
             to="/profile"
             preload="intent"
             aria-label="Profile"
-            className="ml-auto grid min-h-11 min-w-11 place-items-center rounded-xl text-muted-foreground active:bg-elevated"
+            className="relative grid min-h-11 min-w-11 place-items-center rounded-xl text-muted-foreground active:bg-elevated"
           >
             <User className="h-4 w-4" />
+            {!hasBulk && goalDiscovery.isSuccess && goalDiscovery.data?.goal_seen_at == null ? (
+              <span
+                aria-label="New Goal feature"
+                className="absolute right-2 top-2 h-2 w-2 rounded-full bg-primary ring-2 ring-background"
+              />
+            ) : null}
           </Link>
-          <button
-            onClick={() => {
-              void signOut().then((signedOut) => {
-                if (signedOut) void navigate({ to: "/auth", replace: true });
-              });
-            }}
-            aria-label="Sign out"
-            className="grid min-h-11 min-w-11 place-items-center rounded-xl text-muted-foreground active:bg-elevated"
-          >
-            <LogOut className="h-4 w-4" />
-          </button>
         </div>
         <div
           aria-hidden="true"
@@ -139,24 +157,23 @@ export function AppShell({ children }: { children: ReactNode }) {
           className="mx-auto grid max-w-lg px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2"
           style={{ gridTemplateColumns: `repeat(${nav.length}, minmax(0, 1fr))` }}
         >
-          {nav.map(({ to, label, icon: Icon, exact }) => {
-            const moreSelected =
-              to === "/bulk/more" &&
-              !pendingTo &&
-              MORE_DESTINATIONS.some(
-                (destination) => pathname === destination || pathname.startsWith(`${destination}/`),
-              );
-            const selected = pendingTo === to || moreSelected;
+          {nav.map((item) => {
+            const { to, label, icon: Icon, exact } = item;
+            const itemHash = "hash" in item ? item.hash : undefined;
+            const key = `${to}${itemHash ? `#${itemHash}` : ""}`;
+            const selected =
+              pendingTo === key || (pathname === to && (itemHash ? hash === itemHash : !hash));
             return (
               <Link
-                key={to}
+                key={key}
                 to={to}
+                {...(itemHash ? { hash: itemHash } : {})}
                 preload="intent"
                 activeOptions={{ exact }}
                 onPointerEnter={() => prefetchDestination(to)}
                 onFocus={() => prefetchDestination(to)}
-                onPointerDown={() => acknowledge(to)}
-                onClick={() => acknowledge(to)}
+                onPointerDown={() => acknowledge(key)}
+                onClick={() => acknowledge(key)}
                 aria-current={selected ? "page" : undefined}
                 className={`group flex min-h-11 flex-col items-center gap-1 rounded-xl py-2 text-muted-foreground transition active:scale-95 active:bg-elevated data-[status=active]:text-primary ${selected ? "bg-elevated text-primary" : ""}`}
               >
@@ -171,9 +188,27 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
 }
 
-export function PageHeader({ title, subtitle }: { title: string; subtitle?: string }) {
+export function PageHeader({
+  title,
+  subtitle,
+  backTo,
+  backLabel = "Back",
+}: {
+  title: string;
+  subtitle?: string;
+  backTo?: "/profile" | "/challenge" | "/challenge/payments" | "/bulk/training";
+  backLabel?: string;
+}) {
   return (
     <header className="fade-up mb-5">
+      {backTo ? (
+        <Link
+          to={backTo}
+          className="mb-2 inline-flex min-h-11 items-center gap-2 rounded-xl pr-3 text-sm font-semibold text-muted-foreground active:bg-elevated"
+        >
+          <ArrowLeft className="h-4 w-4" aria-hidden="true" /> {backLabel}
+        </Link>
+      ) : null}
       <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
       {subtitle ? <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p> : null}
     </header>

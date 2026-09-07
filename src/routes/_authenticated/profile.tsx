@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Dumbbell, Lock, LogOut, Mail, RotateCcw } from "lucide-react";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { Card, Note, SectionTitle } from "@/components/ui-kit";
@@ -8,6 +8,7 @@ import { useAuth, signOut } from "@/lib/auth";
 import { useMemberships } from "@/lib/bulk-access";
 import { useChallengeMembers, useMyChallenge } from "@/lib/challenge";
 import { resetBulkData } from "@/lib/store";
+import { useAcknowledgeGoal, useGoalDiscovery } from "@/lib/goal-discovery";
 
 export const Route = createFileRoute("/_authenticated/profile")({
   head: () => ({
@@ -33,6 +34,8 @@ function ProfilePage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { data: memberships, isLoading: bulkAccessLoading } = useMemberships();
+  const goalDiscovery = useGoalDiscovery();
+  const acknowledgeGoal = useAcknowledgeGoal();
   const { data: challenge } = useMyChallenge();
   const { data: challengeMembers } = useChallengeMembers(challenge?.id);
   const [busy, setBusy] = useState(false);
@@ -40,9 +43,25 @@ function ProfilePage() {
   const [resetStep, setResetStep] = useState<0 | 1>(0);
   const [resetTargets, setResetTargets] = useState(false);
   const [resetDone, setResetDone] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+  const acknowledgementStarted = useRef(false);
 
   const ownedPlan = memberships?.find((m) => m.role === "owner");
   const canInvite = !!challenge && (challengeMembers?.length ?? 0) < 2;
+
+  useEffect(() => {
+    if (
+      ownedPlan ||
+      goalDiscovery.isLoading ||
+      goalDiscovery.data?.goal_seen_at != null ||
+      acknowledgementStarted.current
+    )
+      return;
+    acknowledgementStarted.current = true;
+    void acknowledgeGoal().catch(() => {
+      acknowledgementStarted.current = false;
+    });
+  }, [acknowledgeGoal, goalDiscovery.data?.goal_seen_at, goalDiscovery.isLoading, ownedPlan]);
 
   const reset = async () => {
     if (!ownedPlan) return;
@@ -91,7 +110,14 @@ function ProfilePage() {
               <Lock className="h-4 w-4" aria-hidden="true" />
             </span>
             <div>
-              <SectionTitle>Get My Goal Plan</SectionTitle>
+              <div className="flex items-center gap-2">
+                <SectionTitle>Get My Goal Plan</SectionTitle>
+                {goalDiscovery.isSuccess && goalDiscovery.data?.goal_seen_at == null ? (
+                  <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold uppercase text-primary">
+                    New
+                  </span>
+                ) : null}
+              </div>
               <p className="text-sm leading-6 text-muted-foreground">
                 Build a personalized nutrition and training setup based on your goals, experience
                 and schedule.
@@ -169,14 +195,23 @@ function ProfilePage() {
       <Card className="mt-3">
         <SectionTitle>Session</SectionTitle>
         <button
+          disabled={signingOut}
           onClick={() => {
-            void signOut().then((signedOut) => {
-              if (signedOut) void navigate({ to: "/auth", replace: true });
-            });
+            if (signingOut) return;
+            setSigningOut(true);
+            void signOut()
+              .then((signedOut) => {
+                if (signedOut) {
+                  void navigate({ to: "/auth", replace: true });
+                  return;
+                }
+                setSigningOut(false);
+              })
+              .catch(() => setSigningOut(false));
           }}
-          className="flex w-full items-center justify-center gap-2 rounded-xl border border-border py-3 text-sm font-medium text-muted-foreground"
+          className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-border py-3 text-sm font-medium text-muted-foreground active:scale-[0.98] disabled:opacity-60"
         >
-          <LogOut className="h-4 w-4" /> Sign out
+          <LogOut className="h-4 w-4" /> {signingOut ? "Signing out…" : "Sign out"}
         </button>
       </Card>
     </AppShell>
