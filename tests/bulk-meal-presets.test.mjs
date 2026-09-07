@@ -91,7 +91,7 @@ test("public meal UI uses explicit saves, local errors and mobile-safe controls"
   assert.match(component, /Move ingredient/);
   assert.match(component, /This cannot be undone/);
   assert.match(route, /BulkMealPresets/);
-  assert.match(shell, /"\/bulk\/meals", label: "Meals"/);
+  assert.match(shell, /to: PRODUCT_LANDING_ROUTES\.meals/);
   assert.match(query, /Promise\.all/);
   assert.match(query, /bulkMealPresetsQueryKey\(bulkProfileId\)/);
   assert.match(cache, /"bulk-meal-presets"/);

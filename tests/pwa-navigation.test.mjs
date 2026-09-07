@@ -117,7 +117,8 @@ test("Tempo navigation exposes the four product areas only after persisted Goal 
   assert.match(shell, /min-h-11/);
   assert.doesNotMatch(shell, /label: "Bulk"/);
   assert.doesNotMatch(shell, /disabled[\s\S]{0,120}>\s*Bulk\s*</);
-  assert.match(shell, /onPointerDown=\{\(\) => acknowledge/);
+  assert.match(shell, /const area = productAreaForPath\(pathname\)/);
+  assert.doesNotMatch(shell, /pendingTo|setPendingTo|selectedArea|activeProduct/);
   assert.match(shell, /router\.status === "pending"/);
   assert.doesNotMatch(shell, /Sharing|Shared Bulk|\/bulk\/access/);
   const guard = await read("src/routes/_authenticated/bulk/route.tsx");
@@ -137,10 +138,11 @@ test("Tempo navigation exposes the four product areas only after persisted Goal 
 });
 
 test("each product area has four contextual destinations and legacy/public data paths remain", async () => {
-  const [shell, more, today] = await Promise.all([
+  const [shell, more, today, productNavigation] = await Promise.all([
     read("src/components/AppShell.tsx"),
     read("src/routes/_authenticated/bulk/more.tsx"),
     read("src/routes/_authenticated/bulk/index.tsx"),
+    read("src/lib/product-navigation.ts"),
   ]);
   const labels = (constant) => {
     const source = shell.match(new RegExp(`const ${constant} = \\[([\\s\\S]*?)\\] as const;`))?.[1];
@@ -156,7 +158,7 @@ test("each product area has four contextual destinations and legacy/public data 
     assert.match(shell, new RegExp(destination.replace("/", "\\/")));
   }
   assert.match(more, /min-h-16/);
-  assert.match(shell, /pathname\.startsWith\("\/bulk\/prs"\)/);
+  assert.match(productNavigation, /pathname\.startsWith\("\/bulk\/prs"\)/);
   assert.doesNotMatch(shell, /location\.reload/);
 
   assert.match(today, /You haven&apos;t chosen a training plan yet/);

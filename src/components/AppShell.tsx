@@ -15,10 +15,11 @@ import {
   User,
 } from "lucide-react";
 
-import { useEffect, useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { useMemberships } from "@/lib/bulk-access";
 import { prefetchBulk } from "@/lib/store";
 import { useGoalDiscovery } from "@/lib/goal-discovery";
+import { PRODUCT_LANDING_ROUTES, productAreaForPath } from "@/lib/product-navigation";
 import { PullToRefresh } from "./PullToRefresh";
 
 const CHALLENGE_NAV = [
@@ -49,35 +50,16 @@ const GOAL_NAV = [
   { to: "/bulk/more", label: "More", icon: MoreHorizontal, exact: false },
 ] as const;
 
-type ProductArea = "challenge" | "training" | "meals" | "goal";
-
-function productArea(pathname: string): ProductArea {
-  if (pathname.startsWith("/challenge")) return "challenge";
-  if (
-    pathname.startsWith("/bulk/training") ||
-    pathname.startsWith("/bulk/workout") ||
-    pathname.startsWith("/bulk/exercises") ||
-    pathname.startsWith("/bulk/prs")
-  )
-    return "training";
-  if (pathname.startsWith("/bulk/meals")) return "meals";
-  if (pathname.startsWith("/bulk")) return "goal";
-  return "challenge";
-}
-
 export function AppShell({ children }: { children: ReactNode }) {
   const { pathname, hash } = useLocation();
   const navigationPending = useRouterState({ select: (router) => router.status === "pending" });
   const isChallenge = pathname.startsWith("/challenge");
   const { data: memberships } = useMemberships();
   const goalDiscovery = useGoalDiscovery();
-  const [pendingTo, setPendingTo] = useState<string | null>(null);
-
-  useEffect(() => setPendingTo(null), [pathname]);
 
   const hasBulk = memberships?.some((membership) => membership.role === "owner") ?? false;
   const owner = memberships?.find((membership) => membership.role === "owner");
-  const area = pendingTo ? productArea(pendingTo) : productArea(pathname);
+  const area = productAreaForPath(pathname);
   const nav =
     area === "challenge"
       ? CHALLENGE_NAV
@@ -89,10 +71,6 @@ export function AppShell({ children }: { children: ReactNode }) {
   const prefetchDestination = (to: string) => {
     if (to.startsWith("/bulk") && owner) void prefetchBulk(owner.bulk_profile_id);
   };
-  const acknowledge = (to: string) => {
-    setPendingTo(to);
-    prefetchDestination(to);
-  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -101,10 +79,30 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="mx-auto flex w-full max-w-lg items-center gap-1 px-2 py-2">
           {(
             [
-              { to: "/challenge", label: "Challenge", icon: Trophy, area: "challenge" },
-              { to: "/bulk/training", label: "Training", icon: Dumbbell, area: "training" },
-              { to: "/bulk/meals", label: "Meals", icon: Utensils, area: "meals" },
-              { to: "/bulk", label: "Goal", icon: LineChart, area: "goal" },
+              {
+                to: PRODUCT_LANDING_ROUTES.challenge,
+                label: "Challenge",
+                icon: Trophy,
+                area: "challenge",
+              },
+              {
+                to: PRODUCT_LANDING_ROUTES.training,
+                label: "Training",
+                icon: Dumbbell,
+                area: "training",
+              },
+              {
+                to: PRODUCT_LANDING_ROUTES.meals,
+                label: "Meals",
+                icon: Utensils,
+                area: "meals",
+              },
+              {
+                to: PRODUCT_LANDING_ROUTES.goal,
+                label: "Goal",
+                icon: LineChart,
+                area: "goal",
+              },
             ] as const
           ).map((item) =>
             item.area !== "challenge" && !hasBulk ? null : (
@@ -116,8 +114,6 @@ export function AppShell({ children }: { children: ReactNode }) {
                 aria-current={area === item.area ? "page" : undefined}
                 onPointerEnter={() => prefetchDestination(item.to)}
                 onFocus={() => prefetchDestination(item.to)}
-                onPointerDown={() => acknowledge(item.to)}
-                onClick={() => acknowledge(item.to)}
                 className={`flex min-h-11 min-w-0 flex-1 flex-col items-center justify-center rounded-xl px-1 text-[10px] font-semibold transition active:scale-95 ${area === item.area ? "bg-elevated text-primary" : "text-muted-foreground"}`}
               >
                 <item.icon className="h-4 w-4" aria-hidden="true" />
@@ -161,8 +157,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             const { to, label, icon: Icon, exact } = item;
             const itemHash = "hash" in item ? item.hash : undefined;
             const key = `${to}${itemHash ? `#${itemHash}` : ""}`;
-            const selected =
-              pendingTo === key || (pathname === to && (itemHash ? hash === itemHash : !hash));
+            const selected = pathname === to && (itemHash ? hash === itemHash : !hash);
             return (
               <Link
                 key={key}
@@ -172,8 +167,6 @@ export function AppShell({ children }: { children: ReactNode }) {
                 activeOptions={{ exact }}
                 onPointerEnter={() => prefetchDestination(to)}
                 onFocus={() => prefetchDestination(to)}
-                onPointerDown={() => acknowledge(key)}
-                onClick={() => acknowledge(key)}
                 aria-current={selected ? "page" : undefined}
                 className={`group flex min-h-11 flex-col items-center gap-1 rounded-xl py-2 text-muted-foreground transition active:scale-95 active:bg-elevated data-[status=active]:text-primary ${selected ? "bg-elevated text-primary" : ""}`}
               >
