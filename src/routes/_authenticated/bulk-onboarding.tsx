@@ -10,6 +10,7 @@ import {
   EQUIPMENT_OPTIONS,
   EXPERIENCE_LEVELS,
   LEAN_BULK_WEEKLY_GAIN_RANGE,
+  PHYSIQUE_GOALS,
   TRAINING_DAY_OPTIONS,
   TRAINING_SETUP_OPTIONS,
   WEEKLY_GAIN_OPTIONS,
@@ -17,6 +18,7 @@ import {
   type BulkOnboardingValues,
   type Equipment,
   type ExperienceLevel,
+  type PhysiqueGoal,
   type TrainingSetupPreference,
   recommendInitialNutritionTargets,
   validateBulkOnboarding,
@@ -35,6 +37,7 @@ export const Route = createFileRoute("/_authenticated/bulk-onboarding")({
 
 type Step = 1 | 2 | 3 | 4 | 5;
 type FormState = {
+  goal: PhysiqueGoal | "";
   currentWeightKg: string;
   targetWeightKg: string;
   targetWeeklyGainKg: string;
@@ -50,6 +53,7 @@ type FormState = {
 };
 
 const initialForm: FormState = {
+  goal: "",
   currentWeightKg: "",
   targetWeightKg: "",
   targetWeeklyGainKg: "0.25",
@@ -68,6 +72,7 @@ const numeric = (value: string) => Number(value.trim().replaceAll(",", "."));
 
 function valuesOf(form: FormState): BulkOnboardingValues {
   return {
+    goal: form.goal as PhysiqueGoal,
     currentWeightKg: numeric(form.currentWeightKg),
     targetWeightKg: numeric(form.targetWeightKg),
     targetWeeklyGainKg: numeric(form.targetWeeklyGainKg),
@@ -83,7 +88,7 @@ function valuesOf(form: FormState): BulkOnboardingValues {
 }
 
 const stepFields: Record<Step, BulkOnboardingField[]> = {
-  1: ["currentWeightKg", "targetWeightKg", "targetWeeklyGainKg"],
+  1: ["goal", "currentWeightKg", "targetWeightKg", "targetWeeklyGainKg"],
   2: ["experienceLevel", "trainingDaysPerWeek", "availableEquipment"],
   3: ["trainingSetupPreference"],
   4: ["calories", "protein", "carbs", "fat"],
@@ -106,12 +111,19 @@ function BulkOnboarding() {
   const nutritionRecommendation = useMemo(
     () =>
       recommendInitialNutritionTargets({
+        goal: form.goal as PhysiqueGoal,
         currentWeightKg: numeric(form.currentWeightKg),
         targetWeightKg: numeric(form.targetWeightKg),
         targetWeeklyGainKg: numeric(form.targetWeeklyGainKg),
         trainingDaysPerWeek: form.trainingDaysPerWeek ?? 0,
       }),
-    [form.currentWeightKg, form.targetWeightKg, form.targetWeeklyGainKg, form.trainingDaysPerWeek],
+    [
+      form.goal,
+      form.currentWeightKg,
+      form.targetWeightKg,
+      form.targetWeeklyGainKg,
+      form.trainingDaysPerWeek,
+    ],
   );
 
   useEffect(() => {
@@ -127,7 +139,17 @@ function BulkOnboarding() {
 
   const update = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     if (key === "experienceLevel") setNutritionManuallyAdjusted(false);
-    setForm((current) => ({ ...current, [key]: value }));
+    setForm((current) => {
+      if (key !== "goal") return { ...current, [key]: value };
+      const goal = value as PhysiqueGoal;
+      return {
+        ...current,
+        goal,
+        targetWeightKg: goal === "maintain" ? current.currentWeightKg : current.targetWeightKg,
+        targetWeeklyGainKg: goal === "maintain" ? "0" : "0.25",
+        weeklyGainChoice: goal === "maintain" ? "0" : "0.25",
+      };
+    });
     setVisibleErrors((current) => ({ ...current, [key]: undefined }));
     setSubmitError(null);
   };
@@ -184,6 +206,7 @@ function BulkOnboarding() {
     setSubmitError(null);
     try {
       const { data: planId, error } = await supabase.rpc("complete_bulk_onboarding", {
+        _goal: values.goal,
         _current_weight_kg: values.currentWeightKg,
         _target_weight_kg: values.targetWeightKg,
         _target_weekly_gain_kg: values.targetWeeklyGainKg,
@@ -196,14 +219,14 @@ function BulkOnboarding() {
         _carbs: values.carbs,
         _fat: values.fat,
       });
-      if (error || !planId) throw error ?? new Error("Bulk onboarding failed");
+      if (error || !planId) throw error ?? new Error("Goal onboarding failed");
       await queryClient.invalidateQueries({ queryKey: ["bulk-memberships"], refetchType: "none" });
       const plans = await queryClient.fetchQuery({ ...bulkOwnerQueryOptions(), staleTime: 0 });
       if (!plans.some((plan) => plan.bulk_profile_id === planId))
-        throw new Error("Your Bulk plan is still being prepared. Please retry.");
+        throw new Error("Your Goal plan is still being prepared. Please retry.");
       await navigate({ to: "/bulk", replace: true });
     } catch (cause) {
-      setSubmitError(userFacingError(cause, "create your Bulk plan"));
+      setSubmitError(userFacingError(cause, "create your Goal plan"));
     } finally {
       setBusy(false);
     }
@@ -211,7 +234,7 @@ function BulkOnboarding() {
 
   return (
     <AppShell>
-      <PageHeader title="Create My Bulk Plan" subtitle={`Step ${step} of 5`} />
+      <PageHeader title="Create My Goal Plan" subtitle={`Step ${step} of 5`} />
       <div className="mb-4 h-1.5 overflow-hidden rounded-full bg-secondary" aria-hidden="true">
         <div
           className="h-full rounded-full bg-primary transition-all"
@@ -281,7 +304,7 @@ function BulkOnboarding() {
               onClick={() => void submit()}
               className="flex min-h-11 items-center justify-center rounded-xl bg-primary px-3 py-3 text-sm font-semibold text-primary-foreground active:scale-[0.98] disabled:opacity-60"
             >
-              {busy ? <PendingLabel>Creating My Bulk Plan...</PendingLabel> : "Create My Bulk Plan"}
+              {busy ? <PendingLabel>Creating My Goal Plan...</PendingLabel> : "Create My Goal Plan"}
             </button>
           )}
         </div>
@@ -376,8 +399,31 @@ function GoalStep({
 }) {
   return (
     <>
-      <Heading icon title="Your goal" copy="Set the starting point and pace for your lean bulk." />
+      <Heading
+        icon
+        title="Your goal"
+        copy="Choose the physique outcome you want Tempo to support."
+      />
       <div className="space-y-4">
+        <div>
+          <p className="text-xs font-medium text-muted-foreground">Physique goal</p>
+          <div className="mt-2 grid gap-2">
+            {PHYSIQUE_GOALS.map((option) => (
+              <Choice
+                key={option.value}
+                selected={form.goal === option.value}
+                onClick={() => update("goal", option.value)}
+              >
+                {option.label}
+              </Choice>
+            ))}
+          </div>
+          {errors.goal ? (
+            <p role="alert" className="mt-1 text-xs text-danger">
+              {errors.goal}
+            </p>
+          ) : null}
+        </div>
         <TextNumber
           label="Current weight"
           value={form.currentWeightKg}
@@ -393,35 +439,50 @@ function GoalStep({
           error={errors.targetWeightKg}
         />
         <div>
-          <p className="text-xs font-medium text-muted-foreground">Target weekly weight gain</p>
-          <p className="mt-1 text-[11px] text-muted-foreground">
-            Recommended lean-bulk range: {LEAN_BULK_WEEKLY_GAIN_RANGE[0].toFixed(2)} to{" "}
-            {LEAN_BULK_WEEKLY_GAIN_RANGE[1].toFixed(2)} kg/week.
+          <p className="text-xs font-medium text-muted-foreground">
+            {form.goal === "cut"
+              ? "Target weekly weight loss"
+              : form.goal === "maintain"
+                ? "Weekly weight direction"
+                : "Target weekly weight gain"}
           </p>
-          <div className="mt-2 grid grid-cols-3 gap-2">
-            {WEEKLY_GAIN_OPTIONS.map((gain) => (
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            {form.goal === "cut"
+              ? "Tempo uses a moderate rate of loss and avoids extreme deficits."
+              : form.goal === "maintain"
+                ? "Tempo will aim to keep your weight trend approximately stable."
+                : `Recommended muscle-gain range: ${LEAN_BULK_WEEKLY_GAIN_RANGE[0].toFixed(2)} to ${LEAN_BULK_WEEKLY_GAIN_RANGE[1].toFixed(2)} kg/week.`}
+          </p>
+          {form.goal === "maintain" ? (
+            <p className="mt-2 rounded-xl bg-elevated p-3 text-sm font-medium">
+              Maintain around 0 kg/week
+            </p>
+          ) : (
+            <div className="mt-2 grid grid-cols-3 gap-2">
+              {WEEKLY_GAIN_OPTIONS.map((gain) => (
+                <Choice
+                  key={gain}
+                  selected={form.weeklyGainChoice === String(gain)}
+                  onClick={() => {
+                    update("weeklyGainChoice", String(gain));
+                    update("targetWeeklyGainKg", String(gain));
+                  }}
+                >
+                  {gain.toFixed(2)}
+                </Choice>
+              ))}
               <Choice
-                key={gain}
-                selected={form.weeklyGainChoice === String(gain)}
-                onClick={() => {
-                  update("weeklyGainChoice", String(gain));
-                  update("targetWeeklyGainKg", String(gain));
-                }}
+                selected={form.weeklyGainChoice === "custom"}
+                onClick={() => update("weeklyGainChoice", "custom")}
               >
-                {gain.toFixed(2)}
+                Custom
               </Choice>
-            ))}
-            <Choice
-              selected={form.weeklyGainChoice === "custom"}
-              onClick={() => update("weeklyGainChoice", "custom")}
-            >
-              Custom
-            </Choice>
-          </div>
+            </div>
+          )}
           {form.weeklyGainChoice === "custom" ? (
             <div className="mt-3">
               <TextNumber
-                label="Custom weekly gain"
+                label={form.goal === "cut" ? "Custom weekly loss" : "Custom weekly gain"}
                 value={form.targetWeeklyGainKg}
                 onChange={(value) => update("targetWeeklyGainKg", value)}
                 suffix="kg/week"
@@ -685,6 +746,7 @@ function NutritionStep({
 }
 
 function ReviewStep({ values }: { values: BulkOnboardingValues }) {
+  const goal = PHYSIQUE_GOALS.find(({ value }) => value === values.goal)?.label;
   const experience = EXPERIENCE_LEVELS.find(({ value }) => value === values.experienceLevel)?.label;
   const preference = TRAINING_SETUP_OPTIONS.find(
     ({ value }) => value === values.trainingSetupPreference,
@@ -694,9 +756,13 @@ function ReviewStep({ values }: { values: BulkOnboardingValues }) {
     .filter(Boolean)
     .join(", ");
   const rows = [
+    ["Goal", goal],
     ["Current weight", `${values.currentWeightKg} kg`],
     ["Target weight", `${values.targetWeightKg} kg`],
-    ["Weekly gain", `${values.targetWeeklyGainKg} kg/week`],
+    [
+      values.goal === "cut" ? "Weekly loss" : "Weekly change",
+      `${values.targetWeeklyGainKg} kg/week`,
+    ],
     ["Experience", experience],
     ["Training days", `${values.trainingDaysPerWeek} per week`],
     ["Equipment", equipment],
@@ -709,8 +775,8 @@ function ReviewStep({ values }: { values: BulkOnboardingValues }) {
   return (
     <>
       <Heading
-        title="Review your Bulk plan"
-        copy="Check your setup before creating your private Bulk space."
+        title="Review your Goal plan"
+        copy="Check your setup before creating your private Goal space."
       />
       <dl className="divide-y divide-border rounded-xl bg-elevated/60 px-3">
         {rows.map(([label, value]) => (

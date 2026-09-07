@@ -29,12 +29,15 @@ import {
   paymentsQueryOptions,
   penaltyTextFor,
   qualifiedEquivalentKm,
+  resolvedTargetForWeek,
   sumWeek,
+  targetOverrideForWeek,
   todayIn,
   useActivities,
   useChallengeMembers,
   useMyChallenge,
   useTravelPauses,
+  useWeekTargets,
   useWeeks,
   weeksQueryOptions,
   weekPaused,
@@ -85,6 +88,12 @@ function ChallengeHome() {
   const { data: travelPauses, isLoading: pausesLoading, error: pausesError } = pausesQuery;
   const weeksQuery = useWeeks(challenge?.id);
   const { data: finalizedWeeks } = weeksQuery;
+  const weekTargetsQuery = useWeekTargets(challenge?.id);
+  const {
+    data: weekTargets,
+    isLoading: weekTargetsLoading,
+    error: weekTargetsError,
+  } = weekTargetsQuery;
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -189,7 +198,6 @@ function ChallengeHome() {
   }
 
   const today = todayIn(challenge.timezone);
-  const target = Number(challenge.weekly_target_km);
   const me = members?.find((member) => member.userId === user?.id);
   const opponent = members?.find((member) => member.userId !== user?.id);
   const meTotals =
@@ -200,9 +208,21 @@ function ChallengeHome() {
     week && opponent ? sumWeek(activities ?? [], opponent.userId, week.start, week.end) : null;
   const mePaused = !!(week && user && weekPaused(travelPauses, user.id, week.n));
   const opponentPaused = !!(week && opponent && weekPaused(travelPauses, opponent.userId, week.n));
+  const commonTarget = week
+    ? targetOverrideForWeek(challenge, weekTargets, week.n)
+    : Number(challenge.weekly_target_km);
+  const meTarget =
+    week && user
+      ? resolvedTargetForWeek(challenge, weekTargets, travelPauses, user.id, week.n)
+      : commonTarget;
+  const opponentTarget =
+    week && opponent
+      ? resolvedTargetForWeek(challenge, weekTargets, travelPauses, opponent.userId, week.n)
+      : commonTarget;
   const recent = (activities ?? []).slice(0, 20);
   const needsOpponent = !membersLoading && (members?.length ?? 0) < (challenge.max_members ?? 2);
-  const progressLoading = membersLoading || activitiesLoading || pausesLoading;
+  const progressLoading =
+    membersLoading || activitiesLoading || pausesLoading || weekTargetsLoading;
 
   return (
     <AppShell>
@@ -216,7 +236,7 @@ function ChallengeHome() {
         </p>
       </header>
 
-      {membersError || activitiesError || pausesError ? (
+      {membersError || activitiesError || pausesError || weekTargetsError ? (
         <div className="mb-3">
           <DataError
             title="Some challenge data did not load"
@@ -226,6 +246,7 @@ function ChallengeHome() {
                 membersQuery.refetch(),
                 activitiesQuery.refetch(),
                 pausesQuery.refetch(),
+                weekTargetsQuery.refetch(),
               ]);
             }}
           />
@@ -243,7 +264,7 @@ function ChallengeHome() {
           <ParticipantProgress
             label={me ? "Me" : "You"}
             totals={meTotals}
-            target={target}
+            target={meTarget}
             terms={challenge}
             paused={mePaused}
             barClass="bg-primary"
@@ -252,7 +273,7 @@ function ChallengeHome() {
           <ParticipantProgress
             label={opponent?.name ?? "Opponent"}
             totals={opponentTotals}
-            target={target}
+            target={opponentTarget}
             terms={challenge}
             paused={opponentPaused}
             barClass="bg-chart-2"
@@ -448,12 +469,18 @@ function ChallengeHome() {
               </span>
               <span className="font-medium">Weekly terms</span>
               <span className="ml-auto text-xs text-muted-foreground">
-                {new Intl.NumberFormat("en", { maximumFractionDigits: 2 }).format(target)} km
+                {new Intl.NumberFormat("en", { maximumFractionDigits: 2 }).format(commonTarget)} km
               </span>
               <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-90" />
             </summary>
             <div className="border-t border-border p-3">
               <ChallengeTermsSummary terms={challenge} />
+              <Link
+                to="/challenge/targets"
+                className="mt-3 flex min-h-11 items-center justify-center rounded-xl border border-border px-3 py-2 text-sm font-semibold text-primary"
+              >
+                View upcoming week targets
+              </Link>
             </div>
           </details>
           {user ? <ChallengeNotifications userId={user.id} /> : null}

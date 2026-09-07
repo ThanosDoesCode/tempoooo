@@ -33,6 +33,7 @@ import { Route as AuthenticatedChallengePaymentsRouteImport } from './routes/_au
 import { Route as AuthenticatedChallengeTargetsRouteImport } from './routes/_authenticated/challenge/targets'
 import { Route as AuthenticatedBulkWorkoutSessionIdRouteImport } from './routes/_authenticated/bulk/workout.$sessionId'
 import { Route as AuthenticatedInviteChallengeTokenRouteImport } from './routes/_authenticated/invite.challenge.$token'
+import { Route as AuthenticatedChallengeHistoryWeekWeekNumberRouteImport } from './routes/_authenticated/challenge/history_.week.$weekNumber'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -169,6 +170,12 @@ const AuthenticatedInviteChallengeTokenRoute =
     path: '/invite/challenge/$token',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedChallengeHistoryWeekWeekNumberRoute =
+  AuthenticatedChallengeHistoryWeekWeekNumberRouteImport.update({
+    id: '/challenge/history_/week/$weekNumber',
+    path: '/challenge/history/week/$weekNumber',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -194,6 +201,7 @@ export interface FileRoutesByFullPath {
   '/challenge/': typeof AuthenticatedChallengeIndexRoute
   '/bulk/workout/$sessionId': typeof AuthenticatedBulkWorkoutSessionIdRoute
   '/invite/challenge/$token': typeof AuthenticatedInviteChallengeTokenRoute
+  '/challenge/history/week/$weekNumber': typeof AuthenticatedChallengeHistoryWeekWeekNumberRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -218,6 +226,7 @@ export interface FileRoutesByTo {
   '/challenge': typeof AuthenticatedChallengeIndexRoute
   '/bulk/workout/$sessionId': typeof AuthenticatedBulkWorkoutSessionIdRoute
   '/invite/challenge/$token': typeof AuthenticatedInviteChallengeTokenRoute
+  '/challenge/history/week/$weekNumber': typeof AuthenticatedChallengeHistoryWeekWeekNumberRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -245,6 +254,7 @@ export interface FileRoutesById {
   '/_authenticated/challenge/': typeof AuthenticatedChallengeIndexRoute
   '/_authenticated/bulk/workout/$sessionId': typeof AuthenticatedBulkWorkoutSessionIdRoute
   '/_authenticated/invite/challenge/$token': typeof AuthenticatedInviteChallengeTokenRoute
+  '/_authenticated/challenge/history_/week/$weekNumber': typeof AuthenticatedChallengeHistoryWeekWeekNumberRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -272,6 +282,7 @@ export interface FileRouteTypes {
     | '/challenge/'
     | '/bulk/workout/$sessionId'
     | '/invite/challenge/$token'
+    | '/challenge/history/week/$weekNumber'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -296,6 +307,7 @@ export interface FileRouteTypes {
     | '/challenge'
     | '/bulk/workout/$sessionId'
     | '/invite/challenge/$token'
+    | '/challenge/history/week/$weekNumber'
   id:
     | '__root__'
     | '/'
@@ -322,6 +334,7 @@ export interface FileRouteTypes {
     | '/_authenticated/challenge/'
     | '/_authenticated/bulk/workout/$sessionId'
     | '/_authenticated/invite/challenge/$token'
+    | '/_authenticated/challenge/history_/week/$weekNumber'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -500,6 +513,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedInviteChallengeTokenRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/challenge/history_/week/$weekNumber': {
+      id: '/_authenticated/challenge/history_/week/$weekNumber'
+      path: '/challenge/history/week/$weekNumber'
+      fullPath: '/challenge/history/week/$weekNumber'
+      preLoaderRoute: typeof AuthenticatedChallengeHistoryWeekWeekNumberRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
   }
 }
 
@@ -548,6 +568,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedChallengeTargetsRoute: typeof AuthenticatedChallengeTargetsRoute
   AuthenticatedChallengeIndexRoute: typeof AuthenticatedChallengeIndexRoute
   AuthenticatedInviteChallengeTokenRoute: typeof AuthenticatedInviteChallengeTokenRoute
+  AuthenticatedChallengeHistoryWeekWeekNumberRoute: typeof AuthenticatedChallengeHistoryWeekWeekNumberRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
@@ -563,6 +584,8 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedChallengeIndexRoute: AuthenticatedChallengeIndexRoute,
   AuthenticatedInviteChallengeTokenRoute:
     AuthenticatedInviteChallengeTokenRoute,
+  AuthenticatedChallengeHistoryWeekWeekNumberRoute:
+    AuthenticatedChallengeHistoryWeekWeekNumberRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =

@@ -53,7 +53,7 @@ export const sum = (vals: number[]) => vals.reduce((a, b) => a + b, 0);
 
 export type BulkStatus = {
   rate: number | null; // kg per week
-  label: "ON TRACK" | "TOO SLOW" | "TOO FAST" | "CALIBRATING" | "NO DATA";
+  label: "ON TRACK" | "TOO SLOW" | "TOO FAST" | "DRIFTING" | "CALIBRATING" | "NO DATA";
   tone: "good" | "warn" | "danger" | "muted";
   currentAvg: number | null;
   daysLogged: number;
@@ -73,13 +73,28 @@ export function bulkStatus(data: AppData, on: Date = new Date()): BulkStatus {
   const weeksLeft = Math.max(0, differenceInCalendarDays(parseISO(BULK_END), on) / 7);
   const projected = currentAvg != null && rate != null ? currentAvg + rate * weeksLeft : null;
   const projectedDate =
-    currentAvg != null && rate != null && rate > 0.01
+    currentAvg != null &&
+    rate != null &&
+    (data.targets.goal
+      ? Math.abs(rate) > 0.01 && (data.targets.targetWeight - currentAvg) / rate > 0
+      : rate > 0.01)
       ? iso(addDays(on, ((data.targets.targetWeight - currentAvg) / rate) * 7))
       : null;
 
   const base = { rate, currentAvg, daysLogged, projected, projectedDate };
   if (daysLogged < 14) return { ...base, label: "CALIBRATING", tone: "muted" };
   if (rate == null) return { ...base, label: "NO DATA", tone: "muted" };
+  if (data.targets.goal === "maintain") {
+    return Math.abs(rate) <= 0.15
+      ? { ...base, label: "ON TRACK", tone: "good" }
+      : { ...base, label: "DRIFTING", tone: "warn" };
+  }
+  if (data.targets.goal === "cut") {
+    const expected = -(data.targets.targetWeeklyGainKg ?? 0.25);
+    if (rate > expected + 0.15) return { ...base, label: "TOO SLOW", tone: "warn" };
+    if (rate < expected - 0.15) return { ...base, label: "TOO FAST", tone: "danger" };
+    return { ...base, label: "ON TRACK", tone: "good" };
+  }
   if (rate < 0.2) return { ...base, label: "TOO SLOW", tone: "warn" };
   if (rate > 0.3) return { ...base, label: "TOO FAST", tone: "danger" };
   return { ...base, label: "ON TRACK", tone: "good" };

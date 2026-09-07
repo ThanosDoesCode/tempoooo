@@ -22,6 +22,7 @@ import {
   useMyChallenge,
   useTravelPauses,
   useWeeks,
+  useWeekTargets,
   weekBounds,
   weekNumberOf,
 } from "@/lib/challenge";
@@ -63,6 +64,7 @@ function Payments() {
   } = activitiesQuery;
   const pausesQuery = useTravelPauses(challenge?.id);
   const { data: travelPauses, isLoading: pausesLoading, error: pausesError } = pausesQuery;
+  const weekTargetsQuery = useWeekTargets(challenge?.id);
   const [pending, setPending] = useState<{
     id: string;
     action: "mark" | "undo" | "confirm" | "settle" | "reopen";
@@ -215,9 +217,20 @@ function Payments() {
   const initialLoading =
     challengeLoading ||
     (!!challenge &&
-      (membersLoading || paymentsLoading || weeksLoading || activitiesLoading || pausesLoading));
+      (membersLoading ||
+        paymentsLoading ||
+        weeksLoading ||
+        activitiesLoading ||
+        pausesLoading ||
+        weekTargetsQuery.isLoading));
   const loadError =
-    challengeError || membersError || paymentsError || weeksError || activitiesError || pausesError;
+    challengeError ||
+    membersError ||
+    paymentsError ||
+    weeksError ||
+    activitiesError ||
+    pausesError ||
+    weekTargetsQuery.error;
 
   if (initialLoading) {
     return (
@@ -248,6 +261,7 @@ function Payments() {
                     weeksQuery.refetch(),
                     activitiesQuery.refetch(),
                     pausesQuery.refetch(),
+                    weekTargetsQuery.refetch(),
                   ]
                 : [challengeQuery.refetch()],
             );
@@ -370,7 +384,7 @@ function Payments() {
           {open.length === 0 ? (
             <Note>
               No penalties are outstanding. New obligations appear only after a finalized week ends
-              below {Number(challenge.weekly_target_km)} challenge km.
+              below that week&apos;s resolved challenge target.
             </Note>
           ) : null}
           {open.map((p) => {
@@ -515,7 +529,7 @@ function Payments() {
         {challenge && members ? (
           <button
             type="button"
-            disabled={activitiesLoading}
+            disabled={activitiesLoading || weekTargetsQuery.isLoading}
             onClick={() =>
               downloadChallengeCsv(
                 challenge,
@@ -523,12 +537,15 @@ function Payments() {
                 activities ?? [],
                 weeks ?? [],
                 travelPauses ?? [],
+                weekTargetsQuery.data ?? [],
               )
             }
             className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-border py-2.5 text-sm font-medium disabled:opacity-60"
           >
             <Download className="h-4 w-4" aria-hidden="true" />
-            {activitiesLoading ? "Preparing challenge data…" : "Download challenge data (CSV)"}
+            {activitiesLoading || weekTargetsQuery.isLoading
+              ? "Preparing challenge data…"
+              : "Download challenge data (CSV)"}
           </button>
         ) : null}
         <Note>

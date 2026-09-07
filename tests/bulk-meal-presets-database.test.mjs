@@ -46,7 +46,7 @@ before(async () => {
     await asUser(id, () =>
       db.query(
         `SELECT public.complete_bulk_onboarding(
-          70,78,0.25,'intermediate',4,ARRAY['dumbbells','bench'],'custom',2900,140,360,90
+          'gain',70,78,0.25,'intermediate',4,ARRAY['dumbbells','bench'],'custom',2900,140,360,90
         )`,
       ),
     );

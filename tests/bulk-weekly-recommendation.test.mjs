@@ -115,6 +115,64 @@ test("reached target never creates a cutting recommendation", () => {
   assert.equal(result.reasonCode, "goal_reached");
 });
 
+test("cut recommendations follow loss direction and keep conservative steps", () => {
+  const onTarget = recommend(
+    { weightChangeKg: -0.25 },
+    { goal: "cut", previousTrendChangeKg: -0.25 },
+  );
+  assert.equal(onTarget.decision, "maintain");
+
+  const tooSlow = recommend({ weightChangeKg: 0 }, { goal: "cut", previousTrendChangeKg: 0 });
+  assert.equal(tooSlow.decision, "decrease_calories");
+  assert.equal(tooSlow.calorieDelta, -150);
+
+  const firstFastWeek = recommend(
+    { weightChangeKg: -0.7 },
+    { goal: "cut", previousTrendChangeKg: -0.25 },
+  );
+  assert.equal(firstFastWeek.decision, "maintain");
+  const confirmedFast = recommend(
+    { weightChangeKg: -0.7 },
+    { goal: "cut", previousTrendChangeKg: -0.65 },
+  );
+  assert.equal(confirmedFast.decision, "increase_calories");
+  assert.equal(confirmedFast.calorieDelta, 150);
+});
+
+test("maintenance ignores small fluctuations and corrects only a confirmed drift", () => {
+  const stable = recommend(
+    { targetWeeklyGainKg: 0, weightChangeKg: 0.1 },
+    { goal: "maintain", previousTrendChangeKg: -0.1 },
+  );
+  assert.equal(stable.decision, "maintain");
+  assert.equal(stable.reasonCode, "on_target");
+
+  const oneDrift = recommend(
+    { targetWeeklyGainKg: 0, weightChangeKg: 0.3 },
+    { goal: "maintain", previousTrendChangeKg: 0.1 },
+  );
+  assert.equal(oneDrift.decision, "maintain");
+  const confirmedDrift = recommend(
+    { targetWeeklyGainKg: 0, weightChangeKg: 0.3 },
+    { goal: "maintain", previousTrendChangeKg: 0.25 },
+  );
+  assert.equal(confirmedDrift.decision, "decrease_calories");
+  assert.equal(confirmedDrift.calorieDelta, -150);
+});
+
+test("weekly adjustments remain inside persisted calorie bounds", () => {
+  const cutFloor = recommend(
+    { targetCalories: 800, averageCalories: 800, weightChangeKg: 0 },
+    { goal: "cut", previousTrendChangeKg: 0 },
+  );
+  assert.equal(cutFloor.recommendedCalories, 800);
+  const gainCeiling = recommend(
+    { targetCalories: 10_000, averageCalories: 10_000, weightChangeKg: 0 },
+    { goal: "gain", previousTrendChangeKg: 0 },
+  );
+  assert.equal(gainCeiling.recommendedCalories, 10_000);
+});
+
 test("recommendation is pure and UI uses completed weeks with explicit application", async () => {
   const source = summary({ weightChangeKg: 0 });
   const before = structuredClone(source);

@@ -59,10 +59,10 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const hasBulk = memberships?.some((membership) => membership.role === "owner") ?? false;
   const owner = memberships?.find((membership) => membership.role === "owner");
+  const publicPlan = owner?.is_public ?? usesPublicBulk;
   const showingChallenge = pendingTo ? pendingTo.startsWith("/challenge") : isChallenge;
 
-  const nav =
-    isBulk && hasBulk ? (usesPublicBulk ? PUBLIC_BULK_NAV : LEGACY_BULK_NAV) : CHALLENGE_NAV;
+  const nav = isBulk && hasBulk ? (publicPlan ? PUBLIC_BULK_NAV : LEGACY_BULK_NAV) : CHALLENGE_NAV;
   const prefetchDestination = (to: string) => {
     if (to.startsWith("/bulk") && owner) void prefetchBulk(owner.bulk_profile_id);
   };
@@ -99,7 +99,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 showingChallenge ? "text-muted-foreground" : "bg-elevated text-foreground"
               }`}
             >
-              Bulk
+              {publicPlan ? "Goal" : "Bulk"}
             </Link>
           ) : null}
           <Link

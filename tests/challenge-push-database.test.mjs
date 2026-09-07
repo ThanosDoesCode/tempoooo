@@ -101,6 +101,7 @@ async function count(kind) {
 
 async function completeBulkOnboarding(uid, overrides = {}) {
   const values = {
+    goal: "gain",
     currentWeight: 70,
     targetWeight: 78,
     weeklyGain: 0.25,
@@ -117,9 +118,10 @@ async function completeBulkOnboarding(uid, overrides = {}) {
   return asUser(uid, () =>
     db.query(
       `SELECT public.complete_bulk_onboarding(
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12
       ) AS id`,
       [
+        values.goal,
         values.currentWeight,
         values.targetWeight,
         values.weeklyGain,
@@ -263,11 +265,11 @@ test("Bulk data stays owner-only while users can atomically activate one persona
   );
   assert.equal(ownerWrite.rows[0].payload.calories, 3000);
   assert.equal((await completeBulkOnboarding(a)).rows[0].id, bulk);
-  assert.equal(
-    (await db.query("SELECT payload FROM public.bulk_targets WHERE bulk_profile_id=$1", [bulk]))
-      .rows[0].payload.calories,
-    3000,
-  );
+  const preservedLegacyPayload = (
+    await db.query("SELECT payload FROM public.bulk_targets WHERE bulk_profile_id=$1", [bulk])
+  ).rows[0].payload;
+  assert.equal(preservedLegacyPayload.calories, 3000);
+  assert.equal(preservedLegacyPayload.goal, undefined);
 
   for (const user of [b, c, d]) {
     assert.equal(
@@ -319,7 +321,7 @@ test("Bulk data stays owner-only while users can atomically activate one persona
   try {
     await assert.rejects(
       db.query(
-        "SELECT public.complete_bulk_onboarding(70,78,0.25,'beginner',3,ARRAY['dumbbells'],'generated',2900,140,360,90)",
+        "SELECT public.complete_bulk_onboarding('gain',70,78,0.25,'beginner',3,ARRAY['dumbbells'],'generated',2900,140,360,90)",
       ),
       /Not authenticated/,
     );
@@ -502,6 +504,65 @@ test("Bulk data stays owner-only while users can atomically activate one persona
   await assert.rejects(
     asUser(d, () => db.query("SELECT * FROM public.bulk_admins")),
     /permission denied/,
+  );
+});
+
+test("public Goal onboarding persists gain, cut and maintain without weakening owner isolation", async () => {
+  const cases = [
+    { goal: "gain", currentWeight: 70, targetWeight: 78, weeklyGain: 0.25 },
+    { goal: "cut", currentWeight: 80, targetWeight: 72, weeklyGain: 0.5 },
+    { goal: "maintain", currentWeight: 75, targetWeight: 75, weeklyGain: 0 },
+  ];
+  for (const values of cases) {
+    const owner = randomUUID();
+    await db.query("INSERT INTO auth.users VALUES ($1)", [owner]);
+    await db.query("INSERT INTO public.profiles(id,display_name) VALUES ($1,'Goal owner')", [
+      owner,
+    ]);
+    const result = await completeBulkOnboarding(owner, values);
+    const payload = (
+      await asUser(owner, () =>
+        db.query("SELECT payload FROM public.bulk_targets WHERE bulk_profile_id=$1", [
+          result.rows[0].id,
+        ]),
+      )
+    ).rows[0].payload;
+    assert.equal(payload.goal, values.goal);
+    assert.equal(Number(payload.startWeight), values.currentWeight);
+    assert.equal(Number(payload.targetWeight), values.targetWeight);
+    assert.equal(Number(payload.targetWeeklyGainKg), values.weeklyGain);
+    assert.equal(
+      (
+        await asUser(c, () =>
+          db.query("SELECT payload FROM public.bulk_targets WHERE bulk_profile_id=$1", [
+            result.rows[0].id,
+          ]),
+        )
+      ).rows.length,
+      0,
+    );
+  }
+
+  const invalidOwner = randomUUID();
+  await db.query("INSERT INTO auth.users VALUES ($1)", [invalidOwner]);
+  await db.query("INSERT INTO public.profiles(id,display_name) VALUES ($1,'Invalid goal')", [
+    invalidOwner,
+  ]);
+  for (const invalid of [
+    { goal: "gain", currentWeight: 80, targetWeight: 72, weeklyGain: 0.25 },
+    { goal: "cut", currentWeight: 70, targetWeight: 78, weeklyGain: 0.5 },
+    { goal: "maintain", currentWeight: 70, targetWeight: 78, weeklyGain: 0 },
+    { goal: "maintain", currentWeight: 70, targetWeight: 70, weeklyGain: 0.25 },
+  ]) {
+    await assert.rejects(completeBulkOnboarding(invalidOwner, invalid), /Invalid/i);
+  }
+  assert.equal(
+    (
+      await db.query("SELECT count(*) AS n FROM public.bulk_profiles WHERE owner_id=$1", [
+        invalidOwner,
+      ])
+    ).rows[0].n,
+    0,
   );
 });
 
@@ -2898,7 +2959,7 @@ test("verified background registration restores detached devices and transfers a
     false,
   );
 });
-test("rollback leaves no event and the 15 km weekly target cannot be overridden", async () => {
+test("rollback leaves no event and clients cannot directly override a weekly target", async () => {
   const beforeCount = (
     await db.query("SELECT count(*) AS n FROM public.challenge_notification_events")
   ).rows[0].n;
@@ -2945,6 +3006,205 @@ test("rollback leaves no event and the 15 km weekly target cannot be overridden"
   ).rows;
   assert.equal(result.length, 1);
   assert.equal(result[0].facts.target_km, 15);
+});
+
+test("future target overrides are creator-only, server-mediated and snapshotted at finalization", async () => {
+  const challenge = await freshChallenge("Future targets");
+
+  await assert.rejects(
+    asUser(a, () =>
+      db.query("SELECT public.set_challenge_week_target($1,$2,2,30)", [a, challenge]),
+    ),
+    /permission denied/i,
+  );
+  await assert.rejects(
+    asAnon(() => db.query("SELECT public.set_challenge_week_target($1,$2,2,30)", [a, challenge])),
+    /permission denied/i,
+  );
+  await assert.rejects(
+    asService(() =>
+      db.query("SELECT public.set_challenge_week_target($1,$2,2,30)", [b, challenge]),
+    ),
+    /Only the challenge creator/i,
+  );
+  await assert.rejects(
+    asService(() =>
+      db.query("SELECT public.set_challenge_week_target($1,$2,1,30)", [a, challenge]),
+    ),
+    /Only future week targets/i,
+  );
+  for (const invalidTarget of [0, 500.01, 20.123]) {
+    await assert.rejects(
+      asService(() =>
+        db.query("SELECT public.set_challenge_week_target($1,$2,2,$3)", [
+          a,
+          challenge,
+          invalidTarget,
+        ]),
+      ),
+      /Weekly target must be between 1 and 500 km with at most 2 decimals/i,
+    );
+  }
+
+  assert.equal(
+    Number(
+      (
+        await asService(() =>
+          db.query("SELECT public.set_challenge_week_target($1,$2,2,30.25) AS target_km", [
+            a,
+            challenge,
+          ]),
+        )
+      ).rows[0].target_km,
+    ),
+    30.25,
+  );
+  assert.equal(
+    Number(
+      (
+        await asUser(b, () =>
+          db.query(
+            "SELECT target_km FROM public.challenge_week_targets WHERE challenge_id=$1 AND week_number=2",
+            [challenge],
+          ),
+        )
+      ).rows[0].target_km,
+    ),
+    30.25,
+  );
+  assert.equal(
+    (
+      await asUser(c, () =>
+        db.query("SELECT * FROM public.challenge_week_targets WHERE challenge_id=$1", [challenge]),
+      )
+    ).rows.length,
+    0,
+  );
+
+  await activity(a, 12, challenge);
+  await db.query("UPDATE public.challenges SET start_date=CURRENT_DATE-14 WHERE id=$1", [
+    challenge,
+  ]);
+  await db.exec(
+    "ALTER TABLE public.challenge_activities DISABLE TRIGGER challenge_activities_guard",
+  );
+  await db.query(
+    "UPDATE public.challenge_activities SET activity_date=CURRENT_DATE-7 WHERE challenge_id=$1",
+    [challenge],
+  );
+  await db.exec(
+    "ALTER TABLE public.challenge_activities ENABLE TRIGGER challenge_activities_guard",
+  );
+  await db.query("SELECT public.finalize_challenge($1,$2)", [a, challenge]);
+
+  const finalized = (
+    await db.query(
+      `SELECT target_km,equivalent_km,penalty_eur
+       FROM public.challenge_weeks
+       WHERE challenge_id=$1 AND user_id=$2 AND week_number=2`,
+      [challenge, a],
+    )
+  ).rows[0];
+  assert.deepEqual(
+    {
+      target: Number(finalized.target_km),
+      equivalent: Number(finalized.equivalent_km),
+      penalty: Number(finalized.penalty_eur),
+    },
+    { target: 30.25, equivalent: 12, penalty: 10 },
+  );
+  await assert.rejects(
+    asService(() =>
+      db.query("SELECT public.set_challenge_week_target($1,$2,2,40)", [a, challenge]),
+    ),
+    /Only future week targets|Finalized week targets/i,
+  );
+});
+
+test("resetting a future target restores the base target and travel pause still resolves to zero", async () => {
+  const challenge = await freshChallenge("Resolved targets");
+  await asService(() =>
+    db.query("SELECT public.set_challenge_week_target($1,$2,2,25)", [a, challenge]),
+  );
+  assert.equal(
+    Number(
+      (
+        await asService(() =>
+          db.query("SELECT private.target_for_week($1,2,$2) AS target_km", [challenge, a]),
+        )
+      ).rows[0].target_km,
+    ),
+    25,
+  );
+  await asUser(a, () =>
+    db.query(
+      "INSERT INTO public.challenge_travel_pauses(challenge_id,user_id,week_number,country) VALUES ($1,$2,2,'IT')",
+      [challenge, a],
+    ),
+  );
+  assert.equal(
+    Number(
+      (
+        await asService(() =>
+          db.query("SELECT private.target_for_week($1,2,$2) AS target_km", [challenge, a]),
+        )
+      ).rows[0].target_km,
+    ),
+    0,
+  );
+  assert.equal(
+    Number(
+      (
+        await asService(() =>
+          db.query("SELECT public.set_challenge_week_target($1,$2,2,NULL) AS target_km", [
+            a,
+            challenge,
+          ]),
+        )
+      ).rows[0].target_km,
+    ),
+    15,
+  );
+  assert.equal(
+    (
+      await db.query(
+        "SELECT count(*) AS n FROM public.challenge_week_targets WHERE challenge_id=$1",
+        [challenge],
+      )
+    ).rows[0].n,
+    0,
+  );
+});
+
+test("target-reached push facts use the resolved weekly override", async () => {
+  const challenge = await freshChallenge("Override push");
+  await asService(() =>
+    db.query("SELECT public.set_challenge_week_target($1,$2,2,24)", [a, challenge]),
+  );
+  await db.query("UPDATE public.challenges SET start_date=CURRENT_DATE-7 WHERE id=$1", [challenge]);
+  await activity(a, 24, challenge);
+  const events = (
+    await db.query(
+      "SELECT facts FROM public.challenge_notification_events WHERE challenge_id=$1 AND kind='target_reached'",
+      [challenge],
+    )
+  ).rows;
+  assert.equal(events.length, 1);
+  assert.equal(Number(events[0].facts.target_km), 24);
+});
+
+test("a creator who left cannot change future targets", async () => {
+  const challenge = await freshChallenge("Former creator target");
+  await db.query("DELETE FROM public.challenge_members WHERE challenge_id=$1 AND user_id=$2", [
+    challenge,
+    a,
+  ]);
+  await assert.rejects(
+    asService(() =>
+      db.query("SELECT public.set_challenge_week_target($1,$2,2,20)", [a, challenge]),
+    ),
+    /Active challenge membership required/i,
+  );
 });
 test("a multi-row insert crossing the target emits exactly one completion", async () => {
   const batch = randomUUID();
@@ -3432,7 +3692,7 @@ test("security audit blocks direct cross-user, anon, unsafe-link and legacy func
   await assert.rejects(
     asAnon(() =>
       db.query(
-        "SELECT public.complete_bulk_onboarding(70,78,0.25,'beginner',3,ARRAY['dumbbells'],'custom',2900,140,360,90)",
+        "SELECT public.complete_bulk_onboarding('gain',70,78,0.25,'beginner',3,ARRAY['dumbbells'],'custom',2900,140,360,90)",
       ),
     ),
     /permission denied/i,

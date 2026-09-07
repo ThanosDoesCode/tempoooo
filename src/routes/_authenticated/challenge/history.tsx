@@ -1,4 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { ChevronRight } from "lucide-react";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { Card, DataError, Note, SectionTitle } from "@/components/ui-kit";
 import { useAuth } from "@/lib/auth";
@@ -71,42 +72,52 @@ function History() {
       ) : null}
       <div className="space-y-3">
         {numbers.map((n) => (
-          <Card key={n}>
-            <SectionTitle
-              right={
-                <span className="text-xs text-muted-foreground">
-                  {byWeek.get(n)?.[0]?.week_start} to {byWeek.get(n)?.[0]?.week_end} · target{" "}
-                  {formatTarget(byWeek.get(n)?.[0]?.target_km ?? challenge?.weekly_target_km)} km
-                </span>
-              }
-            >
-              Week {n}
-            </SectionTitle>
-            <div className="space-y-2">
-              {(byWeek.get(n) ?? []).map((w) => (
-                <div
-                  key={w.id}
-                  className="flex items-center justify-between rounded-xl border border-border bg-elevated px-3 py-2 text-sm"
-                >
-                  <span className="font-medium">{name(w.user_id)}</span>
-                  <span className="num text-muted-foreground">
-                    {w.paused
-                      ? `Paused · ${w.pause_country ? countryName(w.pause_country) : "travel"}`
-                      : `${Number(w.equivalent_km).toFixed(1)} / ${Number(w.target_km).toFixed(0)} km`}
+          <Link
+            key={n}
+            to="/challenge/history/week/$weekNumber"
+            params={{ weekNumber: String(n) }}
+            preload="intent"
+            resetScroll={false}
+            className="block rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            <Card>
+              <SectionTitle
+                right={
+                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                    {byWeek.get(n)?.[0]?.week_start} to {byWeek.get(n)?.[0]?.week_end} · target{" "}
+                    {formatTarget(byWeek.get(n)?.[0]?.target_km ?? challenge?.weekly_target_km)} km
+                    <ChevronRight className="h-4 w-4" aria-hidden="true" />
                   </span>
-                  <span className={w.completed || w.paused ? "text-good" : "text-warn"}>
-                    {w.paused
-                      ? "No penalty"
-                      : w.completed
-                        ? "Completed"
-                        : w.penalty_mode === "custom"
-                          ? (w.penalty_consequence ?? "Custom consequence")
-                          : owedText(Number(w.penalty_eur), challenge?.legacy_photo_owed)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </Card>
+                }
+              >
+                Week {n}
+              </SectionTitle>
+              <div className="space-y-2">
+                {(byWeek.get(n) ?? []).map((w) => (
+                  <div
+                    key={w.id}
+                    className="flex items-center justify-between rounded-xl border border-border bg-elevated px-3 py-2 text-sm"
+                  >
+                    <span className="font-medium">{name(w.user_id)}</span>
+                    <span className="num text-muted-foreground">
+                      {w.paused
+                        ? `Paused · ${w.pause_country ? countryName(w.pause_country) : "travel"}`
+                        : `${Number(w.equivalent_km).toFixed(1)} / ${Number(w.target_km).toFixed(0)} km`}
+                    </span>
+                    <span className={w.completed || w.paused ? "text-good" : "text-warn"}>
+                      {w.paused
+                        ? "No penalty"
+                        : w.completed
+                          ? "Completed"
+                          : w.penalty_mode === "custom"
+                            ? (w.penalty_consequence ?? "Custom consequence")
+                            : owedText(Number(w.penalty_eur), challenge?.legacy_photo_owed)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </Link>
         ))}
       </div>
     </AppShell>

@@ -123,12 +123,12 @@ test("Sharing is absent while personal Bulk activation guards remain", async () 
   assert.match(shell, /"\/bulk\/history", label: "History"/);
   assert.match(guard, /bulkOwnerQueryOptions/);
   assert.match(guard, /bulk-onboarding/);
-  assert.match(profile, /Get My Bulk Plan/);
-  assert.match(profile, /Start My Bulk/);
-  assert.match(profile, /My Bulk Plan/);
-  assert.match(profile, /Open My Bulk/);
+  assert.match(profile, /Get My Goal Plan/);
+  assert.match(profile, /Start My Goal/);
+  assert.match(profile, /ownedPlan\.is_public \? "My Goal Plan" : "My Bulk Plan"/);
+  assert.match(profile, /ownedPlan\.is_public \? "Open My Goal" : "Open My Bulk"/);
   assert.match(profile, /bulkAccessLoading/);
-  assert.match(profile, /Loading Bulk plan/);
+  assert.match(profile, /Loading plan/);
   assert.match(migration, /CREATE FUNCTION public\.activate_my_bulk\(\)/);
   assert.match(migration, /caller uuid := \(SELECT auth\.uid\(\)\)/);
   assert.match(migration, /ON CONFLICT \(owner_id\) DO UPDATE/);

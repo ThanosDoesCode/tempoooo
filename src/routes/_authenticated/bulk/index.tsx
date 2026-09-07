@@ -20,7 +20,7 @@ export const Route = createFileRoute("/_authenticated/bulk/")({
       { property: "og:title", content: "Tempo" },
       {
         property: "og:description",
-        content: "Fast daily logging for a 12-month lean bulk.",
+        content: "Fast daily logging for a personal physique Goal.",
       },
     ],
   }),
@@ -118,13 +118,20 @@ function TodayPage() {
       <div className="card-surface fade-up mb-2 flex items-center justify-between gap-3 p-4">
         <div>
           <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-            Bulk status
+            {usesPublicTrainingPlan ? "Goal status" : "Bulk status"}
           </p>
           <p className={`mt-1 text-2xl font-semibold ${toneClass}`}>{status.label}</p>
         </div>
         <div className="text-right">
           <p className={`num text-2xl font-semibold ${toneClass}`}>{signed(status.rate, 2)}</p>
-          <p className="text-[11px] text-muted-foreground">kg/week · target +0.20 to +0.30</p>
+          <p className="text-[11px] text-muted-foreground">
+            kg/week ·{" "}
+            {targets.goal === "cut"
+              ? `target −${targets.targetWeeklyGainKg ?? 0.25}`
+              : targets.goal === "maintain"
+                ? "target stable"
+                : "target +0.20 to +0.30"}
+          </p>
         </div>
       </div>
 

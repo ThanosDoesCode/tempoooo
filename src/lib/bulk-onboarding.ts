@@ -2,6 +2,12 @@ export const LEAN_BULK_WEEKLY_GAIN_RANGE = [0.2, 0.3] as const;
 
 export const WEEKLY_GAIN_OPTIONS = [0.1, 0.2, 0.25, 0.3] as const;
 
+export const PHYSIQUE_GOALS = [
+  { value: "gain", label: "Gain muscle" },
+  { value: "cut", label: "Lose fat" },
+  { value: "maintain", label: "Recomp / maintain" },
+] as const;
+
 export const EXPERIENCE_LEVELS = [
   { value: "beginner", label: "Beginner" },
   { value: "intermediate", label: "Intermediate" },
@@ -43,7 +49,7 @@ export type InitialNutritionRecommendation = {
 
 type RecommendationInput = Pick<
   BulkOnboardingValues,
-  "currentWeightKg" | "targetWeightKg" | "targetWeeklyGainKg" | "trainingDaysPerWeek"
+  "goal" | "currentWeightKg" | "targetWeightKg" | "targetWeeklyGainKg" | "trainingDaysPerWeek"
 >;
 
 const roundTo = (value: number, step: number) => Math.round(value / step) * step;
@@ -57,7 +63,7 @@ const clamp = (value: number, minimum: number, maximum: number) =>
 export function recommendInitialNutritionTargets(
   input: RecommendationInput,
 ): InitialNutritionRecommendation | null {
-  const { currentWeightKg, targetWeightKg, targetWeeklyGainKg, trainingDaysPerWeek } = input;
+  const { goal, currentWeightKg, targetWeightKg, targetWeeklyGainKg, trainingDaysPerWeek } = input;
   if (
     !Number.isFinite(currentWeightKg) ||
     !Number.isFinite(targetWeightKg) ||
@@ -65,25 +71,46 @@ export function recommendInitialNutritionTargets(
     !Number.isInteger(trainingDaysPerWeek) ||
     currentWeightKg < 20 ||
     currentWeightKg > 400 ||
-    targetWeightKg <= currentWeightKg ||
     targetWeightKg > 450 ||
-    targetWeeklyGainKg < 0.05 ||
-    targetWeeklyGainKg > 1.5 ||
+    targetWeightKg < 20 ||
+    !PHYSIQUE_GOALS.some((option) => option.value === goal) ||
     trainingDaysPerWeek < 2 ||
     trainingDaysPerWeek > 6
   )
     return null;
 
-  const protein = roundTo(clamp(currentWeightKg * 1.8, 40, 300), 5);
-  const fat = roundTo(clamp(Math.max(currentWeightKg * 0.8, 50), 40, 180), 5);
+  if (
+    (goal === "gain" &&
+      (targetWeightKg <= currentWeightKg ||
+        targetWeeklyGainKg < 0.05 ||
+        targetWeeklyGainKg > 1.5)) ||
+    (goal === "cut" &&
+      (targetWeightKg >= currentWeightKg ||
+        targetWeeklyGainKg < 0.05 ||
+        targetWeeklyGainKg > 1.5)) ||
+    (goal === "maintain" &&
+      (Math.abs(targetWeightKg - currentWeightKg) > Math.max(2, currentWeightKg * 0.05) ||
+        targetWeeklyGainKg !== 0))
+  )
+    return null;
+
+  const proteinFactor = goal === "cut" ? 2 : 1.8;
+  const protein = roundTo(clamp(currentWeightKg * proteinFactor, 40, 300), 5);
+  const fatFactor = goal === "cut" ? 0.7 : 0.8;
+  const fatMinimum = goal === "cut" ? 45 : 50;
+  const fat = roundTo(clamp(Math.max(currentWeightKg * fatFactor, fatMinimum), 40, 180), 5);
   const goalGapKg = targetWeightKg - currentWeightKg;
-  const planningWeightKg = currentWeightKg + Math.min(goalGapKg * 0.1, 2.5);
+  const planningWeightKg =
+    currentWeightKg + Math.sign(goalGapKg) * Math.min(Math.abs(goalGapKg) * 0.1, 2.5);
   const maintenanceFactor = 30 + trainingDaysPerWeek * 0.75;
-  const dailySurplus = (targetWeeklyGainKg * 7700) / 7;
+  const maintenanceCalories = planningWeightKg * maintenanceFactor;
+  const gainAdjustment = (targetWeeklyGainKg * 7700) / 7;
+  const cutAdjustment = -clamp((Math.abs(targetWeeklyGainKg) * 7700) / 7, 250, 600);
+  const calorieAdjustment = goal === "gain" ? gainAdjustment : goal === "cut" ? cutAdjustment : 0;
   const macroMinimumCalories = protein * 4 + fat * 9;
   const calories = clamp(
-    roundTo(planningWeightKg * maintenanceFactor + dailySurplus, 50),
-    Math.max(800, macroMinimumCalories),
+    roundTo(maintenanceCalories + calorieAdjustment, 50),
+    Math.max(800, macroMinimumCalories + 20),
     10000,
   );
   const remainingCalories = Math.max(0, calories - macroMinimumCalories);
@@ -93,10 +120,12 @@ export function recommendInitialNutritionTargets(
 }
 
 export type ExperienceLevel = (typeof EXPERIENCE_LEVELS)[number]["value"];
+export type PhysiqueGoal = (typeof PHYSIQUE_GOALS)[number]["value"];
 export type Equipment = (typeof EQUIPMENT_OPTIONS)[number]["value"];
 export type TrainingSetupPreference = (typeof TRAINING_SETUP_OPTIONS)[number]["value"];
 
 export type BulkOnboardingValues = {
+  goal: PhysiqueGoal;
   currentWeightKg: number;
   targetWeightKg: number;
   targetWeeklyGainKg: number;
@@ -114,27 +143,51 @@ export type BulkOnboardingField = keyof BulkOnboardingValues;
 export type BulkOnboardingErrors = Partial<Record<BulkOnboardingField, string>>;
 
 const experienceValues = new Set<string>(EXPERIENCE_LEVELS.map(({ value }) => value));
+const goalValues = new Set<string>(PHYSIQUE_GOALS.map(({ value }) => value));
 const equipmentValues = new Set<string>(EQUIPMENT_OPTIONS.map(({ value }) => value));
 const setupValues = new Set<string>(TRAINING_SETUP_OPTIONS.map(({ value }) => value));
 
 export function validateBulkOnboarding(values: BulkOnboardingValues): BulkOnboardingErrors {
   const errors: BulkOnboardingErrors = {};
+  if (!goalValues.has(values.goal)) errors.goal = "Choose a physique goal.";
   if (
     !Number.isFinite(values.currentWeightKg) ||
     values.currentWeightKg < 20 ||
     values.currentWeightKg > 400
   )
     errors.currentWeightKg = "Enter a current weight between 20 and 400 kg.";
-  if (!Number.isFinite(values.targetWeightKg) || values.targetWeightKg <= values.currentWeightKg)
-    errors.targetWeightKg = "Target weight must be greater than your current weight.";
-  else if (values.targetWeightKg > 450)
-    errors.targetWeightKg = "Enter a target weight of 450 kg or less.";
   if (
-    !Number.isFinite(values.targetWeeklyGainKg) ||
-    values.targetWeeklyGainKg < 0.05 ||
-    values.targetWeeklyGainKg > 1.5
+    !Number.isFinite(values.targetWeightKg) ||
+    values.targetWeightKg < 20 ||
+    values.targetWeightKg > 450
+  )
+    errors.targetWeightKg = "Enter a target weight between 20 and 450 kg.";
+  else if (values.goal === "gain" && values.targetWeightKg <= values.currentWeightKg)
+    errors.targetWeightKg = "A muscle-gain target must be above your current weight.";
+  else if (values.goal === "cut" && values.targetWeightKg >= values.currentWeightKg)
+    errors.targetWeightKg = "A fat-loss target must be below your current weight.";
+  else if (
+    values.goal === "maintain" &&
+    Math.abs(values.targetWeightKg - values.currentWeightKg) >
+      Math.max(2, values.currentWeightKg * 0.05)
+  )
+    errors.targetWeightKg = "A maintenance target should stay close to your current weight.";
+  if (
+    values.goal === "gain" &&
+    (!Number.isFinite(values.targetWeeklyGainKg) ||
+      values.targetWeeklyGainKg < 0.05 ||
+      values.targetWeeklyGainKg > 1.5)
   )
     errors.targetWeeklyGainKg = "Enter a weekly gain between 0.05 and 1.5 kg.";
+  if (
+    values.goal === "cut" &&
+    (!Number.isFinite(values.targetWeeklyGainKg) ||
+      values.targetWeeklyGainKg < 0.05 ||
+      values.targetWeeklyGainKg > 1.5)
+  )
+    errors.targetWeeklyGainKg = "Enter a weekly loss between 0.05 and 1.5 kg.";
+  if (values.goal === "maintain" && values.targetWeeklyGainKg !== 0)
+    errors.targetWeeklyGainKg = "Maintenance uses a 0 kg weekly change target.";
   if (!experienceValues.has(values.experienceLevel))
     errors.experienceLevel = "Choose your experience level.";
   if (!TRAINING_DAY_OPTIONS.includes(values.trainingDaysPerWeek as 2 | 3 | 4 | 5 | 6))

@@ -151,3 +151,46 @@ test("challenge CSV preserves summary, activity, finalized-week and travel-pause
   assert.match(csv, /"35"/);
   assert.match(csv, /"10"/);
 });
+
+test("challenge CSV resolves open activity targets and exports future overrides", () => {
+  const csv = context.exports.challengeCsv(
+    {
+      name: "Variable target",
+      start_date: "2026-08-31",
+      weekly_target_km: 15,
+      penalty_mode: "money",
+      penalty_high_eur: 15,
+      penalty_medium_eur: 10,
+      penalty_low_eur: 5,
+      penalty_high_custom: null,
+      penalty_medium_custom: null,
+      penalty_low_custom: null,
+      legacy_photo_owed: false,
+      travel_pause_enabled: false,
+      travel_pause_home_countries: [],
+    },
+    [{ userId: "a", name: "Alex" }],
+    [
+      {
+        id: "activity-open",
+        user_id: "a",
+        activity_date: "2026-08-31",
+        activity_type: "run",
+        distance_km: 5,
+        duration_seconds: 1500,
+        is_qualified: true,
+        qualifying_equivalent_km: 5,
+      },
+    ],
+    [],
+    [],
+    [{ challenge_id: "challenge", week_number: 1, target_km: 22.5, set_by: "a" }],
+  );
+
+  const rows = csv.split("\n");
+  const activityRow = rows.find((row) => row.includes('"activity"'));
+  const overrideRow = rows.find((row) => row.includes('"week_target_override"'));
+  assert.ok(activityRow?.includes('"22.5"'));
+  assert.ok(overrideRow?.includes('"22.5"'));
+  assert.ok(overrideRow?.includes('"All active participants"'));
+});

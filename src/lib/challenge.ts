@@ -47,6 +47,17 @@ export type Activity = {
   edited: boolean;
   created_at: string;
   updated_at: string;
+  evidence_expired_at?: string | null;
+};
+
+export type WeekTargetOverride = {
+  id: string;
+  challenge_id: string;
+  week_number: number;
+  target_km: number;
+  set_by: string;
+  created_at: string;
+  updated_at: string;
 };
 
 export const DEFAULT_TARGET_KM = 15;
@@ -200,6 +211,29 @@ export function weekBounds(challenge: Challenge, weekNumber: number) {
   return { start: format(start, "yyyy-MM-dd"), end: format(addDays(start, 6), "yyyy-MM-dd") };
 }
 
+export function targetOverrideForWeek(
+  challenge: Pick<Challenge, "weekly_target_km">,
+  overrides: WeekTargetOverride[] | undefined,
+  weekNumber: number,
+) {
+  return Number(
+    overrides?.find((override) => override.week_number === weekNumber)?.target_km ??
+      challenge.weekly_target_km,
+  );
+}
+
+export function resolvedTargetForWeek(
+  challenge: Pick<Challenge, "weekly_target_km">,
+  overrides: WeekTargetOverride[] | undefined,
+  pauses: TravelPause[] | undefined,
+  userId: string,
+  weekNumber: number,
+) {
+  return weekPaused(pauses, userId, weekNumber)
+    ? 0
+    : targetOverrideForWeek(challenge, overrides, weekNumber);
+}
+
 export function hoursLeft(challenge: Challenge, weekNumber: number) {
   const { end } = weekBounds(challenge, weekNumber);
   const endOfWeek = new Date(`${end}T23:59:59`);
@@ -350,6 +384,28 @@ export function useTravelPauses(challengeId: string | undefined) {
       if (error) throw error;
       return (data ?? []) as unknown as TravelPause[];
     },
+  });
+}
+
+export const weekTargetsQueryOptions = (challengeId: string) =>
+  queryOptions({
+    queryKey: ["challenge-week-targets", challengeId],
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("challenge_week_targets")
+        .select("*")
+        .eq("challenge_id", challengeId)
+        .order("week_number", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as unknown as WeekTargetOverride[];
+    },
+  });
+
+export function useWeekTargets(challengeId: string | undefined) {
+  return useQuery({
+    ...weekTargetsQueryOptions(challengeId ?? ""),
+    enabled: !!challengeId,
   });
 }
 

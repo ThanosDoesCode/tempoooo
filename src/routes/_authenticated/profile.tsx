@@ -15,12 +15,12 @@ export const Route = createFileRoute("/_authenticated/profile")({
       { title: "Tempo" },
       {
         name: "description",
-        content: "See the account you are signed in with and create or open your lean bulk plan.",
+        content: "See the account you are signed in with and create or open your Tempo Goal plan.",
       },
       { property: "og:title", content: "Tempo" },
       {
         property: "og:description",
-        content: "Manage your account and your lean bulk plan access.",
+        content: "Manage your account and your Tempo Goal plan access.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
@@ -72,18 +72,15 @@ function ProfilePage() {
       </Card>
 
       {bulkAccessLoading ? (
-        <div
-          className="mt-3 h-36 animate-pulse rounded-2xl bg-card"
-          aria-label="Loading Bulk plan"
-        />
+        <div className="mt-3 h-36 animate-pulse rounded-2xl bg-card" aria-label="Loading plan" />
       ) : ownedPlan ? (
         <Card className="mt-3">
-          <SectionTitle>My Bulk Plan</SectionTitle>
+          <SectionTitle>{ownedPlan.is_public ? "My Goal Plan" : "My Bulk Plan"}</SectionTitle>
           <button
             onClick={() => void navigate({ to: "/bulk" })}
             className="min-h-11 w-full rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground"
           >
-            Open My Bulk
+            {ownedPlan.is_public ? "Open My Goal" : "Open My Bulk"}
           </button>
           {error ? <p className="mt-2 text-xs text-danger">{error}</p> : null}
         </Card>
@@ -94,7 +91,7 @@ function ProfilePage() {
               <Lock className="h-4 w-4" aria-hidden="true" />
             </span>
             <div>
-              <SectionTitle>Get My Bulk Plan</SectionTitle>
+              <SectionTitle>Get My Goal Plan</SectionTitle>
               <p className="text-sm leading-6 text-muted-foreground">
                 Build a personalized nutrition and training setup based on your goals, experience
                 and schedule.
@@ -106,7 +103,7 @@ function ProfilePage() {
             onClick={() => void navigate({ to: "/bulk-onboarding" })}
             className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground active:scale-[0.98]"
           >
-            <Dumbbell className="h-4 w-4" aria-hidden="true" /> Start My Bulk
+            <Dumbbell className="h-4 w-4" aria-hidden="true" /> Start My Goal
           </button>
         </Card>
       )}
@@ -141,7 +138,8 @@ function ProfilePage() {
               }}
               className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-danger/50 py-3 text-sm font-semibold text-danger"
             >
-              <RotateCcw className="h-4 w-4" /> Reset my bulk plan
+              <RotateCcw className="h-4 w-4" /> Reset my {ownedPlan.is_public ? "Goal" : "bulk"}{" "}
+              plan
             </button>
           ) : (
             <div className="mt-3 grid grid-cols-2 gap-2">
@@ -161,7 +159,9 @@ function ProfilePage() {
             </div>
           )}
           {resetDone ? (
-            <p className="mt-2 text-xs text-good">Your bulk plan is now empty.</p>
+            <p className="mt-2 text-xs text-good">
+              Your {ownedPlan.is_public ? "Goal" : "bulk"} plan is now empty.
+            </p>
           ) : null}
         </Card>
       ) : null}

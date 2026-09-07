@@ -31,7 +31,7 @@ const destinations = [
 function BulkMorePage() {
   return (
     <AppShell>
-      <PageHeader title="More" subtitle="Progress, check-ins and your Bulk history." />
+      <PageHeader title="More" subtitle="Progress, check-ins and your Goal history." />
       <div className="space-y-3">
         {destinations.map(({ to, label, description, icon: Icon }) => (
           <Link

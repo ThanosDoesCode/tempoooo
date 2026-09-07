@@ -8,6 +8,7 @@ import {
   type Challenge,
   type TravelPause,
   type WeekRow,
+  type WeekTargetOverride,
 } from "./challenge";
 
 type Member = { userId: string; name: string };
@@ -58,6 +59,7 @@ export function challengeCsv(
   activities: Activity[],
   weeks: WeekRow[],
   pauses: TravelPause[],
+  overrides: WeekTargetOverride[] = [],
 ) {
   const name = (userId: string) =>
     members.find((member) => member.userId === userId)?.name ?? userId;
@@ -100,10 +102,24 @@ export function challengeCsv(
 
   for (const activity of activities) {
     const metrics = activityMetrics(activity);
+    const activityWeek = weekNumberOf(challenge, activity.activity_date);
+    const finalized = weeks.find(
+      (week) => week.user_id === activity.user_id && week.week_number === activityWeek,
+    );
+    const paused = pauses.some(
+      (pause) => pause.user_id === activity.user_id && pause.week_number === activityWeek,
+    );
+    const activityTarget = Number(
+      finalized?.target_km ??
+        (paused
+          ? 0
+          : (overrides.find((override) => override.week_number === activityWeek)?.target_km ??
+            challenge.weekly_target_km)),
+    );
     rows.push({
       record_type: "activity",
       player: name(activity.user_id),
-      week: weekNumberOf(challenge, activity.activity_date),
+      week: activityWeek,
       activity_date: activity.activity_date,
       activity_type: activity.activity_type,
       distance_km: Number(activity.distance_km),
@@ -113,7 +129,7 @@ export function challengeCsv(
       average_pace: formatPace(metrics.averagePace),
       qualified: metrics.qualified,
       challenge_km: Number(qualifiedEquivalentKm(activity).toFixed(4)),
-      weekly_target_km: Number(challenge.weekly_target_km),
+      weekly_target_km: activityTarget,
       penalty_mode: challenge.penalty_mode,
       penalty_high_eur: Number(challenge.penalty_high_eur),
       penalty_medium_eur: Number(challenge.penalty_medium_eur),
@@ -127,13 +143,42 @@ export function challengeCsv(
       applied_penalty_band: "",
       applied_penalty_consequence: "",
       penalty_eur: "",
-      travel_paused: pauses.some(
-        (pause) =>
-          pause.user_id === activity.user_id &&
-          pause.week_number === weekNumberOf(challenge, activity.activity_date),
-      ),
+      travel_paused: paused,
       travel_country: "",
       activity_id: activity.id,
+    });
+  }
+
+  for (const override of overrides) {
+    rows.push({
+      record_type: "week_target_override",
+      player: "All active participants",
+      week: override.week_number,
+      activity_date: "",
+      activity_type: "",
+      distance_km: "",
+      duration_seconds: "",
+      average_speed_kmh: "",
+      average_pace: "",
+      qualified: "",
+      challenge_km: "",
+      weekly_target_km: Number(override.target_km),
+      penalty_mode: challenge.penalty_mode,
+      penalty_high_eur: Number(challenge.penalty_high_eur),
+      penalty_medium_eur: Number(challenge.penalty_medium_eur),
+      penalty_low_eur: Number(challenge.penalty_low_eur),
+      penalty_high_custom: challenge.penalty_high_custom,
+      penalty_medium_custom: challenge.penalty_medium_custom,
+      penalty_low_custom: challenge.penalty_low_custom,
+      legacy_photo_owed: challenge.legacy_photo_owed,
+      travel_pause_enabled: challenge.travel_pause_enabled,
+      travel_pause_home_countries: challenge.travel_pause_home_countries.join("|"),
+      applied_penalty_band: "",
+      applied_penalty_consequence: "",
+      penalty_eur: "",
+      travel_paused: false,
+      travel_country: "",
+      activity_id: "",
     });
   }
 
@@ -215,8 +260,9 @@ export function downloadChallengeCsv(
   activities: Activity[],
   weeks: WeekRow[],
   pauses: TravelPause[],
+  overrides: WeekTargetOverride[] = [],
 ) {
-  const blob = new Blob([challengeCsv(challenge, members, activities, weeks, pauses)], {
+  const blob = new Blob([challengeCsv(challenge, members, activities, weeks, pauses, overrides)], {
     type: "text/csv;charset=utf-8",
   });
   const url = URL.createObjectURL(blob);

@@ -77,3 +77,19 @@ export const disableChallengePushAccount = createServerFn({ method: "POST" })
     await disableChallengePushFor(context.userId);
     return { ok: true };
   });
+
+export const setChallengeWeekTarget = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data) =>
+    z
+      .object({
+        challenge: z.string().uuid(),
+        weekNumber: z.number().int().min(1).max(520),
+        targetKm: z.number().min(1).max(500).multipleOf(0.01).nullable(),
+      })
+      .parse(data),
+  )
+  .handler(async ({ data, context }) => {
+    const { setChallengeWeekTargetFor } = await import("./privileged-rpcs.server");
+    return setChallengeWeekTargetFor(context.userId, data);
+  });

@@ -1617,6 +1617,7 @@ export type Database = {
           _current_weight_kg: number
           _experience_level: string
           _fat: number
+          _goal: string
           _protein: number
           _target_weekly_gain_kg: number
           _target_weight_kg: number

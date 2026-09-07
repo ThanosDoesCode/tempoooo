@@ -139,15 +139,34 @@ export function PublicBulkProgress({
   const recommendation = useMemo(
     () =>
       recommendBulkCalories({
+        goal: targets.goal ?? "gain",
         summary: completedSummary,
         previousTrendChangeKg: priorSummary.weightChangeKg,
         previousTrendComparable:
           priorSummary.weightEntryCount >= 3 && priorSummary.previousWeightEntryCount >= 3,
         targetWeightReached:
-          goal.currentWeightKg != null && goal.currentWeightKg >= targets.targetWeight,
+          goal.currentWeightKg != null &&
+          (targets.goal === "cut"
+            ? goal.currentWeightKg <= targets.targetWeight
+            : targets.goal === "maintain"
+              ? Math.abs(goal.currentWeightKg - targets.targetWeight) <= 0.5
+              : goal.currentWeightKg >= targets.targetWeight),
       }),
-    [completedSummary, priorSummary, goal.currentWeightKg, targets.targetWeight],
+    [completedSummary, priorSummary, goal.currentWeightKg, targets.goal, targets.targetWeight],
   );
+  const physiqueGoal = targets.goal ?? "gain";
+  const weeklyTargetLabel =
+    physiqueGoal === "cut"
+      ? "Target loss"
+      : physiqueGoal === "maintain"
+        ? "Target change"
+        : "Target gain";
+  const weeklyTargetValue =
+    physiqueGoal === "maintain"
+      ? "Stable"
+      : summary.targetWeeklyGainKg == null
+        ? "Unavailable"
+        : `${physiqueGoal === "cut" ? "−" : "+"}${summary.targetWeeklyGainKg} kg`;
   const invalidateWeights = async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: bulkWeightQueryKey(bulkProfileId) }),
@@ -198,7 +217,11 @@ export function PublicBulkProgress({
           <span>
             {goal.gainedKg == null
               ? "No progress data"
-              : `${goal.gainedKg >= 0 ? "+" : ""}${goal.gainedKg} kg · ${goal.remainingKg! > 0 ? `${goal.remainingKg} kg remaining` : `${Math.abs(goal.remainingKg!)} kg beyond goal`}`}
+              : targets.goal === "cut"
+                ? `${Math.abs(goal.gainedKg)} kg lost · ${goal.remainingKg! < 0 ? `${Math.abs(goal.remainingKg!)} kg to target` : `${Math.abs(goal.remainingKg!)} kg beyond goal`}`
+                : targets.goal === "maintain"
+                  ? `${Math.abs(goal.gainedKg)} kg from starting weight`
+                  : `${goal.gainedKg >= 0 ? "+" : ""}${goal.gainedKg} kg · ${goal.remainingKg! > 0 ? `${goal.remainingKg} kg remaining` : `${Math.abs(goal.remainingKg!)} kg beyond goal`}`}
           </span>
         </div>
       </Card>
@@ -254,15 +277,7 @@ export function PublicBulkProgress({
             }
             hint={summary.plannedWorkouts == null ? "No active plan target" : "workouts this week"}
           />
-          <Metric
-            label="Target gain"
-            value={
-              summary.targetWeeklyGainKg == null
-                ? "Unavailable"
-                : `+${summary.targetWeeklyGainKg} kg`
-            }
-            hint="per week"
-          />
+          <Metric label={weeklyTargetLabel} value={weeklyTargetValue} hint="per week" />
         </div>
         {summary.weightEntryCount === 1 ? (
           <p className="mt-3 text-xs text-muted-foreground">
@@ -287,6 +302,7 @@ export function PublicBulkProgress({
         recommendation={recommendation}
         summary={completedSummary}
         profileId={bulkProfileId}
+        goal={physiqueGoal}
       />
 
       <Card>
@@ -402,10 +418,12 @@ function WeeklyCheckIn({
   recommendation,
   summary,
   profileId,
+  goal,
 }: {
   recommendation: BulkWeeklyRecommendation;
   summary: BulkWeeklyProgressSummary;
   profileId: string;
+  goal: "gain" | "cut" | "maintain";
 }) {
   const queryClient = useQueryClient();
   const [pending, setPending] = useState(false);
@@ -458,9 +476,15 @@ function WeeklyCheckIn({
       </p>
       <div className="mt-3 grid grid-cols-2 gap-2">
         <Metric
-          label="Target gain"
+          label={
+            goal === "cut" ? "Target loss" : goal === "maintain" ? "Target change" : "Target gain"
+          }
           value={
-            summary.targetWeeklyGainKg == null ? "Unavailable" : `+${summary.targetWeeklyGainKg} kg`
+            goal === "maintain"
+              ? "Stable"
+              : summary.targetWeeklyGainKg == null
+                ? "Unavailable"
+                : `${goal === "cut" ? "−" : "+"}${summary.targetWeeklyGainKg} kg`
           }
           hint="per week"
         />
@@ -721,7 +745,7 @@ function ProgressPhotos({
     <Card>
       <SectionTitle>Progress photos</SectionTitle>
       <p className="text-xs text-muted-foreground">
-        Private to your Bulk account. Use similar lighting and positioning for useful comparisons.
+        Private to your Goal account. Use similar lighting and positioning for useful comparisons.
       </p>
       <div className="mt-3 grid grid-cols-2 gap-2">
         <input

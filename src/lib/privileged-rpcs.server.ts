@@ -181,3 +181,14 @@ export const createChallengeFor = (caller: string, input: CreateChallengeInput) 
 
 export const disableChallengePushFor = (caller: string) =>
   rpc<null>("disable_challenge_push", { _caller: caller });
+
+export const setChallengeWeekTargetFor = (
+  caller: string,
+  input: { challenge: string; weekNumber: number; targetKm: number | null },
+) =>
+  rpc<number>("set_challenge_week_target", {
+    _caller: caller,
+    _challenge: input.challenge,
+    _week: input.weekNumber,
+    _target: input.targetKm,
+  });

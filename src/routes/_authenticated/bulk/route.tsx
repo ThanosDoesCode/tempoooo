@@ -39,9 +39,9 @@ function BulkRouteError({ error, reset }: ErrorComponentProps) {
   }
   return (
     <AppShell>
-      <PageHeader title="Bulk unavailable" />
+      <PageHeader title="Plan unavailable" />
       <DataError
-        message={userFacingError(error, "load Bulk")}
+        message={userFacingError(error, "load your plan")}
         onRetry={() => {
           reset();
           void router.invalidate();
@@ -67,7 +67,7 @@ function BulkLayout() {
     const preferred = memberships[0]!;
     if (preferred.bulk_profile_id !== bulkId) {
       loadBulk(preferred.bulk_profile_id, preferred.role).catch((e: Error) =>
-        setError(userFacingError(e, "load Bulk")),
+        setError(userFacingError(e, "load your plan")),
       );
     }
   }, [memberships, bulkId, navigate]);
@@ -75,14 +75,14 @@ function BulkLayout() {
   if (error) {
     return (
       <AppShell>
-        <PageHeader title="Bulk unavailable" />
+        <PageHeader title="Plan unavailable" />
         <DataError
           message={error}
           onRetry={() => {
             setError(null);
             if (memberships?.[0])
               void loadBulk(memberships[0].bulk_profile_id, memberships[0].role).catch((e: Error) =>
-                setError(userFacingError(e, "load Bulk")),
+                setError(userFacingError(e, "load your plan")),
               );
           }}
         />

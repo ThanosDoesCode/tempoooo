@@ -49,9 +49,9 @@ test("Tempo navigation exposes optional Bulk only after persisted activation", a
   assert.match(shell, /"\/bulk\/history", label: "History"/);
   assert.match(
     shell,
-    /isBulk && hasBulk \? \(usesPublicBulk \? PUBLIC_BULK_NAV : LEGACY_BULK_NAV\) : CHALLENGE_NAV/,
+    /isBulk && hasBulk \? \(publicPlan \? PUBLIC_BULK_NAV : LEGACY_BULK_NAV\) : CHALLENGE_NAV/,
   );
-  assert.match(shell, /\{hasBulk \? \([\s\S]*?>\s*Bulk\s*<\/Link>/);
+  assert.match(shell, /\{publicPlan \? "Goal" : "Bulk"\}/);
   assert.match(shell, />\s*Challenge\s*<\/Link>/);
   assert.doesNotMatch(shell, /disabled[\s\S]{0,120}>\s*Bulk\s*</);
   assert.match(shell, /onPointerDown=\{\(\) => acknowledge/);
@@ -66,7 +66,7 @@ test("Tempo navigation exposes optional Bulk only after persisted activation", a
   assert.match(guard, /redirect\(\{ to: "\/bulk-onboarding", replace: true \}\)/);
   const onboarding = await read("src/routes/_authenticated/bulk-onboarding.tsx");
   assert.match(onboarding, /supabase\.rpc\("complete_bulk_onboarding"/);
-  assert.match(onboarding, /Create My Bulk Plan/);
+  assert.match(onboarding, /Create My Goal Plan/);
   assert.match(onboarding, /bulkOwnerQueryOptions/);
   const denied = await read("src/routes/_authenticated/bulk-access-denied.tsx");
   assert.match(denied, /Bulk access required/);

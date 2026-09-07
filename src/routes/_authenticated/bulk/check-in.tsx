@@ -29,7 +29,7 @@ export const Route = createFileRoute("/_authenticated/bulk/check-in")({
       {
         name: "description",
         content:
-          "Weekly and monthly lean bulk summaries built for a single clean screenshot to share with ChatGPT.",
+          "Weekly and monthly Goal progress summaries built for a single clean screenshot to share with ChatGPT.",
       },
       { property: "og:title", content: "Tempo" },
       {
@@ -68,7 +68,8 @@ function CheckInPage() {
     );
   }
 
-  const tone = s.status.tone === "muted" ? "muted" : s.status.tone;
+  const displayedStatus = data.targets.goal ? bulkStatus(data, addDays(s.weekStart, 6)) : s.status;
+  const tone = displayedStatus.tone === "muted" ? "muted" : displayedStatus.tone;
 
   return (
     <AppShell>
@@ -110,31 +111,48 @@ function CheckInPage() {
               {signed(s.change, 2)}
             </p>
             <p className={`mt-1 text-sm font-semibold tracking-wide ${toneText(tone)}`}>
-              {s.status.label}
+              {displayedStatus.label}
             </p>
           </div>
 
           <div className="mb-4">
             <Card>
-              <SectionTitle>Decision</SectionTitle>
-              <p className={`text-base font-semibold ${toneText(s.advice.tone)}`}>
-                {s.advice.decision}
-              </p>
-              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                {s.advice.detail}
-              </p>
-              {s.focus.length ? (
+              <SectionTitle>{data.targets.goal ? "Goal phase" : "Decision"}</SectionTitle>
+              {data.targets.goal ? (
                 <>
-                  <p className="mt-3 text-[10px] uppercase tracking-wider text-muted-foreground">
-                    Focus next week
+                  <p className={`text-base font-semibold ${toneText(displayedStatus.tone)}`}>
+                    {data.targets.goal === "cut"
+                      ? "Lose fat"
+                      : data.targets.goal === "maintain"
+                        ? "Recomp / maintain"
+                        : "Gain muscle"}
                   </p>
-                  <ul className="mt-1 space-y-0.5 text-sm">
-                    {s.focus.map((f) => (
-                      <li key={f}>· {f}</li>
-                    ))}
-                  </ul>
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                    Goal-aware calorie guidance is based on completed weeks and appears in Progress.
+                  </p>
                 </>
-              ) : null}
+              ) : (
+                <>
+                  <p className={`text-base font-semibold ${toneText(s.advice.tone)}`}>
+                    {s.advice.decision}
+                  </p>
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                    {s.advice.detail}
+                  </p>
+                  {s.focus.length ? (
+                    <>
+                      <p className="mt-3 text-[10px] uppercase tracking-wider text-muted-foreground">
+                        Focus next week
+                      </p>
+                      <ul className="mt-1 space-y-0.5 text-sm">
+                        {s.focus.map((f) => (
+                          <li key={f}>· {f}</li>
+                        ))}
+                      </ul>
+                    </>
+                  ) : null}
+                </>
+              )}
             </Card>
           </div>
 
@@ -358,20 +376,32 @@ function ShareWeek({
   const latest = sortedDays(data)
     .filter((d) => d.weight != null)
     .pop();
+  const displayedStatus = data.targets.goal ? bulkStatus(data, addDays(s.weekStart, 6)) : s.status;
+  const targetChange = data.targets.targetWeeklyGainKg ?? 0.25;
+  const onGoal = (change: number) =>
+    data.targets.goal === "cut"
+      ? change >= -targetChange - 0.15 && change <= -targetChange + 0.15
+      : data.targets.goal === "maintain"
+        ? Math.abs(change) <= 0.15
+        : change >= 0.2 && change <= 0.3;
   return (
-    <ShareWrap title="Tempo Bulk Check-In" subtitle={s.label} onClose={onClose}>
+    <ShareWrap
+      title={data.targets.goal ? "Tempo Goal Check-In" : "Tempo Bulk Check-In"}
+      subtitle={s.label}
+      onClose={onClose}
+    >
       <div className="pb-2">
         <ShareHead>Weight</ShareHead>
         <ShareLine
           label="Weekly change"
           value={signed(s.change, 2, " kg/week")}
-          mark={trend(s.change, (n) => n >= 0.2 && n <= 0.3)}
+          mark={trend(s.change, onGoal)}
         />
         <ShareLine label="7-day avg" value={fmt(s.currentAvg, 2, " kg")} />
         <ShareLine label="Current weight" value={fmt(latest?.weight, 1, " kg")} />
         <ShareLine label="Waist (4 weeks)" value={signed(s.waist4w, 1, " cm")} />
-        <p className={`mt-1 text-[15px] font-semibold ${toneText(s.status.tone)}`}>
-          {s.status.label}
+        <p className={`mt-1 text-[15px] font-semibold ${toneText(displayedStatus.tone)}`}>
+          {displayedStatus.label}
         </p>
       </div>
       <div className="py-2">
@@ -401,21 +431,39 @@ function ShareWeek({
           value={`${s.cyclingKm.toFixed(1)} / ${s.runningKm.toFixed(1)} km`}
         />
       </div>
-      <div className="py-2">
-        <ShareHead>Decision</ShareHead>
-        <p className={`mt-1 text-[17px] font-semibold ${toneText(s.advice.tone)}`}>
-          {s.advice.decision}
-        </p>
-        <p className="mt-1 text-[13px] leading-snug text-muted-foreground">{s.advice.detail}</p>
-      </div>
-      <div className="py-2">
-        <ShareHead>Focus next week</ShareHead>
-        <ul className="mt-1 space-y-0.5 text-[15px]">
-          {(s.focus.length ? s.focus : ["Keep logging and repeat the plan"]).map((f) => (
-            <li key={f}>· {f}</li>
-          ))}
-        </ul>
-      </div>
+      {data.targets.goal ? (
+        <div className="py-2">
+          <ShareHead>Goal phase</ShareHead>
+          <p className={`mt-1 text-[17px] font-semibold ${toneText(displayedStatus.tone)}`}>
+            {data.targets.goal === "cut"
+              ? "Lose fat"
+              : data.targets.goal === "maintain"
+                ? "Recomp / maintain"
+                : "Gain muscle"}
+          </p>
+          <p className="mt-1 text-[13px] leading-snug text-muted-foreground">
+            Use the completed-week recommendation in Progress for goal-aware calorie guidance.
+          </p>
+        </div>
+      ) : (
+        <>
+          <div className="py-2">
+            <ShareHead>Decision</ShareHead>
+            <p className={`mt-1 text-[17px] font-semibold ${toneText(s.advice.tone)}`}>
+              {s.advice.decision}
+            </p>
+            <p className="mt-1 text-[13px] leading-snug text-muted-foreground">{s.advice.detail}</p>
+          </div>
+          <div className="py-2">
+            <ShareHead>Focus next week</ShareHead>
+            <ul className="mt-1 space-y-0.5 text-[15px]">
+              {(s.focus.length ? s.focus : ["Keep logging and repeat the plan"]).map((f) => (
+                <li key={f}>· {f}</li>
+              ))}
+            </ul>
+          </div>
+        </>
+      )}
       {s.note ? (
         <div className="py-2">
           <ShareHead>Notes</ShareHead>
@@ -463,18 +511,27 @@ function monthlyStats(data: AppData, month: Date) {
       const dt = parseISO(p.date);
       return dt >= start && dt <= end;
     }),
-    status: statusOf(gained == null ? null : gained / weeks),
-    overall: overallStatus(
-      gained == null ? null : gained / weeks,
-      waists.length > 1 ? (waists[waists.length - 1] as number) - (waists[0] as number) : null,
-      prog.progressed,
-      prog.regressed,
-    ),
+    status: data.targets.goal
+      ? bulkStatus(data, end)
+      : statusOf(gained == null ? null : gained / weeks),
+    overall: data.targets.goal
+      ? goalOverall(bulkStatus(data, end))
+      : overallStatus(
+          gained == null ? null : gained / weeks,
+          waists.length > 1 ? (waists[waists.length - 1] as number) - (waists[0] as number) : null,
+          prog.progressed,
+          prog.regressed,
+        ),
     bulk: bulkStatus(data, end),
     strength: ALL_EXERCISES.map((d) => ({ name: d.name, s: strengthChange(data, d.name) })).filter(
       (x) => x.s != null,
     ),
   };
+}
+
+function goalOverall(status: ReturnType<typeof bulkStatus>) {
+  const icon = status.tone === "good" ? "🟢" : status.tone === "danger" ? "🔴" : "🟡";
+  return { icon, text: status.label, tone: status.tone };
 }
 
 function overallStatus(
@@ -500,6 +557,7 @@ function overallStatus(
 
 function MonthlyPreview({ data }: { data: AppData }) {
   const m = monthlyStats(data, new Date());
+  const publicGoal = !!data.targets.goal;
   return (
     <Card>
       <SectionTitle>{m.label}</SectionTitle>
@@ -510,14 +568,14 @@ function MonthlyPreview({ data }: { data: AppData }) {
         rows={[
           ["Start weight", fmt(m.startWeight, 1, " kg")],
           ["Current 7-day avg", fmt(m.bulk.currentAvg, 2, " kg")],
-          ["Total gained", signed(m.gained, 2, " kg")],
-          ["Avg weekly gain", signed(m.avgWeeklyGain, 2, " kg")],
+          [publicGoal ? "Total change" : "Total gained", signed(m.gained, 2, " kg")],
+          [publicGoal ? "Avg weekly change" : "Avg weekly gain", signed(m.avgWeeklyGain, 2, " kg")],
           ["Waist change", signed(m.waistChange, 1, " cm")],
           ["Avg calories", fmt0(m.avgCalories, " kcal")],
           ["Gym sessions", String(m.gymSessions)],
           ["Avg sleep", fmt(m.avgSleep, 1, " h")],
           [
-            "Projected 75 kg",
+            publicGoal ? `Projected ${data.targets.targetWeight} kg` : "Projected 75 kg",
             m.bulk.projectedDate ? format(parseISO(m.bulk.projectedDate), "MMM yyyy") : "—",
           ],
         ]}
@@ -528,16 +586,27 @@ function MonthlyPreview({ data }: { data: AppData }) {
 
 function ShareMonth({ data, onClose }: { data: AppData; onClose: () => void }) {
   const m = monthlyStats(data, new Date());
+  const publicGoal = !!data.targets.goal;
   const decision = m.status.label === "ON TARGET" ? "Keep calories unchanged" : "Review calories";
 
   return (
-    <ShareWrap title="Tempo Bulk Monthly" subtitle={m.label} onClose={onClose}>
+    <ShareWrap
+      title={data.targets.goal ? "Tempo Goal Monthly" : "Tempo Bulk Monthly"}
+      subtitle={m.label}
+      onClose={onClose}
+    >
       <div className="pb-2">
         <ShareLine label="Start weight" value={fmt(m.startWeight, 1, " kg")} />
         <ShareLine label="End weight" value={fmt(m.endWeight, 1, " kg")} />
         <ShareLine label="Monthly average" value={fmt(m.avgWeight, 2, " kg")} />
-        <ShareLine label="Total gained" value={signed(m.gained, 2, " kg")} />
-        <ShareLine label="Avg weekly gain" value={signed(m.avgWeeklyGain, 2, " kg")} />
+        <ShareLine
+          label={publicGoal ? "Total change" : "Total gained"}
+          value={signed(m.gained, 2, " kg")}
+        />
+        <ShareLine
+          label={publicGoal ? "Avg weekly change" : "Avg weekly gain"}
+          value={signed(m.avgWeeklyGain, 2, " kg")}
+        />
         <ShareLine label="Waist change" value={signed(m.waistChange, 1, " cm")} />
       </div>
       <div className="py-2">

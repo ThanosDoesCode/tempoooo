@@ -2,6 +2,7 @@ import {
   DEFAULT_NUTRITION_TARGETS,
   type Equipment,
   type ExperienceLevel,
+  type PhysiqueGoal,
   type TrainingSetupPreference,
 } from "./bulk-onboarding.ts";
 
@@ -86,6 +87,7 @@ export type Targets = {
   startWeight: number;
   targetWeight: number;
   targetWeeklyGainKg?: number | undefined;
+  goal?: PhysiqueGoal | undefined;
   experienceLevel?: ExperienceLevel | undefined;
   trainingDaysPerWeek?: number | undefined;
   availableEquipment?: Equipment[] | undefined;
