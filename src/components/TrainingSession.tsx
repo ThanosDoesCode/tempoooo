@@ -1,6 +1,7 @@
 import { format, parseISO } from "date-fns";
 import { Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
+import { Trash2 } from "lucide-react";
 import {
   CartesianGrid,
   Line,
@@ -56,6 +57,7 @@ export function TrainingSession({
   onSave,
   onSaveSetupNote,
   onReorderExercises,
+  onRemoveExercise,
   readOnly = false,
 }: {
   data: AppData;
@@ -64,6 +66,11 @@ export function TrainingSession({
   onSave: (workout: Workout) => Promise<void>;
   onSaveSetupNote?: (exercise: string, note: string) => Promise<void>;
   onReorderExercises?: (split: SplitType, exerciseNames: string[]) => Promise<void>;
+  onRemoveExercise?: (
+    split: SplitType,
+    exerciseName: string,
+    nextWorkout: Workout,
+  ) => Promise<void>;
   readOnly?: boolean;
 }) {
   const [restored] = useState(() => (readOnly ? null : readWorkoutDraft(cacheKey, date)));
@@ -82,6 +89,7 @@ export function TrainingSession({
   );
   const [cacheError, setCacheError] = useState(false);
   const [completing, setCompleting] = useState(false);
+  const [removingExercise, setRemovingExercise] = useState<string | null>(null);
   const [graphFor, setGraphFor] = useState<string | null>(null);
   const [restKey, setRestKey] = useState(0);
   const [restRunning, setRestRunning] = useState(false);
@@ -162,6 +170,41 @@ export function TrainingSession({
       void persist(next, true);
     } catch (reason) {
       setError((reason as Error).message);
+    }
+  };
+  const removeLegacyExercise = async (exerciseName: string) => {
+    if (!onRemoveExercise || removingExercise || readOnly || workout.status === "completed") return;
+    const entry = current.current.entries.find((item) => item.exercise === exerciseName);
+    const hasEnteredData =
+      !!entry &&
+      (entry.reps.some((reps) => reps != null) ||
+        entry.weight != null ||
+        entry.addedWeight != null ||
+        entry.assistance != null ||
+        !!entry.notes ||
+        !!entry.noteTags?.length ||
+        entry.rpe != null);
+    const confirmation = hasEnteredData
+      ? `Remove ${exerciseLabel(exerciseName)} and its entered workout data?`
+      : `Remove ${exerciseLabel(exerciseName)} from this workout?`;
+    if (!window.confirm(confirmation)) return;
+
+    setRemovingExercise(exerciseName);
+    setError("");
+    const next = {
+      ...current.current,
+      entries: current.current.entries.filter((item) => item.exercise !== exerciseName),
+    };
+    try {
+      await onRemoveExercise(workout.type, exerciseName, next);
+      current.current = next;
+      setWorkout(next);
+      setSync("saved");
+      clearWorkoutDraft(cacheKey, next);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Could not remove this exercise.");
+    } finally {
+      setRemovingExercise(null);
     }
   };
 
@@ -288,6 +331,11 @@ export function TrainingSession({
             const stats = exerciseMetrics(entry);
             const best = bestRecentSet(data, def.name, date);
             const history = exerciseHistory(data, def.name).filter((item) => item.date <= date);
+            const removable =
+              !!onRemoveExercise &&
+              (data.targets.legacyExerciseDefinitions?.[workout.type] ?? []).some(
+                (item) => item.name === def.name,
+              );
             return (
               <Card key={def.name}>
                 <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
@@ -298,11 +346,25 @@ export function TrainingSession({
                       {volumeMultiplier(def.name) === 2 ? " · kg per dumbbell" : ""}
                     </p>
                   </div>
-                  <span
-                    className={`rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-wider ${toneCls(p.tone)}`}
-                  >
-                    {p.label}
-                  </span>
+                  <div className="flex flex-wrap items-center justify-end gap-1">
+                    <span
+                      className={`rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-wider ${toneCls(p.tone)}`}
+                    >
+                      {p.label}
+                    </span>
+                    {removable && !readOnly && workout.status !== "completed" ? (
+                      <button
+                        type="button"
+                        disabled={removingExercise !== null}
+                        onClick={() => void removeLegacyExercise(def.name)}
+                        aria-label={`Remove ${exerciseLabel(def.name)} from workout`}
+                        className="flex min-h-11 items-center gap-1 rounded-xl px-2 text-xs font-semibold text-danger active:bg-danger/10 disabled:opacity-50"
+                      >
+                        <Trash2 className="h-4 w-4" aria-hidden="true" />
+                        {removingExercise === def.name ? "Removing..." : "Remove"}
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
                 {onReorderExercises && !storedAtOpen && !hasContent ? (
                   <div

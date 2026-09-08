@@ -186,6 +186,12 @@ test("training UI supports generated, preset and empty custom paths without repl
   assert.match(query, /create_empty_bulk_training_plan/);
   assert.match(route, /TrainingPlanOverview/);
   assert.match(route, /TrainingSession/);
+  assert.match(route, /onRemoveExercise/);
+  assert.match(route, /legacyExerciseDefinitions/);
+  assert.match(
+    route,
+    /saveWorkout\(nextWorkout, user\.id\)[\s\S]*saveTargets\([\s\S]*legacyExerciseDefinitions/,
+  );
   assert.doesNotMatch(route, /<TrainingPlanSetup|TrainingPlanEditor/);
   assert.match(moreRoute, /TrainingPlanSetup/);
   assert.match(moreRoute, /TrainingPlanEditor/);

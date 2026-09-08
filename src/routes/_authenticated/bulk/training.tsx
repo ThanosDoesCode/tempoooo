@@ -168,6 +168,23 @@ function TrainingPage() {
                 },
               });
             }}
+            onRemoveExercise={async (split, exerciseName, nextWorkout) => {
+              const definitions = data.targets.legacyExerciseDefinitions?.[split] ?? [];
+              await saveWorkout(nextWorkout, user.id);
+              await saveTargets({
+                ...data.targets,
+                legacyExerciseDefinitions: {
+                  ...(data.targets.legacyExerciseDefinitions ?? {}),
+                  [split]: definitions.filter((exercise) => exercise.name !== exerciseName),
+                },
+                legacyExerciseOrder: {
+                  ...(data.targets.legacyExerciseOrder ?? {}),
+                  [split]: (data.targets.legacyExerciseOrder?.[split] ?? []).filter(
+                    (name) => name !== exerciseName,
+                  ),
+                },
+              });
+            }}
             readOnly={role === "viewer"}
           />
         ) : (

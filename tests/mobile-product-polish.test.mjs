@@ -158,13 +158,19 @@ test("legacy PRs reuse effective load and dumbbell-pair volume while excluding d
   assert.equal(pullUp.bestWeight.bodyweight, 70);
 });
 
-test("legacy exercise add keeps origin context, blocks duplicates and completed edits", async () => {
+test("legacy exercise add and removal keep origin context and completed sessions immutable", async () => {
   const [session, library, types] = await Promise.all([
     read("src/components/TrainingSession.tsx"),
     read("src/routes/_authenticated/bulk/exercises.tsx"),
     read("src/lib/types.ts"),
   ]);
   assert.match(session, /search=\{\{ addTo: workout\.type, date \}\}/);
+  assert.match(session, /onRemoveExercise/);
+  assert.match(session, /legacyExerciseDefinitions\?\.\[workout\.type\]/);
+  assert.match(session, /Remove \$\{exerciseLabel\(def\.name\)\} from workout/);
+  assert.match(session, /Removing\.\.\./);
+  assert.match(session, /workout\.status !== "completed"/);
+  assert.match(session, /window\.confirm\(confirmation\)/);
   assert.match(library, /const addingToWorkout = !!addTo && !!date/);
   assert.match(library, /title=\{addingToWorkout \? "Add to workout"/);
   assert.match(library, /Completed workouts cannot be changed/);
@@ -173,6 +179,7 @@ test("legacy exercise add keeps origin context, blocks duplicates and completed 
   assert.match(library, /Adding\.\.\./);
   assert.match(library, /inputPreserved: true/);
   assert.match(library, /navigate\(\{ to: "\/bulk\/training", replace: true \}\)/);
+  assert.match(library, /removeFromLegacyWorkout/);
   assert.match(types, /legacyExerciseDefinitions/);
 });
 
