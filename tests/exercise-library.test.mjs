@@ -196,3 +196,36 @@ test("library API pages server results and custom writes cannot target system ro
   assert.doesNotMatch(migration, /UPDATE public\.bulk_workouts/);
   assert.match(cancellation, /"bulk-exercise-library"/);
 });
+
+test("add-to-workout results use compact accessible cards with scoped mutation feedback", async () => {
+  const browser = await read("src/routes/_authenticated/bulk/exercises.tsx");
+
+  assert.match(browser, /const addingToWorkout = !!addTo && !!date/);
+  assert.match(browser, /addingToWorkout \? \([\s\S]*?<button/);
+  assert.match(browser, /aria-label=\{[\s\S]*?`Add \$\{item\.name\} to workout`/);
+  assert.match(browser, /onClick=\{\(\) =>[\s\S]*?addToLegacyWorkout\(item\)/);
+  assert.match(browser, /active:scale-\[0\.98\][\s\S]*active:bg-elevated/);
+  assert.match(browser, /min-h-16/);
+  assert.doesNotMatch(browser, />\s*Add to workout\s*</);
+
+  assert.match(browser, /const pending = exerciseMutation\?\.id === item\.id/);
+  assert.match(browser, /exerciseMutation\.action === "add" \? "Adding\.\.\." : "Removing\.\.\."/);
+  assert.match(browser, /disabled=\{exerciseMutation !== null/);
+  assert.match(
+    browser,
+    /if \(!addTo \|\| !date \|\| !data \|\| !user \|\| exerciseMutation\) return/,
+  );
+  assert.match(
+    browser,
+    /catch \(error\)[\s\S]*inputPreserved: true[\s\S]*finally[\s\S]*setExerciseMutation\(null\)/,
+  );
+
+  assert.match(browser, /addedByLibrary[\s\S]*removeFromLegacyWorkout\(item\)/);
+  assert.match(browser, /`Remove \$\{item\.name\} from workout`/);
+  assert.match(browser, /entries: existing\.entries\.filter/);
+  assert.match(browser, /legacyExerciseDefinitions:[\s\S]*\.filter/);
+  assert.match(browser, /Remove \$\{item\.name\} and its entered workout data\?/);
+
+  assert.match(browser, /:\s*\(\s*<div key=\{item\.id\} className="card-surface p-3">/);
+  assert.match(browser, /!item\.is_system \? \([\s\S]*Deleting\.\.\./);
+});

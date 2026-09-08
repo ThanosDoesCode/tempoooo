@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { Plus } from "lucide-react";
 import { useDeferredValue, useState } from "react";
 import { z } from "zod";
 import { AppShell, PageHeader } from "@/components/AppShell";
@@ -71,9 +72,13 @@ function ExerciseLibraryPage() {
   const [customUnilateral, setCustomUnilateral] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [addingId, setAddingId] = useState<string | null>(null);
+  const [exerciseMutation, setExerciseMutation] = useState<{
+    id: string;
+    action: "add" | "remove";
+  } | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const addingToWorkout = !!addTo && !!date;
 
   const refreshLibrary = () =>
     Promise.all([
@@ -132,7 +137,7 @@ function ExerciseLibraryPage() {
   const addToLegacyWorkout = async (
     item: NonNullable<typeof library.data>["exercises"][number],
   ) => {
-    if (!addTo || !date || !data || !user || addingId) return;
+    if (!addTo || !date || !data || !user || exerciseMutation) return;
     const existing = data.workouts[date];
     if (existing?.status === "completed") {
       setFormError("Completed workouts cannot be changed.");
@@ -147,7 +152,7 @@ function ExerciseLibraryPage() {
       setFormError("That exercise is already in this workout.");
       return;
     }
-    setAddingId(item.id);
+    setExerciseMutation({ id: item.id, action: "add" });
     setFormError(null);
     const definition: ExerciseDef = {
       name: item.name,
@@ -178,16 +183,73 @@ function ExerciseLibraryPage() {
     } catch (error) {
       setFormError(userFacingError(error, "add this exercise", { inputPreserved: true }));
     } finally {
-      setAddingId(null);
+      setExerciseMutation(null);
+    }
+  };
+
+  const removeFromLegacyWorkout = async (
+    item: NonNullable<typeof library.data>["exercises"][number],
+  ) => {
+    if (!addTo || !date || !data || !user || exerciseMutation) return;
+    const existing = data.workouts[date];
+    if (existing?.status === "completed") {
+      setFormError("Completed workouts cannot be changed.");
+      return;
+    }
+    const currentDefinitions = data.targets.legacyExerciseDefinitions?.[addTo] ?? [];
+    if (!currentDefinitions.some((exercise) => exercise.name === item.name)) return;
+    const entry = existing?.entries.find((candidate) => candidate.exercise === item.name);
+    const hasEnteredData =
+      !!entry &&
+      (entry.reps.some((reps) => reps != null) ||
+        entry.weight != null ||
+        entry.addedWeight != null ||
+        entry.assistance != null ||
+        !!entry.notes ||
+        !!entry.noteTags?.length ||
+        entry.rpe != null);
+    if (hasEnteredData && !window.confirm(`Remove ${item.name} and its entered workout data?`))
+      return;
+
+    setExerciseMutation({ id: item.id, action: "remove" });
+    setFormError(null);
+    try {
+      await saveTargets({
+        ...data.targets,
+        legacyExerciseDefinitions: {
+          ...(data.targets.legacyExerciseDefinitions ?? {}),
+          [addTo]: currentDefinitions.filter((exercise) => exercise.name !== item.name),
+        },
+        legacyExerciseOrder: {
+          ...(data.targets.legacyExerciseOrder ?? {}),
+          [addTo]: (data.targets.legacyExerciseOrder?.[addTo] ?? []).filter(
+            (name) => name !== item.name,
+          ),
+        },
+      });
+      if (existing?.type === addTo && entry) {
+        await saveWorkout(
+          {
+            ...existing,
+            entries: existing.entries.filter((candidate) => candidate.exercise !== item.name),
+          },
+          user.id,
+        );
+      }
+      await navigate({ to: "/bulk/training", replace: true });
+    } catch (error) {
+      setFormError(userFacingError(error, "remove this exercise", { inputPreserved: true }));
+    } finally {
+      setExerciseMutation(null);
     }
   };
 
   return (
     <AppShell>
       <PageHeader
-        title={addTo ? "Add to workout" : "Exercise library"}
+        title={addingToWorkout ? "Add to workout" : "Exercise library"}
         subtitle={
-          addTo
+          addingToWorkout
             ? `Choose an exercise for ${addTo}.`
             : "Browse Tempo exercises or save movements that are unique to your setup."
         }
@@ -369,43 +431,82 @@ function ExerciseLibraryPage() {
           <DataError message="Could not load exercises." onRetry={() => void library.refetch()} />
         ) : library.data?.exercises.length ? (
           <div className="space-y-2">
-            {library.data.exercises.map((item) => (
-              <div key={item.id} className="card-surface p-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="font-medium text-foreground">{item.name}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">
+            {library.data.exercises.map((item) => {
+              const savedAdditions = addTo
+                ? (data?.targets.legacyExerciseDefinitions?.[addTo] ?? [])
+                : [];
+              const addedByLibrary = savedAdditions.some((exercise) => exercise.name === item.name);
+              const alreadyInWorkout =
+                addTo && data
+                  ? orderedExerciseDefs(data.targets, addTo).some(
+                      (exercise) => exercise.name === item.name,
+                    )
+                  : false;
+              const pending = exerciseMutation?.id === item.id;
+              return addingToWorkout ? (
+                <button
+                  key={item.id}
+                  type="button"
+                  disabled={exerciseMutation !== null || (alreadyInWorkout && !addedByLibrary)}
+                  onClick={() =>
+                    void (addedByLibrary ? removeFromLegacyWorkout(item) : addToLegacyWorkout(item))
+                  }
+                  aria-label={
+                    addedByLibrary
+                      ? `Remove ${item.name} from workout`
+                      : alreadyInWorkout
+                        ? `${item.name} is already in workout`
+                        : `Add ${item.name} to workout`
+                  }
+                  className={`card-surface flex min-h-16 w-full items-center justify-between gap-3 p-3 text-left transition active:scale-[0.98] active:bg-elevated disabled:cursor-wait ${pending ? "border-primary/50 bg-primary/5" : ""} ${alreadyInWorkout && !addedByLibrary ? "opacity-60" : ""}`}
+                >
+                  <span className="min-w-0">
+                    <span className="block font-medium text-foreground">{item.name}</span>
+                    <span className="mt-1 block text-xs text-muted-foreground">
                       {label(item.primary_muscle)} · {item.equipment.map(label).join(", ")}
                       {item.supports_unilateral ? " · Unilateral option" : ""}
-                    </p>
-                  </div>
-                  {!item.is_system ? (
-                    <button
-                      type="button"
-                      disabled={deletingId !== null}
-                      onClick={() => void remove(item.id)}
-                      className="min-h-11 shrink-0 rounded-lg px-2 text-xs font-semibold text-danger disabled:opacity-50"
-                    >
-                      {deletingId === item.id ? "Deleting..." : "Delete"}
-                    </button>
-                  ) : null}
-                </div>
-                {addTo ? (
-                  <button
-                    type="button"
-                    disabled={addingId !== null}
-                    onClick={() => void addToLegacyWorkout(item)}
-                    className="mt-3 min-h-11 w-full rounded-xl bg-primary px-3 text-sm font-semibold text-primary-foreground active:scale-[0.98] disabled:opacity-60"
-                  >
-                    {addingId === item.id ? (
-                      <PendingLabel>Adding...</PendingLabel>
+                    </span>
+                  </span>
+                  <span className="flex shrink-0 items-center gap-1 text-xs font-semibold text-primary">
+                    {pending ? (
+                      <PendingLabel>
+                        {exerciseMutation.action === "add" ? "Adding..." : "Removing..."}
+                      </PendingLabel>
+                    ) : addedByLibrary ? (
+                      "Remove"
+                    ) : alreadyInWorkout ? (
+                      "In workout"
                     ) : (
-                      "Add to workout"
+                      <>
+                        <Plus className="h-4 w-4" aria-hidden="true" /> Tap to add
+                      </>
                     )}
-                  </button>
-                ) : null}
-              </div>
-            ))}
+                  </span>
+                </button>
+              ) : (
+                <div key={item.id} className="card-surface p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-medium text-foreground">{item.name}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {label(item.primary_muscle)} · {item.equipment.map(label).join(", ")}
+                        {item.supports_unilateral ? " · Unilateral option" : ""}
+                      </p>
+                    </div>
+                    {!item.is_system ? (
+                      <button
+                        type="button"
+                        disabled={deletingId !== null}
+                        onClick={() => void remove(item.id)}
+                        className="min-h-11 shrink-0 rounded-lg px-2 text-xs font-semibold text-danger disabled:opacity-50"
+                      >
+                        {deletingId === item.id ? "Deleting..." : "Delete"}
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         ) : (
           <div className="card-surface p-5 text-center text-sm text-muted-foreground">

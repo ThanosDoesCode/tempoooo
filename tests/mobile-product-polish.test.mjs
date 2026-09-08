@@ -165,7 +165,8 @@ test("legacy exercise add keeps origin context, blocks duplicates and completed 
     read("src/lib/types.ts"),
   ]);
   assert.match(session, /search=\{\{ addTo: workout\.type, date \}\}/);
-  assert.match(library, /title=\{addTo \? "Add to workout"/);
+  assert.match(library, /const addingToWorkout = !!addTo && !!date/);
+  assert.match(library, /title=\{addingToWorkout \? "Add to workout"/);
   assert.match(library, /Completed workouts cannot be changed/);
   assert.match(library, /definitionAlreadySaved/);
   assert.match(library, /workoutAlreadyUpdated/);
