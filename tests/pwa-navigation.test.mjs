@@ -118,6 +118,8 @@ test("Tempo navigation exposes the four product areas only after persisted Goal 
   assert.doesNotMatch(shell, /label: "Bulk"/);
   assert.doesNotMatch(shell, /disabled[\s\S]{0,120}>\s*Bulk\s*</);
   assert.match(shell, /const area = productAreaForPath\(pathname\)/);
+  assert.match(shell, /aria-current=\{area === "profile" \? "page" : undefined\}/);
+  assert.match(shell, /\{nav \? \([\s\S]*<nav[\s\S]*\) : null\}/);
   assert.doesNotMatch(shell, /pendingTo|setPendingTo|selectedArea|activeProduct/);
   assert.match(shell, /router\.status === "pending"/);
   assert.doesNotMatch(shell, /Sharing|Shared Bulk|\/bulk\/access/);

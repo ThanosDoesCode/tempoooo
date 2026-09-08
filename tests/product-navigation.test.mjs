@@ -11,6 +11,7 @@ test("top-level products navigate to their real landing routes", () => {
     training: "/bulk/training",
     meals: "/bulk/meals",
     goal: "/bulk",
+    profile: "/profile",
   });
 });
 
@@ -27,7 +28,10 @@ test("top product and contextual navigation derive from the rendered route", asy
 test("deep routes select the correct parent product", () => {
   for (const path of ["/challenge", "/challenge/log", "/challenge/history/week/4"])
     assert.equal(productAreaForPath(path), "challenge", path);
-  assert.equal(productAreaForPath("/profile"), "challenge");
+  assert.equal(productAreaForPath("/invite/challenge/token"), "challenge");
+
+  for (const path of ["/profile", "/profile/security", "/bulk-onboarding", "/bulk-access-denied"])
+    assert.equal(productAreaForPath(path), "profile", path);
 
   for (const path of [
     "/bulk/training",
@@ -50,15 +54,31 @@ test("deep routes select the correct parent product", () => {
 
   for (const path of ["/bulk", "/bulk/progress", "/bulk/check-in", "/bulk/more"])
     assert.equal(productAreaForPath(path), "goal", path);
+
+  for (const path of ["/unknown", "/settings", "/profile-other"])
+    assert.equal(productAreaForPath(path), null, path);
 });
 
 test("top links preserve browser history and activation visibility rules", async () => {
   const shell = await read("src/components/AppShell.tsx");
   for (const area of ["challenge", "training", "meals", "goal"])
     assert.match(shell, new RegExp(`PRODUCT_LANDING_ROUTES\\.${area}`));
+  assert.match(shell, /to=\{PRODUCT_LANDING_ROUTES\.profile\}/);
   assert.match(shell, /item\.area !== "challenge" && !hasBulk \? null/);
   assert.match(shell, /<Link[\s\S]*to=\{item\.to\}/);
   assert.doesNotMatch(shell, /to=\{item\.to\}[\s\S]{0,200}replace/);
+});
+
+test("Profile is selected explicitly and has no contextual product navigation", async () => {
+  const shell = await read("src/components/AppShell.tsx");
+  assert.equal(productAreaForPath("/profile"), "profile");
+  assert.equal(productAreaForPath("/profile/preferences"), "profile");
+  assert.notEqual(productAreaForPath("/profile"), "challenge");
+  assert.match(shell, /aria-current=\{area === "profile" \? "page" : undefined\}/);
+  assert.match(shell, /area === "profile" \? "bg-elevated text-primary"/);
+  assert.match(shell, /area === "goal"[\s\S]*\? GOAL_NAV[\s\S]*: null/);
+  assert.match(shell, /\{nav \? \([\s\S]*<nav[\s\S]*\) : null\}/);
+  assert.equal(productAreaForPath("/challenge"), "challenge");
 });
 
 test("contextual navigation uses distinct route-backed tasks", async () => {

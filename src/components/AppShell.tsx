@@ -85,7 +85,9 @@ export function AppShell({ children }: { children: ReactNode }) {
         ? TRAINING_NAV
         : area === "meals"
           ? MEALS_NAV
-          : GOAL_NAV;
+          : area === "goal"
+            ? GOAL_NAV
+            : null;
   const prefetchDestination = (to: string) => {
     if (to.startsWith("/bulk") && owner) void prefetchBulk(owner.bulk_profile_id);
   };
@@ -140,10 +142,11 @@ export function AppShell({ children }: { children: ReactNode }) {
             ),
           )}
           <Link
-            to="/profile"
+            to={PRODUCT_LANDING_ROUTES.profile}
             preload="intent"
             aria-label="Profile"
-            className="relative grid min-h-11 min-w-11 place-items-center rounded-xl text-muted-foreground active:bg-elevated"
+            aria-current={area === "profile" ? "page" : undefined}
+            className={`relative grid min-h-11 min-w-11 place-items-center rounded-xl active:scale-95 active:bg-elevated ${area === "profile" ? "bg-elevated text-primary" : "text-muted-foreground"}`}
           >
             <User className="h-4 w-4" />
             {!hasBulk && goalDiscovery.isSuccess && goalDiscovery.data?.goal_seen_at == null ? (
@@ -162,39 +165,43 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </div>
 
-      <main className={`mx-auto w-full max-w-lg px-4 pb-28 ${isChallenge ? "pt-4" : "pt-6"}`}>
+      <main
+        className={`mx-auto w-full max-w-lg px-4 ${nav ? "pb-28" : "pb-8"} ${isChallenge ? "pt-4" : "pt-6"}`}
+      >
         {children}
       </main>
 
-      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 backdrop-blur">
-        <div
-          className="mx-auto grid max-w-lg px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2"
-          style={{ gridTemplateColumns: `repeat(${nav.length}, minmax(0, 1fr))` }}
-        >
-          {nav.map((item) => {
-            const { to, label, icon: Icon, exact } = item;
-            const activePrefixes = "activePrefixes" in item ? item.activePrefixes : [];
-            const selected =
-              (exact ? pathname === to : pathname.startsWith(to)) ||
-              activePrefixes.some((prefix) => pathname.startsWith(prefix));
-            return (
-              <Link
-                key={to}
-                to={to}
-                preload="intent"
-                activeOptions={{ exact }}
-                onPointerEnter={() => prefetchDestination(to)}
-                onFocus={() => prefetchDestination(to)}
-                aria-current={selected ? "page" : undefined}
-                className={`group flex min-h-11 flex-col items-center gap-1 rounded-xl py-2 text-muted-foreground transition active:scale-95 active:bg-elevated data-[status=active]:text-primary ${selected ? "bg-elevated text-primary" : ""}`}
-              >
-                <Icon className="h-5 w-5" strokeWidth={2} />
-                <span className="text-[11px] font-medium">{label}</span>
-              </Link>
-            );
-          })}
-        </div>
-      </nav>
+      {nav ? (
+        <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 backdrop-blur">
+          <div
+            className="mx-auto grid max-w-lg px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2"
+            style={{ gridTemplateColumns: `repeat(${nav.length}, minmax(0, 1fr))` }}
+          >
+            {nav.map((item) => {
+              const { to, label, icon: Icon, exact } = item;
+              const activePrefixes = "activePrefixes" in item ? item.activePrefixes : [];
+              const selected =
+                (exact ? pathname === to : pathname.startsWith(to)) ||
+                activePrefixes.some((prefix) => pathname.startsWith(prefix));
+              return (
+                <Link
+                  key={to}
+                  to={to}
+                  preload="intent"
+                  activeOptions={{ exact }}
+                  onPointerEnter={() => prefetchDestination(to)}
+                  onFocus={() => prefetchDestination(to)}
+                  aria-current={selected ? "page" : undefined}
+                  className={`group flex min-h-11 flex-col items-center gap-1 rounded-xl py-2 text-muted-foreground transition active:scale-95 active:bg-elevated data-[status=active]:text-primary ${selected ? "bg-elevated text-primary" : ""}`}
+                >
+                  <Icon className="h-5 w-5" strokeWidth={2} />
+                  <span className="text-[11px] font-medium">{label}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </nav>
+      ) : null}
     </div>
   );
 }
