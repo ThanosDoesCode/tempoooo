@@ -117,7 +117,7 @@ async function completeBulkOnboarding(uid, overrides = {}) {
   };
   return asUser(uid, () =>
     db.query(
-      `SELECT public.complete_bulk_onboarding(
+      `SELECT public.complete_goal_onboarding(
         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12
       ) AS id`,
       [
@@ -264,7 +264,10 @@ test("Bulk data stays owner-only while users can atomically activate one persona
     ),
   );
   assert.equal(ownerWrite.rows[0].payload.calories, 3000);
-  assert.equal((await completeBulkOnboarding(a)).rows[0].id, bulk);
+  await assert.rejects(
+    completeBulkOnboarding(a),
+    /Legacy My Bulk profiles cannot be converted through public onboarding/,
+  );
   const preservedLegacyPayload = (
     await db.query("SELECT payload FROM public.bulk_targets WHERE bulk_profile_id=$1", [bulk])
   ).rows[0].payload;
@@ -321,7 +324,7 @@ test("Bulk data stays owner-only while users can atomically activate one persona
   try {
     await assert.rejects(
       db.query(
-        "SELECT public.complete_bulk_onboarding('gain',70,78,0.25,'beginner',3,ARRAY['dumbbells'],'generated',2900,140,360,90)",
+        "SELECT public.complete_goal_onboarding('gain',70,78,0.25,'beginner',3,ARRAY['dumbbells'],'generated',2900,140,360,90)",
       ),
       /Not authenticated/,
     );
@@ -3692,7 +3695,7 @@ test("security audit blocks direct cross-user, anon, unsafe-link and legacy func
   await assert.rejects(
     asAnon(() =>
       db.query(
-        "SELECT public.complete_bulk_onboarding('gain',70,78,0.25,'beginner',3,ARRAY['dumbbells'],'custom',2900,140,360,90)",
+        "SELECT public.complete_goal_onboarding('gain',70,78,0.25,'beginner',3,ARRAY['dumbbells'],'custom',2900,140,360,90)",
       ),
     ),
     /permission denied/i,

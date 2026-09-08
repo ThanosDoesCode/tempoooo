@@ -447,10 +447,16 @@ function ExerciseLibraryPage() {
                 <button
                   key={item.id}
                   type="button"
-                  disabled={exerciseMutation !== null || (alreadyInWorkout && !addedByLibrary)}
-                  onClick={() =>
-                    void (addedByLibrary ? removeFromLegacyWorkout(item) : addToLegacyWorkout(item))
-                  }
+                  disabled={pending || (alreadyInWorkout && !addedByLibrary)}
+                  onClick={() => {
+                    if (exerciseMutation) {
+                      setFormError("Wait for the current exercise change to finish.");
+                      return;
+                    }
+                    void (addedByLibrary
+                      ? removeFromLegacyWorkout(item)
+                      : addToLegacyWorkout(item));
+                  }}
                   aria-label={
                     addedByLibrary
                       ? `Remove ${item.name} from workout`

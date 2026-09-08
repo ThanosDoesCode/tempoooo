@@ -14,6 +14,8 @@ import {
 import {
   createEmptyTrainingPlan,
   instantiateTrainingPlan,
+  switchToEmptyTrainingPlan,
+  switchTrainingPlan,
   useTrainingPlanTemplates,
 } from "@/lib/training-plans-query";
 import { userFacingError } from "@/lib/network-errors";
@@ -110,7 +112,15 @@ function PlanCard({
   );
 }
 
-export function TrainingPlanSetup({ targets }: { targets: Targets }) {
+export function TrainingPlanSetup({
+  targets,
+  replacingPlan = false,
+  onCreated,
+}: {
+  targets: Targets;
+  replacingPlan?: boolean;
+  onCreated?: () => void;
+}) {
   const queryClient = useQueryClient();
   const templates = useTrainingPlanTemplates();
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -147,12 +157,12 @@ export function TrainingPlanSetup({ targets }: { targets: Targets }) {
   async function choose(plan: TrainingPlanTemplate) {
     setPendingId(plan.id);
     try {
-      await instantiateTrainingPlan(
-        plan.id,
-        preference === "generated" ? "generated" : "tempo_preset",
-      );
+      const planType = preference === "generated" ? "generated" : "tempo_preset";
+      if (replacingPlan) await switchTrainingPlan(plan.id, planType);
+      else await instantiateTrainingPlan(plan.id, planType);
       await refreshPlan();
-      toast.success("Training plan created");
+      toast.success(replacingPlan ? "Training plan changed" : "Training plan created");
+      onCreated?.();
     } catch (error) {
       toast.error(userFacingError(error, "create your training plan"));
     } finally {
@@ -168,9 +178,11 @@ export function TrainingPlanSetup({ targets }: { targets: Targets }) {
     }
     setPendingId("custom");
     try {
-      await createEmptyTrainingPlan(name);
+      if (replacingPlan) await switchToEmptyTrainingPlan(name);
+      else await createEmptyTrainingPlan(name);
       await refreshPlan();
-      toast.success("Training plan created");
+      toast.success(replacingPlan ? "Training plan changed" : "Training plan created");
+      onCreated?.();
     } catch (error) {
       toast.error(userFacingError(error, "create your training plan", { inputPreserved: true }));
     } finally {

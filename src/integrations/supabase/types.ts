@@ -665,6 +665,7 @@ export type Database = {
         Row: {
           allow_editor: boolean
           created_at: string
+          goal_status: string | null
           id: string
           name: string
           owner_id: string
@@ -672,6 +673,7 @@ export type Database = {
         Insert: {
           allow_editor?: boolean
           created_at?: string
+          goal_status?: string | null
           id?: string
           name?: string
           owner_id: string
@@ -679,6 +681,7 @@ export type Database = {
         Update: {
           allow_editor?: boolean
           created_at?: string
+          goal_status?: string | null
           id?: string
           name?: string
           owner_id?: string
@@ -1629,6 +1632,24 @@ export type Database = {
         }
         Returns: string
       }
+      complete_goal_onboarding: {
+        Args: {
+          _available_equipment: string[]
+          _calories: number
+          _carbs: number
+          _current_weight_kg: number
+          _experience_level: string
+          _fat: number
+          _goal: string
+          _protein: number
+          _target_weekly_gain_kg: number
+          _target_weight_kg: number
+          _training_days_per_week: number
+          _training_setup_preference: string
+        }
+        Returns: string
+      }
+      deactivate_public_goal: { Args: never; Returns: string }
       create_bulk_meal_preset: {
         Args: {
           _calories: number
@@ -1662,7 +1683,7 @@ export type Database = {
         Returns: boolean
       }
       log_bulk_meal_preset: {
-        Args: { _log_date: string; _preset: string; _request_id: string }
+        Args: { _local_today: string; _log_date: string; _preset: string; _request_id: string }
         Returns: string
       }
       create_bulk_nutrition_entry: {
@@ -1671,6 +1692,7 @@ export type Database = {
           _carbs: number
           _fat: number
           _log_date: string
+          _local_today: string
           _name: string
           _note?: string | null
           _protein: number
@@ -1685,13 +1707,17 @@ export type Database = {
           _entry: string
           _expected_updated_at: string
           _fat: number
+          _local_today: string
           _name: string
           _note?: string | null
           _protein: number
         }
         Returns: string
       }
-      delete_bulk_nutrition_entry: { Args: { _entry: string }; Returns: boolean }
+      delete_bulk_nutrition_entry: {
+        Args: { _entry: string; _local_today: string }
+        Returns: boolean
+      }
       create_empty_bulk_training_plan: { Args: { _name: string }; Returns: string }
       ensure_bulk_profile: { Args: { _caller: string }; Returns: string }
       finalize_challenge: {
@@ -1707,6 +1733,11 @@ export type Database = {
         Args: { _plan_type: string; _template_id: string }
         Returns: string
       }
+      switch_bulk_training_plan: {
+        Args: { _plan_type: string; _template_id: string }
+        Returns: string
+      }
+      switch_to_empty_bulk_training_plan: { Args: { _name: string }; Returns: string }
       save_bulk_training_plan: {
         Args: {
           _days: Json

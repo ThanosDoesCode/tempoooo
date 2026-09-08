@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 
 import type { ReactNode } from "react";
-import { useMemberships } from "@/lib/bulk-access";
+import { activeBulkMemberships, useMemberships } from "@/lib/bulk-access";
 import { prefetchBulk } from "@/lib/store";
 import { useGoalDiscovery } from "@/lib/goal-discovery";
 import { PRODUCT_LANDING_ROUTES, productAreaForPath } from "@/lib/product-navigation";
@@ -56,7 +56,6 @@ const MEALS_NAV = [
     label: "History",
     icon: History,
     exact: false,
-    activePrefixes: ["/bulk/history"],
   },
   { to: "/bulk/meals/more", label: "More", icon: MoreHorizontal, exact: false },
 ] as const;
@@ -75,8 +74,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { data: memberships } = useMemberships();
   const goalDiscovery = useGoalDiscovery();
 
-  const hasBulk = memberships?.some((membership) => membership.role === "owner") ?? false;
-  const owner = memberships?.find((membership) => membership.role === "owner");
+  const activeMemberships = activeBulkMemberships(memberships);
+  const hasBulk = activeMemberships.some((membership) => membership.role === "owner");
+  const owner = activeMemberships.find((membership) => membership.role === "owner");
   const area = productAreaForPath(pathname);
   const nav =
     area === "challenge"

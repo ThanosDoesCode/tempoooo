@@ -9,7 +9,11 @@ export type Membership = {
   owner_id: string;
   allow_editor: boolean;
   is_public: boolean;
+  is_active: boolean;
 };
+
+export const activeBulkMemberships = (memberships: Membership[] | undefined) =>
+  memberships?.filter((membership) => membership.is_active !== false) ?? [];
 
 export const bulkOwnerQueryOptions = () =>
   queryOptions({
@@ -18,7 +22,7 @@ export const bulkOwnerQueryOptions = () =>
       const { data, error } = await supabase
         .from("bulk_members")
         .select(
-          "bulk_profile_id, role, bulk_profiles(owner_id, allow_editor, bulk_targets(payload))",
+          "bulk_profile_id, role, bulk_profiles(owner_id, allow_editor, goal_status, bulk_targets(payload))",
         );
       if (error) throw error;
       return (data ?? [])
@@ -27,6 +31,7 @@ export const bulkOwnerQueryOptions = () =>
           const profile = r.bulk_profiles as unknown as {
             owner_id: string;
             allow_editor: boolean;
+            goal_status: "active" | "inactive" | null;
             bulk_targets:
               { payload: Record<string, unknown> } | { payload: Record<string, unknown> }[] | null;
           } | null;
@@ -38,7 +43,9 @@ export const bulkOwnerQueryOptions = () =>
             role: r.role as BulkRole,
             owner_id: profile?.owner_id ?? "",
             allow_editor: profile?.allow_editor ?? false,
-            is_public: !!targets?.payload?.["trainingSetupPreference"],
+            is_public:
+              profile?.goal_status != null || !!targets?.payload?.["trainingSetupPreference"],
+            is_active: profile?.goal_status !== "inactive",
           };
         });
     },
@@ -68,4 +75,10 @@ export function useMemberships() {
 
 export function useBulkAdmin() {
   return useQuery(bulkAdminQueryOptions());
+}
+
+export async function deactivatePublicGoal(): Promise<string> {
+  const { data, error } = await supabase.rpc("deactivate_public_goal");
+  if (error) throw error;
+  return data;
 }

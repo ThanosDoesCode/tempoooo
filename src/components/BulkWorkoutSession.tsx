@@ -272,7 +272,7 @@ export function BulkWorkoutSessionView({
       clearLocalDrafts(session);
       await refresh();
       toast.success("Workout completed");
-      await navigate({ to: "/bulk/history" });
+      await navigate({ to: "/bulk/training/history" });
     } catch (error) {
       toast.error(userFacingError(error, "finish your workout", { inputPreserved: true }));
     } finally {

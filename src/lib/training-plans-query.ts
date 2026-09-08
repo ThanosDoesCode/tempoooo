@@ -164,8 +164,28 @@ export async function instantiateTrainingPlan(
   return data;
 }
 
+export async function switchTrainingPlan(
+  templateId: string,
+  planType: "generated" | "tempo_preset",
+): Promise<string> {
+  const { data, error } = await supabase.rpc("switch_bulk_training_plan", {
+    _template_id: templateId,
+    _plan_type: planType,
+  });
+  if (error) throw error;
+  return data;
+}
+
 export async function createEmptyTrainingPlan(name: string): Promise<string> {
   const { data, error } = await supabase.rpc("create_empty_bulk_training_plan", {
+    _name: name,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function switchToEmptyTrainingPlan(name: string): Promise<string> {
+  const { data, error } = await supabase.rpc("switch_to_empty_bulk_training_plan", {
     _name: name,
   });
   if (error) throw error;

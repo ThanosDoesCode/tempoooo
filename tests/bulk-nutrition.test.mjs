@@ -123,7 +123,11 @@ test("nutrition UI keeps daily logging and route-backed preset management distin
   assert.match(component, /Previous day/);
   assert.match(component, /Next day/);
   assert.match(component, /\n\s*Today\n/);
-  assert.match(component, /Planning a future day/);
+  assert.match(component, /Future days are view-only\. Come back on this date to log meals\./);
+  assert.match(component, /if \(pending \|\| isFuture\) return/);
+  assert.match(component, /isFuture \? null : editor/);
+  assert.match(component, /No meal presets yet/);
+  assert.match(component, /Create meal preset/);
   assert.match(component, /Log to \{format\(parseISO\(selectedDate\)/);
   assert.match(component, /Retry same log/);
   assert.match(component, /failedPreset\.requestId/);
@@ -133,8 +137,32 @@ test("nutrition UI keeps daily logging and route-backed preset management distin
   assert.match(component, /Nothing logged for this day/);
   assert.match(query, /bulkNutritionDayQueryKey\(bulkProfileId, logDate\)/);
   assert.match(query, /log_bulk_meal_preset/);
+  assert.match(query, /_local_today: localToday\(\)/);
   assert.match(presetComponent, /Create Meal/);
   assert.match(cache, /"bulk-nutrition-day"/);
+});
+
+test("future public nutrition writes are rejected at the database boundary", async () => {
+  const migration = await read(
+    "supabase/migrations/20260908120000_public_goal_mobile_flow_hardening.sql",
+  );
+  assert.match(migration, /private\.validate_bulk_nutrition_write_day/);
+  assert.match(migration, /IF _log_date > _local_today/);
+  assert.match(migration, /Future nutrition days are view-only/);
+  for (const signature of [
+    "log_bulk_meal_preset\\(uuid,date,uuid,date\\)",
+    "create_bulk_nutrition_entry\\(date,uuid,text,numeric,numeric,numeric,numeric,date,text\\)",
+    "update_bulk_nutrition_entry\\(uuid,timestamptz,text,numeric,numeric,numeric,numeric,date,text\\)",
+    "delete_bulk_nutrition_entry\\(uuid,date\\)",
+  ]) {
+    assert.match(migration, new RegExp(signature));
+  }
+  assert.match(
+    migration,
+    /REVOKE EXECUTE ON FUNCTION public\.log_bulk_meal_preset\(uuid,date,uuid\) FROM authenticated/,
+  );
+  assert.match(migration, /_local_today NOT BETWEEN current_date - 1 AND current_date \+ 1/);
+  assert.doesNotMatch(migration, /public\.bulk_days/);
 });
 
 test("nutrition migration snapshots history and leaves legacy My Bulk data separate", async () => {

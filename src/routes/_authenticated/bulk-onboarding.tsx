@@ -4,7 +4,7 @@ import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, Check, Dumbbell } from "lucide-react";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { Card, PendingLabel } from "@/components/ui-kit";
-import { bulkOwnerQueryOptions } from "@/lib/bulk-access";
+import { activeBulkMemberships, bulkOwnerQueryOptions } from "@/lib/bulk-access";
 import {
   DEFAULT_NUTRITION_TARGETS,
   EQUIPMENT_OPTIONS,
@@ -29,7 +29,9 @@ import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/_authenticated/bulk-onboarding")({
   beforeLoad: async ({ context }) => {
-    const plans = await context.queryClient.ensureQueryData(bulkOwnerQueryOptions());
+    const plans = activeBulkMemberships(
+      await context.queryClient.ensureQueryData(bulkOwnerQueryOptions()),
+    );
     if (plans.length) throw redirect({ to: "/bulk", replace: true });
   },
   head: () => ({ meta: [{ title: "Tempo" }] }),
@@ -207,7 +209,7 @@ function BulkOnboarding() {
     setBusy(true);
     setSubmitError(null);
     try {
-      const { data: planId, error } = await supabase.rpc("complete_bulk_onboarding", {
+      const { data: planId, error } = await supabase.rpc("complete_goal_onboarding", {
         _goal: values.goal,
         _current_weight_kg: values.currentWeightKg,
         _target_weight_kg: values.targetWeightKg,
@@ -223,7 +225,9 @@ function BulkOnboarding() {
       });
       if (error || !planId) throw error ?? new Error("Goal onboarding failed");
       await queryClient.invalidateQueries({ queryKey: ["bulk-memberships"], refetchType: "none" });
-      const plans = await queryClient.fetchQuery({ ...bulkOwnerQueryOptions(), staleTime: 0 });
+      const plans = activeBulkMemberships(
+        await queryClient.fetchQuery({ ...bulkOwnerQueryOptions(), staleTime: 0 }),
+      );
       if (!plans.some((plan) => plan.bulk_profile_id === planId))
         throw new Error("Your Goal plan is still being prepared. Please retry.");
       await acknowledgeGoal().catch(() => undefined);

@@ -139,7 +139,7 @@ test("crash recovery navigates to Challenge, clears the boundary and never reloa
 
 test("Bulk activation revocation still clears local data and redirects", async () => {
   const bulk = await read("src/routes/_authenticated/bulk/route.tsx");
-  assert.match(bulk, /memberships\.length === 0[\s\S]*clearBulk\(\)/);
+  assert.match(bulk, /activeMemberships\.length === 0[\s\S]*clearBulk\(\)/);
   assert.match(bulk, /navigate\(\{ to: "\/bulk-onboarding", replace: true \}\)/);
 });
 

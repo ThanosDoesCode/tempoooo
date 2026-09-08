@@ -207,7 +207,7 @@ test("nutrition onboarding adapts guidance without changing its atomic save", as
   assert.match(onboarding, /recommendation is prefilled/);
   assert.match(onboarding, /form\.experienceLevel === "advanced"/);
   assert.match(onboarding, /Use Tempo recommendation/);
-  assert.match(onboarding, /complete_bulk_onboarding/);
+  assert.match(onboarding, /complete_goal_onboarding/);
   assert.match(onboarding, /PHYSIQUE_GOALS/);
   assert.match(onboarding, /goal: form\.goal/);
 });
@@ -228,7 +228,7 @@ test("the five-step UI submits one atomic RPC and does not expose Bulk early", a
   ]) {
     assert.match(onboarding, new RegExp(heading.replace(/[?]/g, "\\?")));
   }
-  assert.match(onboarding, /complete_bulk_onboarding/);
+  assert.match(onboarding, /complete_goal_onboarding/);
   assert.doesNotMatch(onboarding, /activate_my_bulk/);
   assert.match(onboarding, /Creating My Goal/);
   assert.match(onboarding, /bulkOwnerQueryOptions/);

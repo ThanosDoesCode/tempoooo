@@ -45,7 +45,7 @@ before(async () => {
     await db.query("INSERT INTO public.profiles(id,display_name) VALUES ($1,'Meal owner')", [id]);
     await asUser(id, () =>
       db.query(
-        `SELECT public.complete_bulk_onboarding(
+        `SELECT public.complete_goal_onboarding(
           'gain',70,78,0.25,'intermediate',4,ARRAY['dumbbells','bench'],'custom',2900,140,360,90
         )`,
       ),
@@ -480,7 +480,7 @@ test("nutrition logs snapshot targets, presets and ingredients with idempotent r
   const secondRequest = randomUUID();
   const firstEntry = (
     await asUser(owner, () =>
-      db.query("SELECT public.log_bulk_meal_preset($1,'2026-09-06',$2) AS id", [
+      db.query("SELECT public.log_bulk_meal_preset($1,'2026-09-06',$2,current_date) AS id", [
         preset,
         firstRequest,
       ]),
@@ -488,7 +488,7 @@ test("nutrition logs snapshot targets, presets and ingredients with idempotent r
   ).rows[0].id;
   const retryEntry = (
     await asUser(owner, () =>
-      db.query("SELECT public.log_bulk_meal_preset($1,'2026-09-06',$2) AS id", [
+      db.query("SELECT public.log_bulk_meal_preset($1,'2026-09-06',$2,current_date) AS id", [
         preset,
         firstRequest,
       ]),
@@ -496,7 +496,7 @@ test("nutrition logs snapshot targets, presets and ingredients with idempotent r
   ).rows[0].id;
   const secondEntry = (
     await asUser(owner, () =>
-      db.query("SELECT public.log_bulk_meal_preset($1,'2026-09-06',$2) AS id", [
+      db.query("SELECT public.log_bulk_meal_preset($1,'2026-09-06',$2,current_date) AS id", [
         preset,
         secondRequest,
       ]),
@@ -584,7 +584,7 @@ test("custom entries edit independently, aggregate decimals and preserve histori
     await asUser(owner, () =>
       db.query(
         `SELECT public.create_bulk_nutrition_entry(
-          '2026-09-06',$1,'Protein bar',123.45,12.25,14.5,3.75,'After training'
+          '2026-09-06',$1,'Protein bar',123.45,12.25,14.5,3.75,current_date,'After training'
         ) AS id`,
         [request],
       ),
@@ -594,7 +594,7 @@ test("custom entries edit independently, aggregate decimals and preserve histori
     await asUser(owner, () =>
       db.query(
         `SELECT public.create_bulk_nutrition_entry(
-          '2026-09-06',$1,'Protein bar',123.45,12.25,14.5,3.75,'After training'
+          '2026-09-06',$1,'Protein bar',123.45,12.25,14.5,3.75,current_date,'After training'
         ) AS id`,
         [request],
       ),
@@ -638,7 +638,7 @@ test("custom entries edit independently, aggregate decimals and preserve histori
   ).rows[0].updated_at;
   await asUser(owner, () =>
     db.query(
-      "SELECT public.update_bulk_nutrition_entry($1,$2,'Coffee',45.5,1.25,5.5,2.25,'Edited only here')",
+      "SELECT public.update_bulk_nutrition_entry($1,$2,'Coffee',45.5,1.25,5.5,2.25,current_date,'Edited only here')",
       [custom, updatedAt],
     ),
   );
@@ -672,7 +672,7 @@ test("custom entries edit independently, aggregate decimals and preserve histori
   assert.equal(
     (
       await asUser(owner, () =>
-        db.query("SELECT public.delete_bulk_nutrition_entry($1) AS ok", [custom]),
+        db.query("SELECT public.delete_bulk_nutrition_entry($1,current_date) AS ok", [custom]),
       )
     ).rows[0].ok,
     true,
@@ -682,22 +682,22 @@ test("custom entries edit independently, aggregate decimals and preserve histori
     countBefore - 1,
   );
 
-  const future = (
-    await asUser(owner, () =>
+  await assert.rejects(
+    asUser(owner, () =>
       db.query(
-        "SELECT public.create_bulk_nutrition_entry('2099-01-01',$1,'Planned meal',1.5,2.5,3.5,4.5,NULL) AS id",
+        "SELECT public.create_bulk_nutrition_entry('2099-01-01',$1,'Planned meal',1.5,2.5,3.5,4.5,current_date,NULL) AS id",
         [randomUUID()],
       ),
-    )
-  ).rows[0].id;
-  assert.ok(future);
+    ),
+    /Future nutrition days are view-only/i,
+  );
 });
 
 test("nutrition RLS and mutation RPCs deny cross-user and anonymous access", async () => {
   const ownerPreset = (await createMeal(owner, "Owner only preset")).rows[0].id;
   const ownerEntry = (
     await asUser(owner, () =>
-      db.query("SELECT public.log_bulk_meal_preset($1,'2026-09-07',$2) AS id", [
+      db.query("SELECT public.log_bulk_meal_preset($1,'2026-09-07',$2,current_date) AS id", [
         ownerPreset,
         randomUUID(),
       ]),
@@ -714,7 +714,7 @@ test("nutrition RLS and mutation RPCs deny cross-user and anonymous access", asy
   );
   await assert.rejects(
     asUser(other, () =>
-      db.query("SELECT public.log_bulk_meal_preset($1,'2026-09-07',$2)", [
+      db.query("SELECT public.log_bulk_meal_preset($1,'2026-09-07',$2,current_date)", [
         ownerPreset,
         randomUUID(),
       ]),
@@ -726,17 +726,17 @@ test("nutrition RLS and mutation RPCs deny cross-user and anonymous access", asy
   ).rows[0].updated_at;
   await assert.rejects(
     asUser(other, () =>
-      db.query("SELECT public.update_bulk_nutrition_entry($1,$2,'Stolen',1,1,1,1,NULL)", [
-        ownerEntry,
-        ownerUpdated,
-      ]),
+      db.query(
+        "SELECT public.update_bulk_nutrition_entry($1,$2,'Stolen',1,1,1,1,current_date,NULL)",
+        [ownerEntry, ownerUpdated],
+      ),
     ),
     /not found/i,
   );
   assert.equal(
     (
       await asUser(other, () =>
-        db.query("SELECT public.delete_bulk_nutrition_entry($1) AS ok", [ownerEntry]),
+        db.query("SELECT public.delete_bulk_nutrition_entry($1,current_date) AS ok", [ownerEntry]),
       )
     ).rows[0].ok,
     false,
@@ -749,6 +749,98 @@ test("nutrition RLS and mutation RPCs deny cross-user and anonymous access", asy
     asAnon(() => db.query("SELECT * FROM public.bulk_nutrition_entries")),
     /permission denied/i,
   );
+});
+
+test("future nutrition is read-only at every mutation boundary with local-day tolerance", async () => {
+  const profile = (await db.query("SELECT id FROM public.bulk_profiles WHERE owner_id=$1", [owner]))
+    .rows[0].id;
+  const preset = (await createMeal(owner, "Future guard preset")).rows[0].id;
+
+  await assert.rejects(
+    asUser(owner, () =>
+      db.query("SELECT public.log_bulk_meal_preset($1,'2098-01-01',$2,current_date)", [
+        preset,
+        randomUUID(),
+      ]),
+    ),
+    /Future nutrition days are view-only/i,
+  );
+  await assert.rejects(
+    asUser(owner, () =>
+      db.query(
+        "SELECT public.create_bulk_nutrition_entry('2098-01-01',$1,'Future custom',1,1,1,1,current_date,NULL)",
+        [randomUUID()],
+      ),
+    ),
+    /Future nutrition days are view-only/i,
+  );
+  assert.equal(
+    Number(
+      (
+        await db.query(
+          "SELECT count(*) AS n FROM public.bulk_nutrition_days WHERE bulk_profile_id=$1 AND log_date='2098-01-01'",
+          [profile],
+        )
+      ).rows[0].n,
+    ),
+    0,
+  );
+
+  const futureDay = randomUUID();
+  const futureEntry = randomUUID();
+  await db.query(
+    `INSERT INTO public.bulk_nutrition_days(
+      id,bulk_profile_id,log_date,target_calories,target_protein_g,target_carbs_g,target_fat_g
+    ) VALUES ($1,$2,'2099-01-01',2900,140,360,90)`,
+    [futureDay, profile],
+  );
+  await db.query(
+    `INSERT INTO public.bulk_nutrition_entries(
+      id,nutrition_day_id,source_type,name_snapshot,calories,protein_g,carbs_g,fat_g,
+      sort_order,request_id
+    ) VALUES ($1,$2,'custom','Protected future entry',1,1,1,1,1,$3)`,
+    [futureEntry, futureDay, randomUUID()],
+  );
+  const updatedAt = (
+    await db.query("SELECT updated_at FROM public.bulk_nutrition_entries WHERE id=$1", [
+      futureEntry,
+    ])
+  ).rows[0].updated_at;
+  await assert.rejects(
+    asUser(owner, () =>
+      db.query(
+        "SELECT public.update_bulk_nutrition_entry($1,$2,'Changed',2,2,2,2,current_date,NULL)",
+        [futureEntry, updatedAt],
+      ),
+    ),
+    /Future nutrition days are view-only/i,
+  );
+  await assert.rejects(
+    asUser(owner, () =>
+      db.query("SELECT public.delete_bulk_nutrition_entry($1,current_date)", [futureEntry]),
+    ),
+    /Future nutrition days are view-only/i,
+  );
+  assert.equal(
+    Number(
+      (
+        await db.query("SELECT count(*) AS n FROM public.bulk_nutrition_entries WHERE id=$1", [
+          futureEntry,
+        ])
+      ).rows[0].n,
+    ),
+    1,
+  );
+
+  const timezoneEntry = (
+    await asUser(owner, () =>
+      db.query(
+        "SELECT public.create_bulk_nutrition_entry(current_date + 1,$1,'Local today',1,1,1,1,current_date + 1,NULL) AS id",
+        [randomUUID()],
+      ),
+    )
+  ).rows[0].id;
+  assert.ok(timezoneEntry);
 });
 
 test("calorie recommendation application is bounded, idempotent and calorie-only", async () => {
@@ -833,7 +925,7 @@ test("calorie recommendation application is bounded, idempotent and calorie-only
   assert.equal(Number(historical.rows[0].target_calories), 2900);
   await asUser(owner, () =>
     db.query(
-      "SELECT public.create_bulk_nutrition_entry('2026-09-10',$1,'After adjustment',1,1,1,1,NULL)",
+      "SELECT public.create_bulk_nutrition_entry(current_date,$1,'After adjustment',1,1,1,1,current_date,NULL)",
       [randomUUID()],
     ),
   );
@@ -841,12 +933,157 @@ test("calorie recommendation application is bounded, idempotent and calorie-only
     Number(
       (
         await db.query(
-          "SELECT target_calories FROM public.bulk_nutrition_days WHERE bulk_profile_id=$1 AND log_date='2026-09-10'",
+          "SELECT target_calories FROM public.bulk_nutrition_days WHERE bulk_profile_id=$1 AND log_date=current_date",
           [ownerProfile],
         )
       ).rows[0].target_calories,
     ),
     next,
+  );
+});
+
+test("plan switching and Goal reset preserve completed public history", async () => {
+  const profile = (await db.query("SELECT id FROM public.bulk_profiles WHERE owner_id=$1", [owner]))
+    .rows[0].id;
+  const originalPlan = (
+    await asUser(owner, () =>
+      db.query(
+        "SELECT public.instantiate_bulk_training_plan('template:intermediate-upper-lower-4','generated') AS id",
+      ),
+    )
+  ).rows[0].id;
+  const originalDay = (
+    await db.query(
+      "SELECT id FROM public.bulk_training_plan_days WHERE plan_id=$1 ORDER BY day_order LIMIT 1",
+      [originalPlan],
+    )
+  ).rows[0].id;
+  const completedSession = randomUUID();
+  await db.query(
+    `INSERT INTO public.bulk_training_sessions(
+      id,bulk_profile_id,training_plan_id,source_plan_day_id,plan_name_snapshot,
+      workout_day_name_snapshot,workout_day_order_snapshot,status,completed_at
+    ) VALUES ($1,$2,$3,$4,'Original plan','Completed day',1,'completed',now())`,
+    [completedSession, profile, originalPlan, originalDay],
+  );
+
+  const replacementPlan = (
+    await asUser(owner, () =>
+      db.query(
+        "SELECT public.switch_bulk_training_plan('template:beginner-full-body-3','tempo_preset') AS id",
+      ),
+    )
+  ).rows[0].id;
+  assert.notEqual(replacementPlan, originalPlan);
+  assert.deepEqual(
+    (
+      await db.query(
+        "SELECT id,active FROM public.bulk_training_plans WHERE id IN ($1,$2) ORDER BY id",
+        [originalPlan, replacementPlan],
+      )
+    ).rows
+      .map((row) => [row.id, row.active])
+      .sort(([left], [right]) => left.localeCompare(right)),
+    [
+      [originalPlan, false],
+      [replacementPlan, true],
+    ].sort(([left], [right]) => left.localeCompare(right)),
+  );
+  assert.equal(
+    Number(
+      (
+        await db.query("SELECT count(*) AS n FROM public.bulk_training_sessions WHERE id=$1", [
+          completedSession,
+        ])
+      ).rows[0].n,
+    ),
+    1,
+  );
+
+  const replacementDay = (
+    await db.query(
+      "SELECT id FROM public.bulk_training_plan_days WHERE plan_id=$1 ORDER BY day_order LIMIT 1",
+      [replacementPlan],
+    )
+  ).rows[0].id;
+  const activeSession = (
+    await asUser(owner, () =>
+      db.query("SELECT public.start_bulk_training_session($1) AS id", [replacementDay]),
+    )
+  ).rows[0].id;
+  await assert.rejects(
+    asUser(owner, () =>
+      db.query("SELECT public.switch_bulk_training_plan('template:advanced-ppl-6','generated')"),
+    ),
+    /Finish or discard your current workout before changing plans/i,
+  );
+  await asUser(owner, () =>
+    db.query("SELECT public.discard_bulk_training_session($1)", [activeSession]),
+  );
+
+  assert.equal(
+    (await asUser(owner, () => db.query("SELECT public.deactivate_public_goal() AS id"))).rows[0]
+      .id,
+    profile,
+  );
+  const reset = (
+    await db.query(
+      `SELECT goal_status,
+        (SELECT count(*) FROM public.bulk_targets WHERE bulk_profile_id=p.id) AS target_count,
+        (SELECT count(*) FROM public.bulk_training_sessions WHERE bulk_profile_id=p.id AND status='completed') AS completed_count
+       FROM public.bulk_profiles p WHERE p.id=$1`,
+      [profile],
+    )
+  ).rows[0];
+  assert.equal(reset.goal_status, "inactive");
+  assert.equal(Number(reset.target_count), 0);
+  assert.equal(Number(reset.completed_count), 1);
+  assert.equal(
+    Number(
+      (
+        await db.query(
+          "SELECT count(*) AS n FROM public.bulk_training_plans WHERE bulk_profile_id=$1",
+          [profile],
+        )
+      ).rows[0].n,
+    ),
+    2,
+  );
+  await assert.rejects(
+    asUser(owner, () =>
+      db.query("SELECT public.switch_bulk_training_plan('template:advanced-ppl-6','generated')"),
+    ),
+    /Active Goal profile required/i,
+  );
+  assert.equal(
+    (
+      await asUser(owner, () =>
+        db.query(
+          `SELECT public.complete_goal_onboarding(
+            'maintain',70,70,0,'intermediate',4,ARRAY['dumbbells','bench'],'custom',2500,140,300,80
+          ) AS id`,
+        ),
+      )
+    ).rows[0].id,
+    profile,
+  );
+  const reactivated = (
+    await db.query(
+      `SELECT goal_status,
+        (SELECT count(*) FROM public.bulk_targets WHERE bulk_profile_id=p.id) AS target_count,
+        (SELECT count(*) FROM public.bulk_training_sessions WHERE bulk_profile_id=p.id AND status='completed') AS completed_count
+       FROM public.bulk_profiles p WHERE p.id=$1`,
+      [profile],
+    )
+  ).rows[0];
+  assert.equal(reactivated.goal_status, "active");
+  assert.equal(Number(reactivated.target_count), 1);
+  assert.equal(Number(reactivated.completed_count), 1);
+  await assert.rejects(
+    asUser(owner, () =>
+      db.query("UPDATE public.bulk_profiles SET goal_status='inactive' WHERE id=$1", [profile]),
+    ),
+    /permission denied/i,
   );
 });
 

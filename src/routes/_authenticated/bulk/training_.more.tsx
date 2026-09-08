@@ -9,9 +9,11 @@ import { TrainingPlanSetup } from "@/components/TrainingPlanSetup";
 import { Button } from "@/components/ui/button";
 import { Card, DataError, SectionTitle } from "@/components/ui-kit";
 import { useBulkMuscleCoverage } from "@/lib/bulk-muscle-coverage-query";
+import { useActiveBulkTrainingSession } from "@/lib/bulk-training-sessions";
 import { userFacingError } from "@/lib/network-errors";
 import { useAppData, useBulkMeta } from "@/lib/store";
 import { useActiveTrainingPlan } from "@/lib/training-plans-query";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/bulk/training_/more")({
   head: () => ({ meta: [{ title: "Tempo" }] }),
@@ -24,8 +26,10 @@ function TrainingMorePage() {
   const queryClient = useQueryClient();
   const usesPlanSetup = !!data?.targets.trainingSetupPreference;
   const activePlan = useActiveTrainingPlan(usesPlanSetup ? bulkId : null);
+  const activeSession = useActiveBulkTrainingSession(usesPlanSetup ? bulkId : null);
   const coverage = useBulkMuscleCoverage(usesPlanSetup ? (activePlan.data ?? null) : null);
   const [editing, setEditing] = useState(false);
+  const [switching, setSwitching] = useState(false);
 
   return (
     <AppShell>
@@ -38,6 +42,17 @@ function TrainingMorePage() {
           message={userFacingError(activePlan.error, "load your training plan")}
           onRetry={() => void activePlan.refetch()}
         />
+      ) : usesPlanSetup && activePlan.data && switching ? (
+        <div className="space-y-3">
+          <Button variant="ghost" className="min-h-11" onClick={() => setSwitching(false)}>
+            Keep current plan
+          </Button>
+          <TrainingPlanSetup
+            targets={data!.targets}
+            replacingPlan
+            onCreated={() => setSwitching(false)}
+          />
+        </div>
       ) : usesPlanSetup && activePlan.data ? (
         editing ? (
           <TrainingPlanEditor
@@ -67,6 +82,19 @@ function TrainingMorePage() {
                 onClick={() => setEditing(true)}
               >
                 Edit training plan
+              </Button>
+              <Button
+                variant="ghost"
+                className="mt-2 min-h-11 w-full"
+                onClick={() => {
+                  if (activeSession.data) {
+                    toast.error("Finish or discard your current workout before changing plans.");
+                    return;
+                  }
+                  setSwitching(true);
+                }}
+              >
+                Change plan
               </Button>
             </Card>
             <BulkMuscleCoverage

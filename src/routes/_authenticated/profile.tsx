@@ -1,13 +1,14 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Dumbbell, Lock, LogOut, Mail, RotateCcw } from "lucide-react";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { Card, Note, SectionTitle } from "@/components/ui-kit";
 import { ChallengeInviteCard } from "@/components/ChallengeInvite";
 import { useAuth, signOut } from "@/lib/auth";
-import { useMemberships } from "@/lib/bulk-access";
+import { deactivatePublicGoal, useMemberships } from "@/lib/bulk-access";
 import { useChallengeMembers, useMyChallenge } from "@/lib/challenge";
-import { resetBulkData } from "@/lib/store";
+import { clearBulk, resetBulkData } from "@/lib/store";
 import { useAcknowledgeGoal, useGoalDiscovery } from "@/lib/goal-discovery";
 
 export const Route = createFileRoute("/_authenticated/profile")({
@@ -33,6 +34,7 @@ export const Route = createFileRoute("/_authenticated/profile")({
 function ProfilePage() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { data: memberships, isLoading: bulkAccessLoading } = useMemberships();
   const goalDiscovery = useGoalDiscovery();
   const acknowledgeGoal = useAcknowledgeGoal();
@@ -46,7 +48,7 @@ function ProfilePage() {
   const [signingOut, setSigningOut] = useState(false);
   const acknowledgementStarted = useRef(false);
 
-  const ownedPlan = memberships?.find((m) => m.role === "owner");
+  const ownedPlan = memberships?.find((m) => m.role === "owner" && m.is_active !== false);
   const canInvite = !!challenge && (challengeMembers?.length ?? 0) < 2;
 
   useEffect(() => {
@@ -69,7 +71,26 @@ function ProfilePage() {
     setError(null);
     setResetStep(0);
     try {
-      await resetBulkData(ownedPlan.bulk_profile_id, { photos: true, targets: resetTargets });
+      if (ownedPlan.is_public) {
+        await deactivatePublicGoal();
+        clearBulk();
+        queryClient.setQueryData(
+          ["bulk-memberships"],
+          memberships?.map((membership) =>
+            membership.bulk_profile_id === ownedPlan.bulk_profile_id
+              ? { ...membership, is_active: false }
+              : membership,
+          ) ?? [],
+        );
+        await queryClient.invalidateQueries({
+          predicate: ({ queryKey }) => String(queryKey[0] ?? "").startsWith("bulk"),
+        });
+      } else {
+        await resetBulkData(ownedPlan.bulk_profile_id, {
+          photos: true,
+          targets: resetTargets,
+        });
+      }
       setResetDone(true);
     } catch (e) {
       setError((e as Error).message);
@@ -81,6 +102,10 @@ function ProfilePage() {
   return (
     <AppShell>
       <PageHeader title="Profile" subtitle="Your account and plan access" />
+
+      {resetDone && !ownedPlan ? (
+        <Note>Your Goal plan was reset. Completed history remains available after setup.</Note>
+      ) : null}
 
       <Card>
         <SectionTitle>Signed in as</SectionTitle>
@@ -144,18 +169,21 @@ function ProfilePage() {
         <Card className="mt-3">
           <SectionTitle>Danger zone</SectionTitle>
           <Note>
-            Resetting clears every daily log, workout, weekly note and progress photo on your plan.
-            The plan itself and the people you shared it with stay in place. This cannot be undone.
+            {ownedPlan.is_public
+              ? "Resetting removes the active Goal setup and returns you to onboarding. Completed workout and nutrition history stays unchanged."
+              : "Resetting clears every daily log, workout, weekly note and progress photo on your plan. The plan itself stays in place. This cannot be undone."}
           </Note>
-          <label className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
-            <input
-              type="checkbox"
-              checked={resetTargets}
-              onChange={(e) => setResetTargets(e.target.checked)}
-              className="h-4 w-4 accent-primary"
-            />
-            Also restore the default targets
-          </label>
+          {!ownedPlan.is_public ? (
+            <label className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={resetTargets}
+                onChange={(e) => setResetTargets(e.target.checked)}
+                className="h-4 w-4 accent-primary"
+              />
+              Also restore the default targets
+            </label>
+          ) : null}
           {resetStep === 0 ? (
             <button
               onClick={() => {

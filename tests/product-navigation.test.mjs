@@ -48,11 +48,10 @@ test("deep routes select the correct parent product", () => {
     "/bulk/meals/presets",
     "/bulk/meals/history",
     "/bulk/meals/more",
-    "/bulk/history",
   ])
     assert.equal(productAreaForPath(path), "meals", path);
 
-  for (const path of ["/bulk", "/bulk/progress", "/bulk/check-in", "/bulk/more"])
+  for (const path of ["/bulk", "/bulk/progress", "/bulk/check-in", "/bulk/more", "/bulk/history"])
     assert.equal(productAreaForPath(path), "goal", path);
 
   for (const path of ["/unknown", "/settings", "/profile-other"])
@@ -121,7 +120,7 @@ test("contextual navigation uses distinct route-backed tasks", async () => {
   assert.equal(new Set(routes("MEALS_NAV")).size, 4);
   assert.doesNotMatch(shell, /hash: "(?:plan|presets)"/);
   assert.match(shell, /activePrefixes\.some\(\(prefix\) => pathname\.startsWith\(prefix\)\)/);
-  for (const nested of ["/bulk/workout/", "/bulk/exercises", "/bulk/history"])
+  for (const nested of ["/bulk/workout/", "/bulk/exercises"])
     assert.match(shell, new RegExp(nested.replaceAll("/", "\\/")));
 
   assert.match(trainingToday, /TrainingPlanOverview/);
@@ -137,5 +136,6 @@ test("contextual navigation uses distinct route-backed tasks", async () => {
   assert.doesNotMatch(mealsPresets, /BulkNutritionLog/);
   assert.match(mealsHistory, /useBulkNutritionDay/);
   assert.match(mealsHistory, /Logged meals and entries/);
+  assert.doesNotMatch(mealsHistory, /CompletedWorkout|useCompletedBulkTrainingSessions/);
   assert.doesNotMatch(shell, /window\.location|location\.reload|replace:\s*true/);
 });

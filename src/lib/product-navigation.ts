@@ -20,7 +20,8 @@ export function productAreaForPath(pathname: string): ProductArea | null {
     pathname.startsWith("/bulk/prs")
   )
     return "training";
-  if (pathname.startsWith("/bulk/meals") || pathname.startsWith("/bulk/history")) return "meals";
+  if (pathname.startsWith("/bulk/meals")) return "meals";
+  if (pathname.startsWith("/bulk/history")) return "goal";
   if (pathname.startsWith("/bulk")) return "goal";
   return null;
 }

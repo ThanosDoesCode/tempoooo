@@ -210,7 +210,8 @@ test("add-to-workout results use compact accessible cards with scoped mutation f
 
   assert.match(browser, /const pending = exerciseMutation\?\.id === item\.id/);
   assert.match(browser, /exerciseMutation\.action === "add" \? "Adding\.\.\." : "Removing\.\.\."/);
-  assert.match(browser, /disabled=\{exerciseMutation !== null/);
+  assert.match(browser, /disabled=\{pending \|\|/);
+  assert.match(browser, /Wait for the current exercise change to finish/);
   assert.match(
     browser,
     /if \(!addTo \|\| !date \|\| !data \|\| !user \|\| exerciseMutation\) return/,

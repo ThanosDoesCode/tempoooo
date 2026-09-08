@@ -8,6 +8,9 @@ import type {
   NutritionEntryInput,
   NutritionIngredientSnapshot,
 } from "./bulk-nutrition";
+import { iso } from "./calc";
+
+const localToday = () => iso(new Date());
 
 type DayRow = {
   id: string;
@@ -119,6 +122,7 @@ export async function logBulkMealPreset(
     _preset: presetId,
     _log_date: logDate,
     _request_id: requestId,
+    _local_today: localToday(),
   });
   if (error) throw error;
   return data;
@@ -138,6 +142,7 @@ export async function createBulkNutritionEntry(
     _carbs: input.carbs,
     _fat: input.fat,
     _note: input.note,
+    _local_today: localToday(),
   });
   if (error) throw error;
   return data;
@@ -156,6 +161,7 @@ export async function updateBulkNutritionEntry(
     _carbs: input.carbs,
     _fat: input.fat,
     _note: input.note,
+    _local_today: localToday(),
   });
   if (error) throw error;
   return data;
@@ -164,6 +170,7 @@ export async function updateBulkNutritionEntry(
 export async function deleteBulkNutritionEntry(entryId: string): Promise<void> {
   const { data, error } = await supabase.rpc("delete_bulk_nutrition_entry", {
     _entry: entryId,
+    _local_today: localToday(),
   });
   if (error) throw error;
   if (!data) throw new Error("Nutrition entry could not be deleted");

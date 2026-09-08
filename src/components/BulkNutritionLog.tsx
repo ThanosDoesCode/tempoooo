@@ -1,4 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { addDays, format, parseISO } from "date-fns";
 import { ChevronLeft, ChevronRight, Pencil, Plus, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -61,6 +62,7 @@ export function BulkNutritionLog({
   const [error, setError] = useState<string | null>(null);
   const [editor, setEditor] = useState<EntryEditor | null>(null);
   const today = iso(new Date());
+  const isFuture = selectedDate > today;
 
   const invalidate = () =>
     Promise.all([
@@ -89,7 +91,7 @@ export function BulkNutritionLog({
   };
 
   const logPreset = async (presetId: string, requestId: string = crypto.randomUUID()) => {
-    if (pending) return;
+    if (pending || isFuture) return;
     setPending(`preset:${presetId}`);
     setError(null);
     try {
@@ -106,7 +108,7 @@ export function BulkNutritionLog({
   };
 
   const saveEntry = async () => {
-    if (!editor || pending) return;
+    if (!editor || pending || isFuture) return;
     const result = validateNutritionEntryDraft(editor.draft);
     if (!result.input) {
       setError(result.errors[0] ?? "Check the entry and try again.");
@@ -133,7 +135,7 @@ export function BulkNutritionLog({
   };
 
   const removeEntry = async (entry: BulkNutritionEntry) => {
-    if (pending || !window.confirm(`Delete “${entry.name}” from this day?`)) return;
+    if (pending || isFuture || !window.confirm(`Delete “${entry.name}” from this day?`)) return;
     setPending(`delete:${entry.id}`);
     setError(null);
     try {
@@ -160,9 +162,9 @@ export function BulkNutritionLog({
   return (
     <div className="space-y-4">
       <DateNavigation selectedDate={selectedDate} today={today} onChange={changeDate} />
-      {selectedDate > today ? (
-        <p className="rounded-xl bg-elevated px-3 py-2 text-xs text-muted-foreground">
-          Planning a future day. Entries are allowed and remain attached to this selected date.
+      {isFuture ? (
+        <p role="status" className="rounded-xl bg-elevated px-3 py-2 text-xs text-muted-foreground">
+          Future days are view-only. Come back on this date to log meals.
         </p>
       ) : null}
 
@@ -222,7 +224,7 @@ export function BulkNutritionLog({
         </div>
       ) : null}
 
-      {editor ? (
+      {isFuture ? null : editor ? (
         <NutritionEntryEditor
           editor={editor}
           disabled={pending === "entry:save"}
@@ -248,45 +250,53 @@ export function BulkNutritionLog({
         </Button>
       )}
 
-      <Card className="p-3">
-        <h2 className="text-sm font-semibold">Quick add saved meals</h2>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          Log to {format(parseISO(selectedDate), "d MMM")}. Each tap creates one meal occurrence.
-        </p>
-        {presets.isLoading ? (
-          <div className="mt-3 h-16 animate-pulse rounded-xl bg-elevated" />
-        ) : presets.error ? (
-          <div className="mt-3">
-            <DataError
-              title="Could not load saved meals"
-              message={userFacingError(presets.error, "load your saved meals")}
-              onRetry={() => void presets.refetch()}
-            />
-          </div>
-        ) : presets.data?.length ? (
-          <div className="mt-2 divide-y divide-border">
-            {presets.data.map((preset) => (
-              <PresetQuickAdd
-                key={preset.id}
-                preset={preset}
-                disabled={!!pending}
-                retry={failedPreset?.presetId === preset.id}
-                loading={pending === `preset:${preset.id}`}
-                onLog={() =>
-                  void logPreset(
-                    preset.id,
-                    failedPreset?.presetId === preset.id ? failedPreset.requestId : undefined,
-                  )
-                }
-              />
-            ))}
-          </div>
-        ) : (
-          <p className="mt-3 text-sm text-muted-foreground">
-            No presets yet. Open Meal Presets to create reusable meals.
+      {!isFuture ? (
+        <Card className="p-3">
+          <h2 className="text-sm font-semibold">Quick add saved meals</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Log to {format(parseISO(selectedDate), "d MMM")}. Each tap creates one meal occurrence.
           </p>
-        )}
-      </Card>
+          {presets.isLoading ? (
+            <div className="mt-3 h-16 animate-pulse rounded-xl bg-elevated" />
+          ) : presets.error ? (
+            <div className="mt-3">
+              <DataError
+                title="Could not load saved meals"
+                message={userFacingError(presets.error, "load your saved meals")}
+                onRetry={() => void presets.refetch()}
+              />
+            </div>
+          ) : presets.data?.length ? (
+            <div className="mt-2 divide-y divide-border">
+              {presets.data.map((preset) => (
+                <PresetQuickAdd
+                  key={preset.id}
+                  preset={preset}
+                  disabled={!!pending}
+                  retry={failedPreset?.presetId === preset.id}
+                  loading={pending === `preset:${preset.id}`}
+                  onLog={() =>
+                    void logPreset(
+                      preset.id,
+                      failedPreset?.presetId === preset.id ? failedPreset.requestId : undefined,
+                    )
+                  }
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="mt-3 rounded-xl bg-elevated p-3">
+              <p className="font-semibold">No meal presets yet</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Create meals you eat often so logging them later is fast.
+              </p>
+              <Button asChild className="mt-3 min-h-11 rounded-xl">
+                <Link to="/bulk/meals/presets">Create meal preset</Link>
+              </Button>
+            </div>
+          )}
+        </Card>
+      ) : null}
 
       <div>
         <h2 className="text-sm font-semibold">Entries</h2>
@@ -303,7 +313,8 @@ export function BulkNutritionLog({
               <NutritionEntryCard
                 key={entry.id}
                 entry={entry}
-                disabled={!!pending}
+                disabled={!!pending || isFuture}
+                readOnly={isFuture}
                 deleting={pending === `delete:${entry.id}`}
                 onEdit={() => {
                   const draft = nutritionEntryDraft(entry);
@@ -435,12 +446,14 @@ function PresetQuickAdd({
 function NutritionEntryCard({
   entry,
   disabled,
+  readOnly,
   deleting,
   onEdit,
   onDelete,
 }: {
   entry: BulkNutritionEntry;
   disabled: boolean;
+  readOnly: boolean;
   deleting: boolean;
   onEdit: () => void;
   onDelete: () => void;
@@ -464,26 +477,28 @@ function NutritionEntryCard({
             {entry.sourceType === "preset" ? "Saved meal snapshot" : "Custom entry"}
           </p>
         </div>
-        <div className="flex">
-          <button
-            type="button"
-            aria-label={`Edit ${entry.name}`}
-            className="grid min-h-11 min-w-11 place-items-center rounded-xl text-muted-foreground active:bg-elevated disabled:opacity-40"
-            disabled={disabled}
-            onClick={onEdit}
-          >
-            <Pencil className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            aria-label={`Delete ${entry.name}`}
-            className="grid min-h-11 min-w-11 place-items-center rounded-xl text-danger active:bg-elevated disabled:opacity-40"
-            disabled={disabled}
-            onClick={onDelete}
-          >
-            {deleting ? <PendingLabel>Deleting...</PendingLabel> : <Trash2 className="h-4 w-4" />}
-          </button>
-        </div>
+        {!readOnly ? (
+          <div className="flex">
+            <button
+              type="button"
+              aria-label={`Edit ${entry.name}`}
+              className="grid min-h-11 min-w-11 place-items-center rounded-xl text-muted-foreground active:bg-elevated disabled:opacity-40"
+              disabled={disabled}
+              onClick={onEdit}
+            >
+              <Pencil className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              aria-label={`Delete ${entry.name}`}
+              className="grid min-h-11 min-w-11 place-items-center rounded-xl text-danger active:bg-elevated disabled:opacity-40"
+              disabled={disabled}
+              onClick={onDelete}
+            >
+              {deleting ? <PendingLabel>Deleting...</PendingLabel> : <Trash2 className="h-4 w-4" />}
+            </button>
+          </div>
+        ) : null}
       </div>
     </Card>
   );

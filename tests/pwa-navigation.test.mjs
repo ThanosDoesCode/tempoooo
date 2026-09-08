@@ -127,11 +127,11 @@ test("Tempo navigation exposes the four product areas only after persisted Goal 
   assert.match(guard, /bulkOwnerQueryOptions/);
   assert.match(guard, /ensureQueryData/);
   assert.match(guard, /prefetchBulk/);
-  assert.match(guard, /memberships\.length === 0/);
+  assert.match(guard, /activeMemberships\.length === 0/);
   assert.match(guard, /clearBulk\(\)/);
   assert.match(guard, /redirect\(\{ to: "\/bulk-onboarding", replace: true \}\)/);
   const onboarding = await read("src/routes/_authenticated/bulk-onboarding.tsx");
-  assert.match(onboarding, /supabase\.rpc\("complete_bulk_onboarding"/);
+  assert.match(onboarding, /supabase\.rpc\("complete_goal_onboarding"/);
   assert.match(onboarding, /Create My Goal Plan/);
   assert.match(onboarding, /bulkOwnerQueryOptions/);
   const denied = await read("src/routes/_authenticated/bulk-access-denied.tsx");

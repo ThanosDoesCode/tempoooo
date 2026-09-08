@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { addDays, format, parseISO } from "date-fns";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useState } from "react";
@@ -44,6 +44,10 @@ function BulkHistoryPage() {
         <div className="h-40 animate-pulse rounded-2xl bg-card" />
       </AppShell>
     );
+  }
+
+  if (data.targets.trainingSetupPreference) {
+    return <Navigate to="/bulk/training/history" replace />;
   }
 
   const day = data.days[date];
