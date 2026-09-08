@@ -161,7 +161,7 @@ test("library API pages server results and custom writes cannot target system ro
   const [client, browser, training, migration, legacyTypes, cancellation] = await Promise.all([
     read("src/lib/exercise-library-query.ts"),
     read("src/routes/_authenticated/bulk/exercises.tsx"),
-    read("src/routes/_authenticated/bulk/training.tsx"),
+    read("src/routes/_authenticated/bulk/training_.more.tsx"),
     read("supabase/migrations/20260905170000_bulk_exercise_library.sql"),
     read("src/lib/types.ts"),
     read("src/lib/query-cancellation.ts"),
@@ -186,7 +186,7 @@ test("library API pages server results and custom writes cannot target system ro
   assert.match(browser, /Saving exercise/);
   assert.match(browser, /Delete this custom exercise\?/);
   assert.match(browser, /Page \{page \+ 1\}/);
-  assert.match(training, /Browse exercise library/);
+  assert.match(training, /Exercise library/);
   assert.match(migration, /owner_id = \(SELECT auth\.uid\(\)\)/);
   assert.match(migration, /NOT is_system/);
   assert.match(migration, /private\.has_active_bulk\(\)/);

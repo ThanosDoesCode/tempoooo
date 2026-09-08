@@ -150,16 +150,18 @@ test("each product area has four contextual destinations and legacy/public data 
     return [...source.matchAll(/label: "([^"]+)"/g)].map((match) => match[1]);
   };
   assert.deepEqual(labels("CHALLENGE_NAV"), ["Week", "Add", "History", "Money"]);
-  assert.deepEqual(labels("TRAINING_NAV"), ["Today", "Plan", "PRs", "More"]);
+  assert.deepEqual(labels("TRAINING_NAV"), ["Today", "PRs", "History", "More"]);
   assert.deepEqual(labels("MEALS_NAV"), ["Today", "Presets", "History", "More"]);
   assert.deepEqual(labels("GOAL_NAV"), ["Today", "Progress", "Check-In", "More"]);
   for (const destination of ["/bulk/progress", "/bulk/check-in", "/bulk/history"]) {
     assert.match(more, new RegExp(destination.replace("/", "\\/")));
-    assert.match(shell, new RegExp(destination.replace("/", "\\/")));
   }
+  for (const destination of ["/bulk/progress", "/bulk/check-in", "/bulk/more"])
+    assert.match(shell, new RegExp(destination.replace("/", "\\/")));
   assert.match(more, /min-h-16/);
   assert.match(productNavigation, /pathname\.startsWith\("\/bulk\/prs"\)/);
   assert.doesNotMatch(shell, /location\.reload/);
+  assert.doesNotMatch(shell, /hash: "(?:plan|presets)"/);
 
   assert.match(today, /You haven&apos;t chosen a training plan yet/);
   assert.match(today, /Choose training plan/);

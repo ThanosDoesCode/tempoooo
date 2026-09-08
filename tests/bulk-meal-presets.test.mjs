@@ -77,7 +77,7 @@ test("ingredients validate quantity and unit and retain deterministic order", ()
 test("public meal UI uses explicit saves, local errors and mobile-safe controls", async () => {
   const [component, route, query, shell, cache, legacy] = await Promise.all([
     read("src/components/BulkMealPresets.tsx"),
-    read("src/routes/_authenticated/bulk/meals.tsx"),
+    read("src/routes/_authenticated/bulk/meals_.presets.tsx"),
     read("src/lib/bulk-meal-presets-query.ts"),
     read("src/components/AppShell.tsx"),
     read("src/lib/query-cancellation.ts"),

@@ -32,6 +32,11 @@ import { Route as AuthenticatedChallengeLogRouteImport } from './routes/_authent
 import { Route as AuthenticatedChallengeNewRouteImport } from './routes/_authenticated/challenge/new'
 import { Route as AuthenticatedChallengePaymentsRouteImport } from './routes/_authenticated/challenge/payments'
 import { Route as AuthenticatedChallengeTargetsRouteImport } from './routes/_authenticated/challenge/targets'
+import { Route as AuthenticatedBulkMealsHistoryRouteImport } from './routes/_authenticated/bulk/meals_.history'
+import { Route as AuthenticatedBulkMealsMoreRouteImport } from './routes/_authenticated/bulk/meals_.more'
+import { Route as AuthenticatedBulkMealsPresetsRouteImport } from './routes/_authenticated/bulk/meals_.presets'
+import { Route as AuthenticatedBulkTrainingHistoryRouteImport } from './routes/_authenticated/bulk/training_.history'
+import { Route as AuthenticatedBulkTrainingMoreRouteImport } from './routes/_authenticated/bulk/training_.more'
 import { Route as AuthenticatedBulkWorkoutSessionIdRouteImport } from './routes/_authenticated/bulk/workout.$sessionId'
 import { Route as AuthenticatedInviteChallengeTokenRouteImport } from './routes/_authenticated/invite.challenge.$token'
 import { Route as AuthenticatedChallengeHistoryWeekWeekNumberRouteImport } from './routes/_authenticated/challenge/history_.week.$weekNumber'
@@ -164,6 +169,36 @@ const AuthenticatedChallengeTargetsRoute =
     path: '/challenge/targets',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedBulkMealsHistoryRoute =
+  AuthenticatedBulkMealsHistoryRouteImport.update({
+    id: '/meals_/history',
+    path: '/meals/history',
+    getParentRoute: () => AuthenticatedBulkRouteRoute,
+  } as any)
+const AuthenticatedBulkMealsMoreRoute =
+  AuthenticatedBulkMealsMoreRouteImport.update({
+    id: '/meals_/more',
+    path: '/meals/more',
+    getParentRoute: () => AuthenticatedBulkRouteRoute,
+  } as any)
+const AuthenticatedBulkMealsPresetsRoute =
+  AuthenticatedBulkMealsPresetsRouteImport.update({
+    id: '/meals_/presets',
+    path: '/meals/presets',
+    getParentRoute: () => AuthenticatedBulkRouteRoute,
+  } as any)
+const AuthenticatedBulkTrainingHistoryRoute =
+  AuthenticatedBulkTrainingHistoryRouteImport.update({
+    id: '/training_/history',
+    path: '/training/history',
+    getParentRoute: () => AuthenticatedBulkRouteRoute,
+  } as any)
+const AuthenticatedBulkTrainingMoreRoute =
+  AuthenticatedBulkTrainingMoreRouteImport.update({
+    id: '/training_/more',
+    path: '/training/more',
+    getParentRoute: () => AuthenticatedBulkRouteRoute,
+  } as any)
 const AuthenticatedBulkWorkoutSessionIdRoute =
   AuthenticatedBulkWorkoutSessionIdRouteImport.update({
     id: '/workout/$sessionId',
@@ -206,6 +241,11 @@ export interface FileRoutesByFullPath {
   '/challenge/targets': typeof AuthenticatedChallengeTargetsRoute
   '/bulk/': typeof AuthenticatedBulkIndexRoute
   '/challenge/': typeof AuthenticatedChallengeIndexRoute
+  '/bulk/meals/history': typeof AuthenticatedBulkMealsHistoryRoute
+  '/bulk/meals/more': typeof AuthenticatedBulkMealsMoreRoute
+  '/bulk/meals/presets': typeof AuthenticatedBulkMealsPresetsRoute
+  '/bulk/training/history': typeof AuthenticatedBulkTrainingHistoryRoute
+  '/bulk/training/more': typeof AuthenticatedBulkTrainingMoreRoute
   '/bulk/workout/$sessionId': typeof AuthenticatedBulkWorkoutSessionIdRoute
   '/invite/challenge/$token': typeof AuthenticatedInviteChallengeTokenRoute
   '/challenge/history/week/$weekNumber': typeof AuthenticatedChallengeHistoryWeekWeekNumberRoute
@@ -232,6 +272,11 @@ export interface FileRoutesByTo {
   '/challenge/targets': typeof AuthenticatedChallengeTargetsRoute
   '/bulk': typeof AuthenticatedBulkIndexRoute
   '/challenge': typeof AuthenticatedChallengeIndexRoute
+  '/bulk/meals/history': typeof AuthenticatedBulkMealsHistoryRoute
+  '/bulk/meals/more': typeof AuthenticatedBulkMealsMoreRoute
+  '/bulk/meals/presets': typeof AuthenticatedBulkMealsPresetsRoute
+  '/bulk/training/history': typeof AuthenticatedBulkTrainingHistoryRoute
+  '/bulk/training/more': typeof AuthenticatedBulkTrainingMoreRoute
   '/bulk/workout/$sessionId': typeof AuthenticatedBulkWorkoutSessionIdRoute
   '/invite/challenge/$token': typeof AuthenticatedInviteChallengeTokenRoute
   '/challenge/history/week/$weekNumber': typeof AuthenticatedChallengeHistoryWeekWeekNumberRoute
@@ -261,6 +306,11 @@ export interface FileRoutesById {
   '/_authenticated/challenge/targets': typeof AuthenticatedChallengeTargetsRoute
   '/_authenticated/bulk/': typeof AuthenticatedBulkIndexRoute
   '/_authenticated/challenge/': typeof AuthenticatedChallengeIndexRoute
+  '/_authenticated/bulk/meals_/history': typeof AuthenticatedBulkMealsHistoryRoute
+  '/_authenticated/bulk/meals_/more': typeof AuthenticatedBulkMealsMoreRoute
+  '/_authenticated/bulk/meals_/presets': typeof AuthenticatedBulkMealsPresetsRoute
+  '/_authenticated/bulk/training_/history': typeof AuthenticatedBulkTrainingHistoryRoute
+  '/_authenticated/bulk/training_/more': typeof AuthenticatedBulkTrainingMoreRoute
   '/_authenticated/bulk/workout/$sessionId': typeof AuthenticatedBulkWorkoutSessionIdRoute
   '/_authenticated/invite/challenge/$token': typeof AuthenticatedInviteChallengeTokenRoute
   '/_authenticated/challenge/history_/week/$weekNumber': typeof AuthenticatedChallengeHistoryWeekWeekNumberRoute
@@ -290,6 +340,11 @@ export interface FileRouteTypes {
     | '/challenge/targets'
     | '/bulk/'
     | '/challenge/'
+    | '/bulk/meals/history'
+    | '/bulk/meals/more'
+    | '/bulk/meals/presets'
+    | '/bulk/training/history'
+    | '/bulk/training/more'
     | '/bulk/workout/$sessionId'
     | '/invite/challenge/$token'
     | '/challenge/history/week/$weekNumber'
@@ -316,6 +371,11 @@ export interface FileRouteTypes {
     | '/challenge/targets'
     | '/bulk'
     | '/challenge'
+    | '/bulk/meals/history'
+    | '/bulk/meals/more'
+    | '/bulk/meals/presets'
+    | '/bulk/training/history'
+    | '/bulk/training/more'
     | '/bulk/workout/$sessionId'
     | '/invite/challenge/$token'
     | '/challenge/history/week/$weekNumber'
@@ -344,6 +404,11 @@ export interface FileRouteTypes {
     | '/_authenticated/challenge/targets'
     | '/_authenticated/bulk/'
     | '/_authenticated/challenge/'
+    | '/_authenticated/bulk/meals_/history'
+    | '/_authenticated/bulk/meals_/more'
+    | '/_authenticated/bulk/meals_/presets'
+    | '/_authenticated/bulk/training_/history'
+    | '/_authenticated/bulk/training_/more'
     | '/_authenticated/bulk/workout/$sessionId'
     | '/_authenticated/invite/challenge/$token'
     | '/_authenticated/challenge/history_/week/$weekNumber'
@@ -518,6 +583,41 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedChallengeTargetsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/bulk/meals_/history': {
+      id: '/_authenticated/bulk/meals_/history'
+      path: '/meals/history'
+      fullPath: '/bulk/meals/history'
+      preLoaderRoute: typeof AuthenticatedBulkMealsHistoryRouteImport
+      parentRoute: typeof AuthenticatedBulkRouteRoute
+    }
+    '/_authenticated/bulk/meals_/more': {
+      id: '/_authenticated/bulk/meals_/more'
+      path: '/meals/more'
+      fullPath: '/bulk/meals/more'
+      preLoaderRoute: typeof AuthenticatedBulkMealsMoreRouteImport
+      parentRoute: typeof AuthenticatedBulkRouteRoute
+    }
+    '/_authenticated/bulk/meals_/presets': {
+      id: '/_authenticated/bulk/meals_/presets'
+      path: '/meals/presets'
+      fullPath: '/bulk/meals/presets'
+      preLoaderRoute: typeof AuthenticatedBulkMealsPresetsRouteImport
+      parentRoute: typeof AuthenticatedBulkRouteRoute
+    }
+    '/_authenticated/bulk/training_/history': {
+      id: '/_authenticated/bulk/training_/history'
+      path: '/training/history'
+      fullPath: '/bulk/training/history'
+      preLoaderRoute: typeof AuthenticatedBulkTrainingHistoryRouteImport
+      parentRoute: typeof AuthenticatedBulkRouteRoute
+    }
+    '/_authenticated/bulk/training_/more': {
+      id: '/_authenticated/bulk/training_/more'
+      path: '/training/more'
+      fullPath: '/bulk/training/more'
+      preLoaderRoute: typeof AuthenticatedBulkTrainingMoreRouteImport
+      parentRoute: typeof AuthenticatedBulkRouteRoute
+    }
     '/_authenticated/bulk/workout/$sessionId': {
       id: '/_authenticated/bulk/workout/$sessionId'
       path: '/workout/$sessionId'
@@ -553,6 +653,11 @@ interface AuthenticatedBulkRouteRouteChildren {
   AuthenticatedBulkPrsRoute: typeof AuthenticatedBulkPrsRoute
   AuthenticatedBulkTrainingRoute: typeof AuthenticatedBulkTrainingRoute
   AuthenticatedBulkIndexRoute: typeof AuthenticatedBulkIndexRoute
+  AuthenticatedBulkMealsHistoryRoute: typeof AuthenticatedBulkMealsHistoryRoute
+  AuthenticatedBulkMealsMoreRoute: typeof AuthenticatedBulkMealsMoreRoute
+  AuthenticatedBulkMealsPresetsRoute: typeof AuthenticatedBulkMealsPresetsRoute
+  AuthenticatedBulkTrainingHistoryRoute: typeof AuthenticatedBulkTrainingHistoryRoute
+  AuthenticatedBulkTrainingMoreRoute: typeof AuthenticatedBulkTrainingMoreRoute
   AuthenticatedBulkWorkoutSessionIdRoute: typeof AuthenticatedBulkWorkoutSessionIdRoute
 }
 
@@ -568,6 +673,12 @@ const AuthenticatedBulkRouteRouteChildren: AuthenticatedBulkRouteRouteChildren =
     AuthenticatedBulkPrsRoute: AuthenticatedBulkPrsRoute,
     AuthenticatedBulkTrainingRoute: AuthenticatedBulkTrainingRoute,
     AuthenticatedBulkIndexRoute: AuthenticatedBulkIndexRoute,
+    AuthenticatedBulkMealsHistoryRoute: AuthenticatedBulkMealsHistoryRoute,
+    AuthenticatedBulkMealsMoreRoute: AuthenticatedBulkMealsMoreRoute,
+    AuthenticatedBulkMealsPresetsRoute: AuthenticatedBulkMealsPresetsRoute,
+    AuthenticatedBulkTrainingHistoryRoute:
+      AuthenticatedBulkTrainingHistoryRoute,
+    AuthenticatedBulkTrainingMoreRoute: AuthenticatedBulkTrainingMoreRoute,
     AuthenticatedBulkWorkoutSessionIdRoute:
       AuthenticatedBulkWorkoutSessionIdRoute,
   }

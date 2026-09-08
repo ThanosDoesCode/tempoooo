@@ -4,8 +4,7 @@ import { format, parseISO } from "date-fns";
 import { useMemo, useState } from "react";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { TrainingSession } from "@/components/TrainingSession";
-import { TrainingPlanOverview, TrainingPlanSetup } from "@/components/TrainingPlanSetup";
-import { TrainingPlanEditor } from "@/components/TrainingPlanEditor";
+import { TrainingPlanOverview } from "@/components/TrainingPlanSetup";
 import { iso } from "@/lib/calc";
 import { useAuth } from "@/lib/auth";
 import { useActions, useAppData, useBulkMeta } from "@/lib/store";
@@ -18,8 +17,6 @@ import {
 } from "@/lib/bulk-training-sessions";
 import { Button } from "@/components/ui/button";
 import { useBulkProgressionTargets } from "@/lib/bulk-progression-query";
-import { useBulkMuscleCoverage } from "@/lib/bulk-muscle-coverage-query";
-import { BulkMuscleCoverage } from "@/components/BulkMuscleCoverage";
 
 export const Route = createFileRoute("/_authenticated/bulk/training")({
   head: () => ({
@@ -50,7 +47,6 @@ function TrainingPage() {
   const { saveWorkout, saveTargets } = useActions();
   const today = iso(new Date());
   const [date, setDate] = useState(today);
-  const [editingPlan, setEditingPlan] = useState(false);
   const [startingDayId, setStartingDayId] = useState<string | null>(null);
   const activeSession = useActiveBulkTrainingSession(usesPlanSetup ? bulkId : null);
   const progressionInputs = useMemo(
@@ -73,7 +69,6 @@ function TrainingPage() {
     progressionInputs,
     activePlan.data?.updatedAt ?? "none",
   );
-  const coverage = useBulkMuscleCoverage(usesPlanSetup ? (activePlan.data ?? null) : null);
 
   async function startWorkout(planDayId: string) {
     setStartingDayId(planDayId);
@@ -95,13 +90,6 @@ function TrainingPage() {
         title="Training"
         {...(!usesPlanSetup ? { subtitle: format(parseISO(date), "EEEE, d MMMM") } : {})}
       />
-      <Link
-        to="/bulk/exercises"
-        preload="intent"
-        className="mb-3 flex min-h-11 items-center justify-center rounded-xl border border-border px-3 text-sm font-semibold text-foreground active:scale-[0.98]"
-      >
-        Browse exercise library
-      </Link>
       {usesPlanSetup && activeSession.isLoading ? (
         <div className="mb-3 h-20 animate-pulse rounded-2xl bg-card" />
       ) : activeSession.data ? (
@@ -132,7 +120,7 @@ function TrainingPage() {
           />
         </label>
       ) : null}
-      <div id="plan">
+      <div>
         {usesPlanSetup && activePlan.isLoading ? (
           <div className="h-48 animate-pulse rounded-2xl bg-card" />
         ) : usesPlanSetup && activePlan.error ? (
@@ -141,41 +129,23 @@ function TrainingPage() {
             onRetry={() => void activePlan.refetch()}
           />
         ) : usesPlanSetup && activePlan.data ? (
-          editingPlan ? (
-            <TrainingPlanEditor
-              plan={activePlan.data}
-              onCancel={() => setEditingPlan(false)}
-              onSaved={async () => {
-                await activePlan.refetch();
-                await Promise.all([
-                  queryClient.invalidateQueries({ queryKey: ["bulk-progression"] }),
-                  queryClient.invalidateQueries({ queryKey: ["bulk-muscle-coverage"] }),
-                ]);
-                setEditingPlan(false);
-              }}
-            />
-          ) : (
-            <>
-              <TrainingPlanOverview
-                plan={activePlan.data}
-                onEdit={() => setEditingPlan(true)}
-                onStart={(dayId) => void startWorkout(dayId)}
-                startingDayId={startingDayId}
-                workoutActive={!!activeSession.data}
-                progression={progression.data ?? {}}
-              />
-              <div className="mt-3">
-                <BulkMuscleCoverage
-                  result={coverage.data}
-                  loading={coverage.isLoading}
-                  error={coverage.error}
-                  onRetry={() => void coverage.refetch()}
-                />
-              </div>
-            </>
-          )
+          <TrainingPlanOverview
+            plan={activePlan.data}
+            onStart={(dayId) => void startWorkout(dayId)}
+            startingDayId={startingDayId}
+            workoutActive={!!activeSession.data}
+            progression={progression.data ?? {}}
+          />
         ) : usesPlanSetup && data ? (
-          <TrainingPlanSetup targets={data.targets} />
+          <Card className="py-8 text-center">
+            <h2 className="font-semibold">You haven&apos;t chosen a training plan yet</h2>
+            <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
+              Pick a plan to start tracking today&apos;s workouts.
+            </p>
+            <Button asChild className="mt-4 min-h-11">
+              <Link to="/bulk/training/more">Choose training plan</Link>
+            </Button>
+          </Card>
         ) : data && bulkId && user ? (
           <TrainingSession
             key={`${user.id}:${bulkId}:${date}`}

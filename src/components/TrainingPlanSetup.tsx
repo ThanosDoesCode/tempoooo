@@ -277,7 +277,7 @@ export function TrainingPlanOverview({
   progression,
 }: {
   plan: UserTrainingPlan;
-  onEdit: () => void;
+  onEdit?: () => void;
   onStart: (dayId: string) => void;
   startingDayId: string | null;
   workoutActive: boolean;
@@ -296,9 +296,11 @@ export function TrainingPlanOverview({
         {plan.description ? (
           <p className="mt-3 text-sm text-muted-foreground">{plan.description}</p>
         ) : null}
-        <Button variant="outline" className="mt-4 min-h-11 w-full" onClick={onEdit}>
-          Edit Plan
-        </Button>
+        {onEdit ? (
+          <Button variant="outline" className="mt-4 min-h-11 w-full" onClick={onEdit}>
+            Edit Plan
+          </Button>
+        ) : null}
       </Card>
       {plan.days.length ? (
         plan.days.map((day) => (

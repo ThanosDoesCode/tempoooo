@@ -101,18 +101,25 @@ test("logical nutrition days reject malformed or impossible local dates", () => 
   assert.equal(isIsoLocalDay("09/06/2026"), false);
 });
 
-test("nutrition UI keeps selected dates, drafts, retry IDs and preset management intact", async () => {
-  const [component, route, query, presetComponent, cache] = await Promise.all([
-    read("src/components/BulkNutritionLog.tsx"),
-    read("src/routes/_authenticated/bulk/meals.tsx"),
-    read("src/lib/bulk-nutrition-query.ts"),
-    read("src/components/BulkMealPresets.tsx"),
-    read("src/lib/query-cancellation.ts"),
-  ]);
-  assert.match(route, /Daily Log/);
-  assert.match(route, /Meal Presets/);
-  assert.match(route, /hidden=\{view !== "daily"\}/);
+test("nutrition UI keeps daily logging and route-backed preset management distinct", async () => {
+  const [component, route, presetRoute, historyRoute, query, presetComponent, cache] =
+    await Promise.all([
+      read("src/components/BulkNutritionLog.tsx"),
+      read("src/routes/_authenticated/bulk/meals.tsx"),
+      read("src/routes/_authenticated/bulk/meals_.presets.tsx"),
+      read("src/routes/_authenticated/bulk/meals_.history.tsx"),
+      read("src/lib/bulk-nutrition-query.ts"),
+      read("src/components/BulkMealPresets.tsx"),
+      read("src/lib/query-cancellation.ts"),
+    ]);
+  assert.match(route, /BulkNutritionLog/);
+  assert.doesNotMatch(route, /BulkMealPresets|hidden=\{view|hash === "presets"/);
+  assert.match(route, /publicNutrition[\s\S]*BulkNutritionLog/);
   assert.match(route, /selectedDate=\{selectedDate\}/);
+  assert.match(presetRoute, /BulkMealPresets/);
+  assert.doesNotMatch(presetRoute, /BulkNutritionLog/);
+  assert.match(historyRoute, /useBulkNutritionDay/);
+  assert.match(historyRoute, /Logged meals and entries/);
   assert.match(component, /Previous day/);
   assert.match(component, /Next day/);
   assert.match(component, /\n\s*Today\n/);

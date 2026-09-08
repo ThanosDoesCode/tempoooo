@@ -88,7 +88,7 @@ test("public workout UI resumes durable sessions and confirms incomplete finish/
     read("src/routes/_authenticated/bulk/training.tsx"),
     read("src/components/TrainingPlanSetup.tsx"),
     read("src/components/BulkWorkoutSession.tsx"),
-    read("src/routes/_authenticated/bulk/history.tsx"),
+    read("src/routes/_authenticated/bulk/training_.history.tsx"),
     read("src/lib/bulk-training-sessions.ts"),
     read("supabase/migrations/20260906180000_public_bulk_workout_sessions.sql"),
     read("src/lib/query-cancellation.ts"),
@@ -102,7 +102,7 @@ test("public workout UI resumes durable sessions and confirms incomplete finish/
   assert.match(workout, /Retry save/);
   assert.match(workout, /tempo:bulk-workout-draft/);
   assert.match(workout, /localStorage\.removeItem/);
-  assert.match(history, /Completed plan workouts/);
+  assert.match(history, /Training history/);
   assert.match(history, /CompletedWorkout/);
   assert.match(query, /staleTime: 0/);
   assert.match(cache, /bulk-training-session/);

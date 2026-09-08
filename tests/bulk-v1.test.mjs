@@ -120,7 +120,8 @@ test("Sharing is absent while personal Bulk activation guards remain", async () 
     "supabase/migrations/20260905150000_complete_bulk_onboarding.sql",
   );
   assert.doesNotMatch(shell, /Sharing|\/bulk\/sharing|\/bulk\/invite/);
-  assert.match(shell, /"\/bulk\/history", label: "History"/);
+  assert.match(shell, /to: "\/bulk\/training\/history"[\s\S]{0,100}label: "History"/);
+  assert.match(shell, /to: "\/bulk\/meals\/history"[\s\S]{0,100}label: "History"/);
   assert.match(guard, /bulkOwnerQueryOptions/);
   assert.match(guard, /bulk-onboarding/);
   assert.match(profile, /Get My Goal Plan/);

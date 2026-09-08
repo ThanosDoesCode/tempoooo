@@ -179,7 +179,10 @@ test("coverage query is batched and public UI remains separate from legacy", asy
   const [query, component, route, cache] = await Promise.all([
     readFile(new URL("../src/lib/bulk-muscle-coverage-query.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/components/BulkMuscleCoverage.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../src/routes/_authenticated/bulk/training.tsx", import.meta.url), "utf8"),
+    readFile(
+      new URL("../src/routes/_authenticated/bulk/training_.more.tsx", import.meta.url),
+      "utf8",
+    ),
     readFile(new URL("../src/lib/query-cancellation.ts", import.meta.url), "utf8"),
   ]);
   assert.match(query, /new Set/);

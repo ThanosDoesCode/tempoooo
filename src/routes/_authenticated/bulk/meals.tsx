@@ -1,11 +1,12 @@
-import { createFileRoute, useLocation } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { AppShell, PageHeader } from "@/components/AppShell";
-import { BulkMealPresets } from "@/components/BulkMealPresets";
 import { BulkNutritionLog } from "@/components/BulkNutritionLog";
-import { Chip } from "@/components/ui-kit";
+import { Button } from "@/components/ui/button";
+import { Card, SectionTitle } from "@/components/ui-kit";
 import { iso } from "@/lib/calc";
+import { mealPlan } from "@/lib/meals";
 import { useAppData, useBulkMeta } from "@/lib/store";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 export const Route = createFileRoute("/_authenticated/bulk/meals")({
   head: () => ({ meta: [{ title: "Tempo" }] }),
@@ -15,15 +16,10 @@ export const Route = createFileRoute("/_authenticated/bulk/meals")({
 function BulkMealsPage() {
   const { bulkId } = useBulkMeta();
   const data = useAppData();
-  const [view, setView] = useState<"daily" | "presets">("daily");
-  const { hash } = useLocation();
   const [selectedDate, setSelectedDate] = useState(() => iso(new Date()));
   const publicNutrition = !!data?.targets.trainingSetupPreference;
-
-  useEffect(() => {
-    if (hash === "presets") setView("presets");
-    else if (!hash) setView("daily");
-  }, [hash]);
+  const legacyDay = data?.days[selectedDate];
+  const legacyPlan = mealPlan(legacyDay?.mealPlan);
 
   return (
     <AppShell>
@@ -31,40 +27,58 @@ function BulkMealsPage() {
         title="Meals"
         subtitle={
           publicNutrition
-            ? "Daily nutrition and reusable meal presets."
-            : "Reusable meals with your own ingredients and macros."
+            ? "Today's nutrition, remaining targets and logged meals."
+            : "Today's saved nutrition and meal plan."
         }
       />
       {bulkId && publicNutrition && data ? (
-        <>
-          <div className="mb-4 flex gap-2" aria-label="Meals view">
-            <Chip active={view === "daily"} onClick={() => setView("daily")}>
-              Daily Log
-            </Chip>
-            <Chip active={view === "presets"} onClick={() => setView("presets")}>
-              Meal Presets
-            </Chip>
+        <BulkNutritionLog
+          bulkProfileId={bulkId}
+          selectedDate={selectedDate}
+          onDateChange={setSelectedDate}
+          currentTargets={{
+            calories: data.targets.calories,
+            protein: data.targets.protein,
+            carbs: data.targets.carbs,
+            fat: data.targets.fat,
+          }}
+        />
+      ) : bulkId && data ? (
+        <Card>
+          <SectionTitle>Today&apos;s nutrition</SectionTitle>
+          <div className="mt-2 grid grid-cols-2 gap-3 text-sm">
+            <LegacyMacro label="Calories" value={legacyDay?.calories} unit="kcal" />
+            <LegacyMacro label="Protein" value={legacyDay?.protein} unit="g" />
+            <LegacyMacro label="Carbs" value={legacyDay?.carbs} unit="g" />
+            <LegacyMacro label="Fat" value={legacyDay?.fat} unit="g" />
           </div>
-          <div hidden={view !== "daily"}>
-            <BulkNutritionLog
-              bulkProfileId={bulkId}
-              selectedDate={selectedDate}
-              onDateChange={setSelectedDate}
-              currentTargets={{
-                calories: data.targets.calories,
-                protein: data.targets.protein,
-                carbs: data.targets.carbs,
-                fat: data.targets.fat,
-              }}
-            />
-          </div>
-          <div id="presets" hidden={view !== "presets"}>
-            <BulkMealPresets bulkProfileId={bulkId} />
-          </div>
-        </>
-      ) : bulkId ? (
-        <BulkMealPresets bulkProfileId={bulkId} />
+          <p className="mt-3 text-sm text-muted-foreground">
+            Meal plan: <span className="text-foreground">{legacyPlan?.name ?? "Not selected"}</span>
+          </p>
+          <Button asChild className="mt-4 min-h-11 w-full">
+            <Link to="/bulk">Open daily log</Link>
+          </Button>
+        </Card>
       ) : null}
     </AppShell>
+  );
+}
+
+function LegacyMacro({
+  label,
+  value,
+  unit,
+}: {
+  label: string;
+  value: number | undefined;
+  unit: string;
+}) {
+  return (
+    <p className="text-muted-foreground">
+      {label}
+      <strong className="block text-foreground">
+        {value == null ? "—" : `${Math.round(value)} ${unit}`}
+      </strong>
+    </p>
   );
 }

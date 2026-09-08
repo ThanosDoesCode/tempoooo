@@ -30,17 +30,35 @@ const CHALLENGE_NAV = [
 ] as const;
 
 const TRAINING_NAV = [
-  { to: "/bulk/training", label: "Today", icon: Dumbbell, exact: true },
-  { to: "/bulk/training", hash: "plan", label: "Plan", icon: CalendarCheck, exact: true },
+  {
+    to: "/bulk/training",
+    label: "Today",
+    icon: Dumbbell,
+    exact: true,
+    activePrefixes: ["/bulk/workout/"],
+  },
   { to: "/bulk/prs", label: "PRs", icon: Trophy, exact: false },
-  { to: "/bulk/exercises", label: "More", icon: MoreHorizontal, exact: false },
+  { to: "/bulk/training/history", label: "History", icon: History, exact: false },
+  {
+    to: "/bulk/training/more",
+    label: "More",
+    icon: MoreHorizontal,
+    exact: false,
+    activePrefixes: ["/bulk/exercises"],
+  },
 ] as const;
 
 const MEALS_NAV = [
   { to: "/bulk/meals", label: "Today", icon: Utensils, exact: true },
-  { to: "/bulk/meals", hash: "presets", label: "Presets", icon: Salad, exact: true },
-  { to: "/bulk/history", label: "History", icon: History, exact: false },
-  { to: "/bulk/more", label: "More", icon: MoreHorizontal, exact: false },
+  { to: "/bulk/meals/presets", label: "Presets", icon: Salad, exact: false },
+  {
+    to: "/bulk/meals/history",
+    label: "History",
+    icon: History,
+    exact: false,
+    activePrefixes: ["/bulk/history"],
+  },
+  { to: "/bulk/meals/more", label: "More", icon: MoreHorizontal, exact: false },
 ] as const;
 
 const GOAL_NAV = [
@@ -51,7 +69,7 @@ const GOAL_NAV = [
 ] as const;
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const { pathname, hash } = useLocation();
+  const { pathname } = useLocation();
   const navigationPending = useRouterState({ select: (router) => router.status === "pending" });
   const isChallenge = pathname.startsWith("/challenge");
   const { data: memberships } = useMemberships();
@@ -155,14 +173,14 @@ export function AppShell({ children }: { children: ReactNode }) {
         >
           {nav.map((item) => {
             const { to, label, icon: Icon, exact } = item;
-            const itemHash = "hash" in item ? item.hash : undefined;
-            const key = `${to}${itemHash ? `#${itemHash}` : ""}`;
-            const selected = pathname === to && (itemHash ? hash === itemHash : !hash);
+            const activePrefixes = "activePrefixes" in item ? item.activePrefixes : [];
+            const selected =
+              (exact ? pathname === to : pathname.startsWith(to)) ||
+              activePrefixes.some((prefix) => pathname.startsWith(prefix));
             return (
               <Link
-                key={key}
+                key={to}
                 to={to}
-                {...(itemHash ? { hash: itemHash } : {})}
                 preload="intent"
                 activeOptions={{ exact }}
                 onPointerEnter={() => prefetchDestination(to)}

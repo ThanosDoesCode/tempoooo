@@ -165,15 +165,17 @@ test("legacy My Bulk exercise order is stored separately without changing canoni
 });
 
 test("training UI supports generated, preset and empty custom paths without replacing legacy logging", async () => {
-  const [component, editor, picker, route, query, migration, editMigration] = await Promise.all([
-    read("src/components/TrainingPlanSetup.tsx"),
-    read("src/components/TrainingPlanEditor.tsx"),
-    read("src/components/PlanExercisePicker.tsx"),
-    read("src/routes/_authenticated/bulk/training.tsx"),
-    read("src/lib/training-plans-query.ts"),
-    read("supabase/migrations/20260905180000_bulk_training_plans.sql"),
-    read("supabase/migrations/20260906120000_edit_bulk_training_plans.sql"),
-  ]);
+  const [component, editor, picker, route, moreRoute, query, migration, editMigration] =
+    await Promise.all([
+      read("src/components/TrainingPlanSetup.tsx"),
+      read("src/components/TrainingPlanEditor.tsx"),
+      read("src/components/PlanExercisePicker.tsx"),
+      read("src/routes/_authenticated/bulk/training.tsx"),
+      read("src/routes/_authenticated/bulk/training_.more.tsx"),
+      read("src/lib/training-plans-query.ts"),
+      read("supabase/migrations/20260905180000_bulk_training_plans.sql"),
+      read("supabase/migrations/20260906120000_edit_bulk_training_plans.sql"),
+    ]);
   assert.match(component, /Your recommended plan/);
   assert.match(component, /See Other Plans/);
   assert.match(component, /Tempo plans/);
@@ -182,9 +184,11 @@ test("training UI supports generated, preset and empty custom paths without repl
   assert.match(component, /Works with your equipment/);
   assert.match(query, /instantiate_bulk_training_plan/);
   assert.match(query, /create_empty_bulk_training_plan/);
-  assert.match(route, /TrainingPlanSetup/);
   assert.match(route, /TrainingPlanOverview/);
   assert.match(route, /TrainingSession/);
+  assert.doesNotMatch(route, /<TrainingPlanSetup|TrainingPlanEditor/);
+  assert.match(moreRoute, /TrainingPlanSetup/);
+  assert.match(moreRoute, /TrainingPlanEditor/);
   assert.doesNotMatch(migration, /UPDATE public\.bulk_workouts|DELETE FROM public\.bulk_workouts/);
   assert.match(editor, /Save Changes/);
   assert.match(editor, /Add Workout Day/);
