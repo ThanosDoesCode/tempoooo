@@ -14,6 +14,7 @@ import { userFacingError } from "@/lib/network-errors";
 import { useAppData, useBulkMeta } from "@/lib/store";
 import { useActiveTrainingPlan } from "@/lib/training-plans-query";
 import { toast } from "sonner";
+import { bulkPlanModeFor, useMemberships } from "@/lib/bulk-access";
 
 export const Route = createFileRoute("/_authenticated/bulk/training_/more")({
   head: () => ({ meta: [{ title: "Tempo" }] }),
@@ -23,13 +24,23 @@ export const Route = createFileRoute("/_authenticated/bulk/training_/more")({
 function TrainingMorePage() {
   const data = useAppData();
   const { bulkId } = useBulkMeta();
+  const memberships = useMemberships();
   const queryClient = useQueryClient();
-  const usesPlanSetup = !!data?.targets.trainingSetupPreference;
+  const planMode = bulkPlanModeFor(memberships.data, bulkId);
+  const usesPlanSetup = planMode === "public";
   const activePlan = useActiveTrainingPlan(usesPlanSetup ? bulkId : null);
   const activeSession = useActiveBulkTrainingSession(usesPlanSetup ? bulkId : null);
   const coverage = useBulkMuscleCoverage(usesPlanSetup ? (activePlan.data ?? null) : null);
   const [editing, setEditing] = useState(false);
   const [switching, setSwitching] = useState(false);
+
+  if (planMode === "none") {
+    return (
+      <AppShell>
+        <div className="h-40 animate-pulse rounded-2xl bg-card" />
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell>

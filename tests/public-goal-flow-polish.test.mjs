@@ -76,8 +76,10 @@ test("inactive public Goal access is hidden without changing legacy My Bulk", as
 });
 
 test("public Meals never falls back to legacy presets and future dates are read-only", async () => {
-  const [today, presets, legacy, query, migration] = await Promise.all([
+  const [today, mealsRoute, goalToday, presets, legacy, query, migration] = await Promise.all([
     read("src/components/BulkNutritionLog.tsx"),
+    read("src/routes/_authenticated/bulk/meals.tsx"),
+    read("src/routes/_authenticated/bulk/index.tsx"),
     read("src/lib/bulk-meal-presets-query.ts"),
     read("src/lib/meals.ts"),
     read("src/lib/bulk-nutrition-query.ts"),
@@ -90,6 +92,16 @@ test("public Meals never falls back to legacy presets and future dates are read-
     assert.doesNotMatch(today, new RegExp(legacyName));
   assert.match(presets, /\.eq\("bulk_profile_id", bulkProfileId\)/);
   assert.match(legacy, /Beef day/);
+  assert.match(mealsRoute, /bulkPlanModeFor\(memberships\.data, bulkId\)/);
+  assert.match(mealsRoute, /publicNutrition = planMode === "public"/);
+  assert.doesNotMatch(mealsRoute, /publicNutrition = !!data\?\.targets\.trainingSetupPreference/);
+  assert.match(mealsRoute, /publicNutrition \? \([\s\S]*<BulkNutritionLog/);
+  assert.match(goalToday, /const isPublicGoal = planMode === "public"/);
+  assert.match(goalToday, /const plan = isPublicGoal \? undefined : mealPlan/);
+  assert.match(
+    goalToday,
+    /isPublicGoal \? \([\s\S]*Open Meals Today[\s\S]*\) : \([\s\S]*MEAL_PLANS\.map/,
+  );
   assert.match(today, /const isFuture = selectedDate > today/);
   assert.match(today, /Future days are view-only\. Come back on this date to log meals\./);
   assert.match(today, /isFuture \? null : editor/);

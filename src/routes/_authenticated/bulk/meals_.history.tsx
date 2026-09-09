@@ -9,6 +9,7 @@ import { useBulkNutritionDay } from "@/lib/bulk-nutrition-query";
 import { iso } from "@/lib/calc";
 import { userFacingError } from "@/lib/network-errors";
 import { useAppData, useBulkMeta } from "@/lib/store";
+import { bulkPlanModeFor, useMemberships } from "@/lib/bulk-access";
 
 export const Route = createFileRoute("/_authenticated/bulk/meals_/history")({
   head: () => ({ meta: [{ title: "Tempo" }] }),
@@ -21,11 +22,13 @@ const macro = (value: number | undefined, unit: string) =>
 function MealsHistoryPage() {
   const data = useAppData();
   const { bulkId } = useBulkMeta();
+  const memberships = useMemberships();
   const today = iso(new Date());
   const [date, setDate] = useState(() => iso(addDays(new Date(), -1)));
-  const isPublic = !!data?.targets.trainingSetupPreference;
+  const planMode = bulkPlanModeFor(memberships.data, bulkId);
+  const isPublic = planMode === "public";
   const nutrition = useBulkNutritionDay(isPublic ? bulkId : null, date);
-  const legacyDay = data?.days[date];
+  const legacyDay = planMode === "legacy" ? data?.days[date] : undefined;
   const totals = nutrition.data?.day
     ? nutritionSummary(nutrition.data.entries, nutrition.data.day.targets)
     : null;
@@ -68,7 +71,9 @@ function MealsHistoryPage() {
         </button>
       </div>
 
-      {isPublic && nutrition.isLoading ? (
+      {planMode === "none" ? (
+        <div className="h-40 animate-pulse rounded-2xl bg-card" aria-label="Loading history" />
+      ) : isPublic && nutrition.isLoading ? (
         <div className="h-40 animate-pulse rounded-2xl bg-card" />
       ) : isPublic && nutrition.error ? (
         <DataError

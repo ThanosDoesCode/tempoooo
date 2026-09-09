@@ -6,6 +6,7 @@ import { Card, SectionTitle } from "@/components/ui-kit";
 import { iso } from "@/lib/calc";
 import { mealPlan } from "@/lib/meals";
 import { useAppData, useBulkMeta } from "@/lib/store";
+import { bulkPlanModeFor, useMemberships } from "@/lib/bulk-access";
 import { useState } from "react";
 
 export const Route = createFileRoute("/_authenticated/bulk/meals")({
@@ -16,10 +17,12 @@ export const Route = createFileRoute("/_authenticated/bulk/meals")({
 function BulkMealsPage() {
   const { bulkId } = useBulkMeta();
   const data = useAppData();
+  const memberships = useMemberships();
   const [selectedDate, setSelectedDate] = useState(() => iso(new Date()));
-  const publicNutrition = !!data?.targets.trainingSetupPreference;
-  const legacyDay = data?.days[selectedDate];
-  const legacyPlan = mealPlan(legacyDay?.mealPlan);
+  const planMode = bulkPlanModeFor(memberships.data, bulkId);
+  const publicNutrition = planMode === "public";
+  const legacyDay = planMode === "legacy" ? data?.days[selectedDate] : undefined;
+  const legacyPlan = legacyDay ? mealPlan(legacyDay.mealPlan) : undefined;
 
   return (
     <AppShell>
@@ -31,7 +34,9 @@ function BulkMealsPage() {
             : "Today's saved nutrition and meal plan."
         }
       />
-      {bulkId && publicNutrition && data ? (
+      {!bulkId || !data || planMode === "none" ? (
+        <div className="h-40 animate-pulse rounded-2xl bg-card" aria-label="Loading meals" />
+      ) : publicNutrition ? (
         <BulkNutritionLog
           bulkProfileId={bulkId}
           selectedDate={selectedDate}
@@ -43,7 +48,7 @@ function BulkMealsPage() {
             fat: data.targets.fat,
           }}
         />
-      ) : bulkId && data ? (
+      ) : (
         <Card>
           <SectionTitle>Today&apos;s nutrition</SectionTitle>
           <div className="mt-2 grid grid-cols-2 gap-3 text-sm">
@@ -59,7 +64,7 @@ function BulkMealsPage() {
             <Link to="/bulk">Open daily log</Link>
           </Button>
         </Card>
-      ) : null}
+      )}
     </AppShell>
   );
 }

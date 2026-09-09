@@ -88,7 +88,7 @@ test("refresh revalidates data without a destructive browser reload", async () =
   assert.doesNotMatch(await read("src/routes/index.tsx"), /location\.reload/);
 });
 
-test("Tempo navigation exposes the four product areas only after persisted Goal activation", async () => {
+test("Tempo navigation exposes one five-item bottom bar after persisted Goal activation", async () => {
   const manifest = JSON.parse(await read("public/manifest.webmanifest"));
   assert.equal(manifest.name, "Tempo");
   assert.equal(manifest.short_name, "Tempo");
@@ -110,16 +110,17 @@ test("Tempo navigation exposes the four product areas only after persisted Goal 
   assert.match(index, /data\.session \? "\/challenge" : "\/auth"/);
   assert.doesNotMatch(index, /window\.location/);
   const shell = await read("src/components/AppShell.tsx");
-  for (const label of ["Challenge", "Training", "Meals", "Goal"])
+  for (const label of ["Challenge", "Training", "Meals", "Goal", "Profile"])
     assert.match(shell, new RegExp(`label: "${label}"`));
-  assert.match(shell, /item\.area !== "challenge" && !hasBulk \? null/);
+  assert.match(shell, /item\.area === "challenge" \|\| item\.area === "profile" \|\| hasBulk/);
   assert.match(shell, /aria-label=\{item\.label\}/);
   assert.match(shell, /min-h-11/);
   assert.doesNotMatch(shell, /label: "Bulk"/);
   assert.doesNotMatch(shell, /disabled[\s\S]{0,120}>\s*Bulk\s*</);
   assert.match(shell, /const area = productAreaForPath\(pathname\)/);
-  assert.match(shell, /aria-current=\{area === "profile" \? "page" : undefined\}/);
-  assert.match(shell, /\{nav \? \([\s\S]*<nav[\s\S]*\) : null\}/);
+  assert.match(shell, /const selected = area === item\.area/);
+  assert.equal((shell.match(/fixed inset-x-0 bottom-0/g) ?? []).length, 1);
+  assert.doesNotMatch(shell, /sticky top-0/);
   assert.doesNotMatch(shell, /pendingTo|setPendingTo|selectedArea|activeProduct/);
   assert.match(shell, /router\.status === "pending"/);
   assert.doesNotMatch(shell, /Sharing|Shared Bulk|\/bulk\/access/);
@@ -169,7 +170,7 @@ test("each product area has four contextual destinations and legacy/public data 
   assert.match(today, /Choose training plan/);
   assert.match(today, /activePlan\.data\.days\.map/);
   assert.match(today, /planDay\.name/);
-  assert.match(today, /usesPublicTrainingPlan[\s\S]*WORKOUT_TYPES\.map/);
+  assert.match(today, /isPublicGoal[\s\S]*WORKOUT_TYPES\.map/);
 
   assert.match(shell, /hasBulk/);
   assert.doesNotMatch(shell, /PUBLIC_BULK_NAV|LEGACY_BULK_NAV/);

@@ -234,6 +234,6 @@ test("the five-step UI submits one atomic RPC and does not expose Bulk early", a
   assert.match(onboarding, /bulkOwnerQueryOptions/);
   assert.match(profile, /Start My Goal/);
   assert.match(guard, /redirect\(\{ to: "\/bulk-onboarding", replace: true \}\)/);
-  assert.match(shell, /item\.area !== "challenge" && !hasBulk \? null/);
+  assert.match(shell, /item\.area === "challenge" \|\| item\.area === "profile" \|\| hasBulk/);
   assert.doesNotMatch(shell, /label: "Bulk"/);
 });

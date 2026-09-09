@@ -15,15 +15,29 @@ export type Membership = {
 export const activeBulkMemberships = (memberships: Membership[] | undefined) =>
   memberships?.filter((membership) => membership.is_active !== false) ?? [];
 
+export const bulkMembershipFor = (
+  memberships: Membership[] | undefined,
+  bulkProfileId: string | null,
+) => memberships?.find((membership) => membership.bulk_profile_id === bulkProfileId);
+
+export type BulkPlanMode = "public" | "legacy" | "none";
+
+export const bulkPlanModeFor = (
+  memberships: Membership[] | undefined,
+  bulkProfileId: string | null,
+): BulkPlanMode => {
+  const membership = bulkMembershipFor(memberships, bulkProfileId);
+  if (!membership || membership.is_active === false) return "none";
+  return membership.is_public ? "public" : "legacy";
+};
+
 export const bulkOwnerQueryOptions = () =>
   queryOptions({
     queryKey: ["bulk-memberships"],
     queryFn: async (): Promise<Membership[]> => {
       const { data, error } = await supabase
         .from("bulk_members")
-        .select(
-          "bulk_profile_id, role, bulk_profiles(owner_id, allow_editor, goal_status, bulk_targets(payload))",
-        );
+        .select("bulk_profile_id, role, bulk_profiles(owner_id, allow_editor, goal_status)");
       if (error) throw error;
       return (data ?? [])
         .filter((r) => r.role === "owner")
@@ -32,19 +46,13 @@ export const bulkOwnerQueryOptions = () =>
             owner_id: string;
             allow_editor: boolean;
             goal_status: "active" | "inactive" | null;
-            bulk_targets:
-              { payload: Record<string, unknown> } | { payload: Record<string, unknown> }[] | null;
           } | null;
-          const targets = Array.isArray(profile?.bulk_targets)
-            ? profile.bulk_targets[0]
-            : profile?.bulk_targets;
           return {
             bulk_profile_id: r.bulk_profile_id,
             role: r.role as BulkRole,
             owner_id: profile?.owner_id ?? "",
             allow_editor: profile?.allow_editor ?? false,
-            is_public:
-              profile?.goal_status != null || !!targets?.payload?.["trainingSetupPreference"],
+            is_public: profile?.goal_status != null,
             is_active: profile?.goal_status !== "inactive",
           };
         });

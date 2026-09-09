@@ -12,6 +12,7 @@ import {
   derivePublicPersonalRecords,
   type PersonalRecord,
 } from "@/lib/personal-records";
+import { bulkPlanModeFor, useMemberships } from "@/lib/bulk-access";
 
 export const Route = createFileRoute("/_authenticated/bulk/prs")({
   validateSearch: z.object({ record: z.string().optional() }),
@@ -25,9 +26,11 @@ const number = (value: number | null) =>
 function PersonalRecordsPage() {
   const data = useAppData();
   const { bulkId } = useBulkMeta();
+  const memberships = useMemberships();
   const navigate = useNavigate();
   const { record: selectedKey } = Route.useSearch();
-  const isPublic = !!data?.targets.trainingSetupPreference;
+  const planMode = bulkPlanModeFor(memberships.data, bulkId);
+  const isPublic = planMode === "public";
   const sessions = useQuery({
     queryKey: ["bulk-personal-records", bulkId],
     enabled: isPublic && !!bulkId,
@@ -36,11 +39,12 @@ function PersonalRecordsPage() {
     retry: shouldRetryRead,
     retryDelay: readRetryDelay,
   });
-  const records = data
-    ? isPublic
-      ? derivePublicPersonalRecords(sessions.data ?? [])
-      : deriveLegacyPersonalRecords(data)
-    : [];
+  const records =
+    data && planMode !== "none"
+      ? isPublic
+        ? derivePublicPersonalRecords(sessions.data ?? [])
+        : deriveLegacyPersonalRecords(data)
+      : [];
   const selected = records.find((item) => item.key === selectedKey);
 
   return (

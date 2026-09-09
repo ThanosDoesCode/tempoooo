@@ -18,6 +18,7 @@ import {
 } from "@/lib/training";
 import { useCompletedBulkTrainingSessions } from "@/lib/bulk-training-sessions";
 import { userFacingError } from "@/lib/network-errors";
+import { bulkPlanModeFor, useMemberships } from "@/lib/bulk-access";
 
 export const Route = createFileRoute("/_authenticated/bulk/history")({
   head: () => ({
@@ -32,13 +33,15 @@ export const Route = createFileRoute("/_authenticated/bulk/history")({
 function BulkHistoryPage() {
   const data = useAppData();
   const { bulkId } = useBulkMeta();
+  const memberships = useMemberships();
+  const planMode = bulkPlanModeFor(memberships.data, bulkId);
   const today = iso(new Date());
   const [date, setDate] = useState(today);
   const from = new Date(`${date}T00:00:00`).toISOString();
   const to = new Date(`${iso(addDays(parseISO(date), 1))}T00:00:00`).toISOString();
   const publicSessions = useCompletedBulkTrainingSessions(bulkId, from, to);
 
-  if (!data) {
+  if (!data || planMode === "none") {
     return (
       <AppShell>
         <div className="h-40 animate-pulse rounded-2xl bg-card" />
@@ -46,7 +49,7 @@ function BulkHistoryPage() {
     );
   }
 
-  if (data.targets.trainingSetupPreference) {
+  if (planMode === "public") {
     return <Navigate to="/bulk/training/history" replace />;
   }
 

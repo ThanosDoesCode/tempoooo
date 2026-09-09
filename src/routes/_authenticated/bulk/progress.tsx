@@ -38,7 +38,7 @@ import {
 import { useActions, useAppData, useBulkMeta } from "@/lib/store";
 import { optimizeBulkPhoto } from "@/lib/challenge-evidence";
 import { ALL_EXERCISES, exerciseLabel, type AppData, type PhotoSet } from "@/lib/types";
-import { useBulkAdmin } from "@/lib/bulk-access";
+import { bulkPlanModeFor, useBulkAdmin, useMemberships } from "@/lib/bulk-access";
 import { PublicBulkProgress } from "@/components/PublicBulkProgress";
 
 export const Route = createFileRoute("/_authenticated/bulk/progress")({
@@ -64,8 +64,10 @@ const MONTHS = Array.from({ length: 13 }, (_, i) => addMonths(new Date(2026, 8, 
 function ProgressPage() {
   const data = useAppData();
   const { bulkId } = useBulkMeta();
+  const memberships = useMemberships();
+  const planMode = bulkPlanModeFor(memberships.data, bulkId);
 
-  if (!data) {
+  if (!data || planMode === "none") {
     return (
       <AppShell>
         <div className="h-40 animate-pulse rounded-2xl bg-card" />
@@ -73,7 +75,7 @@ function ProgressPage() {
     );
   }
 
-  if (data.targets.trainingSetupPreference && bulkId) {
+  if (planMode === "public" && bulkId) {
     return (
       <AppShell>
         <PageHeader

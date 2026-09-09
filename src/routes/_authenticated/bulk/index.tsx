@@ -2,12 +2,14 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { format } from "date-fns";
 import { useMemo, useRef, useState } from "react";
 import { AppShell, PageHeader } from "@/components/AppShell";
+import { Button } from "@/components/ui/button";
 import { Bar, Card, Chip, Field, Note, NumInput, SectionTitle, Stat } from "@/components/ui-kit";
 import { bulkStatus, dayCompletion, fmt, iso, signed, weekDays, weekStartOf } from "@/lib/calc";
 import { MEAL_PLANS, mealPlan, mealPlanSnapshot } from "@/lib/meals";
 import { useActions, useAppData, useBulkMeta } from "@/lib/store";
 import { RANGES, type MealPlanId, type WorkoutType } from "@/lib/types";
 import { useActiveTrainingPlan } from "@/lib/training-plans-query";
+import { bulkPlanModeFor, useMemberships } from "@/lib/bulk-access";
 
 export const Route = createFileRoute("/_authenticated/bulk/")({
   head: () => ({
@@ -32,6 +34,7 @@ const WORKOUT_TYPES: WorkoutType[] = ["Chest & Back", "Legs", "Arms & Shoulders"
 function TodayPage() {
   const data = useAppData();
   const { bulkId } = useBulkMeta();
+  const memberships = useMemberships();
   const { saveDay } = useActions();
   const today = iso(new Date());
   const [sync, setSync] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -39,8 +42,9 @@ function TodayPage() {
 
   const day = data?.days[today];
   const targets = data?.targets;
-  const usesPublicTrainingPlan = !!targets?.trainingSetupPreference;
-  const activePlan = useActiveTrainingPlan(usesPublicTrainingPlan ? bulkId : null);
+  const planMode = bulkPlanModeFor(memberships.data, bulkId);
+  const isPublicGoal = planMode === "public";
+  const activePlan = useActiveTrainingPlan(isPublicGoal ? bulkId : null);
 
   const weekCount = useMemo(() => {
     if (!data) return 0;
@@ -49,7 +53,7 @@ function TodayPage() {
 
   const status = useMemo(() => (data ? bulkStatus(data) : null), [data]);
 
-  if (!data || !targets || !status) {
+  if (!data || !targets || !status || planMode === "none") {
     return (
       <AppShell>
         <div className="h-40 animate-pulse rounded-2xl bg-card" />
@@ -97,7 +101,7 @@ function TodayPage() {
     });
   };
 
-  const plan = mealPlan(day?.mealPlan);
+  const plan = isPublicGoal ? undefined : mealPlan(day?.mealPlan);
   const completion = dayCompletion({ ...day, date: today }, !!data.workouts[today]);
   const toneClass =
     status.tone === "good"
@@ -118,7 +122,7 @@ function TodayPage() {
       <div className="card-surface fade-up mb-2 flex items-center justify-between gap-3 p-4">
         <div>
           <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-            {usesPublicTrainingPlan ? "Goal status" : "Bulk status"}
+            {isPublicGoal ? "Goal status" : "Bulk status"}
           </p>
           <p className={`mt-1 text-2xl font-semibold ${toneClass}`}>{status.label}</p>
         </div>
@@ -200,135 +204,166 @@ function TodayPage() {
           </div>
         </Card>
 
-        <Card>
-          <SectionTitle>Today&apos;s meal plan</SectionTitle>
-          <div className="flex flex-wrap gap-1.5">
-            {MEAL_PLANS.map((m) => (
-              <Chip key={m.id} active={day?.mealPlan === m.id} onClick={() => pickPlan(m.id)}>
-                {m.short}
-              </Chip>
-            ))}
-          </div>
-          {plan ? (
-            <div className="mt-3 rounded-xl bg-elevated/70 p-3 text-xs leading-relaxed">
-              <p className="text-sm font-semibold">{plan.name}</p>
-              {plan.base.length ? (
-                <>
+        {isPublicGoal ? (
+          <Card>
+            <SectionTitle>Meals</SectionTitle>
+            <p className="text-sm text-muted-foreground">
+              Log today&apos;s meals from your own presets and see what remains against your Goal
+              targets.
+            </p>
+            <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+              <p>Calories · {targets.calories} kcal</p>
+              <p>Protein · {targets.protein} g</p>
+              <p>Carbs · {targets.carbs} g</p>
+              <p>Fat · {targets.fat} g</p>
+            </div>
+            <Button asChild className="mt-4 min-h-11 w-full">
+              <Link to="/bulk/meals">Open Meals Today</Link>
+            </Button>
+          </Card>
+        ) : (
+          <>
+            <Card>
+              <SectionTitle>Today&apos;s meal plan</SectionTitle>
+              <div className="flex flex-wrap gap-1.5">
+                {MEAL_PLANS.map((m) => (
+                  <Chip key={m.id} active={day?.mealPlan === m.id} onClick={() => pickPlan(m.id)}>
+                    {m.short}
+                  </Chip>
+                ))}
+              </div>
+              {plan ? (
+                <div className="mt-3 rounded-xl bg-elevated/70 p-3 text-xs leading-relaxed">
+                  <p className="text-sm font-semibold">{plan.name}</p>
+                  {plan.base.length ? (
+                    <>
+                      <p className="mt-2 text-[10px] uppercase tracking-wider text-muted-foreground">
+                        Daily base
+                      </p>
+                      <ul className="mt-0.5 space-y-0.5 text-muted-foreground">
+                        {plan.base.map((b) => (
+                          <li key={b}>· {b}</li>
+                        ))}
+                      </ul>
+                    </>
+                  ) : null}
                   <p className="mt-2 text-[10px] uppercase tracking-wider text-muted-foreground">
-                    Daily base
+                    Main meals
                   </p>
                   <ul className="mt-0.5 space-y-0.5 text-muted-foreground">
-                    {plan.base.map((b) => (
+                    {plan.meals.map((b) => (
                       <li key={b}>· {b}</li>
                     ))}
                   </ul>
-                </>
+                  {plan.extras.length ? (
+                    <>
+                      <p className="mt-2 text-[10px] uppercase tracking-wider text-muted-foreground">
+                        Extra
+                      </p>
+                      <ul className="mt-0.5 space-y-0.5 text-muted-foreground">
+                        {plan.extras.map((item) => (
+                          <li key={item}>· {item}</li>
+                        ))}
+                      </ul>
+                    </>
+                  ) : null}
+                  {plan.macros ? (
+                    <p className="num mt-2 font-medium">
+                      Daily total: ≈ {plan.macros.calories} kcal · ~{plan.macros.protein} g protein
+                      · ~{plan.macros.carbs} g carbs · ~{plan.macros.fat} g fat
+                    </p>
+                  ) : null}
+                </div>
               ) : null}
-              <p className="mt-2 text-[10px] uppercase tracking-wider text-muted-foreground">
-                Main meals
-              </p>
-              <ul className="mt-0.5 space-y-0.5 text-muted-foreground">
-                {plan.meals.map((b) => (
-                  <li key={b}>· {b}</li>
-                ))}
-              </ul>
-              {plan.extras.length ? (
-                <>
-                  <p className="mt-2 text-[10px] uppercase tracking-wider text-muted-foreground">
-                    Extra
-                  </p>
-                  <ul className="mt-0.5 space-y-0.5 text-muted-foreground">
-                    {plan.extras.map((item) => (
-                      <li key={item}>· {item}</li>
-                    ))}
-                  </ul>
-                </>
-              ) : null}
-              {plan.macros ? (
-                <p className="num mt-2 font-medium">
-                  Daily total: ≈ {plan.macros.calories} kcal · ~{plan.macros.protein} g protein · ~
-                  {plan.macros.carbs} g carbs · ~{plan.macros.fat} g fat
-                </p>
-              ) : null}
-            </div>
-          ) : null}
-        </Card>
+            </Card>
 
-        <Card>
-          <SectionTitle>Nutrition</SectionTitle>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Calories (kcal)" hint="target 2,900">
-              <NumInput
-                value={day?.calories}
-                onChange={(v) => set({ calories: v })}
-                step="10"
-                placeholder="2900"
-              />
-            </Field>
-            <Field label="Protein (g)" hint="125 to 140 g">
-              <NumInput
-                value={day?.protein}
-                onChange={(v) => set({ protein: v })}
-                step="1"
-                placeholder="130"
-              />
-            </Field>
-            <Field label="Carbs (g)" hint="around 380 g">
-              <NumInput
-                value={day?.carbs}
-                onChange={(v) => set({ carbs: v })}
-                step="1"
-                placeholder="380"
-              />
-            </Field>
-            <Field label="Fat (g)" hint="80 to 90 g">
-              <NumInput
-                value={day?.fat}
-                onChange={(v) => set({ fat: v })}
-                step="1"
-                placeholder="88"
-              />
-            </Field>
-            <Field label="Water (L)" hint="3 L">
-              <NumInput value={day?.water} onChange={(v) => set({ water: v })} placeholder="3" />
-            </Field>
-            <Field label="Creatine (5 g)">
-              <div className="mt-1 flex gap-1.5">
-                <Chip active={day?.creatine === true} onClick={() => set({ creatine: true })}>
-                  Taken
-                </Chip>
-                <Chip active={day?.creatine === false} onClick={() => set({ creatine: false })}>
-                  No
-                </Chip>
+            <Card>
+              <SectionTitle>Nutrition</SectionTitle>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Calories (kcal)" hint="target 2,900">
+                  <NumInput
+                    value={day?.calories}
+                    onChange={(v) => set({ calories: v })}
+                    step="10"
+                    placeholder="2900"
+                  />
+                </Field>
+                <Field label="Protein (g)" hint="125 to 140 g">
+                  <NumInput
+                    value={day?.protein}
+                    onChange={(v) => set({ protein: v })}
+                    step="1"
+                    placeholder="130"
+                  />
+                </Field>
+                <Field label="Carbs (g)" hint="around 380 g">
+                  <NumInput
+                    value={day?.carbs}
+                    onChange={(v) => set({ carbs: v })}
+                    step="1"
+                    placeholder="380"
+                  />
+                </Field>
+                <Field label="Fat (g)" hint="80 to 90 g">
+                  <NumInput
+                    value={day?.fat}
+                    onChange={(v) => set({ fat: v })}
+                    step="1"
+                    placeholder="88"
+                  />
+                </Field>
+                <Field label="Water (L)" hint="3 L">
+                  <NumInput
+                    value={day?.water}
+                    onChange={(v) => set({ water: v })}
+                    placeholder="3"
+                  />
+                </Field>
+                <Field label="Creatine (5 g)">
+                  <div className="mt-1 flex gap-1.5">
+                    <Chip active={day?.creatine === true} onClick={() => set({ creatine: true })}>
+                      Taken
+                    </Chip>
+                    <Chip active={day?.creatine === false} onClick={() => set({ creatine: false })}>
+                      No
+                    </Chip>
+                  </div>
+                </Field>
               </div>
-            </Field>
-          </div>
-          <div className="mt-4 space-y-2.5">
-            <Bar
-              label="Calories"
-              value={day?.calories}
-              target={targets.calories}
-              unit="kcal"
-              range={RANGES.calories}
-            />
-            <Bar
-              label="Protein"
-              value={day?.protein}
-              target={targets.protein}
-              unit="g"
-              range={RANGES.protein}
-            />
-            <Bar
-              label="Carbs"
-              value={day?.carbs}
-              target={targets.carbs}
-              unit="g"
-              range={RANGES.carbs}
-            />
-            <Bar label="Fat" value={day?.fat} target={targets.fat} unit="g" range={RANGES.fat} />
-            <Bar label="Water" value={day?.water} target={targets.water} unit="L" />
-          </div>
-        </Card>
+              <div className="mt-4 space-y-2.5">
+                <Bar
+                  label="Calories"
+                  value={day?.calories}
+                  target={targets.calories}
+                  unit="kcal"
+                  range={RANGES.calories}
+                />
+                <Bar
+                  label="Protein"
+                  value={day?.protein}
+                  target={targets.protein}
+                  unit="g"
+                  range={RANGES.protein}
+                />
+                <Bar
+                  label="Carbs"
+                  value={day?.carbs}
+                  target={targets.carbs}
+                  unit="g"
+                  range={RANGES.carbs}
+                />
+                <Bar
+                  label="Fat"
+                  value={day?.fat}
+                  target={targets.fat}
+                  unit="g"
+                  range={RANGES.fat}
+                />
+                <Bar label="Water" value={day?.water} target={targets.water} unit="L" />
+              </div>
+            </Card>
+          </>
+        )}
 
         <Card>
           <SectionTitle>Activity</SectionTitle>
@@ -374,7 +409,7 @@ function TodayPage() {
           </Field>
         </Card>
 
-        {usesPublicTrainingPlan ? (
+        {isPublicGoal ? (
           <Card>
             <SectionTitle>Training</SectionTitle>
             {activePlan.isLoading ? (

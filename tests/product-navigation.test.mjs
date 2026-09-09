@@ -5,7 +5,7 @@ import { PRODUCT_LANDING_ROUTES, productAreaForPath } from "../src/lib/product-n
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
-test("top-level products navigate to their real landing routes", () => {
+test("persistent products navigate to their real landing routes", () => {
   assert.deepEqual(PRODUCT_LANDING_ROUTES, {
     challenge: "/challenge",
     training: "/bulk/training",
@@ -15,7 +15,7 @@ test("top-level products navigate to their real landing routes", () => {
   });
 });
 
-test("top product and contextual navigation derive from the rendered route", async () => {
+test("primary and in-page navigation derive from the rendered route", async () => {
   const shell = await read("src/components/AppShell.tsx");
   assert.match(shell, /const area = productAreaForPath\(pathname\)/);
   assert.match(shell, /area === "challenge"[\s\S]*CHALLENGE_NAV/);
@@ -58,14 +58,18 @@ test("deep routes select the correct parent product", () => {
     assert.equal(productAreaForPath(path), null, path);
 });
 
-test("top links preserve browser history and activation visibility rules", async () => {
+test("bottom links preserve browser history and activation visibility rules", async () => {
   const shell = await read("src/components/AppShell.tsx");
   for (const area of ["challenge", "training", "meals", "goal"])
     assert.match(shell, new RegExp(`PRODUCT_LANDING_ROUTES\\.${area}`));
-  assert.match(shell, /to=\{PRODUCT_LANDING_ROUTES\.profile\}/);
-  assert.match(shell, /item\.area !== "challenge" && !hasBulk \? null/);
+  assert.match(shell, /to: PRODUCT_LANDING_ROUTES\.profile/);
+  assert.match(shell, /const PRIMARY_NAV = \[/);
+  assert.match(shell, /label: "Challenge"[\s\S]*label: "Profile"/);
+  assert.match(shell, /item\.area === "challenge" \|\| item\.area === "profile" \|\| hasBulk/);
   assert.match(shell, /<Link[\s\S]*to=\{item\.to\}/);
   assert.doesNotMatch(shell, /to=\{item\.to\}[\s\S]{0,200}replace/);
+  assert.match(shell, /aria-label="Primary"[\s\S]*fixed inset-x-0 bottom-0/);
+  assert.doesNotMatch(shell, /sticky top-0/);
 });
 
 test("Profile is selected explicitly and has no contextual product navigation", async () => {
@@ -73,11 +77,53 @@ test("Profile is selected explicitly and has no contextual product navigation", 
   assert.equal(productAreaForPath("/profile"), "profile");
   assert.equal(productAreaForPath("/profile/preferences"), "profile");
   assert.notEqual(productAreaForPath("/profile"), "challenge");
-  assert.match(shell, /aria-current=\{area === "profile" \? "page" : undefined\}/);
-  assert.match(shell, /area === "profile" \? "bg-elevated text-primary"/);
+  assert.match(shell, /const selected = area === item\.area/);
   assert.match(shell, /area === "goal"[\s\S]*\? GOAL_NAV[\s\S]*: null/);
-  assert.match(shell, /\{nav \? \([\s\S]*<nav[\s\S]*\) : null\}/);
+  assert.match(shell, /\{nav \? \([\s\S]*aria-label=\{`\$\{area\} sections`\}/);
   assert.equal(productAreaForPath("/challenge"), "challenge");
+});
+
+test("only one persistent bar exists and secondary navigation stays in page flow", async () => {
+  const shell = await read("src/components/AppShell.tsx");
+  assert.equal((shell.match(/fixed inset-x-0 bottom-0/g) ?? []).length, 1);
+  assert.match(shell, /aria-label="Primary"/);
+  assert.match(shell, /aria-label=\{`\$\{area\} sections`\}[\s\S]*mb-4 overflow-x-auto/);
+  assert.doesNotMatch(shell, /sticky top-0/);
+  assert.doesNotMatch(shell, /aria-label=\{`\$\{area\} sections`\}[\s\S]{0,160}fixed/);
+});
+
+test("route mapping cannot mutate legacy My Bulk fixtures", () => {
+  const legacy = {
+    workouts: [{ date: "2026-08-31", name: "Chest & Back", volume: 832 }],
+    exercises: [{ id: "incline-press", order: 1 }],
+    meals: [{ id: "salmon", calories: 2850 }],
+    history: [{ date: "2026-08-31", note: "Stored note" }],
+    targets: { calories: 2900, protein: 130 },
+    settings: { allowEditor: false },
+    weeklyNotes: [{ week: "2026-W36", note: "Keep this" }],
+    progressPhotos: [{ path: "owner/date/photo.webp" }],
+    snapshots: [{ bodyweight: 61.5, reps: [10, 10, 6] }],
+  };
+  const before = structuredClone(legacy);
+  for (const path of [
+    "/bulk",
+    "/bulk/training",
+    "/bulk/workout/session-a",
+    "/bulk/meals",
+    "/bulk/meals/history",
+    "/bulk/progress",
+  ])
+    productAreaForPath(path);
+  assert.deepEqual(legacy, before);
+});
+
+test("persisted membership status explicitly separates public, legacy and no-plan modes", async () => {
+  const access = await read("src/lib/bulk-access.ts");
+  assert.match(access, /export type BulkPlanMode = "public" \| "legacy" \| "none"/);
+  assert.match(access, /if \(!membership \|\| membership\.is_active === false\) return "none"/);
+  assert.match(access, /return membership\.is_public \? "public" : "legacy"/);
+  assert.match(access, /is_public: profile\?\.goal_status != null/);
+  assert.doesNotMatch(access, /trainingSetupPreference/);
 });
 
 test("contextual navigation uses distinct route-backed tasks", async () => {

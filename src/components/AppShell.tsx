@@ -1,19 +1,5 @@
 import { Link, useLocation, useRouterState } from "@tanstack/react-router";
-import {
-  ArrowLeft,
-  CalendarCheck,
-  Dumbbell,
-  Euro,
-  History,
-  Home,
-  LineChart,
-  MoreHorizontal,
-  Utensils,
-  PlusCircle,
-  Salad,
-  Trophy,
-  User,
-} from "lucide-react";
+import { ArrowLeft, Dumbbell, LineChart, Utensils, Trophy, User } from "lucide-react";
 
 import type { ReactNode } from "react";
 import { activeBulkMemberships, useMemberships } from "@/lib/bulk-access";
@@ -23,48 +9,88 @@ import { PRODUCT_LANDING_ROUTES, productAreaForPath } from "@/lib/product-naviga
 import { PullToRefresh } from "./PullToRefresh";
 
 const CHALLENGE_NAV = [
-  { to: "/challenge", label: "Week", icon: Trophy, exact: true },
-  { to: "/challenge/log", label: "Add", icon: PlusCircle, exact: false },
-  { to: "/challenge/history", label: "History", icon: History, exact: false },
-  { to: "/challenge/payments", label: "Money", icon: Euro, exact: false },
+  { to: "/challenge", label: "Week", exact: true },
+  { to: "/challenge/log", label: "Add", exact: false },
+  { to: "/challenge/history", label: "History", exact: false },
+  {
+    to: "/challenge/payments",
+    label: "Money",
+    exact: false,
+    activePrefixes: ["/challenge/targets"],
+  },
 ] as const;
 
 const TRAINING_NAV = [
   {
     to: "/bulk/training",
     label: "Today",
-    icon: Dumbbell,
     exact: true,
     activePrefixes: ["/bulk/workout/"],
   },
-  { to: "/bulk/prs", label: "PRs", icon: Trophy, exact: false },
-  { to: "/bulk/training/history", label: "History", icon: History, exact: false },
+  { to: "/bulk/prs", label: "PRs", exact: false },
+  { to: "/bulk/training/history", label: "History", exact: false },
   {
     to: "/bulk/training/more",
     label: "More",
-    icon: MoreHorizontal,
     exact: false,
     activePrefixes: ["/bulk/exercises"],
   },
 ] as const;
 
 const MEALS_NAV = [
-  { to: "/bulk/meals", label: "Today", icon: Utensils, exact: true },
-  { to: "/bulk/meals/presets", label: "Presets", icon: Salad, exact: false },
+  { to: "/bulk/meals", label: "Today", exact: true },
+  { to: "/bulk/meals/presets", label: "Presets", exact: false },
   {
     to: "/bulk/meals/history",
     label: "History",
-    icon: History,
     exact: false,
   },
-  { to: "/bulk/meals/more", label: "More", icon: MoreHorizontal, exact: false },
+  { to: "/bulk/meals/more", label: "More", exact: false },
 ] as const;
 
 const GOAL_NAV = [
-  { to: "/bulk", label: "Today", icon: Home, exact: true },
-  { to: "/bulk/progress", label: "Progress", icon: LineChart, exact: false },
-  { to: "/bulk/check-in", label: "Check-In", icon: CalendarCheck, exact: false },
-  { to: "/bulk/more", label: "More", icon: MoreHorizontal, exact: false },
+  { to: "/bulk", label: "Today", exact: true },
+  { to: "/bulk/progress", label: "Progress", exact: false },
+  { to: "/bulk/check-in", label: "Check-In", exact: false },
+  {
+    to: "/bulk/more",
+    label: "More",
+    exact: false,
+    activePrefixes: ["/bulk/history", "/bulk/diagnostics"],
+  },
+] as const;
+
+const PRIMARY_NAV = [
+  {
+    to: PRODUCT_LANDING_ROUTES.challenge,
+    label: "Challenge",
+    icon: Trophy,
+    area: "challenge",
+  },
+  {
+    to: PRODUCT_LANDING_ROUTES.training,
+    label: "Training",
+    icon: Dumbbell,
+    area: "training",
+  },
+  {
+    to: PRODUCT_LANDING_ROUTES.meals,
+    label: "Meals",
+    icon: Utensils,
+    area: "meals",
+  },
+  {
+    to: PRODUCT_LANDING_ROUTES.goal,
+    label: "Goal",
+    icon: LineChart,
+    area: "goal",
+  },
+  {
+    to: PRODUCT_LANDING_ROUTES.profile,
+    label: "Profile",
+    icon: User,
+    area: "profile",
+  },
 ] as const;
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -88,6 +114,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           : area === "goal"
             ? GOAL_NAV
             : null;
+  const primaryNav = PRIMARY_NAV.filter(
+    (item) => item.area === "challenge" || item.area === "profile" || hasBulk,
+  );
   const prefetchDestination = (to: string) => {
     if (to.startsWith("/bulk") && owner) void prefetchBulk(owner.bulk_profile_id);
   };
@@ -95,113 +124,81 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-background">
       <PullToRefresh />
-      <div className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-lg items-center gap-1 px-2 py-2">
-          {(
-            [
-              {
-                to: PRODUCT_LANDING_ROUTES.challenge,
-                label: "Challenge",
-                icon: Trophy,
-                area: "challenge",
-              },
-              {
-                to: PRODUCT_LANDING_ROUTES.training,
-                label: "Training",
-                icon: Dumbbell,
-                area: "training",
-              },
-              {
-                to: PRODUCT_LANDING_ROUTES.meals,
-                label: "Meals",
-                icon: Utensils,
-                area: "meals",
-              },
-              {
-                to: PRODUCT_LANDING_ROUTES.goal,
-                label: "Goal",
-                icon: LineChart,
-                area: "goal",
-              },
-            ] as const
-          ).map((item) =>
-            item.area !== "challenge" && !hasBulk ? null : (
+      <main className={`mx-auto w-full max-w-lg px-4 pb-28 ${isChallenge ? "pt-4" : "pt-6"}`}>
+        {nav ? (
+          <nav aria-label={`${area} sections`} className="mb-4 overflow-x-auto">
+            <div className="grid min-w-max grid-cols-4 gap-1 rounded-xl bg-card p-1 sm:min-w-0">
+              {nav.map((item) => {
+                const { to, label, exact } = item;
+                const activePrefixes = "activePrefixes" in item ? item.activePrefixes : [];
+                const selected =
+                  (exact ? pathname === to : pathname.startsWith(to)) ||
+                  activePrefixes.some((prefix) => pathname.startsWith(prefix));
+                return (
+                  <Link
+                    key={to}
+                    to={to}
+                    preload="intent"
+                    activeOptions={{ exact }}
+                    onPointerEnter={() => prefetchDestination(to)}
+                    onFocus={() => prefetchDestination(to)}
+                    aria-current={selected ? "page" : undefined}
+                    className={`flex min-h-11 min-w-[4.5rem] items-center justify-center rounded-lg px-2 text-xs font-semibold whitespace-nowrap transition active:scale-[0.98] active:bg-elevated ${selected ? "bg-elevated text-primary" : "text-muted-foreground"}`}
+                  >
+                    {label}
+                  </Link>
+                );
+              })}
+            </div>
+          </nav>
+        ) : null}
+        {children}
+      </main>
+
+      <nav
+        aria-label="Primary"
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 backdrop-blur"
+      >
+        <div
+          aria-hidden="true"
+          className={`absolute inset-x-0 top-0 h-0.5 overflow-hidden transition-opacity ${navigationPending ? "opacity-100" : "opacity-0"}`}
+        >
+          <span className="block h-full w-1/2 animate-pulse rounded-full bg-primary" />
+        </div>
+        <div
+          className="mx-auto grid max-w-lg px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2"
+          style={{ gridTemplateColumns: `repeat(${primaryNav.length}, minmax(0, 1fr))` }}
+        >
+          {primaryNav.map((item) => {
+            const Icon = item.icon;
+            const selected = area === item.area;
+            return (
               <Link
                 key={item.area}
                 to={item.to}
                 preload="intent"
                 aria-label={item.label}
-                aria-current={area === item.area ? "page" : undefined}
+                aria-current={selected ? "page" : undefined}
                 onPointerEnter={() => prefetchDestination(item.to)}
                 onFocus={() => prefetchDestination(item.to)}
-                className={`flex min-h-11 min-w-0 flex-1 flex-col items-center justify-center rounded-xl px-1 text-[10px] font-semibold transition active:scale-95 ${area === item.area ? "bg-elevated text-primary" : "text-muted-foreground"}`}
+                className={`relative flex min-h-11 min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-muted-foreground transition active:scale-95 active:bg-elevated ${selected ? "bg-elevated text-primary" : ""}`}
               >
-                <item.icon className="h-4 w-4" aria-hidden="true" />
-                <span className="mt-0.5 truncate">{item.label}</span>
+                <Icon className="h-5 w-5" strokeWidth={2} aria-hidden="true" />
+                <span className="max-w-full truncate text-[10px] font-medium">{item.label}</span>
+                {item.area === "profile" &&
+                !hasBulk &&
+                goalDiscovery.isSuccess &&
+                goalDiscovery.data?.goal_seen_at == null ? (
+                  <span
+                    aria-label="New Goal feature"
+                    className="absolute right-[28%] top-1.5 h-2 w-2 rounded-full bg-primary ring-2 ring-card"
+                  />
+                ) : null}
               </Link>
-            ),
-          )}
-          <Link
-            to={PRODUCT_LANDING_ROUTES.profile}
-            preload="intent"
-            aria-label="Profile"
-            aria-current={area === "profile" ? "page" : undefined}
-            className={`relative grid min-h-11 min-w-11 place-items-center rounded-xl active:scale-95 active:bg-elevated ${area === "profile" ? "bg-elevated text-primary" : "text-muted-foreground"}`}
-          >
-            <User className="h-4 w-4" />
-            {!hasBulk && goalDiscovery.isSuccess && goalDiscovery.data?.goal_seen_at == null ? (
-              <span
-                aria-label="New Goal feature"
-                className="absolute right-2 top-2 h-2 w-2 rounded-full bg-primary ring-2 ring-background"
-              />
-            ) : null}
-          </Link>
+            );
+          })}
         </div>
-        <div
-          aria-hidden="true"
-          className={`absolute inset-x-0 bottom-0 h-0.5 overflow-hidden transition-opacity ${navigationPending ? "opacity-100" : "opacity-0"}`}
-        >
-          <span className="block h-full w-1/2 animate-pulse rounded-full bg-primary" />
-        </div>
-      </div>
-
-      <main
-        className={`mx-auto w-full max-w-lg px-4 ${nav ? "pb-28" : "pb-8"} ${isChallenge ? "pt-4" : "pt-6"}`}
-      >
-        {children}
-      </main>
-
-      {nav ? (
-        <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 backdrop-blur">
-          <div
-            className="mx-auto grid max-w-lg px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2"
-            style={{ gridTemplateColumns: `repeat(${nav.length}, minmax(0, 1fr))` }}
-          >
-            {nav.map((item) => {
-              const { to, label, icon: Icon, exact } = item;
-              const activePrefixes = "activePrefixes" in item ? item.activePrefixes : [];
-              const selected =
-                (exact ? pathname === to : pathname.startsWith(to)) ||
-                activePrefixes.some((prefix) => pathname.startsWith(prefix));
-              return (
-                <Link
-                  key={to}
-                  to={to}
-                  preload="intent"
-                  activeOptions={{ exact }}
-                  onPointerEnter={() => prefetchDestination(to)}
-                  onFocus={() => prefetchDestination(to)}
-                  aria-current={selected ? "page" : undefined}
-                  className={`group flex min-h-11 flex-col items-center gap-1 rounded-xl py-2 text-muted-foreground transition active:scale-95 active:bg-elevated data-[status=active]:text-primary ${selected ? "bg-elevated text-primary" : ""}`}
-                >
-                  <Icon className="h-5 w-5" strokeWidth={2} />
-                  <span className="text-[11px] font-medium">{label}</span>
-                </Link>
-              );
-            })}
-          </div>
-        </nav>
-      ) : null}
+      </nav>
     </div>
   );
 }

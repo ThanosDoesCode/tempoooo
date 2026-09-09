@@ -17,6 +17,7 @@ import {
 } from "@/lib/bulk-training-sessions";
 import { Button } from "@/components/ui/button";
 import { useBulkProgressionTargets } from "@/lib/bulk-progression-query";
+import { bulkPlanModeFor, useMemberships } from "@/lib/bulk-access";
 
 export const Route = createFileRoute("/_authenticated/bulk/training")({
   head: () => ({
@@ -40,9 +41,11 @@ function TrainingPage() {
   const data = useAppData();
   const { user } = useAuth();
   const { bulkId, role } = useBulkMeta();
+  const memberships = useMemberships();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const usesPlanSetup = !!data?.targets.trainingSetupPreference;
+  const planMode = bulkPlanModeFor(memberships.data, bulkId);
+  const usesPlanSetup = planMode === "public";
   const activePlan = useActiveTrainingPlan(usesPlanSetup ? bulkId : null);
   const { saveWorkout, saveTargets } = useActions();
   const today = iso(new Date());
@@ -69,6 +72,14 @@ function TrainingPage() {
     progressionInputs,
     activePlan.data?.updatedAt ?? "none",
   );
+
+  if (planMode === "none") {
+    return (
+      <AppShell>
+        <div className="h-40 animate-pulse rounded-2xl bg-card" />
+      </AppShell>
+    );
+  }
 
   async function startWorkout(planDayId: string) {
     setStartingDayId(planDayId);
@@ -146,7 +157,7 @@ function TrainingPage() {
               <Link to="/bulk/training/more">Choose training plan</Link>
             </Button>
           </Card>
-        ) : data && bulkId && user ? (
+        ) : planMode === "legacy" && data && bulkId && user ? (
           <TrainingSession
             key={`${user.id}:${bulkId}:${date}`}
             data={data}

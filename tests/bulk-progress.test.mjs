@@ -138,7 +138,8 @@ test("public progress remains separate from legacy progress and clears private q
       "utf8",
     ),
   ]);
-  assert.match(route, /targets\.trainingSetupPreference/);
+  assert.match(route, /bulkPlanModeFor\(memberships\.data, bulkId\)/);
+  assert.match(route, /planMode === "public"/);
   assert.match(route, /LegacyProgressPage/);
   assert.match(component, /current week is still in progress/);
   assert.match(component, /Photo unavailable/);

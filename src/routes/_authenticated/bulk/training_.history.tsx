@@ -8,6 +8,7 @@ import { readRetryDelay, shouldRetryRead, userFacingError } from "@/lib/network-
 import { useAppData, useBulkMeta } from "@/lib/store";
 import { splitLabel } from "@/lib/types";
 import { workoutDuration, workoutMetrics } from "@/lib/training";
+import { bulkPlanModeFor, useMemberships } from "@/lib/bulk-access";
 
 export const Route = createFileRoute("/_authenticated/bulk/training_/history")({
   head: () => ({ meta: [{ title: "Tempo" }] }),
@@ -17,7 +18,9 @@ export const Route = createFileRoute("/_authenticated/bulk/training_/history")({
 function TrainingHistoryPage() {
   const data = useAppData();
   const { bulkId } = useBulkMeta();
-  const isPublic = !!data?.targets.trainingSetupPreference;
+  const memberships = useMemberships();
+  const planMode = bulkPlanModeFor(memberships.data, bulkId);
+  const isPublic = planMode === "public";
   const sessions = useQuery({
     queryKey: ["bulk-training-sessions", "history", bulkId],
     enabled: isPublic && !!bulkId,
@@ -33,7 +36,9 @@ function TrainingHistoryPage() {
   return (
     <AppShell>
       <PageHeader title="Training history" subtitle="Completed workouts, newest first." />
-      {isPublic && sessions.isLoading ? (
+      {planMode === "none" ? (
+        <div className="h-40 animate-pulse rounded-2xl bg-card" />
+      ) : isPublic && sessions.isLoading ? (
         <div className="h-40 animate-pulse rounded-2xl bg-card" />
       ) : isPublic && sessions.error ? (
         <DataError
@@ -51,7 +56,7 @@ function TrainingHistoryPage() {
             </section>
           ))}
         </div>
-      ) : !isPublic && legacy.length ? (
+      ) : planMode === "legacy" && legacy.length ? (
         <div className="space-y-3">
           {legacy.map((workout) => {
             const metrics = workoutMetrics(workout);

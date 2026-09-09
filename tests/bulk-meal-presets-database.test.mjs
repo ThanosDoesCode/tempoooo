@@ -85,6 +85,49 @@ const createMeal = (id, name, ingredients = [], calories = 612.5) =>
     ),
   );
 
+test("public Goal starts without presets even when legacy meal data exists", async () => {
+  const profile = (await db.query("SELECT id FROM public.bulk_profiles WHERE owner_id=$1", [owner]))
+    .rows[0].id;
+  assert.equal(
+    Number(
+      (
+        await asUser(owner, () =>
+          db.query("SELECT count(*) AS n FROM public.bulk_meal_presets WHERE bulk_profile_id=$1", [
+            profile,
+          ]),
+        )
+      ).rows[0].n,
+    ),
+    0,
+  );
+  await db.query(
+    `INSERT INTO public.bulk_days(bulk_profile_id,day,payload)
+     VALUES ($1,'2026-09-05','{"mealPlan":"salmon","calories":2850}'::jsonb)`,
+    [profile],
+  );
+  assert.equal(
+    Number(
+      (
+        await asUser(owner, () =>
+          db.query("SELECT count(*) AS n FROM public.bulk_meal_presets WHERE bulk_profile_id=$1", [
+            profile,
+          ]),
+        )
+      ).rows[0].n,
+    ),
+    0,
+  );
+  assert.equal(
+    (
+      await db.query(
+        "SELECT payload->>'mealPlan' AS meal FROM public.bulk_days WHERE day='2026-09-05' AND bulk_profile_id=$1",
+        [profile],
+      )
+    ).rows[0].meal,
+    "salmon",
+  );
+});
+
 test("meal CRUD, duplication and normalized ordering are transactional", async () => {
   const first = (
     await createMeal(owner, "Chicken rice", [
@@ -945,6 +988,22 @@ test("calorie recommendation application is bounded, idempotent and calorie-only
 test("plan switching and Goal reset preserve completed public history", async () => {
   const profile = (await db.query("SELECT id FROM public.bulk_profiles WHERE owner_id=$1", [owner]))
     .rows[0].id;
+  const presetsBeforeReset = Number(
+    (
+      await db.query(
+        "SELECT count(*) AS n FROM public.bulk_meal_presets WHERE bulk_profile_id=$1",
+        [profile],
+      )
+    ).rows[0].n,
+  );
+  const legacyDaysBeforeReset = Number(
+    (
+      await db.query(
+        "SELECT count(*) AS n FROM public.bulk_days WHERE bulk_profile_id=$1 AND payload ? 'mealPlan'",
+        [profile],
+      )
+    ).rows[0].n,
+  );
   const originalPlan = (
     await asUser(owner, () =>
       db.query(
@@ -1042,6 +1101,17 @@ test("plan switching and Goal reset preserve completed public history", async ()
     Number(
       (
         await db.query(
+          "SELECT count(*) AS n FROM public.bulk_meal_presets WHERE bulk_profile_id=$1",
+          [profile],
+        )
+      ).rows[0].n,
+    ),
+    presetsBeforeReset,
+  );
+  assert.equal(
+    Number(
+      (
+        await db.query(
           "SELECT count(*) AS n FROM public.bulk_training_plans WHERE bulk_profile_id=$1",
           [profile],
         )
@@ -1079,6 +1149,28 @@ test("plan switching and Goal reset preserve completed public history", async ()
   assert.equal(reactivated.goal_status, "active");
   assert.equal(Number(reactivated.target_count), 1);
   assert.equal(Number(reactivated.completed_count), 1);
+  assert.equal(
+    Number(
+      (
+        await db.query(
+          "SELECT count(*) AS n FROM public.bulk_meal_presets WHERE bulk_profile_id=$1",
+          [profile],
+        )
+      ).rows[0].n,
+    ),
+    presetsBeforeReset,
+  );
+  assert.equal(
+    Number(
+      (
+        await db.query(
+          "SELECT count(*) AS n FROM public.bulk_days WHERE bulk_profile_id=$1 AND payload ? 'mealPlan'",
+          [profile],
+        )
+      ).rows[0].n,
+    ),
+    legacyDaysBeforeReset,
+  );
   await assert.rejects(
     asUser(owner, () =>
       db.query("UPDATE public.bulk_profiles SET goal_status='inactive' WHERE id=$1", [profile]),
