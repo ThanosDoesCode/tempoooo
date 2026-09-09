@@ -97,7 +97,7 @@ function BulkLayout() {
   if (memberships && !hasActiveMembership) return null;
   if (isLoading || (!memberships && !error) || (hasActiveMembership && !bulkId)) {
     return (
-      <div className="mx-auto w-full max-w-lg space-y-3 p-4">
+      <div className="space-y-3" aria-label="Loading plan">
         <div className="h-24 animate-pulse rounded-2xl bg-card" />
         <div className="h-40 animate-pulse rounded-2xl bg-card" />
       </div>

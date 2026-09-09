@@ -188,6 +188,10 @@ html[data-tempo-ready="true"] .tempo-startup {
   animation: fade-up 0.16s cubic-bezier(0.2, 0.7, 0.3, 1) both;
 }
 
+.tempo-route-content {
+  animation: tempo-route-enter 0.15s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -199,6 +203,10 @@ html[data-tempo-ready="true"] .tempo-startup {
   }
 
   .fade-up {
+    animation: none;
+  }
+
+  .tempo-route-content {
     animation: none;
   }
 
@@ -219,6 +227,17 @@ html[data-tempo-ready="true"] .tempo-startup {
   from {
     opacity: 0;
     transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes tempo-route-enter {
+  from {
+    opacity: 0.92;
+    transform: translateY(3px);
   }
   to {
     opacity: 1;

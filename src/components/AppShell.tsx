@@ -1,7 +1,7 @@
 import { Link, useLocation, useRouterState } from "@tanstack/react-router";
 import { ArrowLeft, Dumbbell, LineChart, Utensils, Trophy, User } from "lucide-react";
 
-import type { ReactNode } from "react";
+import { createContext, useContext, type ReactNode } from "react";
 import { activeBulkMemberships, useMemberships } from "@/lib/bulk-access";
 import { prefetchBulk } from "@/lib/store";
 import { useGoalDiscovery } from "@/lib/goal-discovery";
@@ -93,7 +93,20 @@ const PRIMARY_NAV = [
   },
 ] as const;
 
+const AppShellMountedContext = createContext(false);
+
 export function AppShell({ children }: { children: ReactNode }) {
+  const shellMounted = useContext(AppShellMountedContext);
+  if (shellMounted) return <>{children}</>;
+
+  return (
+    <AppShellMountedContext.Provider value>
+      <AppChrome>{children}</AppChrome>
+    </AppShellMountedContext.Provider>
+  );
+}
+
+function AppChrome({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
   const navigationPending = useRouterState({ select: (router) => router.status === "pending" });
   const isChallenge = pathname.startsWith("/challenge");
@@ -140,10 +153,11 @@ export function AppShell({ children }: { children: ReactNode }) {
                     to={to}
                     preload="intent"
                     activeOptions={{ exact }}
+                    onPointerDown={() => prefetchDestination(to)}
                     onPointerEnter={() => prefetchDestination(to)}
                     onFocus={() => prefetchDestination(to)}
                     aria-current={selected ? "page" : undefined}
-                    className={`flex min-h-11 min-w-[4.5rem] items-center justify-center rounded-lg px-2 text-xs font-semibold whitespace-nowrap transition active:scale-[0.98] active:bg-elevated ${selected ? "bg-elevated text-primary" : "text-muted-foreground"}`}
+                    className={`flex min-h-11 min-w-[4.5rem] items-center justify-center rounded-lg px-2 text-xs font-semibold whitespace-nowrap transition-[color,background-color,transform,opacity] duration-150 ease-out active:scale-[0.98] active:bg-elevated active:opacity-80 ${selected ? "bg-elevated text-primary" : "text-muted-foreground"}`}
                   >
                     {label}
                   </Link>
@@ -152,7 +166,9 @@ export function AppShell({ children }: { children: ReactNode }) {
             </div>
           </nav>
         ) : null}
-        {children}
+        <div key={pathname} className="tempo-route-content">
+          {children}
+        </div>
       </main>
 
       <nav
@@ -179,9 +195,10 @@ export function AppShell({ children }: { children: ReactNode }) {
                 preload="intent"
                 aria-label={item.label}
                 aria-current={selected ? "page" : undefined}
+                onPointerDown={() => prefetchDestination(item.to)}
                 onPointerEnter={() => prefetchDestination(item.to)}
                 onFocus={() => prefetchDestination(item.to)}
-                className={`relative flex min-h-11 min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-muted-foreground transition active:scale-95 active:bg-elevated ${selected ? "bg-elevated text-primary" : ""}`}
+                className={`relative flex min-h-11 min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-muted-foreground transition-[color,background-color,transform,opacity] duration-150 ease-out active:scale-95 active:bg-elevated active:opacity-80 ${selected ? "bg-elevated text-primary" : ""}`}
               >
                 <Icon className="h-5 w-5" strokeWidth={2} aria-hidden="true" />
                 <span className="max-w-full truncate text-[10px] font-medium">{item.label}</span>

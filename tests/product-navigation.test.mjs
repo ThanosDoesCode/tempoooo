@@ -92,6 +92,38 @@ test("only one persistent bar exists and secondary navigation stays in page flow
   assert.doesNotMatch(shell, /aria-label=\{`\$\{area\} sections`\}[\s\S]{0,160}fixed/);
 });
 
+test("authenticated sibling routes share one persistent shell and transition only route content", async () => {
+  const [shell, authenticatedLayout, styles] = await Promise.all([
+    read("src/components/AppShell.tsx"),
+    read("src/routes/_authenticated/route.tsx"),
+    read("src/styles.css"),
+  ]);
+
+  assert.match(authenticatedLayout, /<AppShell>[\s\S]*<Outlet \/>[\s\S]*<\/AppShell>/);
+  assert.match(shell, /const AppShellMountedContext = createContext\(false\)/);
+  assert.match(shell, /if \(shellMounted\) return <>\{children\}<\/>/);
+  assert.match(shell, /<AppShellMountedContext\.Provider value>/);
+  assert.match(shell, /<div key=\{pathname\} className="tempo-route-content">/);
+  assert.doesNotMatch(authenticatedLayout, /key=\{(?:pathname|location)/);
+  assert.match(styles, /\.tempo-route-content\s*\{[\s\S]*tempo-route-enter 0\.15s/);
+  assert.match(styles, /@keyframes tempo-route-enter[\s\S]*translateY\(3px\)/);
+  assert.match(
+    styles,
+    /@media \(prefers-reduced-motion: reduce\)[\s\S]*\.tempo-route-content\s*\{\s*animation: none;/,
+  );
+});
+
+test("primary and secondary navigation provide bounded immediate press feedback", async () => {
+  const shell = await read("src/components/AppShell.tsx");
+  assert.equal((shell.match(/duration-150 ease-out/g) ?? []).length, 2);
+  assert.match(shell, /active:scale-\[0\.98\][^`]*active:opacity-80/);
+  assert.match(shell, /active:scale-95[^`]*active:opacity-80/);
+  assert.match(shell, /preload="intent"/);
+  assert.match(shell, /onPointerDown=\{\(\) => prefetchDestination/);
+  assert.match(shell, /onPointerEnter=\{\(\) => prefetchDestination/);
+  assert.match(shell, /onFocus=\{\(\) => prefetchDestination/);
+});
+
 test("route mapping cannot mutate legacy My Bulk fixtures", () => {
   const legacy = {
     workouts: [{ date: "2026-08-31", name: "Chest & Back", volume: 832 }],
