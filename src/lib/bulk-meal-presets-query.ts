@@ -90,7 +90,7 @@ const ingredientsJson = (input: BulkMealInput) =>
 export async function createBulkMealPreset(input: BulkMealInput): Promise<string> {
   const { data, error } = await supabase.rpc("create_bulk_meal_preset", {
     _name: input.name,
-    _description: input.description,
+    _description: input.description ?? "",
     _calories: input.calories,
     _protein: input.protein,
     _carbs: input.carbs,
@@ -109,7 +109,7 @@ export async function updateBulkMealPreset(
     _meal: meal.id,
     _expected_updated_at: meal.updatedAt,
     _name: input.name,
-    _description: input.description,
+    _description: input.description ?? "",
     _calories: input.calories,
     _protein: input.protein,
     _carbs: input.carbs,

@@ -234,12 +234,12 @@ export async function saveBulkTrainingSet(sessionId: string, set: EditableSessio
   const { error } = await supabase.rpc("save_bulk_training_session_set", {
     _session: sessionId,
     _set: set.id,
-    _bilateral_weight: set.bilateralWeight,
-    _bilateral_reps: set.bilateralReps,
-    _left_weight: set.leftWeight,
-    _left_reps: set.leftReps,
-    _right_weight: set.rightWeight,
-    _right_reps: set.rightReps,
+    _bilateral_weight: set.bilateralWeight ?? 0,
+    _bilateral_reps: set.bilateralReps ?? 0,
+    _left_weight: set.leftWeight ?? 0,
+    _left_reps: set.leftReps ?? 0,
+    _right_weight: set.rightWeight ?? 0,
+    _right_reps: set.rightReps ?? 0,
   });
   if (error) throw error;
 }
