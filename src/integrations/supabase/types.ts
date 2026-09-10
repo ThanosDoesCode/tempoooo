@@ -1021,7 +1021,9 @@ export type Database = {
           created_by: string
           expires_at: string
           id: string
-          invited_email: string
+          invited_email: string | null
+          invited_user_id: string | null
+          invited_username_snapshot: string | null
           revoked_at: string | null
           token_hash: string
         }
@@ -1032,7 +1034,9 @@ export type Database = {
           created_by: string
           expires_at: string
           id?: string
-          invited_email: string
+          invited_email?: string | null
+          invited_user_id?: string | null
+          invited_username_snapshot?: string | null
           revoked_at?: string | null
           token_hash: string
         }
@@ -1043,7 +1047,9 @@ export type Database = {
           created_by?: string
           expires_at?: string
           id?: string
-          invited_email?: string
+          invited_email?: string | null
+          invited_user_id?: string | null
+          invited_username_snapshot?: string | null
           revoked_at?: string | null
           token_hash?: string
         }
@@ -1053,6 +1059,13 @@ export type Database = {
             columns: ["challenge_id"]
             isOneToOne: false
             referencedRelation: "challenges"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "challenge_invitations_invited_user_id_fkey"
+            columns: ["invited_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -1465,30 +1478,36 @@ export type Database = {
       }
       profiles: {
         Row: {
+          account_onboarded_at: string | null
           avatar_url: string | null
           created_at: string
           display_name: string | null
           email: string | null
           goal_seen_at: string | null
           id: string
+          username: string | null
           updated_at: string
         }
         Insert: {
+          account_onboarded_at?: string | null
           avatar_url?: string | null
           created_at?: string
           display_name?: string | null
           email?: string | null
           goal_seen_at?: string | null
           id: string
+          username?: string | null
           updated_at?: string
         }
         Update: {
+          account_onboarded_at?: string | null
           avatar_url?: string | null
           created_at?: string
           display_name?: string | null
           email?: string | null
           goal_seen_at?: string | null
           id?: string
+          username?: string | null
           updated_at?: string
         }
         Relationships: []

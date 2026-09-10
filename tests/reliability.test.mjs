@@ -60,6 +60,27 @@ test("opening or refreshing Bulk seeds auth identity without cancelling its quer
   assert.equal(authenticatedUserChanged(undefined, "owner-a"), false);
 });
 
+test("authenticated cold start retries transient identity/profile reads without crashing", async () => {
+  const [auth, profile, route, root] = await Promise.all([
+    read("src/lib/auth.ts"),
+    read("src/lib/account-profile.ts"),
+    read("src/routes/_authenticated/route.tsx"),
+    read("src/routes/__root.tsx"),
+  ]);
+  assert.match(auth, /shouldRetryRead\(0, error\)\) throw error/);
+  assert.match(auth, /signOut\(\{ scope: "local" \}\)/);
+  assert.match(auth, /retry: shouldRetryRead/);
+  assert.match(profile, /\.maybeSingle\(\)/);
+  assert.match(profile, /retry: shouldRetryRead/);
+  assert.match(route, /errorComponent: AuthenticatedRouteError/);
+  assert.match(route, /restore your Tempo session/);
+  assert.match(route, /Promise\.all\(\[/);
+  assert.match(route, /bulkOwnerQueryOptions\(\)/);
+  assert.match(route, /if \(!profile\)[\s\S]*syncProfile\(user\)/);
+  assert.match(root, /routePending/);
+  assert.match(root, /canDismissStartupScreen/);
+});
+
 test("same-user token refresh does not reset active queries", () => {
   assert.equal(authenticatedUserChanged("owner-a", "owner-a"), false);
 });
@@ -73,6 +94,7 @@ test("actual account changes are recognized for private cache clearing", () => {
 test("account changes clear private query data without removing active queries", async () => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   client.setQueryData(["authenticated-user"], { id: "owner-a" });
+  client.setQueryData(["account-profile", "owner-a"], { username: "owner_a" });
   client.setQueryData(["bulk-memberships"], [{ bulk_profile_id: "private-a" }]);
   client.setQueryData(["bulk-admin"], true);
   client.setQueryData(["challenge-activities", "challenge-a"], [{ id: "activity-a" }]);
@@ -87,6 +109,7 @@ test("account changes clear private query data without removing active queries",
   await resetUserScopedQueries(client);
 
   assert.equal(client.getQueryData(["authenticated-user"]), undefined);
+  assert.equal(client.getQueryData(["account-profile", "owner-a"]), undefined);
   assert.deepEqual(client.getQueryData(["bulk-memberships"]), [{ bulk_profile_id: "private-b" }]);
   assert.equal(client.getQueryData(["bulk-admin"]), undefined);
   assert.equal(client.getQueryData(["challenge-activities", "challenge-a"]), undefined);
@@ -139,7 +162,7 @@ test("crash recovery navigates to Challenge, clears the boundary and never reloa
 
 test("Bulk activation revocation still clears local data and redirects", async () => {
   const bulk = await read("src/routes/_authenticated/bulk/route.tsx");
-  assert.match(bulk, /activeMemberships\.length === 0[\s\S]*clearBulk\(\)/);
+  assert.match(bulk, /if \(!preferred\) \{[\s\S]*clearBulk\(\)/);
   assert.match(bulk, /navigate\(\{ to: "\/bulk-onboarding", replace: true \}\)/);
 });
 

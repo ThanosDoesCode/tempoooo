@@ -92,7 +92,10 @@ test("public Goal migration defaults existing public plans while leaving legacy 
   assert.match(migration, /payload->>'goal' IN \('gain', 'cut', 'maintain'\)/);
   assert.match(shell, /to: PRODUCT_LANDING_ROUTES\.goal/);
   assert.doesNotMatch(shell, /label: "Bulk"/);
-  assert.match(profile, /ownedPlan\.is_public \? "My Goal Plan" : "My Bulk Plan"/);
+  assert.match(profile, /productMode === "public"/);
+  assert.match(profile, /productMode === "legacy"/);
+  assert.match(profile, /Fitness Goal/);
+  assert.match(profile, /My Bulk Plan/);
   assert.match(onboarding, /Review your Goal plan/);
   assert.doesNotMatch(onboarding, /Review your Bulk plan/);
 });

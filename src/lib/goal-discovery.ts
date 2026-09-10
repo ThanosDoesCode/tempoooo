@@ -1,6 +1,7 @@
 import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { readRetryDelay, shouldRetryRead } from "./network-errors";
 
 export const goalDiscoveryQueryOptions = () =>
   queryOptions({
@@ -17,6 +18,8 @@ export const goalDiscoveryQueryOptions = () =>
       return data;
     },
     staleTime: 5 * 60_000,
+    retry: shouldRetryRead,
+    retryDelay: readRetryDelay,
   });
 
 export function useGoalDiscovery() {

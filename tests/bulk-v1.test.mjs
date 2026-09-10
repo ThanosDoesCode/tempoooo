@@ -124,10 +124,12 @@ test("Sharing is absent while personal Bulk activation guards remain", async () 
   assert.match(shell, /to: "\/bulk\/meals\/history"[\s\S]{0,100}label: "History"/);
   assert.match(guard, /bulkOwnerQueryOptions/);
   assert.match(guard, /bulk-onboarding/);
-  assert.match(profile, /Get My Goal Plan/);
-  assert.match(profile, /Start My Goal/);
-  assert.match(profile, /ownedPlan\.is_public \? "My Goal Plan" : "My Bulk Plan"/);
-  assert.match(profile, /ownedPlan\.is_public \? "Open My Goal" : "Open My Bulk"/);
+  assert.match(profile, /<SectionTitle>Fitness tools<\/SectionTitle>/);
+  assert.match(profile, /Set up fitness tools/);
+  assert.match(profile, /productMode === "legacy"[\s\S]*My Bulk Plan/);
+  assert.match(profile, /productMode === "public"[\s\S]*Fitness Goal/);
+  assert.match(profile, /Open Goal/);
+  assert.match(profile, /Open My Bulk/);
   assert.match(profile, /bulkAccessLoading/);
   assert.match(profile, /Loading plan/);
   assert.match(migration, /CREATE FUNCTION public\.activate_my_bulk\(\)/);

@@ -7,8 +7,12 @@ import { Card, Note, PendingLabel, SectionTitle } from "@/components/ui-kit";
 import { randomToken, sha256Hex, useAuth } from "@/lib/auth";
 import type { PenaltyMode } from "@/lib/challenge";
 import { COUNTRIES, countryListLabel } from "@/lib/countries";
-import { userFacingError } from "@/lib/network-errors";
 import { createChallenge } from "@/lib/privileged-rpcs.functions";
+import {
+  challengeUsernameError,
+  normalizeUsername,
+  usernameValidationError,
+} from "@/lib/account-profile";
 
 export const Route = createFileRoute("/_authenticated/challenge/new")({
   head: () => ({
@@ -57,7 +61,7 @@ function NewChallenge() {
   const [travelPauseEnabled, setTravelPauseEnabled] = useState(true);
   const [homeCountries, setHomeCountries] = useState<string[]>(["GR", "SE"]);
   const [countryToAdd, setCountryToAdd] = useState("");
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [link, setLink] = useState<string | null>(null);
@@ -97,6 +101,11 @@ function NewChallenge() {
 
   const create = async () => {
     if (!user || createLock.current) return;
+    const usernameError = usernameValidationError(username);
+    if (usernameError) {
+      setError(usernameError);
+      return;
+    }
     createLock.current = true;
     setBusy(true);
     setError(null);
@@ -113,7 +122,7 @@ function NewChallenge() {
           startDate: start,
           timezone,
           durationWeeks: Math.max(52, weeks),
-          invitedEmail: email,
+          invitedUsername: normalizeUsername(username),
           tokenHash: await sha256Hex(request.token),
           weeklyTargetKm: terms.weekly_target_km,
           penaltyMode: terms.penalty_mode,
@@ -132,7 +141,7 @@ function NewChallenge() {
       }
       setLink(`${window.location.origin}/invite/challenge/${request.token}`);
     } catch (e) {
-      setError(userFacingError(e, "create the challenge", { inputPreserved: true }));
+      setError(challengeUsernameError(e, username));
     } finally {
       createLock.current = false;
       setBusy(false);
@@ -160,8 +169,8 @@ function NewChallenge() {
             Copy link
           </button>
           <Note>
-            Only {email} can accept it, it expires in 14 days, and it stops working as soon as the
-            second member joins.
+            Only @{normalizeUsername(username)} can accept it, it expires in 14 days, and it stops
+            working as soon as the second member joins.
           </Note>
         </Card>
         <button
@@ -375,12 +384,15 @@ function NewChallenge() {
             </p>
           )}
         </div>
-        <Labelled label="Opponent email">
+        <Labelled label="Invite someone">
           <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="friend@email.com"
+            type="text"
+            autoCapitalize="none"
+            autoCorrect="off"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            placeholder="Search username"
+            aria-label="Opponent username"
             className={inputCls}
           />
         </Labelled>
@@ -390,7 +402,7 @@ function NewChallenge() {
           </p>
         ) : null}
         <button
-          disabled={busy || !email || !termsValid}
+          disabled={busy || !!usernameValidationError(username) || !termsValid}
           onClick={() => void create()}
           className="w-full rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground disabled:opacity-60"
         >

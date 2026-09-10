@@ -2,8 +2,34 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { PRODUCT_LANDING_ROUTES, productAreaForPath } from "../src/lib/product-navigation.ts";
+import { accountProductMode, preferredBulkMembership } from "../src/lib/bulk-mode.ts";
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
+
+const membership = (overrides = {}) => ({
+  bulk_profile_id: "profile-a",
+  role: "owner",
+  owner_id: "user-a",
+  allow_editor: false,
+  is_public: false,
+  is_active: true,
+  ...overrides,
+});
+
+test("account modes produce core, public fitness and legacy navigation states", () => {
+  assert.equal(accountProductMode(undefined), "core");
+  assert.equal(accountProductMode([]), "core");
+  assert.equal(accountProductMode([membership({ is_active: false, is_public: true })]), "core");
+  assert.equal(accountProductMode([membership({ is_public: true })]), "public");
+  assert.equal(accountProductMode([membership()]), "legacy");
+});
+
+test("active public membership wins deterministically over a legacy cache row", () => {
+  const legacy = membership({ bulk_profile_id: "legacy" });
+  const publicGoal = membership({ bulk_profile_id: "public", is_public: true });
+  assert.equal(preferredBulkMembership([legacy, publicGoal])?.bulk_profile_id, "public");
+  assert.equal(preferredBulkMembership([publicGoal, legacy])?.bulk_profile_id, "public");
+});
 
 test("persistent products navigate to their real landing routes", () => {
   assert.deepEqual(PRODUCT_LANDING_ROUTES, {
@@ -65,10 +91,14 @@ test("bottom links preserve browser history and activation visibility rules", as
   assert.match(shell, /to: PRODUCT_LANDING_ROUTES\.profile/);
   assert.match(shell, /const PRIMARY_NAV = \[/);
   assert.match(shell, /label: "Challenge"[\s\S]*label: "Profile"/);
-  assert.match(shell, /item\.area === "challenge" \|\| item\.area === "profile" \|\| hasBulk/);
+  assert.match(
+    shell,
+    /item\.area === "challenge" \|\| item\.area === "profile" \|\| hasFitnessTools/,
+  );
   assert.match(shell, /<Link[\s\S]*to=\{item\.to\}/);
   assert.doesNotMatch(shell, /to=\{item\.to\}[\s\S]{0,200}replace/);
   assert.match(shell, /aria-label="Primary"[\s\S]*fixed inset-x-0 bottom-0/);
+  assert.match(shell, /productMode === "legacy" \? "My Bulk" : item\.label/);
   assert.doesNotMatch(shell, /sticky top-0/);
 });
 

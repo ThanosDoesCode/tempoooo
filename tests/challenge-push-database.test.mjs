@@ -39,11 +39,17 @@ before(async () => {
       throw new Error(`Migration failed: ${file}`, { cause: error });
     }
   }
-  for (const id of [a, b, c, d]) {
+  for (const [id, username] of [
+    [a, "user_a"],
+    [b, "user_b"],
+    [c, "user_c"],
+    [d, "user_d"],
+  ]) {
     await db.query("INSERT INTO auth.users VALUES ($1)", [id]);
-    await db.query("INSERT INTO public.profiles(id, display_name) VALUES ($1, 'Test athlete')", [
-      id,
-    ]);
+    await db.query(
+      "INSERT INTO public.profiles(id, display_name, username, account_onboarded_at) VALUES ($1, 'Test athlete', $2, now())",
+      [id, username],
+    );
   }
   for (const [id, creator, other] of [
     [x, a, b],
@@ -144,7 +150,7 @@ async function createChallengeAtomic(
   tokenHash,
   {
     name = "Atomic challenge",
-    email = "opponent@example.com",
+    username,
     target = 15,
     mode = "money",
     high = 15,
@@ -157,6 +163,8 @@ async function createChallengeAtomic(
     homeCountries = ["GR", "SE"],
   } = {},
 ) {
+  const invitedUsername =
+    username ?? (uid === a ? "user_b" : uid === b ? "user_a" : uid === c ? "user_d" : "user_c");
   return asService(() =>
     db.query(
       `SELECT public.create_challenge_atomic(
@@ -167,7 +175,7 @@ async function createChallengeAtomic(
         uid,
         requestId,
         name,
-        email,
+        invitedUsername,
         tokenHash,
         target,
         mode,
@@ -1425,6 +1433,17 @@ test("atomic challenge creation writes challenge, own membership and invitation 
     },
     { challenges: 1, members: 1, invitations: 1, creator: a, member: a },
   );
+  const target = (
+    await db.query(
+      "SELECT invited_user_id,invited_username_snapshot,invited_email FROM public.challenge_invitations WHERE challenge_id=$1",
+      [requestId],
+    )
+  ).rows[0];
+  assert.deepEqual(target, {
+    invited_user_id: b,
+    invited_username_snapshot: "user_b",
+    invited_email: null,
+  });
 
   await assert.rejects(createChallengeAtomic(b, requestId, tokenHash), /conflicts/);
   await assert.rejects(
@@ -1436,6 +1455,131 @@ test("atomic challenge creation writes challenge, own membership and invitation 
     ),
     /permission denied|row-level security/,
   );
+});
+
+test("usernames are normalized, race-safe and writable only through the server boundary", async () => {
+  const first = randomUUID();
+  const second = randomUUID();
+  await db.query("INSERT INTO auth.users VALUES ($1),($2)", [first, second]);
+  await db.query("INSERT INTO public.profiles(id) VALUES ($1),($2)", [first, second]);
+
+  assert.equal(
+    (
+      await asService(() =>
+        db.query("SELECT public.username_available($1,$2) AS ok", [first, "new_user"]),
+      )
+    ).rows[0].ok,
+    true,
+  );
+  await asService(() =>
+    db.query("SELECT public.set_account_username($1,$2,true)", [first, " New_User "]),
+  );
+  assert.equal(
+    (await db.query("SELECT username FROM public.profiles WHERE id=$1", [first])).rows[0].username,
+    "new_user",
+  );
+  assert.equal(
+    (
+      await asService(() =>
+        db.query("SELECT public.username_available($1,$2) AS ok", [second, "NEW_USER"]),
+      )
+    ).rows[0].ok,
+    false,
+  );
+  await assert.rejects(
+    asService(() =>
+      db.query("SELECT public.set_account_username($1,$2,true)", [second, "new_user"]),
+    ),
+    /already taken|unique/i,
+  );
+  await assert.rejects(
+    asService(() =>
+      db.query("SELECT public.set_account_username($1,$2,true)", [second, "bad-name"]),
+    ),
+    /Invalid username/,
+  );
+  await assert.rejects(
+    asUser(second, () =>
+      db.query("SELECT public.username_available($1,$2)", [second, "other_user"]),
+    ),
+    /permission denied/,
+  );
+  await assert.rejects(
+    asUser(first, () =>
+      db.query("UPDATE public.profiles SET username='forged' WHERE id=$1", [first]),
+    ),
+    /permission denied/,
+  );
+  const relationshipChallenge = randomUUID();
+  await db.query(
+    "INSERT INTO public.challenges(id,created_by,name,start_date,timezone) VALUES ($1,$2,'Stable identity',CURRENT_DATE,'UTC')",
+    [relationshipChallenge, first],
+  );
+  await db.query("INSERT INTO public.challenge_members(challenge_id,user_id) VALUES ($1,$2)", [
+    relationshipChallenge,
+    first,
+  ]);
+  await asService(() =>
+    db.query("SELECT public.set_account_username($1,$2,false)", [first, "renamed_user"]),
+  );
+  assert.equal(
+    Number(
+      (
+        await db.query(
+          "SELECT count(*) AS n FROM public.challenge_members WHERE challenge_id=$1 AND user_id=$2",
+          [relationshipChallenge, first],
+        )
+      ).rows[0].n,
+    ),
+    1,
+  );
+});
+
+test("username invitations resolve to UUIDs and reject unsafe targets", async () => {
+  const challenge = randomUUID();
+  await db.query(
+    "INSERT INTO public.challenges(id,created_by,name,start_date,timezone) VALUES ($1,$2,'Username invite',CURRENT_DATE,'UTC')",
+    [challenge, a],
+  );
+  await db.query("INSERT INTO public.challenge_members(challenge_id,user_id) VALUES ($1,$2)", [
+    challenge,
+    a,
+  ]);
+  const call = (username, token = randomUUID().replaceAll("-", "").repeat(2)) =>
+    asService(() =>
+      db.query("SELECT public.create_challenge_invitation($1,$2,$3,$4)", [
+        a,
+        challenge,
+        username,
+        token,
+      ]),
+    );
+  await assert.rejects(call("missing_user"), /Username not found/);
+  await assert.rejects(call("user_a"), /invite yourself/);
+  await call("user_b", "e".repeat(64));
+  await assert.rejects(call("user_b", "f".repeat(64)), /already been sent/);
+  await assert.rejects(
+    asService(() =>
+      db.query("SELECT public.create_challenge_invitation($1,$2,$3,$4)", [
+        a,
+        x,
+        "user_b",
+        "9".repeat(64),
+      ]),
+    ),
+    /already part|already full/i,
+  );
+  const stored = (
+    await db.query(
+      "SELECT invited_user_id,invited_username_snapshot,invited_email FROM public.challenge_invitations WHERE challenge_id=$1 AND revoked_at IS NULL",
+      [challenge],
+    )
+  ).rows[0];
+  assert.deepEqual(stored, {
+    invited_user_id: b,
+    invited_username_snapshot: "user_b",
+    invited_email: null,
+  });
 });
 
 test("atomic creation stores immutable challenge-specific target and money penalties", async () => {
@@ -1919,7 +2063,7 @@ test("atomic challenge creation rejects unauthenticated and direct partial creat
     db.query(
       `SELECT public.create_challenge_atomic(
         $1, $2, 'No owner', (date_trunc('week', CURRENT_DATE) + interval '7 days')::date,
-        'UTC', 52, 'opponent@example.com', $3, 15, 'money', 15, 10, 5,
+        'UTC', 52, 'user_b', $3, 15, 'money', 15, 10, 5,
         null, null, null, true, ARRAY['GR','SE']::text[]
       )`,
       [caller, randomUUID(), "c".repeat(64)],
@@ -1936,7 +2080,7 @@ test("atomic challenge creation rejects unauthenticated and direct partial creat
     db.query(
       `SELECT private.create_challenge_atomic(
         $1, $2, 'No owner', (date_trunc('week', CURRENT_DATE) + interval '7 days')::date,
-        'UTC', 52, 'opponent@example.com', $3, 15, 'money', 15, 10, 5,
+        'UTC', 52, 'user_b', $3, 15, 'money', 15, 10, 5,
         null, null, null, true, ARRAY['GR','SE']::text[]
       )`,
       [caller, randomUUID(), "c".repeat(64)],
@@ -3644,16 +3788,14 @@ test("security audit blocks direct cross-user, anon, unsafe-link and legacy func
     ) VALUES ($1,$2,'private-invite@example.com',$3,now()+interval '1 day',$4)`,
     [invitation, x, createHash("sha256").update(invitation).digest("hex"), a],
   );
-  assert.equal(
-    (
-      await asUser(b, () =>
-        db.query(
-          "UPDATE public.challenge_invitations SET invited_email='changed@example.com' WHERE id=$1 RETURNING id",
-          [invitation],
-        ),
-      )
-    ).rows.length,
-    0,
+  await assert.rejects(
+    asUser(b, () =>
+      db.query(
+        "UPDATE public.challenge_invitations SET invited_email='changed@example.com' WHERE id=$1 RETURNING id",
+        [invitation],
+      ),
+    ),
+    /permission denied|row-level security/,
   );
   const related = await asService(() => db.query("SELECT * FROM public.related_profiles($1)", [a]));
   assert.ok(related.rows.length >= 2);

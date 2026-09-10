@@ -88,7 +88,7 @@ test("refresh revalidates data without a destructive browser reload", async () =
   assert.doesNotMatch(await read("src/routes/index.tsx"), /location\.reload/);
 });
 
-test("Tempo navigation exposes one five-item bottom bar after persisted Goal activation", async () => {
+test("Tempo navigation exposes optional fitness areas only after persisted activation", async () => {
   const manifest = JSON.parse(await read("public/manifest.webmanifest"));
   assert.equal(manifest.name, "Tempo");
   assert.equal(manifest.short_name, "Tempo");
@@ -107,13 +107,17 @@ test("Tempo navigation exposes one five-item bottom bar after persisted Goal act
   assert.match(root, /apple-mobile-web-app-status-bar-style", content: "black-translucent"/);
   assert.match(root, /rel: "apple-touch-icon"[\s\S]*sizes: "180x180"[\s\S]*apple-touch-icon\.png/);
   const index = await read("src/routes/index.tsx");
-  assert.match(index, /data\.session \? "\/challenge" : "\/auth"/);
+  assert.match(index, /if \(data\.session\) throw redirect\(\{ to: "\/challenge" \}\)/);
+  assert.match(index, /component: WelcomePage/);
   assert.doesNotMatch(index, /window\.location/);
   const shell = await read("src/components/AppShell.tsx");
   for (const label of ["Challenge", "Training", "Meals", "Goal", "Profile"])
     assert.match(shell, new RegExp(`label: "${label}"`));
-  assert.match(shell, /item\.area === "challenge" \|\| item\.area === "profile" \|\| hasBulk/);
-  assert.match(shell, /aria-label=\{item\.label\}/);
+  assert.match(
+    shell,
+    /item\.area === "challenge" \|\| item\.area === "profile" \|\| hasFitnessTools/,
+  );
+  assert.match(shell, /aria-label=\{label\}/);
   assert.match(shell, /min-h-11/);
   assert.doesNotMatch(shell, /label: "Bulk"/);
   assert.doesNotMatch(shell, /disabled[\s\S]{0,120}>\s*Bulk\s*</);
@@ -128,7 +132,7 @@ test("Tempo navigation exposes one five-item bottom bar after persisted Goal act
   assert.match(guard, /bulkOwnerQueryOptions/);
   assert.match(guard, /ensureQueryData/);
   assert.match(guard, /prefetchBulk/);
-  assert.match(guard, /activeMemberships\.length === 0/);
+  assert.match(guard, /if \(!preferred\)/);
   assert.match(guard, /clearBulk\(\)/);
   assert.match(guard, /redirect\(\{ to: "\/bulk-onboarding", replace: true \}\)/);
   const onboarding = await read("src/routes/_authenticated/bulk-onboarding.tsx");
@@ -172,7 +176,7 @@ test("each product area has four contextual destinations and legacy/public data 
   assert.match(today, /planDay\.name/);
   assert.match(today, /isPublicGoal[\s\S]*WORKOUT_TYPES\.map/);
 
-  assert.match(shell, /hasBulk/);
+  assert.match(shell, /hasFitnessTools/);
   assert.doesNotMatch(shell, /PUBLIC_BULK_NAV|LEGACY_BULK_NAV/);
 });
 

@@ -2,6 +2,13 @@ import { queryOptions, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { BulkRole } from "./store";
 import { readRetryDelay, shouldRetryRead } from "./network-errors";
+export {
+  accountProductMode,
+  activeBulkMemberships,
+  preferredBulkMembership,
+  type AccountProductMode,
+} from "./bulk-mode";
+import { activeBulkMemberships } from "./bulk-mode";
 
 export type Membership = {
   bulk_profile_id: string;
@@ -11,9 +18,6 @@ export type Membership = {
   is_public: boolean;
   is_active: boolean;
 };
-
-export const activeBulkMemberships = (memberships: Membership[] | undefined) =>
-  memberships?.filter((membership) => membership.is_active !== false) ?? [];
 
 export const bulkMembershipFor = (
   memberships: Membership[] | undefined,

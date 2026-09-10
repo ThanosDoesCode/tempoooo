@@ -7,7 +7,7 @@ import {
   type ErrorComponentProps,
 } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { activeBulkMemberships, bulkOwnerQueryOptions, useMemberships } from "@/lib/bulk-access";
+import { bulkOwnerQueryOptions, preferredBulkMembership, useMemberships } from "@/lib/bulk-access";
 import { clearBulk, loadBulk, prefetchBulk, useBulkMeta } from "@/lib/store";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { DataError } from "@/components/ui-kit";
@@ -17,11 +17,11 @@ import { QueryCancellationRecovery } from "@/components/QueryCancellationRecover
 
 export const Route = createFileRoute("/_authenticated/bulk")({
   beforeLoad: async ({ context }) => {
-    const owners = activeBulkMemberships(
+    const preferred = preferredBulkMembership(
       await context.queryClient.ensureQueryData(bulkOwnerQueryOptions()),
     );
-    if (!owners.length) throw redirect({ to: "/bulk-onboarding", replace: true });
-    await prefetchBulk(owners[0]!.bulk_profile_id);
+    if (!preferred) throw redirect({ to: "/bulk-onboarding", replace: true });
+    await prefetchBulk(preferred.bulk_profile_id);
   },
   component: BulkLayout,
   errorComponent: BulkRouteError,
@@ -61,13 +61,12 @@ function BulkLayout() {
 
   useEffect(() => {
     if (!memberships) return;
-    const activeMemberships = memberships.filter((membership) => membership.is_active !== false);
-    if (activeMemberships.length === 0) {
+    const preferred = preferredBulkMembership(memberships);
+    if (!preferred) {
       clearBulk();
       void navigate({ to: "/bulk-onboarding", replace: true });
       return;
     }
-    const preferred = activeMemberships[0]!;
     if (preferred.bulk_profile_id !== bulkId) {
       loadBulk(preferred.bulk_profile_id, preferred.role).catch((e: Error) =>
         setError(userFacingError(e, "load your plan")),
@@ -83,8 +82,9 @@ function BulkLayout() {
           message={error}
           onRetry={() => {
             setError(null);
-            if (memberships?.[0])
-              void loadBulk(memberships[0].bulk_profile_id, memberships[0].role).catch((e: Error) =>
+            const preferred = preferredBulkMembership(memberships);
+            if (preferred)
+              void loadBulk(preferred.bulk_profile_id, preferred.role).catch((e: Error) =>
                 setError(userFacingError(e, "load your plan")),
               );
           }}
@@ -92,10 +92,13 @@ function BulkLayout() {
       </AppShell>
     );
   }
-  const hasActiveMembership =
-    memberships?.some((membership) => membership.is_active !== false) ?? false;
-  if (memberships && !hasActiveMembership) return null;
-  if (isLoading || (!memberships && !error) || (hasActiveMembership && !bulkId)) {
+  const preferred = preferredBulkMembership(memberships);
+  if (memberships && !preferred) return null;
+  if (
+    isLoading ||
+    (!memberships && !error) ||
+    (preferred && bulkId !== preferred.bulk_profile_id)
+  ) {
     return (
       <div className="space-y-3" aria-label="Loading plan">
         <div className="h-24 animate-pulse rounded-2xl bg-card" />

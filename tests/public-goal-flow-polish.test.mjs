@@ -48,17 +48,18 @@ test("training plan switching is visible, transactional and preserves completed 
 });
 
 test("inactive public Goal access is hidden without changing legacy My Bulk", async () => {
-  const [access, guard, profile, onboarding, migration] = await Promise.all([
+  const [access, mode, guard, profile, onboarding, migration] = await Promise.all([
     read("src/lib/bulk-access.ts"),
+    read("src/lib/bulk-mode.ts"),
     read("src/routes/_authenticated/bulk/route.tsx"),
     read("src/routes/_authenticated/profile.tsx"),
     read("src/routes/_authenticated/bulk-onboarding.tsx"),
     read("supabase/migrations/20260908120000_public_goal_mobile_flow_hardening.sql"),
   ]);
-  assert.match(access, /membership\.is_active !== false/);
+  assert.match(mode, /membership\.is_active !== false/);
   assert.match(access, /goal_status/);
   assert.match(access, /is_active: profile\?\.goal_status !== "inactive"/);
-  assert.match(guard, /activeBulkMemberships/);
+  assert.match(guard, /preferredBulkMembership/);
   assert.match(profile, /deactivatePublicGoal/);
   assert.match(profile, /clearBulk\(\)/);
   assert.match(profile, /is_active: false/);
@@ -76,21 +77,27 @@ test("inactive public Goal access is hidden without changing legacy My Bulk", as
 });
 
 test("public Meals never falls back to legacy presets and future dates are read-only", async () => {
-  const [today, mealsRoute, goalToday, presets, legacy, query, migration] = await Promise.all([
-    read("src/components/BulkNutritionLog.tsx"),
-    read("src/routes/_authenticated/bulk/meals.tsx"),
-    read("src/routes/_authenticated/bulk/index.tsx"),
-    read("src/lib/bulk-meal-presets-query.ts"),
-    read("src/lib/meals.ts"),
-    read("src/lib/bulk-nutrition-query.ts"),
-    read("supabase/migrations/20260908120000_public_goal_mobile_flow_hardening.sql"),
-  ]);
+  const [today, mealsRoute, goalToday, presetRoute, presets, legacy, query, migration, guard] =
+    await Promise.all([
+      read("src/components/BulkNutritionLog.tsx"),
+      read("src/routes/_authenticated/bulk/meals.tsx"),
+      read("src/routes/_authenticated/bulk/index.tsx"),
+      read("src/routes/_authenticated/bulk/meals_.presets.tsx"),
+      read("src/lib/bulk-meal-presets-query.ts"),
+      read("src/lib/meals.ts"),
+      read("src/lib/bulk-nutrition-query.ts"),
+      read("supabase/migrations/20260908120000_public_goal_mobile_flow_hardening.sql"),
+      read("src/routes/_authenticated/bulk/route.tsx"),
+    ]);
   assert.match(today, /No meal presets yet/);
   assert.match(today, /Create meals you eat often so logging them later is fast\./);
   assert.match(today, /to="\/bulk\/meals\/presets"/);
   for (const legacyName of ["Beef day", "Lentil day", "Kebab day", "Salmon day"])
     assert.doesNotMatch(today, new RegExp(legacyName));
   assert.match(presets, /\.eq\("bulk_profile_id", bulkProfileId\)/);
+  assert.match(presetRoute, /planMode === "legacy"[\s\S]*Navigate to="\/bulk"/);
+  assert.match(presetRoute, /bulkId && planMode === "public"/);
+  assert.match(guard, /bulkId !== preferred\.bulk_profile_id/);
   assert.match(legacy, /Beef day/);
   assert.match(mealsRoute, /bulkPlanModeFor\(memberships\.data, bulkId\)/);
   assert.match(mealsRoute, /publicNutrition = planMode === "public"/);

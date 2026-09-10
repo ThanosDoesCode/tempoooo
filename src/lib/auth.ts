@@ -3,19 +3,25 @@ import type { Session, User } from "@supabase/supabase-js";
 import { queryOptions } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { clearAccountScopedBrowserData } from "@/lib/browser-data";
+import { readRetryDelay, shouldRetryRead } from "@/lib/network-errors";
 
 export const authenticatedUserQueryOptions = () =>
   queryOptions({
     queryKey: ["authenticated-user"],
     queryFn: async () => {
       const { data, error } = await supabase.auth.getUser();
-      if (error && !data.user) return null;
+      if (error && !data.user && shouldRetryRead(0, error)) throw error;
+      if (error && !data.user) {
+        await supabase.auth.signOut({ scope: "local" });
+        return null;
+      }
       if (error) throw error;
       return data.user;
     },
     staleTime: 5 * 60_000,
     gcTime: 30 * 60_000,
-    retry: 1,
+    retry: shouldRetryRead,
+    retryDelay: readRetryDelay,
   });
 
 export function useAuth() {
@@ -44,12 +50,13 @@ export async function syncProfile(user: User) {
     (user.user_metadata?.["name"] as string | undefined) ??
     user.email?.split("@")[0] ??
     "Athlete";
-  await supabase.from("profiles").upsert({
+  const { error } = await supabase.from("profiles").upsert({
     id: user.id,
     email: user.email ?? null,
     display_name: name,
     avatar_url: (user.user_metadata?.["avatar_url"] as string | undefined) ?? null,
   });
+  if (error) throw error;
 }
 
 export async function signOut() {

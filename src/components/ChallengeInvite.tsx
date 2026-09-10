@@ -3,12 +3,17 @@ import { Copy, Link2, RefreshCw } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, Note, PendingLabel, SectionTitle } from "@/components/ui-kit";
 import { supabase } from "@/integrations/supabase/client";
-import { randomToken, sha256Hex, useAuth } from "@/lib/auth";
-import { userFacingError } from "@/lib/network-errors";
+import { randomToken, sha256Hex } from "@/lib/auth";
+import {
+  challengeUsernameError,
+  normalizeUsername,
+  usernameValidationError,
+} from "@/lib/account-profile";
+import { createChallengeInvitation } from "@/lib/privileged-rpcs.functions";
 
 type Invitation = {
   id: string;
-  invited_email: string;
+  invited_username_snapshot: string | null;
   expires_at: string;
   accepted_at: string | null;
   revoked_at: string | null;
@@ -21,7 +26,7 @@ function usePendingInvites(challengeId: string | undefined) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("challenge_invitations")
-        .select("id, invited_email, expires_at, accepted_at, revoked_at")
+        .select("id, invited_username_snapshot, expires_at, accepted_at, revoked_at")
         .eq("challenge_id", challengeId!)
         .is("accepted_at", null)
         .is("revoked_at", null)
@@ -37,9 +42,8 @@ function usePendingInvites(challengeId: string | undefined) {
  * Regenerating replaces every pending invitation with a single fresh one.
  */
 export function ChallengeInviteCard({ challengeId }: { challengeId: string }) {
-  const { user } = useAuth();
   const { data: pending, isLoading, error: loadError, refetch } = usePendingInvites(challengeId);
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [link, setLink] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -47,35 +51,31 @@ export function ChallengeInviteCard({ challengeId }: { challengeId: string }) {
   const [notice, setNotice] = useState<string | null>(null);
 
   const current = pending?.[0];
-  const target = email.trim().toLowerCase() || current?.invited_email || "";
+  const target = normalizeUsername(username || current?.invited_username_snapshot || "");
 
   const generate = async () => {
-    if (!user || !target) return;
+    const validationError = usernameValidationError(target);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
     setBusy(true);
     setError(null);
     setNotice(null);
     try {
-      const { error: revokeError } = await supabase
-        .from("challenge_invitations")
-        .update({ revoked_at: new Date().toISOString() })
-        .eq("challenge_id", challengeId)
-        .is("accepted_at", null)
-        .is("revoked_at", null);
-      if (revokeError) throw revokeError;
       const token = randomToken();
-      const { error: e } = await supabase.from("challenge_invitations").insert({
-        challenge_id: challengeId,
-        invited_email: target,
-        token_hash: await sha256Hex(token),
-        expires_at: new Date(Date.now() + 14 * 86_400_000).toISOString(),
-        created_by: user.id,
+      await createChallengeInvitation({
+        data: {
+          challengeId,
+          username: target,
+          tokenHash: await sha256Hex(token),
+        },
       });
-      if (e) throw e;
       setLink(`${window.location.origin}/invite/challenge/${token}`);
       await refetch();
       setNotice("Invitation link created.");
     } catch (e) {
-      setError(userFacingError(e, "create an invitation link", { inputPreserved: true }));
+      setError(challengeUsernameError(e, target));
     } finally {
       setBusy(false);
     }
@@ -111,8 +111,10 @@ export function ChallengeInviteCard({ challengeId }: { challengeId: string }) {
       ) : current ? (
         <p className="text-xs text-muted-foreground">
           Pending invitation for{" "}
-          <span className="font-medium text-foreground">{current.invited_email}</span>, expires{" "}
-          {new Date(current.expires_at).toLocaleDateString()}.
+          <span className="font-medium text-foreground">
+            @{current.invited_username_snapshot ?? "Tempo user"}
+          </span>
+          , expires {new Date(current.expires_at).toLocaleDateString()}.
         </p>
       ) : (
         <p className="text-xs text-muted-foreground">No pending invitation right now.</p>
@@ -120,14 +122,16 @@ export function ChallengeInviteCard({ challengeId }: { challengeId: string }) {
 
       <label className="mt-3 block">
         <span className="mb-1 block text-[11px] uppercase tracking-wider text-muted-foreground">
-          Opponent email
+          Username
         </span>
         <input
-          type="email"
+          type="text"
+          autoCapitalize="none"
+          autoCorrect="off"
           disabled={busy}
-          value={email}
-          placeholder={current?.invited_email ?? "friend@email.com"}
-          onChange={(e) => setEmail(e.target.value)}
+          value={username}
+          placeholder={current?.invited_username_snapshot ?? "Search username"}
+          onChange={(e) => setUsername(e.target.value)}
           className="w-full rounded-xl border border-border bg-elevated px-3 py-2.5 text-sm outline-none focus:border-ring"
         />
       </label>
@@ -135,7 +139,7 @@ export function ChallengeInviteCard({ challengeId }: { challengeId: string }) {
       <button
         type="button"
         onClick={() => void generate()}
-        disabled={busy || !target}
+        disabled={busy || !!usernameValidationError(target)}
         className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
       >
         {!busy && (link ? <RefreshCw className="h-4 w-4" /> : <Link2 className="h-4 w-4" />)}
@@ -176,7 +180,7 @@ export function ChallengeInviteCard({ challengeId }: { challengeId: string }) {
       <div className="mt-2">
         <Note>
           The link is shown once for security. Creating a new one cancels any earlier link, only the
-          invited email can accept it, and it stops working once your opponent joins.
+          invited username can accept it, and it stops working once your opponent joins.
         </Note>
       </div>
     </Card>

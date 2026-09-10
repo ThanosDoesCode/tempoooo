@@ -7,6 +7,8 @@ import { userFacingError } from "@/lib/network-errors";
 
 export const Route = createFileRoute("/auth")({
   ssr: false,
+  validateSearch: (search: Record<string, unknown>): { mode?: "signin" | "signup" } =>
+    search["mode"] === "signup" || search["mode"] === "signin" ? { mode: search["mode"] } : {},
   head: () => ({
     meta: [
       { title: "Sign in — Tempo" },
@@ -29,7 +31,8 @@ type PendingAction = "password" | "google" | null;
 
 function AuthPage() {
   const navigate = useNavigate();
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const search = Route.useSearch();
+  const [mode, setMode] = useState<"signin" | "signup">(search.mode ?? "signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [pending, setPending] = useState<PendingAction>(null);
@@ -39,10 +42,12 @@ function AuthPage() {
     // Remove credentials written by releases that predated browser-managed password saving.
     localStorage.removeItem("saved-credentials");
     void supabase.auth.getSession().then(async ({ data }) => {
-      if (data.session?.user) {
+      if (!data.session?.user) return;
+      try {
         await syncProfile(data.session.user);
         await navigate({ to: "/challenge", replace: true });
-        return;
+      } catch (error) {
+        setNotice({ kind: "error", text: userFacingError(error, "restore your account") });
       }
     });
   }, [navigate]);
@@ -69,8 +74,12 @@ function AuthPage() {
       return;
     }
     if (data.user && data.session) {
-      await syncProfile(data.user);
-      await navigate({ to: "/challenge", replace: true });
+      try {
+        await syncProfile(data.user);
+        await navigate({ to: "/challenge", replace: true });
+      } catch (error) {
+        setNotice({ kind: "error", text: userFacingError(error, "finish signing in") });
+      }
     } else {
       setPassword("");
       setNotice({

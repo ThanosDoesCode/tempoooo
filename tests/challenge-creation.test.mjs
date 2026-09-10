@@ -10,6 +10,8 @@ test("Challenge creation uses the authenticated server function and no browser R
   assert.ok(createBlock);
   assert.match(source, /import \{ createChallenge \} from "@\/lib\/privileged-rpcs\.functions"/);
   assert.match(createBlock, /await createChallenge\(\{\s*data:/);
+  assert.match(createBlock, /invitedUsername: normalizeUsername\(username\)/);
+  assert.doesNotMatch(createBlock, /invitedEmail|Opponent email|type="email"/);
   assert.doesNotMatch(createBlock, /supabase\.rpc\(\s*"create_challenge_atomic"/);
   assert.doesNotMatch(
     createBlock,

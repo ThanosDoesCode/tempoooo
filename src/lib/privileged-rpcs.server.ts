@@ -143,7 +143,7 @@ export type CreateChallengeInput = {
   startDate: string;
   timezone: string;
   durationWeeks: number;
-  invitedEmail: string;
+  invitedUsername: string;
   tokenHash: string;
   weeklyTargetKm: number;
   penaltyMode: "money" | "custom";
@@ -165,7 +165,7 @@ export const createChallengeFor = (caller: string, input: CreateChallengeInput) 
     _start_date: input.startDate,
     _timezone: input.timezone,
     _duration_weeks: input.durationWeeks,
-    _invited_email: input.invitedEmail,
+    _invited_username: input.invitedUsername,
     _token_hash: input.tokenHash,
     _weekly_target_km: input.weeklyTargetKm,
     _penalty_mode: input.penaltyMode,
@@ -178,6 +178,34 @@ export const createChallengeFor = (caller: string, input: CreateChallengeInput) 
     _travel_pause_enabled: input.travelPauseEnabled,
     _travel_pause_home_countries: input.travelPauseHomeCountries,
   });
+
+export async function usernameAvailableFor(caller: string, username: string) {
+  return rpc<boolean>("username_available", { _caller: caller, _username: username });
+}
+
+export async function setAccountUsernameFor(
+  caller: string,
+  username: string,
+  completeOnboarding: boolean,
+) {
+  return rpc<string>("set_account_username", {
+    _caller: caller,
+    _username: username,
+    _complete_onboarding: completeOnboarding,
+  });
+}
+
+export async function createChallengeInvitationFor(
+  caller: string,
+  input: { challengeId: string; username: string; tokenHash: string },
+) {
+  return rpc<string>("create_challenge_invitation", {
+    _caller: caller,
+    _challenge: input.challengeId,
+    _invited_username: input.username,
+    _token_hash: input.tokenHash,
+  });
+}
 
 export const disableChallengePushFor = (caller: string) =>
   rpc<null>("disable_challenge_push", { _caller: caller });

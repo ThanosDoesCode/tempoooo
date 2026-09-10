@@ -232,8 +232,11 @@ test("the five-step UI submits one atomic RPC and does not expose Bulk early", a
   assert.doesNotMatch(onboarding, /activate_my_bulk/);
   assert.match(onboarding, /Creating My Goal/);
   assert.match(onboarding, /bulkOwnerQueryOptions/);
-  assert.match(profile, /Start My Goal/);
+  assert.match(profile, /Set up fitness tools/);
   assert.match(guard, /redirect\(\{ to: "\/bulk-onboarding", replace: true \}\)/);
-  assert.match(shell, /item\.area === "challenge" \|\| item\.area === "profile" \|\| hasBulk/);
+  assert.match(
+    shell,
+    /item\.area === "challenge" \|\| item\.area === "profile" \|\| hasFitnessTools/,
+  );
   assert.doesNotMatch(shell, /label: "Bulk"/);
 });

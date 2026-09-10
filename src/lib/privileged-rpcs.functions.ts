@@ -42,13 +42,53 @@ export const getAdminDiagnostics = createServerFn({ method: "GET" })
     return adminDiagnosticsFor(context.userId);
   });
 
+const usernameInput = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .regex(/^[a-z0-9_]{3,20}$/);
+
+export const checkUsernameAvailability = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data) => z.object({ username: usernameInput }).parse(data))
+  .handler(async ({ data, context }) => {
+    const { usernameAvailableFor } = await import("./privileged-rpcs.server");
+    return usernameAvailableFor(context.userId, data.username);
+  });
+
+export const saveAccountUsername = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data) =>
+    z.object({ username: usernameInput, completeOnboarding: z.boolean() }).parse(data),
+  )
+  .handler(async ({ data, context }) => {
+    const { setAccountUsernameFor } = await import("./privileged-rpcs.server");
+    return setAccountUsernameFor(context.userId, data.username, data.completeOnboarding);
+  });
+
+export const createChallengeInvitation = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data) =>
+    z
+      .object({
+        challengeId: z.string().uuid(),
+        username: usernameInput,
+        tokenHash: z.string().regex(/^[0-9a-f]{64}$/),
+      })
+      .parse(data),
+  )
+  .handler(async ({ data, context }) => {
+    const { createChallengeInvitationFor } = await import("./privileged-rpcs.server");
+    return createChallengeInvitationFor(context.userId, data);
+  });
+
 const createChallengeInput = z.object({
   requestId: z.string().uuid(),
   name: z.string().min(1).max(120),
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   timezone: z.string().min(1).max(100),
   durationWeeks: z.number().int().min(52).max(520),
-  invitedEmail: z.string().email().max(254),
+  invitedUsername: usernameInput,
   tokenHash: z.string().regex(/^[0-9a-f]{64}$/),
   weeklyTargetKm: z.number().min(1).max(500),
   penaltyMode: z.enum(["money", "custom"]),

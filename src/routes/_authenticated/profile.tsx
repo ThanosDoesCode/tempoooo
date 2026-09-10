@@ -1,15 +1,26 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Dumbbell, Lock, LogOut, Mail, RotateCcw } from "lucide-react";
+import { Dumbbell, Lock, LogOut, Mail, RotateCcw, UserRound } from "lucide-react";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { Card, Note, SectionTitle } from "@/components/ui-kit";
 import { ChallengeInviteCard } from "@/components/ChallengeInvite";
 import { useAuth, signOut } from "@/lib/auth";
-import { deactivatePublicGoal, useMemberships } from "@/lib/bulk-access";
+import {
+  accountProductMode,
+  deactivatePublicGoal,
+  preferredBulkMembership,
+  useMemberships,
+} from "@/lib/bulk-access";
 import { useChallengeMembers, useMyChallenge } from "@/lib/challenge";
 import { clearBulk, resetBulkData } from "@/lib/store";
 import { useAcknowledgeGoal, useGoalDiscovery } from "@/lib/goal-discovery";
+import {
+  normalizeUsername,
+  useAccountProfile,
+  usernameValidationError,
+} from "@/lib/account-profile";
+import { checkUsernameAvailability, saveAccountUsername } from "@/lib/privileged-rpcs.functions";
 
 export const Route = createFileRoute("/_authenticated/profile")({
   head: () => ({
@@ -33,9 +44,15 @@ export const Route = createFileRoute("/_authenticated/profile")({
 
 function ProfilePage() {
   const { user } = useAuth();
+  const accountProfile = useAccountProfile(user?.id);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { data: memberships, isLoading: bulkAccessLoading } = useMemberships();
+  const {
+    data: memberships,
+    isLoading: bulkAccessLoading,
+    isError: bulkAccessError,
+    refetch: refetchBulkAccess,
+  } = useMemberships();
   const goalDiscovery = useGoalDiscovery();
   const acknowledgeGoal = useAcknowledgeGoal();
   const { data: challenge } = useMyChallenge();
@@ -46,15 +63,36 @@ function ProfilePage() {
   const [resetTargets, setResetTargets] = useState(false);
   const [resetDone, setResetDone] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [editingUsername, setEditingUsername] = useState(false);
+  const [username, setUsername] = useState("");
+  const [usernameBusy, setUsernameBusy] = useState(false);
+  const [usernameError, setUsernameError] = useState<string | null>(null);
+  const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
   const acknowledgementStarted = useRef(false);
 
-  const ownedPlan = memberships?.find((m) => m.role === "owner" && m.is_active !== false);
+  useEffect(() => {
+    if (!editingUsername || usernameValidationError(username)) {
+      setUsernameAvailable(null);
+      return;
+    }
+    const normalized = normalizeUsername(username);
+    const timer = window.setTimeout(() => {
+      void checkUsernameAvailability({ data: { username: normalized } })
+        .then(setUsernameAvailable)
+        .catch(() => setUsernameAvailable(null));
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [editingUsername, username]);
+
+  const ownedPlan = preferredBulkMembership(memberships);
+  const productMode = accountProductMode(memberships);
   const canInvite = !!challenge && (challengeMembers?.length ?? 0) < 2;
 
   useEffect(() => {
     if (
       ownedPlan ||
       goalDiscovery.isLoading ||
+      goalDiscovery.isError ||
       goalDiscovery.data?.goal_seen_at != null ||
       acknowledgementStarted.current
     )
@@ -63,7 +101,13 @@ function ProfilePage() {
     void acknowledgeGoal().catch(() => {
       acknowledgementStarted.current = false;
     });
-  }, [acknowledgeGoal, goalDiscovery.data?.goal_seen_at, goalDiscovery.isLoading, ownedPlan]);
+  }, [
+    acknowledgeGoal,
+    goalDiscovery.data?.goal_seen_at,
+    goalDiscovery.isError,
+    goalDiscovery.isLoading,
+    ownedPlan,
+  ]);
 
   const reset = async () => {
     if (!ownedPlan) return;
@@ -101,7 +145,7 @@ function ProfilePage() {
 
   return (
     <AppShell>
-      <PageHeader title="Profile" subtitle="Your account and plan access" />
+      <PageHeader title="Profile" subtitle="Your account, Challenge identity and optional tools" />
 
       {resetDone && !ownedPlan ? (
         <Note>Your Goal plan was reset. Completed history remains available after setup.</Note>
@@ -115,16 +159,129 @@ function ProfilePage() {
         </div>
       </Card>
 
+      <Card className="mt-3">
+        <SectionTitle>Username</SectionTitle>
+        {!editingUsername ? (
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-sm">
+              <UserRound className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              <span className="font-medium">@{accountProfile.data?.username ?? "…"}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setUsername(accountProfile.data?.username ?? "");
+                setEditingUsername(true);
+              }}
+              className="min-h-11 rounded-xl px-3 text-sm font-semibold text-primary"
+            >
+              Edit
+            </button>
+          </div>
+        ) : (
+          <div>
+            <div className="flex min-h-11 items-center rounded-xl border border-border bg-elevated px-3">
+              <span className="text-muted-foreground">@</span>
+              <input
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
+                autoCapitalize="none"
+                autoCorrect="off"
+                className="min-w-0 flex-1 bg-transparent px-1 py-2 outline-none"
+              />
+            </div>
+            {usernameError ? <p className="mt-2 text-xs text-danger">{usernameError}</p> : null}
+            {!usernameError && usernameAvailable !== null ? (
+              <p className={`mt-2 text-xs ${usernameAvailable ? "text-good" : "text-danger"}`}>
+                @{normalizeUsername(username)} is{" "}
+                {usernameAvailable ? "available" : "already taken"}
+              </p>
+            ) : null}
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setEditingUsername(false)}
+                className="min-h-11 rounded-xl border border-border text-sm font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={usernameBusy || usernameAvailable === false}
+                onClick={() => {
+                  const validation = usernameValidationError(username);
+                  if (validation) {
+                    setUsernameError(validation);
+                    return;
+                  }
+                  setUsernameBusy(true);
+                  setUsernameError(null);
+                  void saveAccountUsername({
+                    data: {
+                      username: normalizeUsername(username),
+                      completeOnboarding: false,
+                    },
+                  })
+                    .then(() =>
+                      queryClient.invalidateQueries({ queryKey: ["account-profile", user?.id] }),
+                    )
+                    .then(() => setEditingUsername(false))
+                    .catch((cause: unknown) =>
+                      setUsernameError(
+                        /taken|unique/i.test(cause instanceof Error ? cause.message : "")
+                          ? "That username is already taken."
+                          : "We couldn't update your username. Try again.",
+                      ),
+                    )
+                    .finally(() => setUsernameBusy(false));
+                }}
+                className="min-h-11 rounded-xl bg-primary text-sm font-semibold text-primary-foreground disabled:opacity-50"
+              >
+                {usernameBusy ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </div>
+        )}
+      </Card>
+
       {bulkAccessLoading ? (
         <div className="mt-3 h-36 animate-pulse rounded-2xl bg-card" aria-label="Loading plan" />
-      ) : ownedPlan ? (
+      ) : bulkAccessError ? (
         <Card className="mt-3">
-          <SectionTitle>{ownedPlan.is_public ? "My Goal Plan" : "My Bulk Plan"}</SectionTitle>
+          <SectionTitle>Fitness tools</SectionTitle>
+          <p className="text-sm text-muted-foreground">
+            Tempo couldn&apos;t check your fitness setup. Your account and Challenge are still safe.
+          </p>
+          <button
+            type="button"
+            onClick={() => void refetchBulkAccess()}
+            className="mt-3 min-h-11 w-full rounded-xl border border-border px-4 text-sm font-semibold"
+          >
+            Retry
+          </button>
+        </Card>
+      ) : productMode === "legacy" && ownedPlan ? (
+        <Card className="mt-3">
+          <SectionTitle>My Bulk Plan</SectionTitle>
           <button
             onClick={() => void navigate({ to: "/bulk" })}
             className="min-h-11 w-full rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground"
           >
-            {ownedPlan.is_public ? "Open My Goal" : "Open My Bulk"}
+            Open My Bulk
+          </button>
+          {error ? <p className="mt-2 text-xs text-danger">{error}</p> : null}
+        </Card>
+      ) : productMode === "public" && ownedPlan ? (
+        <Card className="mt-3">
+          <SectionTitle>Fitness Goal</SectionTitle>
+          <p className="text-sm leading-6 text-muted-foreground">
+            Training, nutrition and body-composition tracking are active.
+          </p>
+          <button
+            onClick={() => void navigate({ to: "/bulk" })}
+            className="mt-3 min-h-11 w-full rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground"
+          >
+            Open Goal
           </button>
           {error ? <p className="mt-2 text-xs text-danger">{error}</p> : null}
         </Card>
@@ -136,7 +293,7 @@ function ProfilePage() {
             </span>
             <div>
               <div className="flex items-center gap-2">
-                <SectionTitle>Get My Goal Plan</SectionTitle>
+                <SectionTitle>Fitness tools</SectionTitle>
                 {goalDiscovery.isSuccess && goalDiscovery.data?.goal_seen_at == null ? (
                   <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold uppercase text-primary">
                     New
@@ -144,8 +301,7 @@ function ProfilePage() {
                 ) : null}
               </div>
               <p className="text-sm leading-6 text-muted-foreground">
-                Build a personalized nutrition and training setup based on your goals, experience
-                and schedule.
+                Track your training, nutrition and body-composition goal alongside your Challenges.
               </p>
             </div>
           </div>
@@ -154,7 +310,7 @@ function ProfilePage() {
             onClick={() => void navigate({ to: "/bulk-onboarding" })}
             className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground active:scale-[0.98]"
           >
-            <Dumbbell className="h-4 w-4" aria-hidden="true" /> Start My Goal
+            <Dumbbell className="h-4 w-4" aria-hidden="true" /> Set up fitness tools
           </button>
         </Card>
       )}
@@ -169,11 +325,11 @@ function ProfilePage() {
         <Card className="mt-3">
           <SectionTitle>Danger zone</SectionTitle>
           <Note>
-            {ownedPlan.is_public
-              ? "Resetting removes the active Goal setup and returns you to onboarding. Completed workout and nutrition history stays unchanged."
+            {productMode === "public"
+              ? "Deactivating hides the fitness tools and returns them to setup. Completed workout and nutrition history stays unchanged."
               : "Resetting clears every daily log, workout, weekly note and progress photo on your plan. The plan itself stays in place. This cannot be undone."}
           </Note>
-          {!ownedPlan.is_public ? (
+          {productMode === "legacy" ? (
             <label className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
               <input
                 type="checkbox"
@@ -192,8 +348,8 @@ function ProfilePage() {
               }}
               className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-danger/50 py-3 text-sm font-semibold text-danger"
             >
-              <RotateCcw className="h-4 w-4" /> Reset my {ownedPlan.is_public ? "Goal" : "bulk"}{" "}
-              plan
+              <RotateCcw className="h-4 w-4" />
+              {productMode === "public" ? "Deactivate fitness tools" : "Reset my bulk plan"}
             </button>
           ) : (
             <div className="mt-3 grid grid-cols-2 gap-2">
@@ -214,7 +370,9 @@ function ProfilePage() {
           )}
           {resetDone ? (
             <p className="mt-2 text-xs text-good">
-              Your {ownedPlan.is_public ? "Goal" : "bulk"} plan is now empty.
+              {productMode === "public"
+                ? "Fitness tools are inactive. Your completed history remains available."
+                : "Your bulk plan is now empty."}
             </p>
           ) : null}
         </Card>
