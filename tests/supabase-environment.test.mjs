@@ -26,6 +26,16 @@ test("browser build uses canonical import.meta.env Supabase variables first", ()
   );
 });
 
+test("browser client uses direct Vite property reads instead of the whole env object", async () => {
+  const browserClient = await read("src/integrations/supabase/client.ts");
+  assert.match(browserClient, /import\.meta\.env\.VITE_SUPABASE_URL/);
+  assert.match(browserClient, /import\.meta\.env\.VITE_SUPABASE_PUBLISHABLE_KEY/);
+  assert.doesNotMatch(
+    browserClient,
+    /resolvePublicSupabaseConfiguration\(import\.meta\.env,\s*runtimeEnvironment\)/,
+  );
+});
+
 test("SSR runtime uses process.env VITE_SUPABASE variables", () => {
   assert.deepEqual(
     resolvePublicSupabaseConfiguration(

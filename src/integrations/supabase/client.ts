@@ -32,8 +32,19 @@ function createSupabaseFetch(supabaseKey: string): typeof fetch {
 }
 
 function createSupabaseClient() {
+  // Keep these as direct Vite property reads. Vite statically replaces direct
+  // accesses, while passing the whole import.meta.env object can omit managed
+  // variables from the production browser bundle.
+  const buildSupabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const buildSupabasePublishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
   const runtimeEnvironment = typeof process !== "undefined" ? process.env : {};
-  const configuration = resolvePublicSupabaseConfiguration(import.meta.env, runtimeEnvironment);
+  const configuration = resolvePublicSupabaseConfiguration(
+    {
+      VITE_SUPABASE_URL: buildSupabaseUrl,
+      VITE_SUPABASE_PUBLISHABLE_KEY: buildSupabasePublishableKey,
+    },
+    runtimeEnvironment,
+  );
   const SUPABASE_URL = configuration.url;
   const SUPABASE_PUBLISHABLE_KEY = configuration.publishableKey;
 
