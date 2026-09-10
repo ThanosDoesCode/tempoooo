@@ -141,7 +141,7 @@ export async function createBulkNutritionEntry(
     _protein: input.protein,
     _carbs: input.carbs,
     _fat: input.fat,
-    _note: input.note ?? undefined,
+    ...(input.note != null ? { _note: input.note } : {}),
     _local_today: localToday(),
   });
   if (error) throw error;
@@ -160,7 +160,7 @@ export async function updateBulkNutritionEntry(
     _protein: input.protein,
     _carbs: input.carbs,
     _fat: input.fat,
-    _note: input.note ?? undefined,
+    ...(input.note != null ? { _note: input.note } : {}),
     _local_today: localToday(),
   });
   if (error) throw error;
