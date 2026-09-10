@@ -25,7 +25,7 @@ import {
   resetUserScopedQueries,
 } from "@/lib/query-cancellation";
 import { clearAccountScopedBrowserData } from "@/lib/browser-data";
-import { canDismissStartupScreen } from "@/lib/startup";
+import { resolveStartupPhase, STARTUP_DEADLINE_MS, startupDiagnostic } from "@/lib/startup";
 
 function NotFoundComponent() {
   return (
@@ -189,6 +189,8 @@ function RootComponent() {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const previousUserId = useRef<string | null | undefined>(undefined);
   const startupDismissed = useRef(false);
+  const [startupAttempt, setStartupAttempt] = useState(0);
+  const [startupError, setStartupError] = useState<Error | null>(null);
   const [startupSession, setStartupSession] = useState<{
     restored: boolean;
     userId: string | null;
@@ -207,53 +209,111 @@ function RootComponent() {
       clearBulk();
       void resetUserScopedQueries(queryClient);
     });
-    void supabase.auth.getSession().then(({ data: sessionData }) => {
-      setStartupSession({
-        restored: true,
-        userId: sessionData.session?.user.id ?? null,
-      });
-    });
     return () => data.subscription.unsubscribe();
   }, [queryClient]);
 
   useEffect(() => {
-    if (
-      startupDismissed.current ||
-      !canDismissStartupScreen({
-        sessionRestored: startupSession.restored,
-        sessionUserId: startupSession.userId,
-        routePending,
-        pathname,
+    let active = true;
+    setStartupSession({ restored: false, userId: null });
+    void supabase.auth
+      .getSession()
+      .then(({ data: sessionData, error }) => {
+        if (!active) return;
+        if (error) throw error;
+        setStartupSession({ restored: true, userId: sessionData.session?.user.id ?? null });
+        startupDiagnostic("auth_resolved", { signedIn: !!sessionData.session?.user });
       })
-    ) {
-      return;
-    }
+      .catch((error: unknown) => {
+        if (active) setStartupError(error instanceof Error ? error : new Error("Session failed"));
+      });
+    return () => {
+      active = false;
+    };
+  }, [startupAttempt]);
+
+  const startupPhase = resolveStartupPhase({
+    sessionRestored: startupSession.restored,
+    sessionUserId: startupSession.userId,
+    routePending,
+    pathname,
+    recoverableError: startupError !== null,
+  });
+
+  useEffect(() => {
+    if (startupPhase !== "restoring") return;
+    const deadline = window.setTimeout(() => {
+      void queryClient.cancelQueries({
+        predicate: ({ queryKey }) =>
+          queryKey[0] === "authenticated-user" ||
+          queryKey[0] === "account-profile" ||
+          queryKey[0] === "bulk-memberships" ||
+          queryKey[0] === "goal-discovery",
+      });
+      setStartupError(new Error("Tempo startup timed out"));
+    }, STARTUP_DEADLINE_MS);
+    return () => window.clearTimeout(deadline);
+  }, [queryClient, startupAttempt, startupPhase]);
+
+  useEffect(() => {
+    if (startupDismissed.current || startupPhase === "restoring") return;
 
     const frame = window.requestAnimationFrame(() => {
       document.documentElement.dataset["tempoReady"] = "true";
       startupDismissed.current = true;
+      startupDiagnostic("startup_cover_hidden", { state: startupPhase });
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [pathname, routePending, startupSession]);
+  }, [startupPhase]);
+
+  const retryStartup = () => {
+    startupDismissed.current = false;
+    delete document.documentElement.dataset["tempoReady"];
+    setStartupError(null);
+    setStartupAttempt((attempt) => attempt + 1);
+    void router.invalidate();
+  };
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AppCrashBoundary
-        onRetry={() => {
-          void queryClient.refetchQueries({ type: "active" });
-        }}
-        onChallengeHome={() =>
-          recoverChallengeRoute(
-            (options) => router.navigate(options),
-            () => router.invalidate(),
-          )
-        }
-      >
-        <ChallengePushSession />
-        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-        <Outlet />
-        <Toaster position="bottom-center" />
-      </AppCrashBoundary>
+      {startupPhase === "recoverable-error" ? (
+        <main className="fixed inset-0 z-[101] grid place-items-center bg-background px-6 text-center">
+          <div className="w-full max-w-sm" role="alert">
+            <div className="mx-auto grid size-16 place-items-center rounded-full border border-primary/30 text-3xl font-extrabold italic text-primary">
+              T
+            </div>
+            <h1 className="mt-5 text-xl font-semibold text-foreground">
+              Tempo couldn&apos;t start
+            </h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Check your connection and retry. Your session and saved data are unchanged.
+            </p>
+            <button
+              type="button"
+              onClick={retryStartup}
+              className="mt-6 inline-flex min-h-11 items-center justify-center rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground active:opacity-80"
+            >
+              Retry
+            </button>
+          </div>
+        </main>
+      ) : (
+        <AppCrashBoundary
+          onRetry={() => {
+            void queryClient.refetchQueries({ type: "active" });
+          }}
+          onChallengeHome={() =>
+            recoverChallengeRoute(
+              (options) => router.navigate(options),
+              () => router.invalidate(),
+            )
+          }
+        >
+          <ChallengePushSession />
+          {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+          <Outlet />
+          <Toaster position="bottom-center" />
+        </AppCrashBoundary>
+      )}
     </QueryClientProvider>
   );
 }

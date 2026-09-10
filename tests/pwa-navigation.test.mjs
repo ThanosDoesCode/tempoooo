@@ -2,7 +2,13 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile, readdir } from "node:fs/promises";
 import { PULL_REFRESH_THRESHOLD, pullGesture } from "../src/lib/pull-to-refresh.ts";
-import { canDismissStartupScreen } from "../src/lib/startup.ts";
+import {
+  canDismissStartupScreen,
+  resolveStartupPhase,
+  STARTUP_DEADLINE_MS,
+  StartupTimeoutError,
+  withStartupDeadline,
+} from "../src/lib/startup.ts";
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
@@ -11,10 +17,14 @@ test("PWA launch cover follows real session and route readiness", async () => {
 
   assert.match(root, /className="tempo-startup" role="status" aria-label="Loading Tempo"/);
   assert.match(root, /className="tempo-startup-mark">T</);
-  assert.match(root, /supabase\.auth\.getSession\(\)/);
+  assert.match(root, /supabase\.auth\s*\.getSession\(\)/);
   assert.match(root, /state\.status === "pending"/);
   assert.match(root, /requestAnimationFrame/);
-  assert.doesNotMatch(root, /location\.reload|setTimeout/);
+  assert.match(root, /window\.setTimeout/);
+  assert.match(root, /STARTUP_DEADLINE_MS/);
+  assert.match(root, /Tempo couldn&apos;t start/);
+  assert.match(root, />\s*Retry\s*</);
+  assert.doesNotMatch(root, /location\.reload/);
   assert.match(
     styles,
     /\.tempo-startup[\s\S]*position: fixed;[\s\S]*background: var\(--color-background\)/,
@@ -67,6 +77,112 @@ test("PWA launch cover follows real session and route readiness", async () => {
     }),
     true,
   );
+});
+
+test("startup state always leaves restoring after settled data or its deadline", () => {
+  const restoring = {
+    sessionRestored: true,
+    routePending: true,
+    pathname: "/challenge",
+    sessionUserId: "user-a",
+  };
+  assert.equal(resolveStartupPhase(restoring), "restoring");
+  assert.ok(STARTUP_DEADLINE_MS > 0 && STARTUP_DEADLINE_MS <= 15_000);
+  assert.equal(resolveStartupPhase({ ...restoring, recoverableError: true }), "recoverable-error");
+
+  // Core/no-membership, active Goal, inactive Goal and legacy memberships all
+  // resolve at the route layer; optional membership shape is not a loading flag.
+  for (const accountState of ["core", "public-goal", "inactive-goal", "legacy"]) {
+    assert.equal(
+      resolveStartupPhase({
+        sessionRestored: true,
+        routePending: false,
+        pathname: accountState === "core" ? "/challenge" : "/bulk",
+        sessionUserId: "user-a",
+      }),
+      "ready",
+    );
+  }
+
+  assert.equal(
+    resolveStartupPhase({
+      sessionRestored: true,
+      routePending: false,
+      pathname: "/auth",
+      sessionUserId: null,
+    }),
+    "signed-out",
+  );
+});
+
+test("delayed startup reads remain restoring only until they settle", async () => {
+  let sessionRestored = false;
+  let profileResolved = false;
+  let membershipsResolved = false;
+  let routePending = true;
+  assert.equal(
+    resolveStartupPhase({
+      sessionRestored,
+      routePending,
+      pathname: "/challenge",
+      sessionUserId: null,
+    }),
+    "restoring",
+  );
+
+  await Promise.resolve(); // delayed auth response
+  sessionRestored = true;
+  assert.equal(
+    resolveStartupPhase({
+      sessionRestored,
+      routePending,
+      pathname: "/challenge",
+      sessionUserId: "user-a",
+    }),
+    "restoring",
+  );
+
+  await Promise.resolve(); // delayed profile response
+  profileResolved = true;
+  routePending = !(profileResolved && membershipsResolved);
+  assert.equal(
+    resolveStartupPhase({
+      sessionRestored,
+      routePending,
+      pathname: "/challenge",
+      sessionUserId: "user-a",
+    }),
+    "restoring",
+  );
+
+  await Promise.resolve(); // delayed membership response
+  membershipsResolved = true;
+  routePending = !(profileResolved && membershipsResolved);
+  assert.notEqual(
+    resolveStartupPhase({
+      sessionRestored,
+      routePending,
+      pathname: "/challenge",
+      sessionUserId: "user-a",
+    }),
+    "restoring",
+  );
+});
+
+test("a never-settling startup read becomes a recoverable timeout", async () => {
+  let cancelled = false;
+  await assert.rejects(
+    withStartupDeadline(
+      new Promise(() => undefined),
+      "memberships",
+      () => {
+        cancelled = true;
+      },
+      5,
+    ),
+    (error) => error instanceof StartupTimeoutError && error.phase === "memberships",
+  );
+  assert.equal(cancelled, true);
 });
 
 test("pull-to-refresh ignores tiny, horizontal and mid-scroll gestures", () => {

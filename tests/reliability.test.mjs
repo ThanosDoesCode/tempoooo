@@ -22,6 +22,26 @@ test("read retries are bounded and limited to transient failures", () => {
   assert.equal(isNetworkError(new TypeError("Load failed")), true);
 });
 
+test("startup profile and membership failures stop after the bounded read retries", async () => {
+  for (const queryName of ["account-profile", "bulk-memberships"]) {
+    let attempts = 0;
+    const client = new QueryClient();
+    await assert.rejects(
+      client.fetchQuery({
+        queryKey: [queryName, "user-a"],
+        queryFn: () => {
+          attempts += 1;
+          throw new TypeError("Failed to fetch");
+        },
+        retry: shouldRetryRead,
+        retryDelay: 0,
+      }),
+      /Failed to fetch/,
+    );
+    assert.equal(attempts, 3);
+  }
+});
+
 test("write-facing network errors say that entered data is preserved", () => {
   const message = userFacingError(new TypeError("Failed to fetch"), "save the activity", {
     inputPreserved: true,
@@ -76,9 +96,16 @@ test("authenticated cold start retries transient identity/profile reads without 
   assert.match(route, /restore your Tempo session/);
   assert.match(route, /Promise\.all\(\[/);
   assert.match(route, /bulkOwnerQueryOptions\(\)/);
+  assert.match(route, /withStartupDeadline\(/);
+  assert.match(route, /cancelQueries\(\{ queryKey: \["bulk-memberships"\], exact: true \}\)/);
   assert.match(route, /if \(!profile\)[\s\S]*syncProfile\(user\)/);
+  assert.match(profile, /abortSignal\(signal\)/);
+  assert.match(route, /startupDiagnostic\("profile_resolved"/);
+  assert.match(route, /startupDiagnostic\("memberships_resolved"/);
   assert.match(root, /routePending/);
-  assert.match(root, /canDismissStartupScreen/);
+  assert.match(root, /resolveStartupPhase/);
+  assert.match(root, /Tempo startup timed out/);
+  assert.match(root, /startupPhase === "recoverable-error"/);
 });
 
 test("same-user token refresh does not reset active queries", () => {

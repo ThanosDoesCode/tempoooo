@@ -38,10 +38,11 @@ export const bulkPlanModeFor = (
 export const bulkOwnerQueryOptions = () =>
   queryOptions({
     queryKey: ["bulk-memberships"],
-    queryFn: async (): Promise<Membership[]> => {
+    queryFn: async ({ signal }): Promise<Membership[]> => {
       const { data, error } = await supabase
         .from("bulk_members")
-        .select("bulk_profile_id, role, bulk_profiles(owner_id, allow_editor, goal_status)");
+        .select("bulk_profile_id, role, bulk_profiles(owner_id, allow_editor, goal_status)")
+        .abortSignal(signal);
       if (error) throw error;
       return (data ?? [])
         .filter((r) => r.role === "owner")

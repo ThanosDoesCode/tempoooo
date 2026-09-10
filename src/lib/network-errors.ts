@@ -27,6 +27,7 @@ export function isOffline(): boolean {
 
 export function isNetworkError(error: unknown): boolean {
   if (isOffline()) return true;
+  if (error instanceof Error && error.name === "StartupTimeoutError") return true;
   const status = errorStatus(error);
   if (status === 0) return true;
   const message = messageOf(error).toLowerCase();

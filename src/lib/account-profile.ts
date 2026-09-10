@@ -39,11 +39,12 @@ export const accountProfileQueryOptions = (userId: string | undefined) =>
   queryOptions({
     queryKey: ["account-profile", userId],
     enabled: !!userId,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const { data, error } = await supabase
         .from("profiles")
         .select("id,username,account_onboarded_at")
         .eq("id", userId!)
+        .abortSignal(signal)
         .maybeSingle();
       if (error) throw error;
       return data as AccountProfile | null;
