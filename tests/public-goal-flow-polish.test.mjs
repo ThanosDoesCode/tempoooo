@@ -95,8 +95,10 @@ test("public Meals never falls back to legacy presets and future dates are read-
   for (const legacyName of ["Beef day", "Lentil day", "Kebab day", "Salmon day"])
     assert.doesNotMatch(today, new RegExp(legacyName));
   assert.match(presets, /\.eq\("bulk_profile_id", bulkProfileId\)/);
-  assert.match(presetRoute, /planMode === "legacy"[\s\S]*Navigate to="\/bulk"/);
-  assert.match(presetRoute, /bulkId && planMode === "public"/);
+  assert.match(presetRoute, /planMode === "public"[\s\S]*<BulkMealPresets/);
+  assert.match(presetRoute, /<LegacyMealPresets \/>/);
+  assert.match(presetRoute, /MEAL_PLANS\.map/);
+  assert.doesNotMatch(presetRoute, /Navigate|to="\/bulk"/);
   assert.match(guard, /bulkId !== preferred\.bulk_profile_id/);
   assert.match(legacy, /Beef day/);
   assert.match(mealsRoute, /bulkPlanModeFor\(memberships\.data, bulkId\)/);
