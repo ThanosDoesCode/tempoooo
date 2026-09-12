@@ -90,6 +90,7 @@
     color: var(--color-foreground);
     font-family: var(--font-sans);
     font-feature-settings: "tnum" 1;
+    overscroll-behavior-y: contain;
   }
 
   :where(a, button, summary, input, select, textarea):focus-visible {
@@ -192,6 +193,12 @@ html[data-tempo-ready="true"] .tempo-startup {
   animation: tempo-route-enter 0.15s cubic-bezier(0.2, 0.7, 0.3, 1) both;
 }
 
+.tempo-pull-surface {
+  min-height: 100vh;
+  transition: transform 220ms cubic-bezier(0.2, 0.75, 0.25, 1);
+  will-change: transform;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -208,6 +215,10 @@ html[data-tempo-ready="true"] .tempo-startup {
 
   .tempo-route-content {
     animation: none;
+  }
+
+  .tempo-pull-surface {
+    transition: none;
   }
 
   .tempo-startup-ring::before {

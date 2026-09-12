@@ -194,14 +194,35 @@ test("pull-to-refresh ignores tiny, horizontal and mid-scroll gestures", () => {
   assert.ok(ready.distance >= PULL_REFRESH_THRESHOLD);
 });
 
+test("pull-to-refresh uses increasing resistance and cancels below its release threshold", () => {
+  const short = pullGesture({ x: 0, y: 0 }, { x: 0, y: 80 }, 0);
+  const medium = pullGesture({ x: 0, y: 0 }, { x: 0, y: 160 }, 0);
+  const long = pullGesture({ x: 0, y: 0 }, { x: 0, y: 240 }, 0);
+  assert.equal(short.ready, false);
+  assert.equal(medium.ready, true);
+  assert.ok(medium.distance - short.distance > long.distance - medium.distance);
+});
+
 test("refresh revalidates data without a destructive browser reload", async () => {
   const source = await read("src/components/PullToRefresh.tsx");
   assert.match(source, /refetchQueries\(\{ type: "active" \}\)/);
   assert.match(source, /refreshBulk\(\)/);
   assert.doesNotMatch(source, /router\.invalidate\(\)/);
   assert.match(source, /a, button, input, textarea, select/);
+  assert.match(source, /translate3d\(0, \$\{distance\}px, 0\)/);
+  assert.match(source, /PULL_REFRESH_HOLD_DISTANCE/);
+  assert.match(source, /aria-busy=\{status === "refreshing"\}/);
+  assert.match(source, /role="status" aria-live="polite"/);
+  assert.doesNotMatch(source, /Updated/);
   assert.doesNotMatch(source, /location\.reload/);
   assert.doesNotMatch(await read("src/routes/index.tsx"), /location\.reload/);
+  const styles = await read("src/styles.css");
+  assert.match(styles, /overscroll-behavior-y: contain/);
+  assert.match(styles, /\.tempo-pull-surface[\s\S]*transition: transform 220ms/);
+  assert.match(
+    styles,
+    /@media \(prefers-reduced-motion: reduce\)[\s\S]*\.tempo-pull-surface[\s\S]*transition: none/,
+  );
 });
 
 test("Tempo navigation exposes optional fitness areas only after persisted activation", async () => {

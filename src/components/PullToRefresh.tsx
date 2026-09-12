@@ -1,21 +1,27 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "@tanstack/react-router";
 import { LoaderCircle, RotateCw } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { refreshBulk } from "@/lib/store";
-import { PULL_REFRESH_THRESHOLD, pullGesture } from "@/lib/pull-to-refresh";
+import {
+  PULL_REFRESH_HOLD_DISTANCE,
+  PULL_REFRESH_THRESHOLD,
+  pullGesture,
+} from "@/lib/pull-to-refresh";
 
-export function PullToRefresh() {
+type PullStatus = "idle" | "pulling" | "refreshing" | "settling";
+
+export function PullToRefresh({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const { pathname } = useLocation();
   const start = useRef<{ x: number; y: number } | null>(null);
   const cancelled = useRef(false);
   const distanceRef = useRef(0);
-  const statusRef = useRef<"idle" | "pulling" | "refreshing" | "done" | "error">("idle");
+  const settleTimer = useRef<number | null>(null);
+  const statusRef = useRef<PullStatus>("idle");
   const [distance, setDistance] = useState(0);
-  const [status, setStatus] = useState<"idle" | "pulling" | "refreshing" | "done" | "error">(
-    "idle",
-  );
+  const [status, setStatus] = useState<PullStatus>("idle");
+  const [announcement, setAnnouncement] = useState("");
   const updateStatus = useCallback((next: typeof statusRef.current) => {
     statusRef.current = next;
     setStatus(next);
@@ -24,6 +30,23 @@ export function PullToRefresh() {
     distanceRef.current = next;
     setDistance(next);
   }, []);
+  const settle = useCallback(
+    (message?: string) => {
+      if (message) setAnnouncement(message);
+      updateStatus("settling");
+      updateDistance(0);
+      if (settleTimer.current != null) window.clearTimeout(settleTimer.current);
+      settleTimer.current = window.setTimeout(() => updateStatus("idle"), 220);
+    },
+    [updateDistance, updateStatus],
+  );
+
+  useEffect(
+    () => () => {
+      if (settleTimer.current != null) window.clearTimeout(settleTimer.current);
+    },
+    [],
+  );
 
   useEffect(() => {
     const begin = (event: TouchEvent) => {
@@ -60,31 +83,19 @@ export function PullToRefresh() {
       start.current = null;
       if (statusRef.current !== "pulling") return;
       if (distanceRef.current < PULL_REFRESH_THRESHOLD) {
-        updateDistance(0);
-        updateStatus("idle");
+        settle();
         return;
       }
-      updateDistance(PULL_REFRESH_THRESHOLD);
+      updateDistance(PULL_REFRESH_HOLD_DISTANCE);
       updateStatus("refreshing");
+      setAnnouncement("Refreshing content");
       const isBulkRoute = pathname === "/bulk" || pathname.startsWith("/bulk/");
       void Promise.all([
         queryClient.refetchQueries({ type: "active" }),
         isBulkRoute ? refreshBulk() : Promise.resolve(),
       ])
-        .then(() => {
-          updateStatus("done");
-          window.setTimeout(() => {
-            updateStatus("idle");
-            updateDistance(0);
-          }, 800);
-        })
-        .catch(() => {
-          updateStatus("error");
-          window.setTimeout(() => {
-            updateStatus("idle");
-            updateDistance(0);
-          }, 1600);
-        });
+        .then(() => settle("Content refreshed"))
+        .catch(() => settle("Refresh failed. Pull down to try again."));
     };
     const cancel = () => {
       start.current = null;
@@ -104,35 +115,47 @@ export function PullToRefresh() {
       document.removeEventListener("touchend", end);
       document.removeEventListener("touchcancel", cancel);
     };
-  }, [pathname, queryClient, updateDistance, updateStatus]);
+  }, [pathname, queryClient, settle, updateDistance, updateStatus]);
 
-  if (status === "idle") return null;
   const ready = distance >= PULL_REFRESH_THRESHOLD;
-  const label =
-    status === "refreshing"
-      ? "Refreshing…"
-      : status === "done"
-        ? "Updated"
-        : status === "error"
-          ? "Refresh failed"
-          : ready
-            ? "Release to refresh"
-            : "Pull to refresh";
+  const visible = status !== "idle";
+  const progress = Math.min(1, distance / PULL_REFRESH_THRESHOLD);
   return (
-    <div
-      className="pointer-events-none fixed inset-x-0 top-[max(0.5rem,env(safe-area-inset-top))] z-50 flex justify-center transition-transform"
-      style={{ transform: `translateY(${Math.max(0, distance - 50)}px)` }}
-      role="status"
-      aria-live="polite"
-    >
-      <div className="flex min-h-11 items-center gap-2 rounded-full border border-border bg-card/95 px-4 text-xs font-medium shadow-lg backdrop-blur">
-        {status === "refreshing" ? (
-          <LoaderCircle className="h-4 w-4 animate-spin text-primary" />
-        ) : (
-          <RotateCw className={`h-4 w-4 text-primary ${ready ? "rotate-180" : ""}`} />
-        )}
-        {label}
+    <div className="relative min-h-screen overscroll-y-contain">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none fixed inset-x-0 top-[max(0.5rem,env(safe-area-inset-top))] z-30 flex justify-center transition-[opacity,transform] duration-150 ease-out"
+        style={{
+          opacity: visible ? Math.max(0.2, progress) : 0,
+          transform: `translateY(${visible ? Math.min(14, distance * 0.18) : -12}px) scale(${0.82 + progress * 0.18})`,
+        }}
+      >
+        <span
+          className={`grid h-8 w-8 place-items-center rounded-full border bg-card/95 shadow-md backdrop-blur ${ready || status === "refreshing" ? "border-primary/50 text-primary" : "border-border text-muted-foreground"}`}
+        >
+          {status === "refreshing" ? (
+            <LoaderCircle className="h-4 w-4 animate-spin" />
+          ) : (
+            <RotateCw
+              className="h-4 w-4"
+              style={{ transform: `rotate(${Math.round(progress * 210)}deg)` }}
+            />
+          )}
+        </span>
       </div>
+      <div
+        className="tempo-pull-surface"
+        style={{
+          transform: `translate3d(0, ${distance}px, 0)`,
+          transition: status === "pulling" ? "none" : undefined,
+        }}
+        aria-busy={status === "refreshing"}
+      >
+        {children}
+      </div>
+      <span className="sr-only" role="status" aria-live="polite">
+        {announcement}
+      </span>
     </div>
   );
 }
