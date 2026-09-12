@@ -70,6 +70,32 @@ test("migration backfills established users without touching Goal, Bulk or Chall
   assert.doesNotMatch(schemaBackfill, /DELETE FROM public\./);
 });
 
+test("profile bootstrap upsert has the minimum column grants and remains self-only", async () => {
+  const [initial, onboarding, repair, auth] = await Promise.all([
+    read("supabase/migrations/20260814022015_2e6c5c26-4d84-4ec5-a74b-36c614623b97.sql"),
+    read("supabase/migrations/20260909120000_account_onboarding_usernames.sql"),
+    read("supabase/migrations/20260912120000_restore_profile_bootstrap_upsert.sql"),
+    read("src/lib/auth.ts"),
+  ]);
+
+  assert.match(initial, /alter table public\.profiles enable row level security/i);
+  assert.match(initial, /profiles self insert[\s\S]*with check \(id = auth\.uid\(\)\)/i);
+  assert.match(
+    initial,
+    /profiles self update[\s\S]*using \(id = auth\.uid\(\)\)[\s\S]*with check \(id = auth\.uid\(\)\)/i,
+  );
+  assert.match(initial, /profiles self read[\s\S]*using \(id = auth\.uid\(\)\)/i);
+  assert.match(onboarding, /REVOKE INSERT, UPDATE ON public\.profiles FROM authenticated/);
+  assert.match(
+    onboarding,
+    /GRANT INSERT\(id, email, display_name, avatar_url\) ON public\.profiles TO authenticated/,
+  );
+  assert.match(repair, /GRANT UPDATE \(id\) ON public\.profiles TO authenticated/);
+  assert.doesNotMatch(repair, /GRANT (?:ALL|UPDATE) ON public\.profiles/i);
+  assert.doesNotMatch(repair, /DISABLE ROW LEVEL SECURITY|DROP POLICY/i);
+  assert.match(auth, /from\("profiles"\)\.upsert\(\{[\s\S]*id: user\.id/);
+});
+
 test("new Challenge invitations use username resolution and immutable UUID relationships", async () => {
   const [create, invite, functions, server, migration] = await Promise.all([
     read("src/routes/_authenticated/challenge/new.tsx"),
