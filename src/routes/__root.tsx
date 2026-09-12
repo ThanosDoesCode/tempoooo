@@ -8,7 +8,7 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -161,34 +161,41 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 });
 
 function RootShell({ children }: { children: ReactNode }) {
+  const [startupCoverVisible, setStartupCoverVisible] = useState(true);
+
   return (
-    <html lang="en">
-      <head>
-        <HeadContent />
-      </head>
-      <body>
-        <div className="tempo-startup" role="status" aria-label="Loading Tempo">
-          <div className="tempo-startup-content">
-            <div className="tempo-startup-ring" aria-hidden="true">
-              <span className="tempo-startup-mark">T</span>
+    <StartupCoverContext.Provider value={setStartupCoverVisible}>
+      <html lang="en" data-tempo-ready={startupCoverVisible ? undefined : "true"}>
+        <head>
+          <HeadContent />
+        </head>
+        <body>
+          <div className="tempo-startup" role="status" aria-label="Loading Tempo">
+            <div className="tempo-startup-content">
+              <div className="tempo-startup-ring" aria-hidden="true">
+                <span className="tempo-startup-mark">T</span>
+              </div>
+              <span className="tempo-startup-label">Loading Tempo</span>
             </div>
-            <span className="tempo-startup-label">Loading Tempo</span>
           </div>
-        </div>
-        {children}
-        <Scripts />
-      </body>
-    </html>
+          {children}
+          <Scripts />
+        </body>
+      </html>
+    </StartupCoverContext.Provider>
   );
 }
+
+const StartupCoverContext = createContext<(visible: boolean) => void>(() => undefined);
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const router = useRouter();
   const routePending = useRouterState({ select: (state) => state.status === "pending" });
   const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const setStartupCoverVisible = useContext(StartupCoverContext);
   const previousUserId = useRef<string | null | undefined>(undefined);
-  const startupDismissed = useRef(false);
+  const [startupComplete, setStartupComplete] = useState(false);
   const [startupAttempt, setStartupAttempt] = useState(0);
   const [startupError, setStartupError] = useState<Error | null>(null);
   const [startupSession, setStartupSession] = useState<{
@@ -232,6 +239,7 @@ function RootComponent() {
   }, [startupAttempt]);
 
   const startupPhase = resolveStartupPhase({
+    startupComplete,
     sessionRestored: startupSession.restored,
     sessionUserId: startupSession.userId,
     routePending,
@@ -255,19 +263,18 @@ function RootComponent() {
   }, [queryClient, startupAttempt, startupPhase]);
 
   useEffect(() => {
-    if (startupDismissed.current || startupPhase === "restoring") return;
+    if (startupComplete || startupPhase === "restoring") return;
 
     const frame = window.requestAnimationFrame(() => {
-      document.documentElement.dataset["tempoReady"] = "true";
-      startupDismissed.current = true;
+      setStartupCoverVisible(false);
+      if (startupPhase !== "recoverable-error") setStartupComplete(true);
       startupDiagnostic("startup_cover_hidden", { state: startupPhase });
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [startupPhase]);
+  }, [setStartupCoverVisible, startupComplete, startupPhase]);
 
   const retryStartup = () => {
-    startupDismissed.current = false;
-    delete document.documentElement.dataset["tempoReady"];
+    if (!startupComplete) setStartupCoverVisible(true);
     setStartupError(null);
     setStartupAttempt((attempt) => attempt + 1);
     void router.invalidate();

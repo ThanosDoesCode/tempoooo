@@ -19,6 +19,8 @@ test("PWA launch cover follows real session and route readiness", async () => {
   assert.match(root, /className="tempo-startup-mark">T</);
   assert.match(root, /supabase\.auth\s*\.getSession\(\)/);
   assert.match(root, /state\.status === "pending"/);
+  assert.match(root, /data-tempo-ready=\{startupCoverVisible \? undefined : "true"\}/);
+  assert.match(root, /startupComplete/);
   assert.match(root, /requestAnimationFrame/);
   assert.match(root, /window\.setTimeout/);
   assert.match(root, /STARTUP_DEADLINE_MS/);
@@ -77,6 +79,18 @@ test("PWA launch cover follows real session and route readiness", async () => {
     }),
     true,
   );
+  for (const pathname of ["/challenge", "/profile", "/bulk", "/bulk/training"]) {
+    assert.equal(
+      resolveStartupPhase({
+        startupComplete: true,
+        sessionRestored: true,
+        routePending: true,
+        pathname,
+        sessionUserId: "user-a",
+      }),
+      "ready",
+    );
+  }
 });
 
 test("startup state always leaves restoring after settled data or its deadline", () => {
@@ -204,7 +218,10 @@ test("pull-to-refresh uses increasing resistance and cancels below its release t
 });
 
 test("refresh revalidates data without a destructive browser reload", async () => {
-  const source = await read("src/components/PullToRefresh.tsx");
+  const [source, root] = await Promise.all([
+    read("src/components/PullToRefresh.tsx"),
+    read("src/routes/__root.tsx"),
+  ]);
   assert.match(source, /refetchQueries\(\{ type: "active" \}\)/);
   assert.match(source, /refreshBulk\(\)/);
   assert.doesNotMatch(source, /router\.invalidate\(\)/);
@@ -215,6 +232,9 @@ test("refresh revalidates data without a destructive browser reload", async () =
   assert.match(source, /role="status" aria-live="polite"/);
   assert.doesNotMatch(source, /Updated/);
   assert.doesNotMatch(source, /location\.reload/);
+  assert.doesNotMatch(source, /setStartup|tempoReady|tempo-startup/);
+  assert.match(root, /startupComplete,\s*sessionRestored:/);
+  assert.doesNotMatch(root, /delete document\.documentElement\.dataset\["tempoReady"\]/);
   assert.doesNotMatch(await read("src/routes/index.tsx"), /location\.reload/);
   const styles = await read("src/styles.css");
   assert.match(styles, /overscroll-behavior-y: contain/);

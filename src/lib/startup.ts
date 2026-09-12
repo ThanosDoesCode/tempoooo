@@ -4,6 +4,7 @@ export const STARTUP_READ_DEADLINE_MS = 10_000;
 export type StartupPhase = "restoring" | "ready" | "recoverable-error" | "signed-out";
 
 export type StartupReadiness = {
+  startupComplete?: boolean;
   sessionRestored: boolean;
   routePending: boolean;
   pathname: string;
@@ -12,12 +13,17 @@ export type StartupReadiness = {
 };
 
 export function resolveStartupPhase({
+  startupComplete = false,
   sessionRestored,
   routePending,
   pathname,
   sessionUserId,
   recoverableError = false,
 }: StartupReadiness): StartupPhase {
+  // Startup is a one-way lifecycle for the current document. Once the first
+  // route has resolved, later route transitions and query refetches must not
+  // put the app back behind the cold-launch cover.
+  if (startupComplete) return sessionUserId === null ? "signed-out" : "ready";
   if (recoverableError) return "recoverable-error";
   if (!sessionRestored || routePending) return "restoring";
 
