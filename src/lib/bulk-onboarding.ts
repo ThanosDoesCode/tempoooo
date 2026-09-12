@@ -3,10 +3,11 @@ export const LEAN_BULK_WEEKLY_GAIN_RANGE = [0.2, 0.3] as const;
 export const WEEKLY_GAIN_OPTIONS = [0.1, 0.2, 0.25, 0.3] as const;
 
 export const PHYSIQUE_GOALS = [
-  { value: "gain", label: "Gain muscle" },
-  { value: "cut", label: "Lose fat" },
-  { value: "maintain", label: "Recomp / maintain" },
+  { value: "gain", label: "Bulk" },
+  { value: "cut", label: "Cut" },
 ] as const;
+
+const supportedPhysiqueGoals = new Set<PhysiqueGoal>(["gain", "cut", "maintain"]);
 
 export const EXPERIENCE_LEVELS = [
   { value: "beginner", label: "Beginner" },
@@ -73,7 +74,7 @@ export function recommendInitialNutritionTargets(
     currentWeightKg > 400 ||
     targetWeightKg > 450 ||
     targetWeightKg < 20 ||
-    !PHYSIQUE_GOALS.some((option) => option.value === goal) ||
+    !supportedPhysiqueGoals.has(goal) ||
     trainingDaysPerWeek < 2 ||
     trainingDaysPerWeek > 6
   )
@@ -120,7 +121,8 @@ export function recommendInitialNutritionTargets(
 }
 
 export type ExperienceLevel = (typeof EXPERIENCE_LEVELS)[number]["value"];
-export type PhysiqueGoal = (typeof PHYSIQUE_GOALS)[number]["value"];
+/** Maintain remains readable for existing plans, but new setup offers Bulk or Cut. */
+export type PhysiqueGoal = "gain" | "cut" | "maintain";
 export type Equipment = (typeof EQUIPMENT_OPTIONS)[number]["value"];
 export type TrainingSetupPreference = (typeof TRAINING_SETUP_OPTIONS)[number]["value"];
 

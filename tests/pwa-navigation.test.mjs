@@ -316,7 +316,7 @@ test("each product area has four contextual destinations and legacy/public data 
   assert.deepEqual(labels("CHALLENGE_NAV"), ["Week", "Add", "History", "Money"]);
   assert.deepEqual(labels("TRAINING_NAV"), ["Today", "PRs", "History", "More"]);
   assert.deepEqual(labels("MEALS_NAV"), ["Today", "Presets", "History", "More"]);
-  assert.deepEqual(labels("GOAL_NAV"), ["Today", "Progress", "Check-In", "More"]);
+  assert.deepEqual(labels("GOAL_NAV"), ["Today", "Progress", "Check-In", "Settings"]);
   for (const destination of ["/bulk/progress", "/bulk/check-in", "/bulk/history"]) {
     assert.match(more, new RegExp(destination.replace("/", "\\/")));
   }

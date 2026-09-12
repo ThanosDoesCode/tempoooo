@@ -55,7 +55,7 @@ function BulkWorkoutPage() {
         <div className="rounded-2xl bg-card p-4 text-center">
           <p className="font-semibold">Workout unavailable</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            This workout does not exist or does not belong to your Bulk profile.
+            This workout does not exist or does not belong to your Goal.
           </p>
           <Button asChild variant="outline" className="mt-4 min-h-11">
             <Link to="/bulk/training">Back to Training</Link>

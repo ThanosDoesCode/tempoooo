@@ -94,8 +94,8 @@ test("public Goal migration defaults existing public plans while leaving legacy 
   assert.doesNotMatch(shell, /label: "Bulk"/);
   assert.match(profile, /productMode === "public"/);
   assert.match(profile, /productMode === "legacy"/);
-  assert.match(profile, /Fitness Goal/);
-  assert.match(profile, /My Bulk Plan/);
+  assert.match(profile, /<SectionTitle>Goal<\/SectionTitle>/);
+  assert.doesNotMatch(profile, /My Bulk Plan|Open My Bulk/);
   assert.match(onboarding, /Review your Goal plan/);
   assert.doesNotMatch(onboarding, /Review your Bulk plan/);
 });

@@ -76,6 +76,26 @@ test("inactive public Goal access is hidden without changing legacy My Bulk", as
   assert.doesNotMatch(migration, /DELETE FROM public\.bulk_training_sessions/);
 });
 
+test("Goal settings changes Bulk or Cut through the existing scoped reset", async () => {
+  const [settings, access, shell, migration] = await Promise.all([
+    read("src/routes/_authenticated/bulk/more.tsx"),
+    read("src/lib/bulk-access.ts"),
+    read("src/components/AppShell.tsx"),
+    read("supabase/migrations/20260912130000_distinguish_legacy_goal_profiles.sql"),
+  ]);
+  assert.match(settings, /Goal settings/);
+  assert.match(settings, /Change goal/);
+  assert.match(settings, /calorie, macro, weight-target and active plan/);
+  assert.match(settings, /meal presets, completed history, account and Challenge data stay/);
+  assert.match(settings, /await deactivatePublicGoal\(\)/);
+  assert.match(settings, /to: "\/bulk-onboarding"/);
+  assert.match(access, /deactivate_public_goal/);
+  assert.doesNotMatch(shell, /My Bulk/);
+  assert.match(migration, /NOT EXISTS[\s\S]*public\.bulk_admins/);
+  assert.match(migration, /SET goal_status = 'inactive'/);
+  assert.doesNotMatch(migration, /DELETE FROM|challenge_|bulk_meal_presets|bulk_training_sessions/);
+});
+
 test("public Meals never falls back to legacy presets and future dates are read-only", async () => {
   const [today, mealsRoute, goalToday, presetRoute, presets, legacy, query, migration, guard] =
     await Promise.all([

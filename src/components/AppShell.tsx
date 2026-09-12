@@ -2,7 +2,7 @@ import { Link, useLocation, useRouterState } from "@tanstack/react-router";
 import { ArrowLeft, Dumbbell, LineChart, Utensils, Trophy, User } from "lucide-react";
 
 import { createContext, useContext, type ReactNode } from "react";
-import { accountProductMode, preferredBulkMembership, useMemberships } from "@/lib/bulk-access";
+import { preferredBulkMembership, useMemberships } from "@/lib/bulk-access";
 import { prefetchBulk } from "@/lib/store";
 import { useGoalDiscovery } from "@/lib/goal-discovery";
 import { PRODUCT_LANDING_ROUTES, productAreaForPath } from "@/lib/product-navigation";
@@ -54,7 +54,7 @@ const GOAL_NAV = [
   { to: "/bulk/check-in", label: "Check-In", exact: false },
   {
     to: "/bulk/more",
-    label: "More",
+    label: "Settings",
     exact: false,
     activePrefixes: ["/bulk/history", "/bulk/diagnostics"],
   },
@@ -115,7 +115,6 @@ function AppChrome({ children }: { children: ReactNode }) {
   const goalDiscovery = useGoalDiscovery();
 
   const owner = preferredBulkMembership(memberships);
-  const productMode = accountProductMode(memberships);
   const hasFitnessTools = owner !== null;
   const area = productAreaForPath(pathname);
   const nav =
@@ -193,8 +192,7 @@ function AppChrome({ children }: { children: ReactNode }) {
             {primaryNav.map((item) => {
               const Icon = item.icon;
               const selected = area === item.area;
-              const label =
-                item.area === "goal" && productMode === "legacy" ? "My Bulk" : item.label;
+              const label = item.label;
               return (
                 <Link
                   key={item.area}

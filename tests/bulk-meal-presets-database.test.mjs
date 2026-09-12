@@ -1179,6 +1179,85 @@ test("plan switching and Goal reset preserve completed public history", async ()
   );
 });
 
+test("Bulk and Cut switching resets only current Goal configuration", async () => {
+  const switcher = randomUUID();
+  await db.query("INSERT INTO auth.users VALUES ($1)", [switcher]);
+  await db.query("INSERT INTO public.profiles(id,display_name) VALUES ($1,'Goal switcher')", [
+    switcher,
+  ]);
+  const profile = (
+    await asUser(switcher, () =>
+      db.query(
+        `SELECT public.complete_goal_onboarding(
+          'gain',70,78,0.25,'intermediate',4,ARRAY['dumbbells','bench'],'custom',2900,140,360,90
+        ) AS id`,
+      ),
+    )
+  ).rows[0].id;
+  const meal = (await createMeal(switcher, "Reusable oats")).rows[0].id;
+  await asUser(switcher, () =>
+    db.query("SELECT public.switch_to_empty_bulk_training_plan('custom')"),
+  );
+
+  await asUser(switcher, () => db.query("SELECT public.deactivate_public_goal()"));
+  const afterBulk = (
+    await db.query(
+      `SELECT p.goal_status,
+        (SELECT count(*) FROM public.bulk_targets WHERE bulk_profile_id=p.id) AS targets,
+        (SELECT count(*) FROM public.bulk_training_plans WHERE bulk_profile_id=p.id AND active) AS active_plans,
+        (SELECT count(*) FROM public.bulk_meal_presets WHERE id=$2) AS meals,
+        (SELECT count(*) FROM public.profiles WHERE id=$1) AS identity
+       FROM public.bulk_profiles p WHERE p.id=$3`,
+      [switcher, meal, profile],
+    )
+  ).rows[0];
+  assert.equal(afterBulk.goal_status, "inactive");
+  assert.equal(Number(afterBulk.targets), 0);
+  assert.equal(Number(afterBulk.active_plans), 0);
+  assert.equal(Number(afterBulk.meals), 1);
+  assert.equal(Number(afterBulk.identity), 1);
+
+  await asUser(switcher, () =>
+    db.query(
+      `SELECT public.complete_goal_onboarding(
+        'cut',70,62,0.5,'intermediate',4,ARRAY['dumbbells','bench'],'custom',2200,150,240,70
+      )`,
+    ),
+  );
+  assert.equal(
+    (
+      await db.query(
+        "SELECT payload->>'goal' AS goal FROM public.bulk_targets WHERE bulk_profile_id=$1",
+        [profile],
+      )
+    ).rows[0].goal,
+    "cut",
+  );
+  await asUser(switcher, () => db.query("SELECT public.deactivate_public_goal()"));
+  await asUser(switcher, () =>
+    db.query(
+      `SELECT public.complete_goal_onboarding(
+        'gain',70,78,0.25,'intermediate',4,ARRAY['dumbbells','bench'],'custom',2900,140,360,90
+      )`,
+    ),
+  );
+  const afterCut = (
+    await db.query(
+      `SELECT p.goal_status, t.payload->>'goal' AS goal,
+        (SELECT count(*) FROM public.bulk_meal_presets WHERE id=$2) AS meals,
+        (SELECT count(*) FROM public.profiles WHERE id=$1) AS identity
+       FROM public.bulk_profiles p
+       JOIN public.bulk_targets t ON t.bulk_profile_id=p.id
+       WHERE p.id=$3`,
+      [switcher, meal, profile],
+    )
+  ).rows[0];
+  assert.equal(afterCut.goal_status, "active");
+  assert.equal(afterCut.goal, "gain");
+  assert.equal(Number(afterCut.meals), 1);
+  assert.equal(Number(afterCut.identity), 1);
+});
+
 test("all Tempo templates use valid metadata and retain whole-body coverage", async () => {
   const templates = (
     await db.query(

@@ -84,7 +84,7 @@ test("public meal UI uses explicit saves, local errors and mobile-safe controls"
     read("src/lib/meals.ts"),
   ]);
   assert.match(component, /No meal presets yet/);
-  assert.match(component, /Create your first meal/);
+  assert.match(component, /Create meal preset/);
   assert.match(component, /Save meal/);
   assert.match(component, /inputMode="decimal"/);
   assert.match(component, /Discard unsaved meal changes/);

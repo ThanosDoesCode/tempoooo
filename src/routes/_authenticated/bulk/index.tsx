@@ -122,7 +122,7 @@ function TodayPage() {
       <div className="card-surface fade-up mb-2 flex items-center justify-between gap-3 p-4">
         <div>
           <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-            {isPublicGoal ? "Goal status" : "Bulk status"}
+            Goal status
           </p>
           <p className={`mt-1 text-2xl font-semibold ${toneClass}`}>{status.label}</p>
         </div>

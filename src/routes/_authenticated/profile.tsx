@@ -262,18 +262,18 @@ function ProfilePage() {
         </Card>
       ) : productMode === "legacy" && ownedPlan ? (
         <Card className="mt-3">
-          <SectionTitle>My Bulk Plan</SectionTitle>
+          <SectionTitle>Goal</SectionTitle>
           <button
             onClick={() => void navigate({ to: "/bulk" })}
             className="min-h-11 w-full rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground"
           >
-            Open My Bulk
+            Open Goal
           </button>
           {error ? <p className="mt-2 text-xs text-danger">{error}</p> : null}
         </Card>
       ) : productMode === "public" && ownedPlan ? (
         <Card className="mt-3">
-          <SectionTitle>Fitness Goal</SectionTitle>
+          <SectionTitle>Goal</SectionTitle>
           <p className="text-sm leading-6 text-muted-foreground">
             Training, nutrition and body-composition tracking are active.
           </p>
@@ -349,7 +349,7 @@ function ProfilePage() {
               className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-danger/50 py-3 text-sm font-semibold text-danger"
             >
               <RotateCcw className="h-4 w-4" />
-              {productMode === "public" ? "Deactivate fitness tools" : "Reset my bulk plan"}
+              {productMode === "public" ? "Deactivate Goal" : "Reset Goal data"}
             </button>
           ) : (
             <div className="mt-3 grid grid-cols-2 gap-2">
@@ -372,7 +372,7 @@ function ProfilePage() {
             <p className="mt-2 text-xs text-good">
               {productMode === "public"
                 ? "Fitness tools are inactive. Your completed history remains available."
-                : "Your bulk plan is now empty."}
+                : "Your Goal data is now empty."}
             </p>
           ) : null}
         </Card>

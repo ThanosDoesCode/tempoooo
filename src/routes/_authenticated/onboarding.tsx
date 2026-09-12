@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { useAuth } from "@/lib/auth";
 import {
@@ -28,11 +28,12 @@ function AccountOnboarding() {
   const [availability, setAvailability] = useState<Availability>("idle");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const completing = useRef(false);
   const normalized = normalizeUsername(username);
   const validationError = username ? usernameValidationError(username) : null;
 
   useEffect(() => {
-    if (profile.data?.account_onboarded_at && profile.data.username) {
+    if (!completing.current && profile.data?.account_onboarded_at && profile.data.username) {
       void navigate({ to: "/challenge", replace: true });
     } else if (establishedNeedsUsername) {
       setStep(1);
@@ -77,6 +78,7 @@ function AccountOnboarding() {
   };
 
   const finish = async () => {
+    completing.current = true;
     setBusy(true);
     setError(null);
     try {
@@ -84,8 +86,12 @@ function AccountOnboarding() {
         data: { username: normalized, completeOnboarding: true },
       });
       await queryClient.invalidateQueries({ queryKey: ["account-profile", user?.id] });
-      await navigate({ to: "/challenge", replace: true });
+      await navigate({
+        to: establishedNeedsUsername ? "/challenge" : "/bulk-onboarding",
+        replace: true,
+      });
     } catch (cause) {
+      completing.current = false;
       const message = cause instanceof Error ? cause.message : "";
       setError(
         /taken|unique/i.test(message)
@@ -160,14 +166,13 @@ function AccountOnboarding() {
         ) : (
           <section>
             <p className="text-sm font-semibold text-primary">You&apos;re ready</p>
-            <h1 className="mt-2 text-2xl font-semibold tracking-tight">Start your Challenge</h1>
+            <h1 className="mt-2 text-2xl font-semibold tracking-tight">Choose your Goal</h1>
             <p className="mt-3 text-sm leading-6 text-muted-foreground">
-              Start a Challenge now. If you also want workout, nutrition and physique tracking, you
-              can activate Fitness tools anytime from Profile.
+              Next, choose Bulk or Cut and Tempo will help you configure your starting targets.
             </p>
             {error ? <p className="mt-3 text-xs text-danger">{error}</p> : null}
             <button disabled={busy} onClick={() => void finish()} className={primaryButton}>
-              {busy ? "Starting Tempo…" : "Start Tempo"}
+              {busy ? "Saving…" : "Choose Goal"}
             </button>
           </section>
         )}

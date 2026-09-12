@@ -31,7 +31,11 @@ const valid = {
 test("Bulk onboarding centralizes every structured option needed by later segments", () => {
   assert.deepEqual(
     PHYSIQUE_GOALS.map(({ value }) => value),
-    ["gain", "cut", "maintain"],
+    ["gain", "cut"],
+  );
+  assert.deepEqual(
+    PHYSIQUE_GOALS.map(({ label }) => label),
+    ["Bulk", "Cut"],
   );
   assert.deepEqual(
     EXPERIENCE_LEVELS.map(({ value }) => value),
@@ -73,14 +77,14 @@ test("required onboarding values and target relationships validate locally", () 
     validateBulkOnboarding({ ...valid, goal: "cut", targetWeightKg: 78 }).targetWeightKg,
     /below/i,
   );
-  assert.deepEqual(
+  assert.match(
     validateBulkOnboarding({
       ...valid,
       goal: "maintain",
       targetWeightKg: 70,
       targetWeeklyGainKg: 0,
-    }),
-    {},
+    }).goal,
+    /choose/i,
   );
   assert.ok(
     validateBulkOnboarding({

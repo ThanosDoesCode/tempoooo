@@ -33,7 +33,7 @@ function LegacyMealPresets() {
   return (
     <div className="space-y-3">
       <p className="text-sm text-muted-foreground">
-        Your fixed My Bulk meal plans. Choose the plan for the day from My Bulk.
+        Your fixed legacy meal plans. Choose the plan for the day from Goal.
       </p>
       {MEAL_PLANS.map((plan) => (
         <Card key={plan.id} className="p-3">

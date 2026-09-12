@@ -98,7 +98,8 @@ test("bottom links preserve browser history and activation visibility rules", as
   assert.match(shell, /<Link[\s\S]*to=\{item\.to\}/);
   assert.doesNotMatch(shell, /to=\{item\.to\}[\s\S]{0,200}replace/);
   assert.match(shell, /aria-label="Primary"[\s\S]*fixed inset-x-0 bottom-0/);
-  assert.match(shell, /productMode === "legacy" \? "My Bulk" : item\.label/);
+  assert.match(shell, /const label = item\.label/);
+  assert.doesNotMatch(shell, /My Bulk/);
   assert.doesNotMatch(shell, /sticky top-0/);
 });
 
@@ -186,6 +187,16 @@ test("persisted membership status explicitly separates public, legacy and no-pla
   assert.match(access, /return membership\.is_public \? "public" : "legacy"/);
   assert.match(access, /is_public: profile\?\.goal_status != null/);
   assert.doesNotMatch(access, /trainingSetupPreference/);
+});
+
+test("only the pre-public legacy cohort can retain the legacy Goal compatibility mode", async () => {
+  const migration = await read(
+    "supabase/migrations/20260912130000_distinguish_legacy_goal_profiles.sql",
+  );
+  assert.match(migration, /profile\.goal_status IS NULL/);
+  assert.match(migration, /legacy_owner\.user_id = profile\.owner_id/);
+  assert.match(migration, /SET goal_status = 'inactive'/);
+  assert.match(migration, /NULL is reserved for owners captured in the pre-public legacy cohort/);
 });
 
 test("contextual navigation uses distinct route-backed tasks", async () => {

@@ -129,7 +129,7 @@ export function BulkMealPresets({ bulkProfileId }: { bulkProfileId: string }) {
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
-          Save meals you eat often so logging them later is fast.
+          Save meals you eat regularly for faster logging.
         </p>
         {!editor ? (
           <Button className="min-h-11 shrink-0 rounded-xl" onClick={beginCreate}>
@@ -161,10 +161,10 @@ export function BulkMealPresets({ bulkProfileId }: { bulkProfileId: string }) {
         <Card className="py-8 text-center">
           <p className="font-semibold">No meal presets yet</p>
           <p className="mx-auto mt-1 max-w-xs text-sm text-muted-foreground">
-            Save meals you eat often so logging them later is fast.
+            Save meals you eat regularly for faster logging.
           </p>
           <Button className="mt-4 min-h-11 rounded-xl" onClick={beginCreate}>
-            Create your first meal
+            Create meal preset
           </Button>
         </Card>
       ) : null}

@@ -16,7 +16,7 @@ test("unauthenticated home is a compact Tempo welcome with signup and sign-in pa
   assert.doesNotMatch(home, /data\.session \? "\/challenge" : "\/auth"/);
 });
 
-test("account onboarding is separate from Goal activation and guarded by persisted profile state", async () => {
+test("new account onboarding continues into required Goal setup and remains profile-guarded", async () => {
   const [route, onboarding] = await Promise.all([
     read("src/routes/_authenticated/route.tsx"),
     read("src/routes/_authenticated/onboarding.tsx"),
@@ -27,9 +27,11 @@ test("account onboarding is separate from Goal activation and guarded by persist
   assert.match(onboarding, /Welcome to Tempo/);
   assert.match(onboarding, /Choose your username/);
   assert.match(onboarding, /Stay consistent with someone else/);
-  assert.match(onboarding, /Start a Challenge now/);
-  assert.match(onboarding, /activate Fitness tools anytime from Profile/);
-  assert.match(onboarding, /Start Tempo/);
+  assert.match(onboarding, /Choose your Goal/);
+  assert.match(onboarding, /choose Bulk or Cut/);
+  assert.match(onboarding, /Choose Goal/);
+  assert.match(onboarding, /to: establishedNeedsUsername \? "\/challenge" : "\/bulk-onboarding"/);
+  assert.match(onboarding, /!completing\.current && profile\.data\?\.account_onboarded_at/);
   assert.doesNotMatch(onboarding, /complete_goal_onboarding|bulk_profiles|bulk_members/);
 });
 
