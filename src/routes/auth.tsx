@@ -4,11 +4,26 @@ import { lovable } from "@/integrations/lovable";
 import { supabase } from "@/integrations/supabase/client";
 import { syncProfile } from "@/lib/auth";
 import { userFacingError } from "@/lib/network-errors";
+import {
+  rememberDestination,
+  sanitizeDestination,
+  takeDestination,
+} from "@/lib/pending-destination";
 
 export const Route = createFileRoute("/auth")({
   ssr: false,
-  validateSearch: (search: Record<string, unknown>): { mode?: "signin" | "signup" } =>
-    search["mode"] === "signup" || search["mode"] === "signin" ? { mode: search["mode"] } : {},
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { mode?: "signin" | "signup"; redirect?: string } => {
+    const mode =
+      search["mode"] === "signup" || search["mode"] === "signin"
+        ? (search["mode"] as "signin" | "signup")
+        : undefined;
+    const redirect = sanitizeDestination(
+      typeof search["redirect"] === "string" ? search["redirect"] : null,
+    );
+    return { ...(mode ? { mode } : {}), ...(redirect ? { redirect } : {}) };
+  },
   head: () => ({
     meta: [
       { title: "Sign in — Tempo" },
