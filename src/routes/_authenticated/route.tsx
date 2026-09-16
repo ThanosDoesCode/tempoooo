@@ -16,6 +16,7 @@ import { accountProductMode, bulkOwnerQueryOptions } from "@/lib/bulk-access";
 import { isExpectedQueryCancellation } from "@/lib/query-cancellation";
 import { QueryCancellationRecovery } from "@/components/QueryCancellationRecovery";
 import { startupDiagnostic, withStartupDeadline } from "@/lib/startup";
+import { rememberDestination, sanitizeDestination } from "@/lib/pending-destination";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
