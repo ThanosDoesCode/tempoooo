@@ -76,6 +76,8 @@ export const Route = createFileRoute("/_authenticated")({
     const onboardingRequired = !profile?.account_onboarded_at || !profile.username;
     startupDiagnostic("onboarding_resolved", { required: onboardingRequired });
     if (onboardingRequired && location.pathname !== "/onboarding") {
+      // Onboarding runs first, then we come back to the page they opened.
+      rememberDestination(location.href);
       throw redirect({ to: "/onboarding" });
     }
     return { user };
