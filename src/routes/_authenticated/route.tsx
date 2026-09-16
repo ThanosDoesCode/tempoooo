@@ -27,7 +27,12 @@ export const Route = createFileRoute("/_authenticated")({
         void context.queryClient.cancelQueries({ queryKey: ["authenticated-user"], exact: true });
       },
     );
-    if (!user) throw redirect({ to: "/auth" });
+    if (!user) {
+      // Keep where they were heading (an invitation link, typically) through sign-in.
+      const destination = sanitizeDestination(location.href);
+      if (destination) rememberDestination(destination);
+      throw redirect({ to: "/auth", search: destination ? { redirect: destination } : {} });
+    }
     startupDiagnostic("auth_resolved", { signedIn: true });
     const [initialProfile, memberships] = await Promise.all([
       withStartupDeadline(
