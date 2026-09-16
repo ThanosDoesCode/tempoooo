@@ -16,6 +16,7 @@ import { accountProductMode, bulkOwnerQueryOptions } from "@/lib/bulk-access";
 import { isExpectedQueryCancellation } from "@/lib/query-cancellation";
 import { QueryCancellationRecovery } from "@/components/QueryCancellationRecovery";
 import { startupDiagnostic, withStartupDeadline } from "@/lib/startup";
+import { rememberDestination, sanitizeDestination } from "@/lib/pending-destination";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
@@ -27,7 +28,12 @@ export const Route = createFileRoute("/_authenticated")({
         void context.queryClient.cancelQueries({ queryKey: ["authenticated-user"], exact: true });
       },
     );
-    if (!user) throw redirect({ to: "/auth" });
+    if (!user) {
+      // Keep where they were heading (an invitation link, typically) through sign-in.
+      const destination = sanitizeDestination(location.href);
+      if (destination) rememberDestination(destination);
+      throw redirect({ to: "/auth", search: destination ? { redirect: destination } : {} });
+    }
     startupDiagnostic("auth_resolved", { signedIn: true });
     const [initialProfile, memberships] = await Promise.all([
       withStartupDeadline(
@@ -70,6 +76,8 @@ export const Route = createFileRoute("/_authenticated")({
     const onboardingRequired = !profile?.account_onboarded_at || !profile.username;
     startupDiagnostic("onboarding_resolved", { required: onboardingRequired });
     if (onboardingRequired && location.pathname !== "/onboarding") {
+      // Onboarding runs first, then we come back to the page they opened.
+      rememberDestination(location.href);
       throw redirect({ to: "/onboarding" });
     }
     return { user };

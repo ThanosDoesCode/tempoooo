@@ -4,11 +4,26 @@ import { lovable } from "@/integrations/lovable";
 import { supabase } from "@/integrations/supabase/client";
 import { syncProfile } from "@/lib/auth";
 import { userFacingError } from "@/lib/network-errors";
+import {
+  rememberDestination,
+  sanitizeDestination,
+  takeDestination,
+} from "@/lib/pending-destination";
 
 export const Route = createFileRoute("/auth")({
   ssr: false,
-  validateSearch: (search: Record<string, unknown>): { mode?: "signin" | "signup" } =>
-    search["mode"] === "signup" || search["mode"] === "signin" ? { mode: search["mode"] } : {},
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { mode?: "signin" | "signup"; redirect?: string } => {
+    const mode =
+      search["mode"] === "signup" || search["mode"] === "signin"
+        ? (search["mode"] as "signin" | "signup")
+        : undefined;
+    const redirect = sanitizeDestination(
+      typeof search["redirect"] === "string" ? search["redirect"] : null,
+    );
+    return { ...(mode ? { mode } : {}), ...(redirect ? { redirect } : {}) };
+  },
   head: () => ({
     meta: [
       { title: "Sign in — Tempo" },
@@ -32,6 +47,14 @@ type PendingAction = "password" | "google" | null;
 function AuthPage() {
   const navigate = useNavigate();
   const search = Route.useSearch();
+  const goAfterAuth = async () => {
+    const destination = takeDestination(search.redirect ?? null);
+    if (destination) {
+      await navigate({ href: destination, replace: true });
+      return;
+    }
+    await navigate({ to: "/challenge", replace: true });
+  };
   const [mode, setMode] = useState<"signin" | "signup">(search.mode ?? "signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -41,16 +64,17 @@ function AuthPage() {
   useEffect(() => {
     // Remove credentials written by releases that predated browser-managed password saving.
     localStorage.removeItem("saved-credentials");
+    if (search.redirect) rememberDestination(search.redirect);
     void supabase.auth.getSession().then(async ({ data }) => {
       if (!data.session?.user) return;
       try {
         await syncProfile(data.session.user);
-        await navigate({ to: "/challenge", replace: true });
+        await goAfterAuth();
       } catch (error) {
         setNotice({ kind: "error", text: userFacingError(error, "restore your account") });
       }
     });
-  }, [navigate]);
+  }, [navigate, search.redirect]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,7 +100,7 @@ function AuthPage() {
     if (data.user && data.session) {
       try {
         await syncProfile(data.user);
-        await navigate({ to: "/challenge", replace: true });
+        await goAfterAuth();
       } catch (error) {
         setNotice({ kind: "error", text: userFacingError(error, "finish signing in") });
       }
@@ -103,7 +127,7 @@ function AuthPage() {
       const { data, error } = await supabase.auth.getUser();
       if (error || !data.user) throw error ?? new Error("google_session_missing");
       await syncProfile(data.user);
-      await navigate({ to: "/challenge", replace: true });
+      await goAfterAuth();
     } catch (error) {
       setNotice({
         kind: "error",

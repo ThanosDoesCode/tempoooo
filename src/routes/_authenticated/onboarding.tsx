@@ -9,6 +9,7 @@ import {
   usernameValidationError,
 } from "@/lib/account-profile";
 import { checkUsernameAvailability, saveAccountUsername } from "@/lib/privileged-rpcs.functions";
+import { takeDestination } from "@/lib/pending-destination";
 
 export const Route = createFileRoute("/_authenticated/onboarding")({
   head: () => ({ meta: [{ title: "Tempo" }] }),
@@ -34,7 +35,10 @@ function AccountOnboarding() {
 
   useEffect(() => {
     if (!completing.current && profile.data?.account_onboarded_at && profile.data.username) {
-      void navigate({ to: "/challenge", replace: true });
+      const destination = takeDestination();
+      void (destination
+        ? navigate({ href: destination, replace: true })
+        : navigate({ to: "/challenge", replace: true }));
     } else if (establishedNeedsUsername) {
       setStep(1);
     }
@@ -86,10 +90,15 @@ function AccountOnboarding() {
         data: { username: normalized, completeOnboarding: true },
       });
       await queryClient.invalidateQueries({ queryKey: ["account-profile", user?.id] });
-      await navigate({
-        to: establishedNeedsUsername ? "/challenge" : "/bulk-onboarding",
-        replace: true,
-      });
+      const destination = takeDestination();
+      if (destination) {
+        await navigate({ href: destination, replace: true });
+      } else {
+        await navigate({
+          to: establishedNeedsUsername ? "/challenge" : "/bulk-onboarding",
+          replace: true,
+        });
+      }
     } catch (cause) {
       completing.current = false;
       const message = cause instanceof Error ? cause.message : "";
