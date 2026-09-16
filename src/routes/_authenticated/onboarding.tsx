@@ -9,7 +9,7 @@ import {
   usernameValidationError,
 } from "@/lib/account-profile";
 import { checkUsernameAvailability, saveAccountUsername } from "@/lib/privileged-rpcs.functions";
-import { readDestination, takeDestination } from "@/lib/pending-destination";
+import { takeDestination } from "@/lib/pending-destination";
 
 export const Route = createFileRoute("/_authenticated/onboarding")({
   head: () => ({ meta: [{ title: "Tempo" }] }),
