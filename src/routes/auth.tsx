@@ -47,6 +47,14 @@ type PendingAction = "password" | "google" | null;
 function AuthPage() {
   const navigate = useNavigate();
   const search = Route.useSearch();
+  const goAfterAuth = async () => {
+    const destination = takeDestination(search.redirect ?? null);
+    if (destination) {
+      await navigate({ href: destination, replace: true });
+      return;
+    }
+    await navigate({ to: "/challenge", replace: true });
+  };
   const [mode, setMode] = useState<"signin" | "signup">(search.mode ?? "signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -56,16 +64,17 @@ function AuthPage() {
   useEffect(() => {
     // Remove credentials written by releases that predated browser-managed password saving.
     localStorage.removeItem("saved-credentials");
+    if (search.redirect) rememberDestination(search.redirect);
     void supabase.auth.getSession().then(async ({ data }) => {
       if (!data.session?.user) return;
       try {
         await syncProfile(data.session.user);
-        await navigate({ to: "/challenge", replace: true });
+        await goAfterAuth();
       } catch (error) {
         setNotice({ kind: "error", text: userFacingError(error, "restore your account") });
       }
     });
-  }, [navigate]);
+  }, [navigate, search.redirect]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,7 +100,7 @@ function AuthPage() {
     if (data.user && data.session) {
       try {
         await syncProfile(data.user);
-        await navigate({ to: "/challenge", replace: true });
+        await goAfterAuth();
       } catch (error) {
         setNotice({ kind: "error", text: userFacingError(error, "finish signing in") });
       }
@@ -118,7 +127,7 @@ function AuthPage() {
       const { data, error } = await supabase.auth.getUser();
       if (error || !data.user) throw error ?? new Error("google_session_missing");
       await syncProfile(data.user);
-      await navigate({ to: "/challenge", replace: true });
+      await goAfterAuth();
     } catch (error) {
       setNotice({
         kind: "error",
