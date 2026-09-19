@@ -1,26 +1,24 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Dumbbell, Lock, LogOut, Mail, RotateCcw, UserRound } from "lucide-react";
+import { Dumbbell, Lock, LogOut, Mail, RotateCcw, Trash2, UserRound } from "lucide-react";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { Card, Note, SectionTitle } from "@/components/ui-kit";
-import { ChallengeInviteCard } from "@/components/ChallengeInvite";
-import { useAuth, signOut } from "@/lib/auth";
-import {
-  accountProductMode,
-  deactivatePublicGoal,
-  preferredBulkMembership,
-  useMemberships,
-} from "@/lib/bulk-access";
-import { useChallengeMembers, useMyChallenge } from "@/lib/challenge";
-import { clearBulk, resetBulkData } from "@/lib/store";
+import { ChallengeInvitations } from "@/components/ChallengeInvitations";
+import { clearDeletedAccountSession, useAuth, signOut } from "@/lib/auth";
+import { deactivatePublicGoal, preferredBulkMembership, useMemberships } from "@/lib/bulk-access";
+import { clearBulk } from "@/lib/store";
 import { useAcknowledgeGoal, useGoalDiscovery } from "@/lib/goal-discovery";
 import {
   normalizeUsername,
   useAccountProfile,
   usernameValidationError,
 } from "@/lib/account-profile";
-import { checkUsernameAvailability, saveAccountUsername } from "@/lib/privileged-rpcs.functions";
+import {
+  checkUsernameAvailability,
+  deleteTempoAccount,
+  saveAccountUsername,
+} from "@/lib/privileged-rpcs.functions";
 
 export const Route = createFileRoute("/_authenticated/profile")({
   head: () => ({
@@ -55,13 +53,13 @@ function ProfilePage() {
   } = useMemberships();
   const goalDiscovery = useGoalDiscovery();
   const acknowledgeGoal = useAcknowledgeGoal();
-  const { data: challenge } = useMyChallenge();
-  const { data: challengeMembers } = useChallengeMembers(challenge?.id);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resetStep, setResetStep] = useState<0 | 1>(0);
-  const [resetTargets, setResetTargets] = useState(false);
   const [resetDone, setResetDone] = useState(false);
+  const [deleteStep, setDeleteStep] = useState<0 | 1>(0);
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [signingOut, setSigningOut] = useState(false);
   const [editingUsername, setEditingUsername] = useState(false);
   const [username, setUsername] = useState("");
@@ -85,8 +83,6 @@ function ProfilePage() {
   }, [editingUsername, username]);
 
   const ownedPlan = preferredBulkMembership(memberships);
-  const productMode = accountProductMode(memberships);
-  const canInvite = !!challenge && (challengeMembers?.length ?? 0) < 2;
 
   useEffect(() => {
     if (
@@ -115,26 +111,19 @@ function ProfilePage() {
     setError(null);
     setResetStep(0);
     try {
-      if (ownedPlan.is_public) {
-        await deactivatePublicGoal();
-        clearBulk();
-        queryClient.setQueryData(
-          ["bulk-memberships"],
-          memberships?.map((membership) =>
-            membership.bulk_profile_id === ownedPlan.bulk_profile_id
-              ? { ...membership, is_active: false }
-              : membership,
-          ) ?? [],
-        );
-        await queryClient.invalidateQueries({
-          predicate: ({ queryKey }) => String(queryKey[0] ?? "").startsWith("bulk"),
-        });
-      } else {
-        await resetBulkData(ownedPlan.bulk_profile_id, {
-          photos: true,
-          targets: resetTargets,
-        });
-      }
+      await deactivatePublicGoal();
+      clearBulk();
+      queryClient.setQueryData(
+        ["bulk-memberships"],
+        memberships?.map((membership) =>
+          membership.bulk_profile_id === ownedPlan.bulk_profile_id
+            ? { ...membership, is_active: false }
+            : membership,
+        ) ?? [],
+      );
+      await queryClient.invalidateQueries({
+        predicate: ({ queryKey }) => String(queryKey[0] ?? "").startsWith("bulk"),
+      });
       setResetDone(true);
     } catch (e) {
       setError((e as Error).message);
@@ -158,6 +147,8 @@ function ProfilePage() {
           <span className="font-medium">{user?.email ?? "…"}</span>
         </div>
       </Card>
+
+      <ChallengeInvitations />
 
       <Card className="mt-3">
         <SectionTitle>Username</SectionTitle>
@@ -260,18 +251,7 @@ function ProfilePage() {
             Retry
           </button>
         </Card>
-      ) : productMode === "legacy" && ownedPlan ? (
-        <Card className="mt-3">
-          <SectionTitle>Goal</SectionTitle>
-          <button
-            onClick={() => void navigate({ to: "/bulk" })}
-            className="min-h-11 w-full rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground"
-          >
-            Open Goal
-          </button>
-          {error ? <p className="mt-2 text-xs text-danger">{error}</p> : null}
-        </Card>
-      ) : productMode === "public" && ownedPlan ? (
+      ) : ownedPlan ? (
         <Card className="mt-3">
           <SectionTitle>Goal</SectionTitle>
           <p className="text-sm leading-6 text-muted-foreground">
@@ -315,68 +295,107 @@ function ProfilePage() {
         </Card>
       )}
 
-      {canInvite ? (
-        <div className="mt-3">
-          <ChallengeInviteCard challengeId={challenge.id} />
-        </div>
-      ) : null}
-
-      {ownedPlan ? (
-        <Card className="mt-3">
-          <SectionTitle>Danger zone</SectionTitle>
-          <Note>
-            {productMode === "public"
-              ? "Deactivating hides the fitness tools and returns them to setup. Completed workout and nutrition history stays unchanged."
-              : "Resetting clears every daily log, workout, weekly note and progress photo on your plan. The plan itself stays in place. This cannot be undone."}
-          </Note>
-          {productMode === "legacy" ? (
-            <label className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
-              <input
-                type="checkbox"
-                checked={resetTargets}
-                onChange={(e) => setResetTargets(e.target.checked)}
-                className="h-4 w-4 accent-primary"
-              />
-              Also restore the default targets
-            </label>
-          ) : null}
-          {resetStep === 0 ? (
+      <Card className="mt-3 border-danger/30">
+        <SectionTitle>Danger zone</SectionTitle>
+        {ownedPlan ? (
+          <Note>Reset Goal returns fitness tools to setup. Completed history stays unchanged.</Note>
+        ) : null}
+        {ownedPlan ? (
+          <>
+            {resetStep === 0 ? (
+              <button
+                onClick={() => {
+                  setResetDone(false);
+                  setResetStep(1);
+                }}
+                className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-danger/50 py-3 text-sm font-semibold text-danger"
+              >
+                <RotateCcw className="h-4 w-4" />
+                Reset Goal
+              </button>
+            ) : (
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => setResetStep(0)}
+                  className="rounded-xl border border-border py-3 text-sm font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => void reset()}
+                  disabled={busy}
+                  className="rounded-xl bg-danger py-3 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+                >
+                  {busy ? "Resetting…" : "Reset Goal"}
+                </button>
+              </div>
+            )}
+            {resetDone ? (
+              <p className="mt-2 text-xs text-good">
+                Fitness tools are inactive. Your completed history remains available.
+              </p>
+            ) : null}
+          </>
+        ) : null}
+        <div className={ownedPlan ? "mt-5 border-t border-danger/20 pt-4" : ""}>
+          <p className="text-sm font-semibold text-danger">Delete account</p>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            Permanently deletes your account and owned personal data. This cannot be undone.
+          </p>
+          {deleteStep === 0 ? (
             <button
+              type="button"
               onClick={() => {
-                setResetDone(false);
-                setResetStep(1);
+                setDeleteError(null);
+                setDeleteStep(1);
               }}
-              className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-danger/50 py-3 text-sm font-semibold text-danger"
+              className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-danger/50 text-sm font-semibold text-danger"
             >
-              <RotateCcw className="h-4 w-4" />
-              {productMode === "public" ? "Deactivate Goal" : "Reset Goal data"}
+              <Trash2 className="h-4 w-4" aria-hidden="true" /> Delete account
             </button>
           ) : (
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <button
-                onClick={() => setResetStep(0)}
-                className="rounded-xl border border-border py-3 text-sm font-medium"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => void reset()}
-                disabled={busy}
-                className="rounded-xl bg-danger py-3 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-              >
-                {busy ? "Resetting…" : "Yes, erase it"}
-              </button>
+            <div className="mt-3 rounded-xl border border-danger/30 bg-danger/5 p-3">
+              <p className="text-xs text-danger">Are you sure? Your account cannot be recovered.</p>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  disabled={deletingAccount}
+                  onClick={() => setDeleteStep(0)}
+                  className="min-h-11 rounded-xl border border-border text-sm font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={deletingAccount}
+                  onClick={() => {
+                    setDeletingAccount(true);
+                    setDeleteError(null);
+                    void deleteTempoAccount({ data: { confirmation: "Delete my account" } })
+                      .then(() => clearDeletedAccountSession())
+                      .then(() => {
+                        queryClient.clear();
+                        void navigate({ to: "/auth", replace: true });
+                      })
+                      .catch(() => {
+                        setDeleteError("Your account could not be deleted. Try again.");
+                        setDeletingAccount(false);
+                      });
+                  }}
+                  className="min-h-11 rounded-xl bg-danger text-sm font-semibold text-white disabled:opacity-60"
+                >
+                  {deletingAccount ? "Deleting…" : "Delete my account"}
+                </button>
+              </div>
             </div>
           )}
-          {resetDone ? (
-            <p className="mt-2 text-xs text-good">
-              {productMode === "public"
-                ? "Fitness tools are inactive. Your completed history remains available."
-                : "Your Goal data is now empty."}
+          {deleteError ? (
+            <p className="mt-2 text-xs text-danger" role="alert">
+              {deleteError}
             </p>
           ) : null}
-        </Card>
-      ) : null}
+        </div>
+      </Card>
 
       <Card className="mt-3">
         <SectionTitle>Session</SectionTitle>

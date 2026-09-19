@@ -20,7 +20,8 @@ test("Challenge creation uses the authenticated server function and no browser R
   assert.doesNotMatch(createBlock, /created_by|user_id/);
   assert.match(createBlock, /creation\.current/);
   assert.match(createBlock, /challengeId !== request\.requestId/);
-  assert.match(createBlock, /setLink[\s\S]*request\.token/);
+  assert.match(createBlock, /setCreated\(true\)/);
+  assert.doesNotMatch(source, /Copy link|One-time invitation link|navigator\.clipboard/);
   for (const field of [
     "weeklyTargetKm",
     "penaltyMode",

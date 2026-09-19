@@ -28,7 +28,7 @@ function MealsHistoryPage() {
   const planMode = bulkPlanModeFor(memberships.data, bulkId);
   const isPublic = planMode === "public";
   const nutrition = useBulkNutritionDay(isPublic ? bulkId : null, date);
-  const legacyDay = planMode === "legacy" ? data?.days[date] : undefined;
+  const legacyDay = data?.days[date];
   const totals = nutrition.data?.day
     ? nutritionSummary(nutrition.data.entries, nutrition.data.day.targets)
     : null;
@@ -75,7 +75,7 @@ function MealsHistoryPage() {
         <div className="h-40 animate-pulse rounded-2xl bg-card" aria-label="Loading history" />
       ) : isPublic && nutrition.isLoading ? (
         <div className="h-40 animate-pulse rounded-2xl bg-card" />
-      ) : isPublic && nutrition.error ? (
+      ) : isPublic && nutrition.error && !legacyDay ? (
         <DataError
           message={userFacingError(nutrition.error, "load this nutrition day")}
           onRetry={() => void nutrition.refetch()}
@@ -127,7 +127,7 @@ function MealsHistoryPage() {
             </div>
           </section>
         </div>
-      ) : !isPublic && legacyDay ? (
+      ) : legacyDay ? (
         <Card>
           <SectionTitle>Saved daily totals</SectionTitle>
           <div className="mt-2 grid grid-cols-2 gap-3 text-sm">

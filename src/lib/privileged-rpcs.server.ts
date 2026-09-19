@@ -207,6 +207,86 @@ export async function createChallengeInvitationFor(
   });
 }
 
+export type ChallengeInviteCandidate = { username: string };
+
+export const searchChallengeInviteUsersFor = (caller: string, challengeId: string, query: string) =>
+  rpc<ChallengeInviteCandidate[]>("search_challenge_invite_users", {
+    _caller: caller,
+    _challenge: challengeId,
+    _query: query,
+  });
+
+export const sendChallengeUsernameInvitationFor = (
+  caller: string,
+  challengeId: string,
+  username: string,
+) =>
+  rpc<string>("send_challenge_username_invitation", {
+    _caller: caller,
+    _challenge: challengeId,
+    _invited_username: username,
+  });
+
+export type PendingChallengeInvitation = {
+  invitation_id: string;
+  challenge_id: string;
+  challenge_name: string;
+  inviter_username: string;
+  weekly_target_km: number;
+  expires_at: string;
+};
+
+export const listMyChallengeInvitationsFor = (caller: string) =>
+  rpc<PendingChallengeInvitation[]>("list_my_challenge_invitations", { _caller: caller });
+
+export const acceptChallengeInvitationByIdFor = (caller: string, invitationId: string) =>
+  rpc<string>("accept_challenge_invitation_by_id", {
+    _caller: caller,
+    _invitation: invitationId,
+  });
+
+export const declineChallengeInvitationFor = (caller: string, invitationId: string) =>
+  rpc<boolean>("decline_challenge_invitation", {
+    _caller: caller,
+    _invitation: invitationId,
+  });
+
+export async function deleteTempoAccountFor(caller: string) {
+  const profile = await supabaseAdmin
+    .from("bulk_profiles")
+    .select("id")
+    .eq("owner_id", caller)
+    .maybeSingle();
+  if (profile.error) throw new Error("account_deletion_failed");
+  if (profile.data?.id) {
+    const [legacyPhotos, progressPhotos] = await Promise.all([
+      supabaseAdmin
+        .from("bulk_photos")
+        .select("front_path,side_path,back_path")
+        .eq("bulk_profile_id", profile.data.id),
+      supabaseAdmin
+        .from("bulk_progress_photos")
+        .select("storage_path")
+        .eq("bulk_profile_id", profile.data.id),
+    ]);
+    if (legacyPhotos.error || progressPhotos.error) throw new Error("account_deletion_failed");
+    const paths = [
+      ...(legacyPhotos.data ?? []).flatMap((photo) => [
+        photo.front_path,
+        photo.side_path,
+        photo.back_path,
+      ]),
+      ...(progressPhotos.data ?? []).map((photo) => photo.storage_path),
+    ].filter((path): path is string => Boolean(path));
+    if (paths.length) {
+      const removed = await supabaseAdmin.storage.from("bulk-progress-photos").remove(paths);
+      if (removed.error) throw new Error("account_deletion_failed");
+    }
+  }
+  const { error } = await supabaseAdmin.auth.admin.deleteUser(caller);
+  if (error) throw new Error("account_deletion_failed");
+}
+
 export const disableChallengePushFor = (caller: string) =>
   rpc<null>("disable_challenge_push", { _caller: caller });
 

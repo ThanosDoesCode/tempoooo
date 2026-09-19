@@ -3952,3 +3952,247 @@ test("Goal acknowledgement is writable only on the authenticated user's profile"
   );
   assert.ok(stored.rows[0].goal_seen_at);
 });
+
+test("in-app username invitations are recipient-scoped, atomic and service-only", async () => {
+  const creator = randomUUID();
+  const recipient = randomUUID();
+  const stranger = randomUUID();
+  const challenge = randomUUID();
+  for (const [id, username] of [
+    [creator, "invite_owner"],
+    [recipient, "invite_target"],
+    [stranger, "invite_other"],
+  ]) {
+    await db.query("INSERT INTO auth.users(id) VALUES ($1)", [id]);
+    await db.query(
+      "INSERT INTO public.profiles(id,username,account_onboarded_at) VALUES ($1,$2,now())",
+      [id, username],
+    );
+  }
+  await db.query(
+    "INSERT INTO public.challenges(id,created_by,name,start_date,timezone) VALUES ($1,$2,'Invite test',CURRENT_DATE,'UTC')",
+    [challenge, creator],
+  );
+  await db.query("INSERT INTO public.challenge_members(challenge_id,user_id) VALUES ($1,$2)", [
+    challenge,
+    creator,
+  ]);
+
+  await assert.rejects(
+    asUser(creator, () =>
+      db.query("SELECT * FROM public.search_challenge_invite_users($1,$2,'invite')", [
+        creator,
+        challenge,
+      ]),
+    ),
+    /permission denied/i,
+  );
+  const found = await asService(() =>
+    db.query("SELECT * FROM public.search_challenge_invite_users($1,$2,'invite_t')", [
+      creator,
+      challenge,
+    ]),
+  );
+  assert.deepEqual(found.rows, [{ username: "invite_target" }]);
+  await assert.rejects(
+    asService(() =>
+      db.query("SELECT public.send_challenge_username_invitation($1,$2,'invite_owner')", [
+        creator,
+        challenge,
+      ]),
+    ),
+    /invite yourself/i,
+  );
+
+  const declined = await asService(() =>
+    db.query("SELECT public.send_challenge_username_invitation($1,$2,'invite_other') AS id", [
+      creator,
+      challenge,
+    ]),
+  );
+  await assert.rejects(
+    asService(() =>
+      db.query("SELECT public.decline_challenge_invitation($1,$2)", [
+        recipient,
+        declined.rows[0].id,
+      ]),
+    ),
+    /not found/i,
+  );
+  await asService(() =>
+    db.query("SELECT public.decline_challenge_invitation($1,$2)", [stranger, declined.rows[0].id]),
+  );
+  assert.equal(
+    Number(
+      (
+        await db.query(
+          "SELECT count(*) AS n FROM public.challenge_members WHERE challenge_id=$1 AND user_id=$2",
+          [challenge, stranger],
+        )
+      ).rows[0].n,
+    ),
+    0,
+  );
+  assert.equal(
+    (
+      await asService(() =>
+        db.query("SELECT * FROM public.list_my_challenge_invitations($1)", [stranger]),
+      )
+    ).rows.length,
+    0,
+  );
+
+  const sent = await asService(() =>
+    db.query("SELECT public.send_challenge_username_invitation($1,$2,'invite_target') AS id", [
+      creator,
+      challenge,
+    ]),
+  );
+  const invitation = sent.rows[0].id;
+  await assert.rejects(
+    asService(() =>
+      db.query("SELECT public.send_challenge_username_invitation($1,$2,'invite_target')", [
+        creator,
+        challenge,
+      ]),
+    ),
+    /already been sent/i,
+  );
+  const pending = await asService(() =>
+    db.query("SELECT * FROM public.list_my_challenge_invitations($1)", [recipient]),
+  );
+  assert.equal(pending.rows.length, 1);
+  assert.equal(pending.rows[0].invitation_id, invitation);
+  assert.equal(Object.hasOwn(pending.rows[0], "token_hash"), false);
+  assert.equal(Object.hasOwn(pending.rows[0], "invited_email"), false);
+  await assert.rejects(
+    asService(() =>
+      db.query("SELECT public.accept_challenge_invitation_by_id($1,$2)", [stranger, invitation]),
+    ),
+    /not found/i,
+  );
+  await asService(() =>
+    db.query("SELECT public.accept_challenge_invitation_by_id($1,$2)", [recipient, invitation]),
+  );
+  const members = await db.query(
+    "SELECT user_id FROM public.challenge_members WHERE challenge_id=$1 ORDER BY user_id",
+    [challenge],
+  );
+  assert.deepEqual(new Set(members.rows.map((row) => row.user_id)), new Set([creator, recipient]));
+  await assert.rejects(
+    asService(() =>
+      db.query("SELECT public.accept_challenge_invitation_by_id($1,$2)", [recipient, invitation]),
+    ),
+    /no longer valid|already/i,
+  );
+  await assert.rejects(
+    asService(() =>
+      db.query("SELECT public.send_challenge_username_invitation($1,$2,'invite_other')", [
+        creator,
+        challenge,
+      ]),
+    ),
+    /already full/i,
+  );
+});
+
+test("deleting an auth account cascades its owner membership and preserves a shared Challenge", async () => {
+  const deleted = randomUUID();
+  const survivor = randomUUID();
+  const bulkProfile = randomUUID();
+  const sharedChallenge = randomUUID();
+  await db.query("INSERT INTO auth.users(id) VALUES ($1),($2)", [deleted, survivor]);
+  await db.query(
+    "INSERT INTO public.profiles(id,username,account_onboarded_at) VALUES ($1,'released_name',now()),($2,'kept_name',now())",
+    [deleted, survivor],
+  );
+  await db.query(
+    "INSERT INTO public.bulk_profiles(id,owner_id,name,goal_status) VALUES ($1,$2,'Goal','active')",
+    [bulkProfile, deleted],
+  );
+  await db.query(
+    "INSERT INTO public.bulk_members(bulk_profile_id,user_id,role) VALUES ($1,$2,'owner')",
+    [bulkProfile, deleted],
+  );
+  await db.query(
+    'INSERT INTO public.bulk_targets(bulk_profile_id,payload) VALUES ($1,\'{"goal":"gain"}\')',
+    [bulkProfile],
+  );
+  await db.query(
+    "INSERT INTO public.challenges(id,created_by,name,start_date,timezone) VALUES ($1,$2,'Surviving Challenge',CURRENT_DATE,'UTC')",
+    [sharedChallenge, survivor],
+  );
+  await db.query(
+    "INSERT INTO public.challenge_members(challenge_id,user_id) VALUES ($1,$2),($1,$3)",
+    [sharedChallenge, survivor, deleted],
+  );
+
+  await db.query("DELETE FROM auth.users WHERE id=$1", [deleted]);
+  assert.equal(
+    Number(
+      (await db.query("SELECT count(*) AS n FROM auth.users WHERE id=$1", [deleted])).rows[0].n,
+    ),
+    0,
+  );
+  assert.equal(
+    Number(
+      (await db.query("SELECT count(*) AS n FROM public.profiles WHERE id=$1", [deleted])).rows[0]
+        .n,
+    ),
+    0,
+  );
+  assert.equal(
+    Number(
+      (await db.query("SELECT count(*) AS n FROM public.bulk_profiles WHERE id=$1", [bulkProfile]))
+        .rows[0].n,
+    ),
+    0,
+  );
+  assert.equal(
+    Number(
+      (
+        await db.query(
+          "SELECT count(*) AS n FROM public.bulk_members WHERE bulk_profile_id=$1 OR user_id=$2",
+          [bulkProfile, deleted],
+        )
+      ).rows[0].n,
+    ),
+    0,
+  );
+  assert.equal(
+    Number(
+      (
+        await db.query(
+          "SELECT count(*) AS n FROM public.profiles WHERE id=$1 AND username='kept_name'",
+          [survivor],
+        )
+      ).rows[0].n,
+    ),
+    1,
+  );
+  assert.equal(
+    Number(
+      (await db.query("SELECT count(*) AS n FROM auth.users WHERE id=$1", [survivor])).rows[0].n,
+    ),
+    1,
+  );
+  assert.equal(
+    Number(
+      (await db.query("SELECT count(*) AS n FROM public.challenges WHERE id=$1", [sharedChallenge]))
+        .rows[0].n,
+    ),
+    1,
+  );
+  const survivingMembers = await db.query(
+    "SELECT user_id FROM public.challenge_members WHERE challenge_id=$1 ORDER BY user_id",
+    [sharedChallenge],
+  );
+  assert.deepEqual(
+    survivingMembers.rows.map((row) => row.user_id),
+    [survivor],
+  );
+  const available = await asService(() =>
+    db.query("SELECT public.username_available($1,'released_name') AS available", [survivor]),
+  );
+  assert.equal(available.rows[0].available, true);
+});

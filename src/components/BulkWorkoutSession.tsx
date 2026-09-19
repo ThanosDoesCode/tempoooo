@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Check, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "./ui/button";
 import {
@@ -97,6 +97,20 @@ function previousSetLabel(
   return `${previous.bilateralLoad ?? 0}×${previous.bilateralReps}`;
 }
 
+function latestDraftLabel(exercise: BulkTrainingSessionExercise, drafts: Record<string, SetDraft>) {
+  const latest = [...exercise.sets]
+    .reverse()
+    .map((set) => drafts[set.id] ?? toDraft(set))
+    .find((set) => set.bilateralReps != null || set.leftReps != null || set.rightReps != null);
+  if (!latest) return null;
+  if (exercise.executionMode === "unilateral") {
+    return `L ${latest.leftWeight ?? "BW"}×${latest.leftReps ?? "—"} · R ${latest.rightWeight ?? "BW"}×${latest.rightReps ?? "—"}`;
+  }
+  if (exercise.isBodyweight && latest.bilateralWeight == null)
+    return `BW × ${latest.bilateralReps ?? "—"}`;
+  return `${latest.bilateralWeight ?? 0} kg × ${latest.bilateralReps ?? "—"}`;
+}
+
 function draftStorageKey(session: BulkTrainingSession) {
   return `tempo:bulk-workout-draft:${session.bulkProfileId}:${session.id}`;
 }
@@ -167,6 +181,7 @@ export function BulkWorkoutSessionView({
   const [clock, setClock] = useState(() => Date.now());
   const [adding, setAdding] = useState(new Set<string>());
   const [removing, setRemoving] = useState(new Set<string>());
+  const [collapsedExercises, setCollapsedExercises] = useState(new Set<string>());
   const addPending = useRef(new Set<string>());
   const removePending = useRef(new Set<string>());
   draftsRef.current = drafts;
@@ -468,84 +483,117 @@ export function BulkWorkoutSessionView({
 
       {session.exercises.map((exercise) => (
         <Card key={exercise.id} className="p-3">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h2 className="text-sm font-semibold">{exercise.name}</h2>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                {exercise.targetSets} sets · {exercise.targetRepMin}–{exercise.targetRepMax} reps ·{" "}
-                {exercise.executionMode}
-                {exercise.isBodyweight ? " · bodyweight" : ""}
-              </p>
-            </div>
-          </div>
-          {(() => {
-            const target = progression[exercise.sourcePlanExerciseId ?? `session:${exercise.id}`];
-            const guidance = buildBulkNextSessionGuidance(target, {
-              planExerciseId: exercise.sourcePlanExerciseId ?? `session:${exercise.id}`,
-              exerciseId: exercise.sourceExerciseId,
-              executionMode: exercise.executionMode,
-              isBodyweight: exercise.isBodyweight,
-              targetSets: exercise.targetSets,
-              repMin: exercise.targetRepMin,
-              repMax: exercise.targetRepMax,
-            });
-            return (
-              <div
-                className="mt-2 rounded-lg bg-primary/10 px-2.5 py-2 text-[11px] leading-relaxed"
-                aria-label={`Next-session guidance for ${exercise.name}`}
-              >
-                <p className="text-primary">
-                  <span className="font-semibold">Target today:</span> {guidance.targetText}
-                </p>
-                <p className="mt-0.5 text-muted-foreground">{guidance.reasonText}</p>
-              </div>
-            );
-          })()}
-          {exercise.notes ? (
-            <p className="mt-2 rounded-lg bg-elevated p-2 text-xs text-muted-foreground">
-              {exercise.notes}
-            </p>
-          ) : null}
-          <div className="mt-3 overflow-x-auto pb-1">
-            <div className="min-w-[330px]">
-              <div className="grid grid-cols-[2.5rem_minmax(3.75rem,1fr)_3.25rem_3.25rem_2.75rem_2.75rem] gap-1 px-1 text-center text-[9px] font-medium uppercase tracking-wider text-muted-foreground">
-                <span>Set</span>
-                <span>Previous</span>
-                <span>KG</span>
-                <span>Reps</span>
-                <span>RPE</span>
-                <span>Done</span>
-              </div>
-              {exercise.sets.map((set, index) => (
-                <WorkoutSetRow
-                  key={set.id}
-                  exercise={exercise}
-                  set={set}
-                  draft={drafts[set.id] ?? toDraft(set)}
-                  saving={saving.has(set.id)}
-                  removing={removing.has(set.id)}
-                  previous={previousSetLabel(
-                    progression[exercise.sourcePlanExerciseId ?? `session:${exercise.id}`]
-                      ?.previousPerformance?.[index],
-                    exercise,
-                  )}
-                  {...(saveErrors[set.id] ? { error: saveErrors[set.id] } : {})}
-                  onChange={(patch) => update(set.id, patch)}
-                  onRetry={() => void persist(set.id)}
-                  onDone={() => void persist(set.id)}
-                  onRemove={() => void removeSet(set.id)}
-                />
-              ))}
-            </div>
-          </div>
-          <Button
-            variant="outline"
-            className="mt-3 min-h-11 w-full"
-            onClick={() => void addSet(exercise.id)}
-            disabled={adding.has(exercise.id)}
+          <button
+            type="button"
+            aria-expanded={!collapsedExercises.has(exercise.id)}
+            aria-controls={`exercise-${exercise.id}`}
+            onClick={() =>
+              setCollapsedExercises((current) => {
+                const next = new Set(current);
+                if (next.has(exercise.id)) next.delete(exercise.id);
+                else next.add(exercise.id);
+                return next;
+              })
+            }
+            className="flex min-h-11 w-full items-start justify-between gap-3 rounded-lg text-left active:bg-elevated"
           >
-            <Plus aria-hidden="true" /> {adding.has(exercise.id) ? "Adding..." : "Add Set"}
-          </Button>
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold">{exercise.name}</h2>
+              {collapsedExercises.has(exercise.id) ? (
+                <p className="mt-1 truncate text-xs text-muted-foreground">
+                  {
+                    exercise.sets.filter((set) =>
+                      isSessionSetComplete(drafts[set.id] ?? toDraft(set), exercise),
+                    ).length
+                  }
+                  /{exercise.sets.length} sets logged
+                  {latestDraftLabel(exercise, drafts)
+                    ? ` · ${latestDraftLabel(exercise, drafts)}`
+                    : ""}
+                </p>
+              ) : (
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {exercise.targetSets} sets · {exercise.targetRepMin}–{exercise.targetRepMax} reps
+                  · {exercise.executionMode}
+                  {exercise.isBodyweight ? " · bodyweight" : ""}
+                </p>
+              )}
+            </div>
+            <ChevronDown
+              className={`mt-0.5 h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-150 motion-reduce:transition-none ${collapsedExercises.has(exercise.id) ? "" : "rotate-180"}`}
+              aria-hidden="true"
+            />
+          </button>
+          <div id={`exercise-${exercise.id}`} hidden={collapsedExercises.has(exercise.id)}>
+            {(() => {
+              const target = progression[exercise.sourcePlanExerciseId ?? `session:${exercise.id}`];
+              const guidance = buildBulkNextSessionGuidance(target, {
+                planExerciseId: exercise.sourcePlanExerciseId ?? `session:${exercise.id}`,
+                exerciseId: exercise.sourceExerciseId,
+                executionMode: exercise.executionMode,
+                isBodyweight: exercise.isBodyweight,
+                targetSets: exercise.targetSets,
+                repMin: exercise.targetRepMin,
+                repMax: exercise.targetRepMax,
+              });
+              return (
+                <div
+                  className="mt-2 rounded-lg bg-primary/10 px-2.5 py-2 text-[11px] leading-relaxed"
+                  aria-label={`Next-session guidance for ${exercise.name}`}
+                >
+                  <p className="text-primary">
+                    <span className="font-semibold">Target today:</span> {guidance.targetText}
+                  </p>
+                  <p className="mt-0.5 text-muted-foreground">{guidance.reasonText}</p>
+                </div>
+              );
+            })()}
+            {exercise.notes ? (
+              <p className="mt-2 rounded-lg bg-elevated p-2 text-xs text-muted-foreground">
+                {exercise.notes}
+              </p>
+            ) : null}
+            <div className="mt-3 overflow-x-auto pb-1">
+              <div className="min-w-[330px]">
+                <div className="grid grid-cols-[2.5rem_minmax(3.75rem,1fr)_3.25rem_3.25rem_2.75rem_2.75rem] gap-1 px-1 text-center text-[9px] font-medium uppercase tracking-wider text-muted-foreground">
+                  <span>Set</span>
+                  <span>Previous</span>
+                  <span>KG</span>
+                  <span>Reps</span>
+                  <span>RPE</span>
+                  <span>Done</span>
+                </div>
+                {exercise.sets.map((set, index) => (
+                  <WorkoutSetRow
+                    key={set.id}
+                    exercise={exercise}
+                    set={set}
+                    draft={drafts[set.id] ?? toDraft(set)}
+                    saving={saving.has(set.id)}
+                    removing={removing.has(set.id)}
+                    previous={previousSetLabel(
+                      progression[exercise.sourcePlanExerciseId ?? `session:${exercise.id}`]
+                        ?.previousPerformance?.[index],
+                      exercise,
+                    )}
+                    {...(saveErrors[set.id] ? { error: saveErrors[set.id] } : {})}
+                    onChange={(patch) => update(set.id, patch)}
+                    onRetry={() => void persist(set.id)}
+                    onDone={() => void persist(set.id)}
+                    onRemove={() => void removeSet(set.id)}
+                  />
+                ))}
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              className="mt-3 min-h-11 w-full"
+              onClick={() => void addSet(exercise.id)}
+              disabled={adding.has(exercise.id)}
+            >
+              <Plus aria-hidden="true" /> {adding.has(exercise.id) ? "Adding..." : "Add Set"}
+            </Button>
+          </div>
         </Card>
       ))}
 

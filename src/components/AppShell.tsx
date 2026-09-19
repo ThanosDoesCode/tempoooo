@@ -7,6 +7,7 @@ import { prefetchBulk } from "@/lib/store";
 import { useGoalDiscovery } from "@/lib/goal-discovery";
 import { PRODUCT_LANDING_ROUTES, productAreaForPath } from "@/lib/product-navigation";
 import { PullToRefresh } from "./PullToRefresh";
+import { useChallengeInvitations } from "@/lib/challenge-invitations";
 
 const CHALLENGE_NAV = [
   { to: "/challenge", label: "Week", exact: true },
@@ -113,6 +114,7 @@ function AppChrome({ children }: { children: ReactNode }) {
   const isAccountOnboarding = pathname === "/onboarding";
   const { data: memberships } = useMemberships();
   const goalDiscovery = useGoalDiscovery();
+  const pendingInvitations = useChallengeInvitations();
 
   const owner = preferredBulkMembership(memberships);
   const hasFitnessTools = owner !== null;
@@ -215,6 +217,14 @@ function AppChrome({ children }: { children: ReactNode }) {
                       aria-label="New Fitness tools"
                       className="absolute right-[28%] top-1.5 h-2 w-2 rounded-full bg-primary ring-2 ring-card"
                     />
+                  ) : null}
+                  {item.area === "profile" && (pendingInvitations.data?.length ?? 0) > 0 ? (
+                    <span
+                      aria-label={`${pendingInvitations.data!.length} pending Challenge invitations`}
+                      className="absolute right-[24%] top-0.5 grid min-h-4 min-w-4 place-items-center rounded-full bg-danger px-1 text-[9px] font-bold text-white ring-2 ring-card"
+                    >
+                      {pendingInvitations.data!.length > 9 ? "9+" : pendingInvitations.data!.length}
+                    </span>
                   ) : null}
                 </Link>
               );

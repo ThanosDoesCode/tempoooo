@@ -259,7 +259,7 @@ test("contextual navigation uses distinct route-backed tasks", async () => {
   assert.doesNotMatch(shell, /window\.location|location\.reload|replace:\s*true/);
 });
 
-test("every Meals tab remains in Meals while legacy My Bulk stays a separate destination", async () => {
+test("every Meals tab remains in the unified Goal meal experience", async () => {
   const [shell, presets, today, history, more] = await Promise.all([
     read("src/components/AppShell.tsx"),
     read("src/routes/_authenticated/bulk/meals_.presets.tsx"),
@@ -278,9 +278,8 @@ test("every Meals tab remains in Meals while legacy My Bulk stays a separate des
   assert.equal(productAreaForPath("/bulk"), "goal");
 
   assert.match(shell, /to: "\/bulk\/meals\/presets", label: "Presets"/);
-  assert.match(presets, /planMode === "public"[\s\S]*<BulkMealPresets/);
-  assert.match(presets, /<LegacyMealPresets \/>/);
-  assert.match(presets, /MEAL_PLANS\.map/);
+  assert.match(presets, /<BulkMealPresets bulkProfileId=\{bulkId\}/);
+  assert.doesNotMatch(presets, /LegacyMealPresets|MEAL_PLANS/);
   assert.doesNotMatch(presets, /Navigate|to="\/bulk"|replace/);
   assert.match(today, /BulkNutritionLog/);
   assert.match(history, /MealsHistoryPage/);

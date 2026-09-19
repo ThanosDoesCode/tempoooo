@@ -64,7 +64,7 @@ function NewChallenge() {
   const [username, setUsername] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [link, setLink] = useState<string | null>(null);
+  const [created, setCreated] = useState(false);
   const createLock = useRef(false);
   const creation = useRef<{ requestId: string; token: string } | null>(null);
   const terms = {
@@ -139,7 +139,7 @@ function NewChallenge() {
       if (challengeId !== request.requestId) {
         throw new Error("Challenge creation returned an unexpected result");
       }
-      setLink(`${window.location.origin}/invite/challenge/${request.token}`);
+      setCreated(true);
     } catch (e) {
       setError(challengeUsernameError(e, username));
     } finally {
@@ -148,29 +148,20 @@ function NewChallenge() {
     }
   };
 
-  if (link) {
+  if (created) {
     return (
       <AppShell>
         <PageHeader
           title="Challenge created"
-          subtitle="Send this invitation to your opponent."
+          subtitle={`@${normalizeUsername(username)} can accept it from Profile.`}
           backTo="/challenge"
           backLabel="Challenge"
         />
         <Card>
-          <SectionTitle>One-time invitation link</SectionTitle>
-          <p className="break-all rounded-xl border border-border bg-elevated p-3 text-xs">
-            {link}
-          </p>
-          <button
-            onClick={() => void navigator.clipboard.writeText(link)}
-            className="mt-3 w-full rounded-xl bg-primary py-2.5 text-sm font-semibold text-primary-foreground"
-          >
-            Copy link
-          </button>
+          <SectionTitle>Invitation sent</SectionTitle>
           <Note>
-            Only @{normalizeUsername(username)} can accept it, it expires in 14 days, and it stops
-            working as soon as the second member joins.
+            The invitation is waiting in @{normalizeUsername(username)}&apos;s Profile. It expires
+            in 14 days and stops working when the second member joins.
           </Note>
         </Card>
         <button

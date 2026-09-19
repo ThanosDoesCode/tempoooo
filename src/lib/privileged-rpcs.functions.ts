@@ -82,6 +82,62 @@ export const createChallengeInvitation = createServerFn({ method: "POST" })
     return createChallengeInvitationFor(context.userId, data);
   });
 
+export const searchChallengeInviteUsers = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data) =>
+    z
+      .object({ challengeId: z.string().uuid(), query: z.string().trim().min(2).max(20) })
+      .parse(data),
+  )
+  .handler(async ({ data, context }) => {
+    const { searchChallengeInviteUsersFor } = await import("./privileged-rpcs.server");
+    return searchChallengeInviteUsersFor(context.userId, data.challengeId, data.query);
+  });
+
+export const sendChallengeUsernameInvitation = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data) =>
+    z.object({ challengeId: z.string().uuid(), username: usernameInput }).parse(data),
+  )
+  .handler(async ({ data, context }) => {
+    const { sendChallengeUsernameInvitationFor } = await import("./privileged-rpcs.server");
+    return sendChallengeUsernameInvitationFor(context.userId, data.challengeId, data.username);
+  });
+
+export const listMyChallengeInvitations = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { listMyChallengeInvitationsFor } = await import("./privileged-rpcs.server");
+    return listMyChallengeInvitationsFor(context.userId);
+  });
+
+const invitationIdInput = z.object({ invitationId: z.string().uuid() });
+
+export const acceptChallengeInvitationById = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data) => invitationIdInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const { acceptChallengeInvitationByIdFor } = await import("./privileged-rpcs.server");
+    return acceptChallengeInvitationByIdFor(context.userId, data.invitationId);
+  });
+
+export const declineChallengeInvitation = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data) => invitationIdInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const { declineChallengeInvitationFor } = await import("./privileged-rpcs.server");
+    return declineChallengeInvitationFor(context.userId, data.invitationId);
+  });
+
+export const deleteTempoAccount = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data) => z.object({ confirmation: z.literal("Delete my account") }).parse(data))
+  .handler(async ({ context }) => {
+    const { deleteTempoAccountFor } = await import("./privileged-rpcs.server");
+    await deleteTempoAccountFor(context.userId);
+    return { deleted: true };
+  });
+
 const createChallengeInput = z.object({
   requestId: z.string().uuid(),
   name: z.string().min(1).max(120),

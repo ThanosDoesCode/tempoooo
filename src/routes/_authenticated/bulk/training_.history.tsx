@@ -20,10 +20,9 @@ function TrainingHistoryPage() {
   const { bulkId } = useBulkMeta();
   const memberships = useMemberships();
   const planMode = bulkPlanModeFor(memberships.data, bulkId);
-  const isPublic = planMode === "public";
   const sessions = useQuery({
     queryKey: ["bulk-training-sessions", "history", bulkId],
-    enabled: isPublic && !!bulkId,
+    enabled: planMode !== "none" && !!bulkId,
     queryFn: () => fetchRecentCompletedBulkTrainingSessions(bulkId!, 100),
     staleTime: 30_000,
     retry: shouldRetryRead,
@@ -38,16 +37,16 @@ function TrainingHistoryPage() {
       <PageHeader title="Training history" subtitle="Completed workouts, newest first." />
       {planMode === "none" ? (
         <div className="h-40 animate-pulse rounded-2xl bg-card" />
-      ) : isPublic && sessions.isLoading ? (
+      ) : sessions.isLoading ? (
         <div className="h-40 animate-pulse rounded-2xl bg-card" />
-      ) : isPublic && sessions.error ? (
+      ) : sessions.error ? (
         <DataError
           message={userFacingError(sessions.error, "load your training history")}
           onRetry={() => void sessions.refetch()}
         />
-      ) : isPublic && sessions.data?.length ? (
+      ) : sessions.data?.length || legacy.length ? (
         <div className="space-y-5">
-          {sessions.data.map((session) => (
+          {sessions.data?.map((session) => (
             <section key={session.id}>
               <p className="mb-2 text-xs font-medium text-muted-foreground">
                 {new Date(session.completedAt ?? session.startedAt).toLocaleDateString("en-GB")}
@@ -55,25 +54,32 @@ function TrainingHistoryPage() {
               <CompletedWorkout session={session} showBackLink={false} />
             </section>
           ))}
-        </div>
-      ) : planMode === "legacy" && legacy.length ? (
-        <div className="space-y-3">
-          {legacy.map((workout) => {
-            const metrics = workoutMetrics(workout);
-            const duration = workoutDuration(workout);
-            return (
-              <Card key={workout.date}>
-                <p className="text-xs text-muted-foreground">
-                  {new Date(`${workout.date}T12:00:00`).toLocaleDateString("en-GB")}
+          {legacy.length ? (
+            <section className="space-y-3" aria-label="Earlier workout history">
+              {sessions.data?.length ? (
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Earlier workout history
                 </p>
-                <h2 className="mt-1 font-semibold">{splitLabel(workout.type)}</h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {metrics.workingSets} working sets · {Math.round(metrics.volume ?? 0)} kg volume
-                  {duration ? ` · ${Math.round(duration / 60)} min` : ""}
-                </p>
-              </Card>
-            );
-          })}
+              ) : null}
+              {legacy.map((workout) => {
+                const metrics = workoutMetrics(workout);
+                const duration = workoutDuration(workout);
+                return (
+                  <Card key={workout.date}>
+                    <p className="text-xs text-muted-foreground">
+                      {new Date(`${workout.date}T12:00:00`).toLocaleDateString("en-GB")}
+                    </p>
+                    <h2 className="mt-1 font-semibold">{splitLabel(workout.type)}</h2>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {metrics.workingSets} working sets · {Math.round(metrics.volume ?? 0)} kg
+                      volume
+                      {duration ? ` · ${Math.round(duration / 60)} min` : ""}
+                    </p>
+                  </Card>
+                );
+              })}
+            </section>
+          ) : null}
         </div>
       ) : (
         <Card className="py-8 text-center">

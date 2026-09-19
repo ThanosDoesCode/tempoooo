@@ -98,22 +98,24 @@ test("profile bootstrap upsert has the minimum column grants and remains self-on
   assert.match(auth, /from\("profiles"\)\.upsert\(\{[\s\S]*id: user\.id/);
 });
 
-test("new Challenge invitations use username resolution and immutable UUID relationships", async () => {
-  const [create, invite, functions, server, migration] = await Promise.all([
+test("new Challenge invitations use private username search and immutable UUID relationships", async () => {
+  const [create, invite, functions, server, migration, inAppMigration] = await Promise.all([
     read("src/routes/_authenticated/challenge/new.tsx"),
     read("src/components/ChallengeInvite.tsx"),
     read("src/lib/privileged-rpcs.functions.ts"),
     read("src/lib/privileged-rpcs.server.ts"),
     read("supabase/migrations/20260909120000_account_onboarding_usernames.sql"),
+    read("supabase/migrations/20260919120000_account_deletion_and_in_app_challenge_invites.sql"),
   ]);
   assert.match(create, /invitedUsername: normalizeUsername\(username\)/);
   assert.match(create, /placeholder="Search username"/);
   assert.doesNotMatch(create, /Opponent email|invitedEmail|type="email"/);
-  assert.match(invite, /createChallengeInvitation/);
-  assert.doesNotMatch(invite, /\.from\("challenge_invitations"\)\.insert/);
+  assert.match(invite, /searchChallengeInviteUsers/);
+  assert.match(invite, /sendChallengeUsernameInvitation/);
+  assert.doesNotMatch(invite, /\.from\("challenge_invitations"\)/);
   assert.doesNotMatch(invite, /Opponent email|friend@email/);
-  assert.match(functions, /createChallengeInvitation[\s\S]*requireSupabaseAuth/);
-  assert.match(server, /_caller: caller[\s\S]*_invited_username: input\.username/);
+  assert.match(functions, /sendChallengeUsernameInvitation[\s\S]*requireSupabaseAuth/);
+  assert.match(server, /sendChallengeUsernameInvitationFor[\s\S]*_caller: caller/);
   assert.match(migration, /invited_user_id uuid REFERENCES public\.profiles\(id\)/);
   assert.match(migration, /invited_username_snapshot/);
   assert.match(migration, /invited_user_id = invited_user/);
@@ -121,6 +123,13 @@ test("new Challenge invitations use username resolution and immutable UUID relat
   assert.match(
     migration,
     /REVOKE INSERT, UPDATE, DELETE ON public\.challenge_invitations FROM authenticated/,
+  );
+  assert.match(inAppMigration, /RETURNS TABLE\(username text\)/);
+  assert.doesNotMatch(
+    inAppMigration.match(
+      /CREATE FUNCTION public\.search_challenge_invite_users[\s\S]*?\$function\$;/,
+    )?.[0] ?? "",
+    /email|display_name|avatar_url/,
   );
 });
 
