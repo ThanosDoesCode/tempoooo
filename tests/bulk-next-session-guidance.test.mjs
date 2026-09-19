@@ -318,7 +318,8 @@ test("overview and active workout render guidance from the one batched progressi
   ]);
   assert.match(overview, /buildBulkNextSessionGuidance/);
   assert.match(overview, /Next:/);
-  assert.match(workout, /Last time:/);
+  assert.match(workout, /previousSetLabel/);
+  assert.match(workout, />Previous</);
   assert.match(workout, /Target today:/);
   assert.match(workout, /Progression guidance is unavailable|buildBulkNextSessionGuidance/);
   assert.match(query, /fetchRecentCompletedBulkTrainingSessions\(bulkProfileId, 30\)/);

@@ -99,6 +99,25 @@ test("required onboarding values and target relationships validate locally", () 
   assert.ok(validateBulkOnboarding({ ...valid, experienceLevel: "" }).experienceLevel);
   assert.ok(validateBulkOnboarding({ ...valid, trainingDaysPerWeek: 1 }).trainingDaysPerWeek);
   assert.ok(validateBulkOnboarding({ ...valid, availableEquipment: [] }).availableEquipment);
+  assert.equal(
+    validateBulkOnboarding({
+      ...valid,
+      availableEquipment: ["dumbbells", "bench", "pull_up_bar"],
+    }).availableEquipment,
+    undefined,
+  );
+  assert.ok(
+    validateBulkOnboarding({
+      ...valid,
+      availableEquipment: ["bodyweight_only", "pull_up_bar"],
+    }).availableEquipment,
+  );
+  assert.ok(
+    validateBulkOnboarding({
+      ...valid,
+      availableEquipment: ["full_gym", "dumbbells"],
+    }).availableEquipment,
+  );
   assert.ok(
     validateBulkOnboarding({ ...valid, trainingSetupPreference: "" }).trainingSetupPreference,
   );
@@ -201,6 +220,17 @@ test("initial nutrition recommendations never return negative carbs", () => {
   }
 });
 
+test("nutrition recommendation falls back gracefully when optional planning inputs are absent", () => {
+  for (const goal of ["gain", "cut", "maintain"]) {
+    const recommendation = recommendInitialNutritionTargets({ goal, currentWeightKg: 75 });
+    assert.ok(recommendation);
+    assert.ok(recommendation.calories >= 800);
+    assert.ok(recommendation.protein >= 135);
+    assert.ok(recommendation.fat >= 45);
+    assert.ok(recommendation.carbs >= 0);
+  }
+});
+
 test("nutrition onboarding adapts guidance without changing its atomic save", async () => {
   const onboarding = await read("src/routes/_authenticated/bulk-onboarding.tsx");
   assert.match(onboarding, /form\.experienceLevel === "beginner"/);
@@ -208,12 +238,16 @@ test("nutrition onboarding adapts guidance without changing its atomic save", as
   assert.match(onboarding, /Adjust manually/);
   assert.match(onboarding, /starting targets[\s\S]*weekly progress/);
   assert.match(onboarding, /form\.experienceLevel === "intermediate"/);
-  assert.match(onboarding, /recommendation is prefilled/);
+  assert.match(onboarding, /recommendation from your body weight, goal and activity is prefilled/);
   assert.match(onboarding, /form\.experienceLevel === "advanced"/);
   assert.match(onboarding, /Use Tempo recommendation/);
   assert.match(onboarding, /complete_goal_onboarding/);
   assert.match(onboarding, /PHYSIQUE_GOALS/);
   assert.match(onboarding, /goal: form\.goal/);
+  assert.match(onboarding, /Choose every option you can reliably use/);
+  assert.match(onboarding, /Full\/commercial gym covers broad gym equipment/);
+  assert.match(onboarding, /Bodyweight only is for training without equipment/);
+  assert.match(onboarding, /your weight, goal, weekly pace and training schedule/);
 });
 
 test("the five-step UI submits one atomic RPC and does not expose Bulk early", async () => {

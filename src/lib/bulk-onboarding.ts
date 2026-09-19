@@ -48,10 +48,10 @@ export type InitialNutritionRecommendation = {
   fat: number;
 };
 
-type RecommendationInput = Pick<
-  BulkOnboardingValues,
-  "goal" | "currentWeightKg" | "targetWeightKg" | "targetWeeklyGainKg" | "trainingDaysPerWeek"
->;
+type RecommendationInput = Pick<BulkOnboardingValues, "goal" | "currentWeightKg"> &
+  Partial<
+    Pick<BulkOnboardingValues, "targetWeightKg" | "targetWeeklyGainKg" | "trainingDaysPerWeek">
+  >;
 
 const roundTo = (value: number, step: number) => Math.round(value / step) * step;
 const clamp = (value: number, minimum: number, maximum: number) =>
@@ -64,19 +64,38 @@ const clamp = (value: number, minimum: number, maximum: number) =>
 export function recommendInitialNutritionTargets(
   input: RecommendationInput,
 ): InitialNutritionRecommendation | null {
-  const { goal, currentWeightKg, targetWeightKg, targetWeeklyGainKg, trainingDaysPerWeek } = input;
+  const { goal, currentWeightKg } = input;
+  const trainingDaysPerWeek =
+    Number.isInteger(input.trainingDaysPerWeek) &&
+    input.trainingDaysPerWeek! >= 2 &&
+    input.trainingDaysPerWeek! <= 6
+      ? input.trainingDaysPerWeek!
+      : 3;
+  const targetWeeklyGainKg =
+    Number.isFinite(input.targetWeeklyGainKg) &&
+    input.targetWeeklyGainKg! >= 0.05 &&
+    input.targetWeeklyGainKg! <= 1.5
+      ? input.targetWeeklyGainKg!
+      : goal === "maintain"
+        ? 0
+        : 0.25;
+  const targetWeightKg =
+    Number.isFinite(input.targetWeightKg) &&
+    input.targetWeightKg! >= 20 &&
+    input.targetWeightKg! <= 450
+      ? input.targetWeightKg!
+      : goal === "cut"
+        ? currentWeightKg * 0.9
+        : goal === "maintain"
+          ? currentWeightKg
+          : currentWeightKg * 1.1;
   if (
     !Number.isFinite(currentWeightKg) ||
-    !Number.isFinite(targetWeightKg) ||
-    !Number.isFinite(targetWeeklyGainKg) ||
-    !Number.isInteger(trainingDaysPerWeek) ||
     currentWeightKg < 20 ||
     currentWeightKg > 400 ||
     targetWeightKg > 450 ||
     targetWeightKg < 20 ||
-    !supportedPhysiqueGoals.has(goal) ||
-    trainingDaysPerWeek < 2 ||
-    trainingDaysPerWeek > 6
+    !supportedPhysiqueGoals.has(goal)
   )
     return null;
 
@@ -197,9 +216,12 @@ export function validateBulkOnboarding(values: BulkOnboardingValues): BulkOnboar
   if (
     !values.availableEquipment.length ||
     values.availableEquipment.some((v) => !equipmentValues.has(v)) ||
-    (values.availableEquipment.includes("bodyweight_only") && values.availableEquipment.length > 1)
+    (values.availableEquipment.includes("bodyweight_only") &&
+      values.availableEquipment.length > 1) ||
+    (values.availableEquipment.includes("full_gym") && values.availableEquipment.length > 1)
   )
-    errors.availableEquipment = "Choose at least one available equipment option.";
+    errors.availableEquipment =
+      "Choose at least one option. Full gym and Bodyweight only are complete access choices.";
   if (!setupValues.has(values.trainingSetupPreference))
     errors.trainingSetupPreference = "Choose how you want to train.";
   if (!Number.isInteger(values.calories) || values.calories < 800 || values.calories > 10000)

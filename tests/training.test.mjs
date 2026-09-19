@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { parseDecimal, normalizeDecimal, decimalError } from "../src/lib/numeric.ts";
 import { DEFAULT_DATA, EXERCISES } from "../src/lib/types.ts";
 import {
@@ -21,13 +22,21 @@ import {
   restSecondsRemaining,
   setSessionBodyweight,
 } from "../src/lib/training.ts";
-import { progressionFor, exerciseHistory, previousEntry } from "../src/lib/calc.ts";
+import {
+  compactStrengthPerformance,
+  exerciseHistory,
+  previousEntry,
+  progressionFor,
+  strengthChange,
+} from "../src/lib/calc.ts";
 import { createSaveQueue } from "../src/lib/workout-save.ts";
 import {
   cacheWorkoutDraft,
   clearWorkoutDraft,
   readWorkoutDraft,
 } from "../src/lib/workout-draft.ts";
+
+const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
 const data = (workouts = [], days = {}) => ({
   ...structuredClone(DEFAULT_DATA),
@@ -392,6 +401,45 @@ test("legacy history still derives known volume and remains previous session; dr
   assert.equal(exerciseHistory(d, "Incline Dumbbell Press")[0].volume, 864);
   assert.equal(exerciseHistory(d, "Incline Dumbbell Press").length, 1);
   assert.equal(previousEntry(d, "Incline Dumbbell Press", "2026-08-31").date, "2026-08-20");
+});
+test("strength trend keeps the existing volume calculation and formats change direction", () => {
+  const improving = strengthChange(
+    data([
+      workout("2026-08-20", [entry("Cable Rows", 20, [10, 10, 10])]),
+      workout("2026-08-27", [entry("Cable Rows", 22, [10, 10, 10])]),
+    ]),
+    "Cable Rows",
+  );
+  const declining = strengthChange(
+    data([
+      workout("2026-08-20", [entry("Cable Rows", 22, [10, 10, 10])]),
+      workout("2026-08-27", [entry("Cable Rows", 20, [10, 10, 10])]),
+    ]),
+    "Cable Rows",
+  );
+  assert.equal(improving.pct, 10);
+  assert.ok(declining.pct < 0);
+  assert.equal(strengthChange(data([workout("2026-08-20", [entry()])]), "Cable Rows"), null);
+  assert.equal(compactStrengthPerformance({ ...bw(), loadMode: "bodyweight" }, 10), "BW × 10");
+  assert.equal(
+    compactStrengthPerformance({ ...bw(), loadMode: "added", addedWeight: 5 }, 8),
+    "BW + 5 kg × 8",
+  );
+  assert.equal(
+    compactStrengthPerformance({ ...bw(), loadMode: "assisted", assistance: 12.5 }, 6),
+    "BW − 12.5 kg × 6",
+  );
+});
+
+test("Strength Trend groups tracked lifts first and collapses missing data", async () => {
+  const progress = await read("src/routes/_authenticated/bulk/progress.tsx");
+  assert.match(progress, /Strength trend/);
+  assert.match(progress, /EXERCISES/);
+  assert.match(progress, /splitLabel/);
+  assert.match(progress, /Not enough data yet/);
+  assert.match(progress, /<details/);
+  assert.match(progress, /trend\.pct >= 0 \? "\+" : ""/);
+  assert.match(progress, /trend\.latest/);
 });
 test("best recent set favors comparable reps and actual load, excluding drafts and old sessions", () => {
   const d = data([

@@ -533,9 +533,17 @@ export function strengthChange(data: AppData, exercise: string) {
     return null;
   return {
     pct: ((last.volume - first.volume) / first.volume) * 100,
-    latest: `${entryLoadLabel(last.entry)} × ${last.bestReps}`,
+    latest: compactStrengthPerformance(last.entry, last.bestReps),
     sessions: h.length,
   };
+}
+
+export function compactStrengthPerformance(entry: ExerciseEntry, reps: number) {
+  if (!isBodyweight(entry.exercise)) return `${entryLoadLabel(entry)} × ${reps}`;
+  if (entry.loadMode === "assisted" || (entry.assistance ?? 0) > 0)
+    return `BW − ${metricNumber(entry.assistance ?? 0)} kg × ${reps}`;
+  const added = entry.addedWeight ?? (entry.loadMode === "added" ? entry.weight : undefined);
+  return added != null && added > 0 ? `BW + ${metricNumber(added)} kg × ${reps}` : `BW × ${reps}`;
 }
 
 /* ---------------- Day completion ---------------- */

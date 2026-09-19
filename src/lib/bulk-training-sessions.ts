@@ -48,6 +48,8 @@ type SetRow = {
   set_order: number;
   is_extra: boolean;
   is_complete: boolean;
+  set_type?: string;
+  rpe?: number | null;
   bilateral_weight: number | null;
   bilateral_reps: number | null;
   left_weight: number | null;
@@ -97,6 +99,8 @@ function mapSessions(
             order: set.set_order,
             isExtra: set.is_extra,
             isComplete: set.is_complete,
+            setType: (set.set_type ?? "normal") as BulkTrainingSet["setType"],
+            rpe: numberOrNull(set.rpe ?? null),
             bilateralWeight: numberOrNull(set.bilateral_weight),
             bilateralReps: set.bilateral_reps,
             leftWeight: numberOrNull(set.left_weight),
@@ -231,16 +235,21 @@ export async function startBulkTrainingSession(planDayId: string): Promise<strin
 }
 
 export async function saveBulkTrainingSet(sessionId: string, set: EditableSessionSet) {
-  const { error } = await supabase.rpc("save_bulk_training_session_set", {
-    _session: sessionId,
-    _set: set.id,
-    _bilateral_weight: set.bilateralWeight ?? 0,
-    _bilateral_reps: set.bilateralReps ?? 0,
-    _left_weight: set.leftWeight ?? 0,
-    _left_reps: set.leftReps ?? 0,
-    _right_weight: set.rightWeight ?? 0,
-    _right_reps: set.rightReps ?? 0,
-  });
+  const { error } = await supabase.rpc(
+    "save_bulk_training_session_set_details" as never,
+    {
+      _session: sessionId,
+      _set: set.id,
+      _bilateral_weight: set.bilateralWeight,
+      _bilateral_reps: set.bilateralReps,
+      _left_weight: set.leftWeight,
+      _left_reps: set.leftReps,
+      _right_weight: set.rightWeight,
+      _right_reps: set.rightReps,
+      _set_type: set.setType,
+      _rpe: set.rpe,
+    } as never,
+  );
   if (error) throw error;
 }
 

@@ -28,7 +28,6 @@ import {
   iso,
   latestWeight,
   mean,
-  pctSigned,
   signed,
   sortedDays,
   strengthChange,
@@ -37,7 +36,14 @@ import {
 } from "@/lib/calc";
 import { useActions, useAppData, useBulkMeta } from "@/lib/store";
 import { optimizeBulkPhoto } from "@/lib/challenge-evidence";
-import { ALL_EXERCISES, exerciseLabel, type AppData, type PhotoSet } from "@/lib/types";
+import {
+  EXERCISES,
+  exerciseLabel,
+  splitLabel,
+  type AppData,
+  type PhotoSet,
+  type SplitType,
+} from "@/lib/types";
 import { bulkPlanModeFor, useBulkAdmin, useMemberships } from "@/lib/bulk-access";
 import { PublicBulkProgress } from "@/components/PublicBulkProgress";
 
@@ -351,36 +357,7 @@ function LegacyProgressPage({ data }: { data: AppData }) {
           </p>
         </Card>
 
-        <Card>
-          <SectionTitle>Strength trend</SectionTitle>
-          <p className="mb-2 text-[11px] text-muted-foreground">
-            Volume change from your first logged session to the latest.
-          </p>
-          <div className="space-y-2">
-            {ALL_EXERCISES.map((def) => {
-              const s = strengthChange(data, def.name);
-              const arrow = s == null ? "•" : s.pct > 2 ? "↑" : s.pct < -2 ? "↓" : "→";
-              const tone =
-                s == null
-                  ? "text-muted-foreground"
-                  : s.pct > 2
-                    ? "text-good"
-                    : s.pct < -2
-                      ? "text-danger"
-                      : "text-warn";
-              return (
-                <div key={def.name} className="flex items-center justify-between gap-3 text-sm">
-                  <span className="min-w-0 truncate text-muted-foreground">
-                    {exerciseLabel(def.name)}
-                  </span>
-                  <span className={`num shrink-0 font-semibold ${tone}`}>
-                    {s == null ? "—" : `${arrow} ${pctSigned(s.pct)} · ${s.latest}`}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        </Card>
+        <StrengthTrend data={data} />
 
         <TrainingSummary data={data} />
         <PhotosSection data={data} />
@@ -401,6 +378,83 @@ function LegacyProgressPage({ data }: { data: AppData }) {
         ) : null}
       </div>
     </AppShell>
+  );
+}
+
+function StrengthTrend({ data }: { data: AppData }) {
+  const seen = new Set<string>();
+  const grouped = (
+    Object.entries(EXERCISES) as Array<[SplitType, (typeof EXERCISES)[SplitType]]>
+  ).map(([split, exercises]) => ({
+    split,
+    exercises: exercises.filter((exercise) => {
+      if (seen.has(exercise.name)) return false;
+      seen.add(exercise.name);
+      return true;
+    }),
+  }));
+  const missing = grouped.flatMap(({ exercises }) =>
+    exercises.filter((exercise) => strengthChange(data, exercise.name) == null),
+  );
+  return (
+    <Card>
+      <SectionTitle>Strength trend</SectionTitle>
+      <p className="mb-3 text-[11px] text-muted-foreground">
+        Volume change from your first logged session to the latest.
+      </p>
+      <div className="space-y-4">
+        {grouped.map(({ split, exercises }) => {
+          const tracked = exercises.flatMap((exercise) => {
+            const trend = strengthChange(data, exercise.name);
+            return trend ? [{ exercise, trend }] : [];
+          });
+          if (!tracked.length) return null;
+          return (
+            <section key={split} aria-label={`${splitLabel(split)} strength trends`}>
+              <h3 className="mb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                {splitLabel(split)}
+              </h3>
+              <div className="divide-y divide-border">
+                {tracked.map(({ exercise, trend }) => {
+                  const tone =
+                    trend.pct > 2
+                      ? "text-good"
+                      : trend.pct < -2
+                        ? "text-danger"
+                        : "text-muted-foreground";
+                  return (
+                    <div key={exercise.name} className="flex min-h-14 items-center gap-3 py-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="break-words text-sm font-medium">
+                          {exerciseLabel(exercise.name)}
+                        </p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">{trend.latest}</p>
+                      </div>
+                      <span className={`num shrink-0 text-sm font-semibold ${tone}`}>
+                        {trend.pct >= 0 ? "+" : ""}
+                        {trend.pct.toFixed(0)}%
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          );
+        })}
+        {missing.length ? (
+          <details className="rounded-xl bg-elevated px-3 py-2">
+            <summary className="flex min-h-11 cursor-pointer items-center text-sm font-medium text-muted-foreground">
+              Not enough data yet · {missing.length}
+            </summary>
+            <ul className="space-y-2 pb-2 text-xs text-muted-foreground">
+              {missing.map((exercise) => (
+                <li key={exercise.name}>{exerciseLabel(exercise.name)}</li>
+              ))}
+            </ul>
+          </details>
+        ) : null}
+      </div>
+    </Card>
   );
 }
 

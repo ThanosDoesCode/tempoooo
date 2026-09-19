@@ -521,11 +521,13 @@ function TrainingStep({
   errors: Partial<Record<BulkOnboardingField, string>>;
 }) {
   const toggle = (equipment: Equipment) => {
-    if (equipment === "bodyweight_only") {
+    if (equipment === "bodyweight_only" || equipment === "full_gym") {
       update("availableEquipment", form.availableEquipment.includes(equipment) ? [] : [equipment]);
       return;
     }
-    const current = form.availableEquipment.filter((value) => value !== "bodyweight_only");
+    const current = form.availableEquipment.filter(
+      (value) => value !== "bodyweight_only" && value !== "full_gym",
+    );
     update(
       "availableEquipment",
       current.includes(equipment)
@@ -581,7 +583,7 @@ function TrainingStep({
         <div>
           <p className="text-xs font-medium text-muted-foreground">Available equipment</p>
           <p className="mt-1 text-[11px] text-muted-foreground">
-            Choose every option you can reliably use.
+            Choose every option you can reliably use. You can combine equipment freely.
           </p>
           <div className="mt-2 grid gap-2 sm:grid-cols-2">
             {EQUIPMENT_OPTIONS.map((option) => (
@@ -594,6 +596,11 @@ function TrainingStep({
               </Choice>
             ))}
           </div>
+          <p className="mt-2 rounded-xl bg-elevated/70 p-3 text-[11px] leading-5 text-muted-foreground">
+            Full/commercial gym covers broad gym equipment, including bodyweight stations.
+            Bodyweight only is for training without equipment. Selecting either replaces individual
+            equipment choices.
+          </p>
           {errors.availableEquipment ? (
             <p role="alert" className="mt-1 text-xs text-danger">
               {errors.availableEquipment}
@@ -676,10 +683,10 @@ function NutritionStep({
         title="Nutrition targets"
         copy={
           form.experienceLevel === "beginner"
-            ? "Tempo calculated a practical starting point from your goal and training schedule."
+            ? "Tempo calculated a practical starting point from your weight, goal, weekly pace and training schedule."
             : form.experienceLevel === "intermediate"
-              ? "Tempo's recommendation is prefilled. Adjust any target you already track."
-              : "Enter the daily targets you want Tempo to track."
+              ? "Tempo's recommendation from your body weight, goal and activity is prefilled. Adjust any target you already track."
+              : "Tempo prefilled targets from your body weight and goal. Edit them to match the approach you already use."
         }
       />
       {beginnerSummary ? (

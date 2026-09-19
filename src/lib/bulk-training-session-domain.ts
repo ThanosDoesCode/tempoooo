@@ -1,8 +1,12 @@
+export type BulkSetType = "warmup" | "normal" | "failure" | "drop";
+
 export type BulkTrainingSet = {
   id: string;
   order: number;
   isExtra: boolean;
   isComplete: boolean;
+  setType: BulkSetType;
+  rpe: number | null;
   bilateralWeight: number | null;
   bilateralReps: number | null;
   leftWeight: number | null;
@@ -41,6 +45,22 @@ export type BulkTrainingSession = {
 };
 
 export type EditableSessionSet = Omit<BulkTrainingSet, "order" | "isExtra" | "isComplete">;
+
+export function sessionSetVolume(set: EditableSessionSet, exercise: BulkTrainingSessionExercise) {
+  if (set.setType === "warmup" || !isSessionSetComplete(set, exercise)) return 0;
+  if (exercise.executionMode === "unilateral")
+    return (
+      (set.leftWeight ?? 0) * (set.leftReps ?? 0) + (set.rightWeight ?? 0) * (set.rightReps ?? 0)
+    );
+  return (set.bilateralWeight ?? 0) * (set.bilateralReps ?? 0);
+}
+
+export function sessionElapsedSeconds(startedAt: string, now: number, completedAt?: string | null) {
+  const start = Date.parse(startedAt);
+  const end = completedAt ? Date.parse(completedAt) : now;
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return 0;
+  return Math.max(0, Math.floor((end - start) / 1000));
+}
 
 export function isSessionSetComplete(
   set: EditableSessionSet,

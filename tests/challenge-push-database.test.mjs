@@ -1245,6 +1245,7 @@ test("public Bulk workout sessions are snapshot-based, resumable, validated and 
     )
   ).rows;
   const bilateral = sets.find((row) => row.exercise_order === 1 && row.set_order === 1);
+  const bilateralSecond = sets.find((row) => row.exercise_order === 1 && row.set_order === 2);
   const unilateral = sets.find((row) => row.exercise_order === 2);
   const bodyweight = sets.find((row) => row.exercise_order === 3);
   const save = (set, bw, br, lw, lr, rw, rr) =>
@@ -1280,6 +1281,49 @@ test("public Bulk workout sessions are snapshot-based, resumable, validated and 
   );
   await assert.rejects(save(bilateral.id, 10, 0, null, null, null, null), /reps_ck|violates check/);
 
+  const saveDetails = (user, set, weight, reps, type, rpe) =>
+    asUser(user, () =>
+      db.query(
+        `SELECT public.save_bulk_training_session_set_details(
+          $1,$2,$3,$4,NULL,NULL,NULL,NULL,$5,$6
+        )`,
+        [session, set, weight, reps, type, rpe],
+      ),
+    );
+  await saveDetails(owner, bilateralSecond.id, 15, 12, "warmup", 7.5);
+  assert.deepEqual(
+    (
+      await db.query(
+        "SELECT set_type,rpe::text FROM public.bulk_training_session_sets WHERE id=$1",
+        [bilateralSecond.id],
+      )
+    ).rows[0],
+    { set_type: "warmup", rpe: "7.5" },
+  );
+  await assert.rejects(
+    saveDetails(stranger, bilateralSecond.id, 15, 12, "normal", 8),
+    /Active workout not found/,
+  );
+  await assert.rejects(
+    saveDetails(owner, bilateralSecond.id, 15, 12, "invalid", 8),
+    /Invalid set type/,
+  );
+  await assert.rejects(
+    saveDetails(owner, bilateralSecond.id, 15, 12, "normal", 5.5),
+    /RPE must be between 6 and 10/,
+  );
+  assert.equal(
+    (
+      await asUser(owner, () =>
+        db.query("SELECT public.remove_bulk_training_session_set($1,$2) AS ok", [
+          session,
+          bilateralSecond.id,
+        ]),
+      )
+    ).rows[0].ok,
+    true,
+  );
+
   const extra = (
     await asUser(owner, () =>
       db.query("SELECT public.add_bulk_training_session_set($1,$2) AS id", [
@@ -1295,7 +1339,7 @@ test("public Bulk workout sessions are snapshot-based, resumable, validated and 
         [extra],
       )
     ).rows[0],
-    { set_order: 3, is_extra: true },
+    { set_order: 2, is_extra: true },
   );
   assert.equal(
     (
@@ -1304,6 +1348,9 @@ test("public Bulk workout sessions are snapshot-based, resumable, validated and 
       )
     ).rows[0].ok,
     true,
+  );
+  await asUser(owner, () =>
+    db.query("SELECT public.add_bulk_training_session_set($1,$2)", [session, snapshot.rows[0].id]),
   );
 
   const changedAt = (
@@ -3734,10 +3781,15 @@ test("security audit blocks direct cross-user, anon, unsafe-link and legacy func
     "challenge_payments",
     "challenge_travel_pauses",
   ]) {
-    const rows = await asUser(attacker, () =>
-      db.query(`SELECT * FROM public.${table} WHERE challenge_id=$1`, [x]),
-    );
-    assert.equal(rows.rows.length, 0, `${table} leaked outside Challenge membership`);
+    try {
+      const rows = await asUser(attacker, () =>
+        db.query(`SELECT * FROM public.${table} WHERE challenge_id=$1`, [x]),
+      );
+      assert.equal(rows.rows.length, 0, `${table} leaked outside Challenge membership`);
+    } catch (error) {
+      assert.equal(table, "challenge_invitations");
+      assert.match(String(error), /permission denied/i);
+    }
   }
   const challengeObject = randomUUID();
   await db.query(
