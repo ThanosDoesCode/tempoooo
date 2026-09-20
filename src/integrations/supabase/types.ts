@@ -895,8 +895,10 @@ export type Database = {
           left_weight: number | null
           right_reps: number | null
           right_weight: number | null
+          rpe: number | null
           session_exercise_id: string
           set_order: number
+          set_type: string
           updated_at: string
         }
         Insert: {
@@ -909,8 +911,10 @@ export type Database = {
           left_weight?: number | null
           right_reps?: number | null
           right_weight?: number | null
+          rpe?: number | null
           session_exercise_id: string
           set_order: number
+          set_type?: string
           updated_at?: string
         }
         Update: {
@@ -923,8 +927,10 @@ export type Database = {
           left_weight?: number | null
           right_reps?: number | null
           right_weight?: number | null
+          rpe?: number | null
           session_exercise_id?: string
           set_order?: number
+          set_type?: string
           updated_at?: string
         }
         Relationships: [
@@ -2134,6 +2140,21 @@ export type Database = {
           _right_weight: number
           _session: string
           _set: string
+        }
+        Returns: string
+      }
+      save_bulk_training_session_set_details: {
+        Args: {
+          _bilateral_reps: number
+          _bilateral_weight: number
+          _left_reps: number
+          _left_weight: number
+          _right_reps: number
+          _right_weight: number
+          _rpe: number
+          _session: string
+          _set: string
+          _set_type: string
         }
         Returns: string
       }
