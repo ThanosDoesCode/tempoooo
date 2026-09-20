@@ -27,7 +27,15 @@ export type Database = {
           created_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "bulk_admins_user_profile_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       bulk_days: {
         Row: {
@@ -292,6 +300,13 @@ export type Database = {
             referencedRelation: "bulk_profiles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "bulk_members_user_profile_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
         ]
       }
       bulk_nutrition_days: {
@@ -476,7 +491,15 @@ export type Database = {
           name?: string
           owner_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "bulk_profiles_owner_profile_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       bulk_progress_photos: {
         Row: {
@@ -895,8 +918,10 @@ export type Database = {
           left_weight: number | null
           right_reps: number | null
           right_weight: number | null
+          rpe: number | null
           session_exercise_id: string
           set_order: number
+          set_type: string
           updated_at: string
         }
         Insert: {
@@ -909,8 +934,10 @@ export type Database = {
           left_weight?: number | null
           right_reps?: number | null
           right_weight?: number | null
+          rpe?: number | null
           session_exercise_id: string
           set_order: number
+          set_type?: string
           updated_at?: string
         }
         Update: {
@@ -923,8 +950,10 @@ export type Database = {
           left_weight?: number | null
           right_reps?: number | null
           right_weight?: number | null
+          rpe?: number | null
           session_exercise_id?: string
           set_order?: number
+          set_type?: string
           updated_at?: string
         }
         Relationships: [
@@ -1352,6 +1381,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "challenge_invitations_creator_profile_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "challenge_invitations_invited_user_id_fkey"
             columns: ["invited_user_id"]
             isOneToOne: false
@@ -1388,6 +1424,13 @@ export type Database = {
             columns: ["challenge_id"]
             isOneToOne: false
             referencedRelation: "challenges"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "challenge_members_user_profile_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -1851,6 +1894,10 @@ export type Database = {
         Args: { _caller: string; _email: string; _token: string }
         Returns: string
       }
+      accept_challenge_invitation_by_id: {
+        Args: { _caller: string; _invitation: string }
+        Returns: string
+      }
       activate_my_bulk: { Args: never; Returns: string }
       add_bulk_training_session_set: {
         Args: { _exercise: string; _session: string }
@@ -2016,6 +2063,10 @@ export type Database = {
         Returns: string
       }
       deactivate_public_goal: { Args: never; Returns: string }
+      decline_challenge_invitation: {
+        Args: { _caller: string; _invitation: string }
+        Returns: boolean
+      }
       delete_bulk_meal_preset: { Args: { _meal: string }; Returns: boolean }
       delete_bulk_nutrition_entry:
         | { Args: { _entry: string }; Returns: boolean }
@@ -2044,6 +2095,17 @@ export type Database = {
         Returns: string
       }
       is_bulk_admin: { Args: never; Returns: boolean }
+      list_my_challenge_invitations: {
+        Args: { _caller: string }
+        Returns: {
+          challenge_id: string
+          challenge_name: string
+          expires_at: string
+          invitation_id: string
+          inviter_username: string
+          weekly_target_km: number
+        }[]
+      }
       log_bulk_meal_preset:
         | {
             Args: { _log_date: string; _preset: string; _request_id: string }
@@ -2135,6 +2197,31 @@ export type Database = {
           _session: string
           _set: string
         }
+        Returns: string
+      }
+      save_bulk_training_session_set_details: {
+        Args: {
+          _bilateral_reps: number
+          _bilateral_weight: number
+          _left_reps: number
+          _left_weight: number
+          _right_reps: number
+          _right_weight: number
+          _rpe: number
+          _session: string
+          _set: string
+          _set_type: string
+        }
+        Returns: string
+      }
+      search_challenge_invite_users: {
+        Args: { _caller: string; _challenge: string; _query: string }
+        Returns: {
+          username: string
+        }[]
+      }
+      send_challenge_username_invitation: {
+        Args: { _caller: string; _challenge: string; _invited_username: string }
         Returns: string
       }
       set_account_username: {
