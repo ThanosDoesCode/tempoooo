@@ -226,6 +226,7 @@ export type Database = {
           name: string
           protein_g: number
           sort_order: number
+          source_key: string | null
           updated_at: string
         }
         Insert: {
@@ -239,6 +240,7 @@ export type Database = {
           name: string
           protein_g: number
           sort_order: number
+          source_key?: string | null
           updated_at?: string
         }
         Update: {
@@ -252,6 +254,7 @@ export type Database = {
           name?: string
           protein_g?: number
           sort_order?: number
+          source_key?: string | null
           updated_at?: string
         }
         Relationships: [
