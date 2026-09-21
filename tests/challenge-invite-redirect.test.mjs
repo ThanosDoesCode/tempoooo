@@ -37,13 +37,44 @@ test("only same-origin app paths are ever restored after authentication", async 
   assert.match(source, /localStorage/);
 });
 
-test("Go to challenge only navigates the creator", async () => {
-  const source = await read("src/routes/_authenticated/challenge/new.tsx");
-  const block = source.match(/Go to challenge/);
-  assert.ok(block);
-  const button = source.match(/onClick=\{\(\) => void navigate\(\{ to: "\/challenge" \}\)\}/);
-  assert.ok(button, "Go to challenge performs navigation only");
-  // The invitation is persisted by createChallenge, before the link is displayed.
-  assert.match(source, /const challengeId = await createChallenge\(/);
-  assert.match(source, /setLink\(`\$\{window\.location\.origin\}\/invite\/challenge\/\$\{request\.token\}`\)/);
+test("username invitations let both creator and recipient open the Challenge", async () => {
+  const [createRoute, invitations, invitationQuery, migration] = await Promise.all([
+    read("src/routes/_authenticated/challenge/new.tsx"),
+    read("src/components/ChallengeInvitations.tsx"),
+    read("src/lib/challenge-invitations.ts"),
+    read("supabase/migrations/20260919120000_account_deletion_and_in_app_challenge_invites.sql"),
+  ]);
+
+  // The creator identifies the recipient by username and creates the invitation atomically.
+  assert.match(createRoute, /placeholder="Search username"/);
+  assert.match(createRoute, /invitedUsername: normalizeUsername\(username\)/);
+  assert.match(createRoute, /const challengeId = await createChallenge\(/);
+  assert.doesNotMatch(createRoute, /Copy link|navigator\.clipboard|setLink\(/);
+
+  // The creator can open the newly created Challenge.
+  assert.match(createRoute, /Go to challenge/);
+  assert.match(createRoute, /onClick=\{\(\) => void navigate\(\{ to: "\/challenge" \}\)\}/);
+
+  // The recipient sees their pending invitation and accepts it through the authenticated boundary.
+  assert.match(invitationQuery, /listMyChallengeInvitations\(\)/);
+  assert.match(invitations, /invitations\.data\?\.map/);
+  assert.match(
+    invitations,
+    /await acceptChallengeInvitationById\(\{ data: \{ invitationId \} \}\)/,
+  );
+
+  // Acceptance creates the recipient membership before taking them to the Challenge.
+  const acceptance =
+    migration.match(
+      /CREATE FUNCTION public\.accept_challenge_invitation_by_id[\s\S]*?END;\n\$function\$;/,
+    )?.[0] ?? "";
+  assert.match(acceptance, /invitation\.invited_user_id IS DISTINCT FROM _caller/);
+  assert.match(
+    acceptance,
+    /INSERT INTO public\.challenge_members\(challenge_id, user_id\)[\s\S]*invitation\.challenge_id, _caller/,
+  );
+  assert.match(
+    invitations,
+    /await acceptChallengeInvitationById[\s\S]*await refresh\(\);[\s\S]*await navigate\(\{ to: "\/challenge" \}\)/,
+  );
 });
