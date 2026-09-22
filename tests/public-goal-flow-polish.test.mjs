@@ -97,6 +97,14 @@ test("Goal settings changes Bulk or Cut through the existing scoped reset", asyn
   assert.doesNotMatch(migration, /DELETE FROM|challenge_|bulk_meal_presets|bulk_training_sessions/);
 });
 
+test("Goal settings history opens Goal progress instead of Training history", async () => {
+  const settings = await read("src/routes/_authenticated/bulk/more.tsx");
+  assert.match(settings, /to: "\/bulk\/progress"/);
+  assert.match(settings, /label: "Progress history"/);
+  assert.match(settings, /Weight, check-ins and progress records/);
+  assert.doesNotMatch(settings, /to: "\/bulk\/(?:history|training\/history)"/);
+});
+
 test("public Meals never falls back to legacy presets and future dates are read-only", async () => {
   const [today, mealsRoute, goalToday, presetRoute, presets, legacy, query, migration, guard] =
     await Promise.all([

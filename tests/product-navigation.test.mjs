@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { PRODUCT_LANDING_ROUTES, productAreaForPath } from "../src/lib/product-navigation.ts";
 import { accountProductMode, preferredBulkMembership } from "../src/lib/bulk-mode.ts";
-import { secondaryNavigationSlot } from "../src/lib/secondary-navigation.ts";
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
@@ -123,33 +122,33 @@ test("only one persistent bar exists and secondary navigation stays in page flow
   assert.equal((shell.match(/fixed inset-x-0 bottom-0/g) ?? []).length, 1);
   assert.match(shell, /aria-label="Primary"/);
   assert.match(shell, /<SecondaryNavigation/);
-  assert.match(secondary, /className="mb-4 h-12 overflow-hidden"/);
+  assert.match(secondary, /className="relative z-30 mb-4 flex h-11 justify-center"/);
+  assert.doesNotMatch(secondary, /w-full max-w-\[22rem\][^\n]*bg-card/);
   assert.doesNotMatch(shell, /sticky top-0/);
   assert.doesNotMatch(secondary, /fixed/);
 });
 
-test("shared secondary navigation keeps the active route in the center carousel slot", async () => {
+test("shared secondary navigation uses a compact route-synchronized menu", async () => {
   const source = await read("src/components/SecondaryNavigation.tsx");
-  for (let active = 0; active < 4; active++) {
-    assert.equal(secondaryNavigationSlot(active, active, 4), 0);
-    assert.deepEqual(
-      [0, 1, 2, 3].map((index) => secondaryNavigationSlot(index, active, 4)),
-      active === 0
-        ? [0, 1, -2, -1]
-        : active === 1
-          ? [-1, 0, 1, -2]
-          : active === 2
-            ? [-2, -1, 0, 1]
-            : [1, -2, -1, 0],
-    );
-  }
-  assert.match(source, /left-1\/2/);
-  assert.match(source, /translateX\(calc\(-50%/);
-  assert.match(source, /aria-expanded=\{active \? expanded : undefined\}/);
+  assert.match(source, /const activeItem = items\[activeIndex\]/);
+  assert.match(source, /max-w-\[calc\(100vw-2rem\)\]/);
+  assert.match(source, /w-\[min\(20rem,calc\(100vw-2rem\)\)\]/);
+  assert.match(source, /grid-cols-2/);
+  assert.match(source, /aria-expanded=\{expanded\}/);
+  assert.match(source, /aria-haspopup="menu"/);
+  assert.match(source, /<ChevronDown/);
+  assert.match(source, /role="menu"/);
+  assert.match(source, /role="menuitem"/);
+  assert.match(source, /bg-primary\/10 text-primary/);
   assert.match(source, /if \(!root\.current\?\.contains/);
-  assert.match(source, /prefers-reduced-motion: reduce/);
-  assert.match(source, /setSelectionPending\(true\)/);
+  assert.match(source, /event\.key !== "Escape"/);
+  assert.match(source, /trigger\.current\?\.focus/);
+  assert.match(source, /motion-reduce:transition-none/);
+  assert.match(source, /motion-safe:animate-in/);
+  assert.match(source, /preload="intent"/);
+  assert.match(source, /onClick=\{\(\) => setExpanded\(false\)\}/);
   assert.match(source, /setExpanded\(false\)/);
+  assert.doesNotMatch(source, /secondaryNavigationSlot|translateX\(calc\(-50% \+/);
 });
 
 test("authenticated sibling routes share one persistent shell and transition only route content", async () => {

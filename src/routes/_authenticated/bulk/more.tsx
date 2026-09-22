@@ -15,9 +15,9 @@ export const Route = createFileRoute("/_authenticated/bulk/more")({
 
 const destinations = [
   {
-    to: "/bulk/history",
-    label: "History",
-    description: "Past nutrition and completed workouts",
+    to: "/bulk/progress",
+    label: "Progress history",
+    description: "Weight, check-ins and progress records",
     icon: History,
   },
 ] as const;
