@@ -2074,6 +2074,11 @@ export type Database = {
       delete_bulk_nutrition_entry:
         | { Args: { _entry: string }; Returns: boolean }
         | { Args: { _entry: string; _local_today: string }; Returns: boolean }
+      delete_completed_bulk_training_session: {
+        Args: { _session: string }
+        Returns: boolean
+      }
+      delete_legacy_bulk_workout: { Args: { _day: string }; Returns: boolean }
       disable_challenge_push: { Args: { _caller: string }; Returns: undefined }
       discard_bulk_training_session: {
         Args: { _session: string }
