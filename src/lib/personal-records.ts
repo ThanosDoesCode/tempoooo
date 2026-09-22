@@ -51,6 +51,46 @@ function summarize(
   };
 }
 
+const compatibleRecordKey = (record: PersonalRecord) =>
+  `${record.name
+    .trim()
+    .toLocaleLowerCase("en-GB")
+    .replaceAll(/[^a-z0-9]+/g, "")}:${record.side ?? "bilateral"}`;
+
+/**
+ * Combines preserved legacy JSON performances with normalized sessions without
+ * changing either source. Exercise name and side are the only identity shared
+ * by the two historical formats.
+ */
+export function mergePersonalRecords(
+  normalized: PersonalRecord[],
+  legacy: PersonalRecord[],
+): PersonalRecord[] {
+  const grouped = new Map<string, PersonalRecord>();
+  for (const record of [...normalized, ...legacy]) {
+    const key = compatibleRecordKey(record);
+    const existing = grouped.get(key);
+    if (!existing) {
+      grouped.set(key, record);
+      continue;
+    }
+    grouped.set(
+      key,
+      summarize(
+        existing.exerciseId ? existing.key : record.key,
+        existing.exerciseId ?? record.exerciseId,
+        existing.name,
+        existing.side,
+        existing.isBodyweight || record.isBodyweight,
+        [...existing.performances, ...record.performances],
+      ),
+    );
+  }
+  return [...grouped.values()].sort(
+    (a, b) => a.name.localeCompare(b.name) || (a.side ?? "").localeCompare(b.side ?? ""),
+  );
+}
+
 export function derivePublicPersonalRecords(sessions: BulkTrainingSession[]): PersonalRecord[] {
   const grouped = new Map<
     string,

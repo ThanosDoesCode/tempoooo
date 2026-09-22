@@ -250,7 +250,7 @@ test("nutrition onboarding adapts guidance without changing its atomic save", as
   assert.match(onboarding, /your weight, goal, weekly pace and training schedule/);
 });
 
-test("the five-step UI submits one atomic RPC and does not expose Bulk early", async () => {
+test("the five-step UI submits one atomic RPC while optional Goal remains discoverable", async () => {
   const [onboarding, profile, guard, shell] = await Promise.all([
     read("src/routes/_authenticated/bulk-onboarding.tsx"),
     read("src/routes/_authenticated/profile.tsx"),
@@ -274,7 +274,8 @@ test("the five-step UI submits one atomic RPC and does not expose Bulk early", a
   assert.match(guard, /redirect\(\{ to: "\/bulk-onboarding", replace: true \}\)/);
   assert.match(
     shell,
-    /item\.area === "challenge" \|\| item\.area === "profile" \|\| hasFitnessTools/,
+    /item\.area === "challenge" \|\|[\s\S]*item\.area === "goal" \|\|[\s\S]*item\.area === "profile" \|\|[\s\S]*hasFitnessTools/,
   );
+  assert.match(shell, /to: PRODUCT_LANDING_ROUTES\.goal/);
   assert.doesNotMatch(shell, /label: "Bulk"/);
 });

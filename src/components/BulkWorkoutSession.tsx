@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Check, ChevronDown, Plus, Trash2 } from "lucide-react";
@@ -181,6 +187,7 @@ export function BulkWorkoutSessionView({
   const [clock, setClock] = useState(() => Date.now());
   const [adding, setAdding] = useState(new Set<string>());
   const [removing, setRemoving] = useState(new Set<string>());
+  const [openSetId, setOpenSetId] = useState<string | null>(null);
   const [collapsedExercises, setCollapsedExercises] = useState(new Set<string>());
   const addPending = useRef(new Set<string>());
   const removePending = useRef(new Set<string>());
@@ -571,6 +578,8 @@ export function BulkWorkoutSessionView({
                     draft={drafts[set.id] ?? toDraft(set)}
                     saving={saving.has(set.id)}
                     removing={removing.has(set.id)}
+                    canRemove={exercise.sets.length > 1}
+                    swipeOpen={openSetId === set.id}
                     previous={previousSetLabel(
                       progression[exercise.sourcePlanExerciseId ?? `session:${exercise.id}`]
                         ?.previousPerformance?.[index],
@@ -581,6 +590,10 @@ export function BulkWorkoutSessionView({
                     onRetry={() => void persist(set.id)}
                     onDone={() => void persist(set.id)}
                     onRemove={() => void removeSet(set.id)}
+                    onSwipeOpen={() => setOpenSetId(set.id)}
+                    onSwipeClose={() =>
+                      setOpenSetId((current) => (current === set.id ? null : current))
+                    }
                   />
                 ))}
               </div>
@@ -654,29 +667,86 @@ function WorkoutSetRow({
   draft,
   saving,
   removing,
+  canRemove,
+  swipeOpen,
   previous,
   error,
   onChange,
   onRetry,
   onDone,
   onRemove,
+  onSwipeOpen,
+  onSwipeClose,
 }: {
   exercise: BulkTrainingSessionExercise;
   set: BulkTrainingSet;
   draft: SetDraft;
   saving: boolean;
   removing: boolean;
+  canRemove: boolean;
+  swipeOpen: boolean;
   previous: string;
   error?: string;
   onChange: (patch: Partial<SetDraft>) => void;
   onRetry: () => void;
   onDone: () => void;
   onRemove: () => void;
+  onSwipeOpen: () => void;
+  onSwipeClose: () => void;
 }) {
   const done = isSessionSetComplete(draft, exercise);
   const [typeOpen, setTypeOpen] = useState(false);
   const [rpeOpen, setRpeOpen] = useState(false);
   const [rpeDraft, setRpeDraft] = useState<number | null>(draft.rpe);
+  const rowRef = useRef<HTMLDivElement>(null);
+  const gesture = useRef<{ x: number; y: number; pointer: number; horizontal: boolean } | null>(
+    null,
+  );
+  const [dragOffset, setDragOffset] = useState(swipeOpen ? 56 : 0);
+  useEffect(() => setDragOffset(swipeOpen ? 56 : 0), [swipeOpen]);
+  useEffect(() => {
+    if (!swipeOpen) return;
+    const close = (event: PointerEvent) => {
+      if (!rowRef.current?.contains(event.target as Node)) onSwipeClose();
+    };
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, [onSwipeClose, swipeOpen]);
+
+  const beginSwipe = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (
+      !canRemove ||
+      removing ||
+      (event.target as HTMLElement).closest("button,input,select,textarea")
+    )
+      return;
+    gesture.current = {
+      x: event.clientX,
+      y: event.clientY,
+      pointer: event.pointerId,
+      horizontal: false,
+    };
+  };
+  const moveSwipe = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const start = gesture.current;
+    if (!start || start.pointer !== event.pointerId) return;
+    const dx = event.clientX - start.x;
+    const dy = event.clientY - start.y;
+    if (!start.horizontal && Math.abs(dy) > Math.abs(dx) + 6) {
+      gesture.current = null;
+      return;
+    }
+    if (Math.abs(dx) > Math.abs(dy) + 6) start.horizontal = true;
+    if (!start.horizontal) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setDragOffset(Math.max(0, Math.min(64, (swipeOpen ? 56 : 0) + dx)));
+  };
+  const endSwipe = () => {
+    if (!gesture.current) return;
+    gesture.current = null;
+    if (dragOffset >= 34) onSwipeOpen();
+    else onSwipeClose();
+  };
   const field = (label: string, value: number | null, key: keyof SetDraft, integer = false) => (
     <DecimalInput
       value={value ?? undefined}
@@ -711,73 +781,95 @@ function WorkoutSetRow({
   return (
     <>
       <div
-        className={cn(
-          "mt-1 grid grid-cols-[2.5rem_minmax(3.75rem,1fr)_3.25rem_3.25rem_2.75rem_2.75rem] items-center gap-1 rounded-xl px-1 py-1",
-          done ? "bg-good/5" : "bg-elevated/40",
-        )}
+        ref={rowRef}
+        className="relative mt-1 overflow-hidden rounded-xl"
+        data-set-swipe={set.id}
       >
-        <button
-          type="button"
-          onClick={() => setTypeOpen(true)}
-          aria-label={`Set ${set.order}, ${draft.setType} set. Change set type`}
+        {canRemove ? (
+          <button
+            type="button"
+            aria-label={`${removing ? "Removing" : "Remove"} ${exercise.name} set ${set.order}`}
+            disabled={removing}
+            onClick={onRemove}
+            className="absolute inset-y-0 left-0 grid w-14 place-items-center bg-danger text-white disabled:opacity-60"
+          >
+            <Trash2 className="h-5 w-5" aria-hidden="true" />
+          </button>
+        ) : null}
+        <div
+          onPointerDown={beginSwipe}
+          onPointerMove={moveSwipe}
+          onPointerUp={endSwipe}
+          onPointerCancel={endSwipe}
+          style={{ transform: `translateX(${dragOffset}px)`, touchAction: "pan-y" }}
           className={cn(
-            "grid h-11 min-w-10 place-items-center rounded-lg border text-xs font-bold",
-            typeTone,
+            "grid grid-cols-[2.5rem_minmax(3.75rem,1fr)_3.25rem_3.25rem_2.75rem_2.75rem] items-center gap-1 rounded-xl px-1 py-1 transition-transform duration-150 ease-out motion-reduce:transition-none",
+            done ? "bg-good/5" : "bg-elevated/40",
           )}
         >
-          {typeBadge}
-        </button>
-        <span className="line-clamp-2 px-1 text-center text-[10px] leading-tight text-muted-foreground">
-          {previous}
-        </span>
-        {exercise.executionMode === "bilateral" ? (
-          <>
-            {field(
-              exercise.isBodyweight ? "added kg" : "kg",
-              draft.bilateralWeight,
-              "bilateralWeight",
+          <button
+            type="button"
+            onClick={() => setTypeOpen(true)}
+            aria-label={`Set ${set.order}, ${draft.setType} set. Change set type`}
+            className={cn(
+              "grid h-11 min-w-10 place-items-center rounded-lg border text-xs font-bold",
+              typeTone,
             )}
-            {field("reps", draft.bilateralReps, "bilateralReps", true)}
-          </>
-        ) : (
-          <>
-            <div className="space-y-1">
-              {field("left kg", draft.leftWeight, "leftWeight")}
-              {field("right kg", draft.rightWeight, "rightWeight")}
-            </div>
-            <div className="space-y-1">
-              {field("left reps", draft.leftReps, "leftReps", true)}
-              {field("right reps", draft.rightReps, "rightReps", true)}
-            </div>
-          </>
-        )}
-        <button
-          type="button"
-          className="grid h-11 min-w-11 place-items-center rounded-lg border border-input bg-background text-xs font-semibold"
-          aria-label={`${exercise.name}, set ${set.order}, RPE ${draft.rpe ?? "not set"}`}
-          onClick={() => {
-            setRpeDraft(draft.rpe);
-            setRpeOpen(true);
-          }}
-        >
-          {draft.rpe ?? "—"}
-        </button>
-        <button
-          type="button"
-          disabled={!done || saving}
-          onClick={onDone}
-          aria-label={`${done ? "Save" : "Complete"} ${exercise.name} set ${set.order}`}
-          className={cn(
-            "grid h-11 min-w-11 place-items-center rounded-lg border",
-            done ? "border-good/40 bg-good/10 text-good" : "border-border text-muted-foreground",
-          )}
-        >
-          {saving ? (
-            <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent motion-reduce:animate-none" />
+          >
+            {typeBadge}
+          </button>
+          <span className="line-clamp-2 px-1 text-center text-[10px] leading-tight text-muted-foreground">
+            {previous}
+          </span>
+          {exercise.executionMode === "bilateral" ? (
+            <>
+              {field(
+                exercise.isBodyweight ? "added kg" : "kg",
+                draft.bilateralWeight,
+                "bilateralWeight",
+              )}
+              {field("reps", draft.bilateralReps, "bilateralReps", true)}
+            </>
           ) : (
-            <Check className="h-4 w-4" aria-hidden="true" />
+            <>
+              <div className="space-y-1">
+                {field("left kg", draft.leftWeight, "leftWeight")}
+                {field("right kg", draft.rightWeight, "rightWeight")}
+              </div>
+              <div className="space-y-1">
+                {field("left reps", draft.leftReps, "leftReps", true)}
+                {field("right reps", draft.rightReps, "rightReps", true)}
+              </div>
+            </>
           )}
-        </button>
+          <button
+            type="button"
+            className="grid h-11 min-w-11 place-items-center rounded-lg border border-input bg-background text-xs font-semibold"
+            aria-label={`${exercise.name}, set ${set.order}, RPE ${draft.rpe ?? "not set"}`}
+            onClick={() => {
+              setRpeDraft(draft.rpe);
+              setRpeOpen(true);
+            }}
+          >
+            {draft.rpe ?? "—"}
+          </button>
+          <button
+            type="button"
+            disabled={!done || saving}
+            onClick={onDone}
+            aria-label={`${done ? "Save" : "Complete"} ${exercise.name} set ${set.order}`}
+            className={cn(
+              "grid h-11 min-w-11 place-items-center rounded-lg border",
+              done ? "border-good/40 bg-good/10 text-good" : "border-border text-muted-foreground",
+            )}
+          >
+            {saving ? (
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent motion-reduce:animate-none" />
+            ) : (
+              <Check className="h-4 w-4" aria-hidden="true" />
+            )}
+          </button>
+        </div>
       </div>
       <div
         className="flex min-h-5 items-center justify-end gap-2 px-1 text-[10px] text-muted-foreground"
@@ -815,17 +907,6 @@ function WorkoutSetRow({
                 </button>
               </DrawerClose>
             ))}
-            <DrawerClose asChild>
-              <button
-                type="button"
-                disabled={removing}
-                className="flex min-h-12 w-full items-center gap-2 rounded-xl px-4 text-left text-sm font-medium text-danger"
-                onClick={onRemove}
-              >
-                <Trash2 className="h-4 w-4" aria-hidden="true" />{" "}
-                {removing ? "Removing..." : "Remove Set"}
-              </button>
-            </DrawerClose>
           </div>
           <DrawerFooter>
             <DrawerClose asChild>

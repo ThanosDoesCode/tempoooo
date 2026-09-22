@@ -16,7 +16,7 @@ test("unauthenticated home is a compact Tempo welcome with signup and sign-in pa
   assert.doesNotMatch(home, /data\.session \? "\/challenge" : "\/auth"/);
 });
 
-test("new account onboarding continues into required Goal setup and remains profile-guarded", async () => {
+test("new account onboarding ends with a one-time Tempo intro and keeps Goal optional", async () => {
   const [route, onboarding] = await Promise.all([
     read("src/routes/_authenticated/route.tsx"),
     read("src/routes/_authenticated/onboarding.tsx"),
@@ -27,10 +27,16 @@ test("new account onboarding continues into required Goal setup and remains prof
   assert.match(onboarding, /Welcome to Tempo/);
   assert.match(onboarding, /Choose your username/);
   assert.match(onboarding, /Stay consistent with someone else/);
-  assert.match(onboarding, /Choose your Goal/);
-  assert.match(onboarding, /choose Bulk or Cut/);
-  assert.match(onboarding, /Choose Goal/);
-  assert.match(onboarding, /to: establishedNeedsUsername \? "\/challenge" : "\/bulk-onboarding"/);
+  assert.match(onboarding, /Build consistency across your training, nutrition and challenges/);
+  for (const feature of ["Challenge", "Training", "Meals", "Goal"])
+    assert.match(onboarding, new RegExp(`title="${feature}"`));
+  assert.match(
+    onboarding,
+    /Choose Bulk or Cut when you&amp;apos;re ready|Choose Bulk or Cut when you/,
+  );
+  assert.match(onboarding, /Enter Tempo/);
+  assert.match(onboarding, /navigate\(\{ to: "\/challenge", replace: true \}\)/);
+  assert.doesNotMatch(onboarding, /Choose your Goal|Choose Goal/);
   assert.match(onboarding, /!completing\.current && profile\.data\?\.account_onboarded_at/);
   assert.doesNotMatch(onboarding, /complete_goal_onboarding|bulk_profiles|bulk_members/);
 });

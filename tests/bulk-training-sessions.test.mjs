@@ -2,10 +2,13 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import {
+  completedSessionVolume,
+  completedWorkingSets,
   isSessionSetComplete,
   sessionElapsedSeconds,
   sessionSetLabel,
   sessionSetVolume,
+  skippedSessionSets,
 } from "../src/lib/bulk-training-session-domain.ts";
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
@@ -121,6 +124,29 @@ test("live workout metrics count completed working sets and use a real elapsed d
   );
 });
 
+test("history summaries count only completed working sets and keep skipped plans secondary", () => {
+  const session = {
+    exercises: [
+      exercise({
+        sets: [
+          set({ id: "logged", isComplete: true, bilateralWeight: 20, bilateralReps: 10 }),
+          set({
+            id: "warmup",
+            isComplete: true,
+            setType: "warmup",
+            bilateralWeight: 10,
+            bilateralReps: 10,
+          }),
+          set({ id: "skipped" }),
+        ],
+      }),
+    ],
+  };
+  assert.equal(completedWorkingSets(session), 1);
+  assert.equal(completedSessionVolume(session), 200);
+  assert.equal(skippedSessionSets(session), 1);
+});
+
 test("public workout UI resumes durable compact sessions and protects set metadata", async () => {
   const [training, overview, workout, history, query, migration, metadataMigration, cache] =
     await Promise.all([
@@ -140,7 +166,13 @@ test("public workout UI resumes durable compact sessions and protects set metada
   assert.match(workout, /Add Set/);
   assert.match(workout, /SET_TYPES/);
   assert.match(workout, /RPE_VALUES/);
-  assert.match(workout, /Remove Set/);
+  assert.match(workout, /data-set-swipe=\{set\.id\}/);
+  assert.match(workout, /dragOffset >= 34/);
+  assert.match(workout, /touchAction: "pan-y"/);
+  assert.match(workout, /<Trash2[^>]*aria-hidden="true"/);
+  assert.match(workout, /canRemove=\{exercise\.sets\.length > 1\}/);
+  assert.match(workout, /const \[openSetId, setOpenSetId\]/);
+  assert.doesNotMatch(workout, />\s*Remove Set\s*</);
   assert.match(workout, /previousPerformance/);
   assert.match(workout, /min-w-\[330px\]/);
   assert.match(workout, /Finish with incomplete sets/);
@@ -150,7 +182,11 @@ test("public workout UI resumes durable compact sessions and protects set metada
   assert.match(workout, /tempo:bulk-workout-draft/);
   assert.match(workout, /localStorage\.removeItem/);
   assert.match(history, /Training history/);
-  assert.match(history, /CompletedWorkout/);
+  assert.match(history, /PublicWorkoutCard/);
+  assert.match(history, /PublicWorkoutDetail/);
+  assert.match(history, /Delete workout\?/);
+  assert.match(history, /completedWorkingSets/);
+  assert.match(history, /completedSessionVolume/);
   assert.match(query, /staleTime: 0/);
   assert.match(cache, /bulk-training-session/);
   assert.match(migration, /bulk_training_sessions_one_active_uidx/);

@@ -285,3 +285,23 @@ export async function discardBulkTrainingSession(sessionId: string) {
   });
   if (error) throw error;
 }
+
+export async function deleteCompletedBulkTrainingSession(sessionId: string) {
+  const { data, error } = await supabase.rpc(
+    "delete_completed_bulk_training_session" as never,
+    { _session: sessionId } as never,
+  );
+  if (error) throw error;
+  if (!data) throw new Error("Completed workout not found");
+}
+
+export async function deleteLegacyBulkWorkout(day: string) {
+  const { data, error } = await supabase.rpc(
+    "delete_legacy_bulk_workout" as never,
+    {
+      _day: day,
+    } as never,
+  );
+  if (error) throw error;
+  if (!data) throw new Error("Historical workout not found");
+}

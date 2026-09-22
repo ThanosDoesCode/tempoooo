@@ -1453,6 +1453,492 @@ test("public Bulk workout sessions are snapshot-based, resumable, validated and 
   );
 });
 
+test("completed normalized workout deletion cascades snapshots and preserves all unrelated data", async () => {
+  const owner = randomUUID();
+  const other = randomUUID();
+  for (const user of [owner, other]) {
+    await db.query("INSERT INTO auth.users(id) VALUES ($1)", [user]);
+    await db.query("INSERT INTO public.profiles(id,display_name) VALUES ($1,'Deletion tester')", [
+      user,
+    ]);
+    await completeBulkOnboarding(user, { preference: "custom" });
+  }
+
+  const createCompletedSession = async (user, label, existingPlan = null) => {
+    let plan = existingPlan?.plan;
+    let day = existingPlan?.day;
+    if (!plan || !day) {
+      plan = (
+        await asUser(user, () =>
+          db.query("SELECT public.create_empty_bulk_training_plan($1) AS id", [label]),
+        )
+      ).rows[0].id;
+      const version = (
+        await db.query("SELECT updated_at FROM public.bulk_training_plans WHERE id=$1", [plan])
+      ).rows[0].updated_at;
+      await asUser(user, () =>
+        db.query("SELECT public.save_bulk_training_plan($1,$2,$3,$4::jsonb)", [
+          plan,
+          version,
+          label,
+          JSON.stringify([
+            {
+              name: `${label} day`,
+              exercises: [
+                {
+                  exerciseId: "system:flat-barbell-bench-press",
+                  sets: 1,
+                  repMin: 8,
+                  repMax: 12,
+                  executionMode: "bilateral",
+                  notes: null,
+                },
+              ],
+            },
+          ]),
+        ]),
+      );
+      day = (
+        await db.query("SELECT id FROM public.bulk_training_plan_days WHERE plan_id=$1", [plan])
+      ).rows[0].id;
+    }
+    const session = (
+      await asUser(user, () =>
+        db.query("SELECT public.start_bulk_training_session($1) AS id", [day]),
+      )
+    ).rows[0].id;
+    const row = (
+      await db.query(
+        `SELECT e.id AS exercise_id, ss.id AS set_id
+         FROM public.bulk_training_session_exercises e
+         JOIN public.bulk_training_session_sets ss ON ss.session_exercise_id=e.id
+         WHERE e.session_id=$1`,
+        [session],
+      )
+    ).rows[0];
+    await asUser(user, () =>
+      db.query(
+        `SELECT public.save_bulk_training_session_set_details(
+          $1,$2,80,8,NULL,NULL,NULL,NULL,'failure',9.5
+        )`,
+        [session, row.set_id],
+      ),
+    );
+    await asUser(user, () =>
+      db.query("SELECT public.finish_bulk_training_session($1,false)", [session]),
+    );
+    const references = (
+      await db.query(
+        `SELECT p.id AS plan, d.id AS day, pe.id AS plan_exercise,
+                coalesce(pe.source_system_exercise_id,pe.exercise_id) AS library_exercise
+         FROM public.bulk_training_plans p
+         JOIN public.bulk_training_plan_days d ON d.plan_id=p.id
+         JOIN public.bulk_training_plan_exercises pe ON pe.plan_day_id=d.id
+         WHERE p.id=$1`,
+        [plan],
+      )
+    ).rows[0];
+    return {
+      session,
+      exercise: row.exercise_id,
+      set: row.set_id,
+      ...references,
+    };
+  };
+
+  const mine = await createCompletedSession(owner, "Owner deletion");
+  const mineToKeep = await createCompletedSession(owner, "Owner retained history", mine);
+  const theirs = await createCompletedSession(other, "Other history");
+  const ownerProfile = (
+    await db.query("SELECT id FROM public.bulk_profiles WHERE owner_id=$1", [owner])
+  ).rows[0].id;
+  const nutritionDay = randomUUID();
+  const nutritionEntry = randomUUID();
+  const challenge = randomUUID();
+  await db.query(
+    `INSERT INTO public.bulk_nutrition_days(
+       id,bulk_profile_id,log_date,target_calories,target_protein_g,target_carbs_g,target_fat_g
+     ) VALUES ($1,$2,'2026-09-21',2800,150,350,90)`,
+    [nutritionDay, ownerProfile],
+  );
+  await db.query(
+    `INSERT INTO public.bulk_nutrition_entries(
+       id,nutrition_day_id,source_type,name_snapshot,calories,protein_g,carbs_g,fat_g,
+       sort_order,request_id
+     ) VALUES ($1,$2,'custom','Preserved meal',700,40,80,20,1,$3)`,
+    [nutritionEntry, nutritionDay, randomUUID()],
+  );
+  await db.query(
+    "INSERT INTO public.challenges(id,created_by,name,start_date,timezone,legacy_photo_owed) VALUES ($1,$2,'Deletion isolation',CURRENT_DATE,'UTC',false)",
+    [challenge, owner],
+  );
+  await db.query("INSERT INTO public.challenge_members(challenge_id,user_id) VALUES ($1,$2)", [
+    challenge,
+    owner,
+  ]);
+
+  assert.deepEqual(
+    (
+      await db.query(
+        "SELECT set_type,rpe::text FROM public.bulk_training_session_sets WHERE id=$1",
+        [mine.set],
+      )
+    ).rows[0],
+    { set_type: "failure", rpe: "9.5" },
+  );
+  assert.equal(
+    (
+      await asUser(other, () =>
+        db.query("SELECT public.delete_completed_bulk_training_session($1) AS ok", [mine.session]),
+      )
+    ).rows[0].ok,
+    false,
+  );
+  assert.equal(
+    (
+      await asUser(owner, () =>
+        db.query("SELECT public.delete_completed_bulk_training_session($1) AS ok", [mine.session]),
+      )
+    ).rows[0].ok,
+    true,
+  );
+  for (const [table, id] of [
+    ["bulk_training_sessions", mine.session],
+    ["bulk_training_session_exercises", mine.exercise],
+    ["bulk_training_session_sets", mine.set],
+  ])
+    assert.equal(
+      Number(
+        (await db.query(`SELECT count(*) AS n FROM public.${table} WHERE id=$1`, [id])).rows[0].n,
+      ),
+      0,
+      `${table} should cascade with the deleted workout`,
+    );
+  assert.equal(
+    Number(
+      (
+        await db.query("SELECT count(*) AS n FROM public.bulk_training_sessions WHERE id=$1", [
+          theirs.session,
+        ])
+      ).rows[0].n,
+    ),
+    1,
+  );
+  assert.equal(
+    Number(
+      (
+        await db.query("SELECT count(*) AS n FROM public.bulk_training_sessions WHERE id=$1", [
+          mineToKeep.session,
+        ])
+      ).rows[0].n,
+    ),
+    1,
+  );
+  for (const [table, id] of [
+    ["bulk_training_plans", mine.plan],
+    ["bulk_training_plan_days", mine.day],
+    ["bulk_training_plan_exercises", mine.plan_exercise],
+    ["bulk_exercises", mine.library_exercise],
+    ["bulk_nutrition_days", nutritionDay],
+    ["bulk_nutrition_entries", nutritionEntry],
+    ["challenges", challenge],
+    ["challenge_members", owner],
+  ]) {
+    const condition = table === "challenge_members" ? "user_id=$1" : "id=$1";
+    assert.equal(
+      Number(
+        (await db.query(`SELECT count(*) AS n FROM public.${table} WHERE ${condition}`, [id]))
+          .rows[0].n,
+      ),
+      1,
+      `${table} must survive deleting one completed workout`,
+    );
+  }
+
+  const active = (
+    await asUser(owner, () =>
+      db.query("SELECT public.start_bulk_training_session($1) AS id", [mineToKeep.day]),
+    )
+  ).rows[0].id;
+  assert.equal(
+    (
+      await asUser(owner, () =>
+        db.query("SELECT public.delete_completed_bulk_training_session($1) AS ok", [active]),
+      )
+    ).rows[0].ok,
+    false,
+  );
+  assert.equal(
+    Number(
+      (
+        await db.query("SELECT count(*) AS n FROM public.bulk_training_sessions WHERE id=$1", [
+          active,
+        ])
+      ).rows[0].n,
+    ),
+    1,
+  );
+  assert.equal(
+    (
+      await asUser(owner, () =>
+        db.query("SELECT public.delete_completed_bulk_training_session($1) AS ok", [mine.session]),
+      )
+    ).rows[0].ok,
+    false,
+  );
+  assert.equal(
+    (
+      await asUser(owner, () =>
+        db.query("SELECT public.delete_completed_bulk_training_session($1) AS ok", [randomUUID()]),
+      )
+    ).rows[0].ok,
+    false,
+  );
+  await assert.rejects(
+    asAnon(() =>
+      db.query("SELECT public.delete_completed_bulk_training_session($1)", [theirs.session]),
+    ),
+    /permission denied/i,
+  );
+});
+
+test("legacy workout deletion is owner-scoped and preserves same-day Goal records", async () => {
+  const owner = randomUUID();
+  const other = randomUUID();
+  for (const user of [owner, other]) {
+    await db.query("INSERT INTO auth.users(id) VALUES ($1)", [user]);
+    await db.query("INSERT INTO public.profiles(id,display_name) VALUES ($1,'Legacy deletion')", [
+      user,
+    ]);
+    await completeBulkOnboarding(user, { preference: "custom" });
+  }
+  const ownerProfile = (
+    await db.query("SELECT id FROM public.bulk_profiles WHERE owner_id=$1", [owner])
+  ).rows[0].id;
+  const otherProfile = (
+    await db.query("SELECT id FROM public.bulk_profiles WHERE owner_id=$1", [other])
+  ).rows[0].id;
+  const day = "2026-09-14";
+  const legacyPayload = {
+    date: day,
+    type: "Chest & Back",
+    status: "completed",
+    sessionNote: "Preserved only in workout history",
+    entries: [
+      {
+        exercise: "Cable Rows",
+        weight: 55,
+        reps: [10, 9, 8],
+        rpe: 9,
+        notes: "Historical set notes",
+      },
+    ],
+  };
+  await db.query(
+    "INSERT INTO public.bulk_workouts(bulk_profile_id,day,payload) VALUES ($1,$3,$4::jsonb),($2,$3,$4::jsonb)",
+    [ownerProfile, otherProfile, day, JSON.stringify(legacyPayload)],
+  );
+  await db.query(
+    `INSERT INTO public.bulk_days(bulk_profile_id,day,payload)
+     VALUES ($1,$2,'{"weight":72.4,"calories":2800,"protein":155,"note":"daily note"}'::jsonb)`,
+    [ownerProfile, day],
+  );
+  await db.query(
+    "INSERT INTO public.bulk_week_notes(bulk_profile_id,week_start,note) VALUES ($1,$2,'week note')",
+    [ownerProfile, day],
+  );
+  const legacyPhoto = randomUUID();
+  await db.query(
+    `INSERT INTO public.bulk_photos(id,bulk_profile_id,taken_on,weight,front_path,side_path,back_path)
+     VALUES ($1,$2,$3,72.4,'front.webp','side.webp','back.webp')`,
+    [legacyPhoto, ownerProfile, day],
+  );
+  const weight = randomUUID();
+  await db.query(
+    "INSERT INTO public.bulk_weight_entries(id,bulk_profile_id,log_date,weight_kg,note) VALUES ($1,$2,$3,72.4,'morning')",
+    [weight, ownerProfile, day],
+  );
+  const progressPhoto = randomUUID();
+  await db.query(
+    `INSERT INTO public.bulk_progress_photos(
+       id,bulk_profile_id,log_date,storage_path,view_type,note
+     ) VALUES ($1,$2,$3,$4,'front','monthly')`,
+    [progressPhoto, ownerProfile, day, `${ownerProfile}/public/${progressPhoto}.webp`],
+  );
+  const nutritionDay = randomUUID();
+  const nutritionEntry = randomUUID();
+  await db.query(
+    `INSERT INTO public.bulk_nutrition_days(
+       id,bulk_profile_id,log_date,target_calories,target_protein_g,target_carbs_g,target_fat_g
+     ) VALUES ($1,$2,$3,2800,155,350,85)`,
+    [nutritionDay, ownerProfile, day],
+  );
+  await db.query(
+    `INSERT INTO public.bulk_nutrition_entries(
+       id,nutrition_day_id,source_type,name_snapshot,calories,protein_g,carbs_g,fat_g,
+       note,sort_order,request_id
+     ) VALUES ($1,$2,'custom','Same-day meal',650,40,75,18,'nutrition note',1,$3)`,
+    [nutritionEntry, nutritionDay, randomUUID()],
+  );
+
+  // The RPC accepts no profile identifier: another user can only delete the row
+  // selected through their own current_bulk_profile().
+  assert.equal(
+    (
+      await asUser(other, () =>
+        db.query("SELECT public.delete_legacy_bulk_workout($1) AS ok", [day]),
+      )
+    ).rows[0].ok,
+    true,
+  );
+  assert.equal(
+    Number(
+      (
+        await db.query(
+          "SELECT count(*) AS n FROM public.bulk_workouts WHERE bulk_profile_id=$1 AND day=$2",
+          [ownerProfile, day],
+        )
+      ).rows[0].n,
+    ),
+    1,
+  );
+  assert.equal(
+    (
+      await asUser(owner, () =>
+        db.query("SELECT public.delete_legacy_bulk_workout($1) AS ok", [day]),
+      )
+    ).rows[0].ok,
+    true,
+  );
+  assert.equal(
+    Number(
+      (
+        await db.query(
+          "SELECT count(*) AS n FROM public.bulk_workouts WHERE bulk_profile_id=$1 AND day=$2",
+          [ownerProfile, day],
+        )
+      ).rows[0].n,
+    ),
+    0,
+  );
+  for (const [table, id] of [
+    ["bulk_days", ownerProfile],
+    ["bulk_week_notes", ownerProfile],
+    ["bulk_photos", legacyPhoto],
+    ["bulk_weight_entries", weight],
+    ["bulk_progress_photos", progressPhoto],
+    ["bulk_nutrition_days", nutritionDay],
+    ["bulk_nutrition_entries", nutritionEntry],
+  ]) {
+    const column = table === "bulk_days" || table === "bulk_week_notes" ? "bulk_profile_id" : "id";
+    assert.equal(
+      Number(
+        (await db.query(`SELECT count(*) AS n FROM public.${table} WHERE ${column}=$1`, [id]))
+          .rows[0].n,
+      ),
+      1,
+      `${table} must survive deleting the legacy workout row`,
+    );
+  }
+  assert.equal(
+    (
+      await asUser(owner, () =>
+        db.query("SELECT public.delete_legacy_bulk_workout($1) AS ok", [day]),
+      )
+    ).rows[0].ok,
+    false,
+  );
+  assert.equal(
+    (
+      await asUser(owner, () =>
+        db.query("SELECT public.delete_legacy_bulk_workout($1) AS ok", ["2026-01-01"]),
+      )
+    ).rows[0].ok,
+    false,
+  );
+  const draftDay = "2026-09-15";
+  await db.query(
+    `INSERT INTO public.bulk_workouts(bulk_profile_id,day,payload)
+     VALUES ($1,$2,'{"date":"2026-09-15","type":"Chest & Back","status":"draft","entries":[]}'::jsonb)`,
+    [ownerProfile, draftDay],
+  );
+  assert.equal(
+    (
+      await asUser(owner, () =>
+        db.query("SELECT public.delete_legacy_bulk_workout($1) AS ok", [draftDay]),
+      )
+    ).rows[0].ok,
+    false,
+  );
+  assert.equal(
+    Number(
+      (
+        await db.query(
+          "SELECT count(*) AS n FROM public.bulk_workouts WHERE bulk_profile_id=$1 AND day=$2",
+          [ownerProfile, draftDay],
+        )
+      ).rows[0].n,
+    ),
+    1,
+  );
+  const preStatusDay = "2026-09-13";
+  await db.query(
+    `INSERT INTO public.bulk_workouts(bulk_profile_id,day,payload)
+     VALUES ($1,$2,'{"date":"2026-09-13","type":"Chest & Back","entries":[]}'::jsonb)`,
+    [ownerProfile, preStatusDay],
+  );
+  assert.equal(
+    (
+      await asUser(owner, () =>
+        db.query("SELECT public.delete_legacy_bulk_workout($1) AS ok", [preStatusDay]),
+      )
+    ).rows[0].ok,
+    true,
+  );
+  await assert.rejects(
+    asAnon(() => db.query("SELECT public.delete_legacy_bulk_workout($1)", [day])),
+    /permission denied/i,
+  );
+});
+
+test("workout deletion RPC ownership, search path and grants stay locked down", async () => {
+  const helper = (
+    await db.query(
+      "SELECT pg_get_functiondef('private.current_bulk_profile()'::regprocedure) AS sql",
+    )
+  ).rows[0].sql;
+  assert.match(helper, /member\.user_id = \(SELECT auth\.uid\(\)\)/i);
+  assert.match(helper, /member\.role = 'owner'/i);
+  assert.match(helper, /profile\.owner_id = \(SELECT auth\.uid\(\)\)/i);
+  const ownerIndex = (
+    await db.query(
+      "SELECT indexdef FROM pg_indexes WHERE schemaname='public' AND indexname='bulk_profiles_owner_unique'",
+    )
+  ).rows[0].indexdef;
+  assert.match(ownerIndex, /UNIQUE INDEX[\s\S]*\(owner_id\)/i);
+
+  for (const signature of [
+    "public.delete_completed_bulk_training_session(uuid)",
+    "public.delete_legacy_bulk_workout(date)",
+  ]) {
+    const metadata = (
+      await db.query(
+        `SELECT p.prosecdef, p.proconfig,
+                has_function_privilege('anon', $1, 'EXECUTE') AS anon_execute,
+                has_function_privilege('authenticated', $1, 'EXECUTE') AS authenticated_execute,
+                has_function_privilege('service_role', $1, 'EXECUTE') AS service_execute
+         FROM pg_proc p WHERE p.oid=$1::regprocedure`,
+        [signature],
+      )
+    ).rows[0];
+    assert.equal(metadata.prosecdef, true);
+    assert.deepEqual(metadata.proconfig, ['search_path=""']);
+    assert.equal(metadata.anon_execute, false);
+    assert.equal(metadata.authenticated_execute, true);
+    assert.equal(metadata.service_execute, true);
+  }
+});
+
 test("atomic challenge creation writes challenge, own membership and invitation exactly once", async () => {
   const requestId = randomUUID();
   const tokenHash = "a".repeat(64);

@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { Dumbbell, Salad, Target, Trophy, type LucideIcon } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AppShell } from "@/components/AppShell";
 import { useAuth } from "@/lib/auth";
 import {
@@ -94,10 +95,7 @@ function AccountOnboarding() {
       if (destination) {
         await navigate({ href: destination, replace: true });
       } else {
-        await navigate({
-          to: establishedNeedsUsername ? "/challenge" : "/bulk-onboarding",
-          replace: true,
-        });
+        await navigate({ to: "/challenge", replace: true });
       }
     } catch (cause) {
       completing.current = false;
@@ -174,19 +172,54 @@ function AccountOnboarding() {
           </section>
         ) : (
           <section>
-            <p className="text-sm font-semibold text-primary">You&apos;re ready</p>
-            <h1 className="mt-2 text-2xl font-semibold tracking-tight">Choose your Goal</h1>
-            <p className="mt-3 text-sm leading-6 text-muted-foreground">
-              Next, choose Bulk or Cut and Tempo will help you configure your starting targets.
-            </p>
+            <p className="text-sm font-semibold text-primary">Tempo</p>
+            <h1 className="mt-2 text-2xl font-semibold tracking-tight">
+              Build consistency across your training, nutrition and challenges.
+            </h1>
+            <div className="mt-5 space-y-2">
+              <FeatureRow icon={Trophy} title="Challenge">
+                Set a weekly running or cycling target with someone else.
+              </FeatureRow>
+              <FeatureRow icon={Dumbbell} title="Training">
+                Plan workouts, log sets and track your strength progress.
+              </FeatureRow>
+              <FeatureRow icon={Salad} title="Meals">
+                Track calories and macros and save meals you use often.
+              </FeatureRow>
+              <FeatureRow icon={Target} title="Goal">
+                Choose Bulk or Cut when you&apos;re ready and Tempo will help set your targets.
+              </FeatureRow>
+            </div>
             {error ? <p className="mt-3 text-xs text-danger">{error}</p> : null}
             <button disabled={busy} onClick={() => void finish()} className={primaryButton}>
-              {busy ? "Saving…" : "Choose Goal"}
+              {busy ? "Entering…" : "Enter Tempo"}
             </button>
           </section>
         )}
       </div>
     </AppShell>
+  );
+}
+
+function FeatureRow({
+  icon: Icon,
+  title,
+  children,
+}: {
+  icon: LucideIcon;
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex gap-3 rounded-xl bg-card p-3">
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+        <Icon className="h-4 w-4" aria-hidden="true" />
+      </span>
+      <div>
+        <h2 className="text-sm font-semibold">{title}</h2>
+        <p className="mt-0.5 text-xs leading-5 text-muted-foreground">{children}</p>
+      </div>
+    </div>
   );
 }
 

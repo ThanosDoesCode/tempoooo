@@ -272,7 +272,7 @@ test("Tempo navigation exposes optional fitness areas only after persisted activ
     assert.match(shell, new RegExp(`label: "${label}"`));
   assert.match(
     shell,
-    /item\.area === "challenge" \|\| item\.area === "profile" \|\| hasFitnessTools/,
+    /item\.area === "challenge" \|\|[\s\S]*item\.area === "goal" \|\|[\s\S]*item\.area === "profile" \|\|[\s\S]*hasFitnessTools/,
   );
   assert.match(shell, /aria-label=\{label\}/);
   assert.match(shell, /min-h-11/);
@@ -317,9 +317,8 @@ test("each product area has four contextual destinations and legacy/public data 
   assert.deepEqual(labels("TRAINING_NAV"), ["Today", "PRs", "History", "More"]);
   assert.deepEqual(labels("MEALS_NAV"), ["Today", "Presets", "History", "More"]);
   assert.deepEqual(labels("GOAL_NAV"), ["Today", "Progress", "Check-In", "Settings"]);
-  for (const destination of ["/bulk/progress", "/bulk/check-in", "/bulk/history"]) {
-    assert.match(more, new RegExp(destination.replace("/", "\\/")));
-  }
+  assert.doesNotMatch(more, /to="\/bulk\/(?:progress|check-in)"/);
+  assert.match(more, /to: "\/bulk\/history"/);
   for (const destination of ["/bulk/progress", "/bulk/check-in", "/bulk/more"])
     assert.match(shell, new RegExp(destination.replace("/", "\\/")));
   assert.match(more, /min-h-16/);

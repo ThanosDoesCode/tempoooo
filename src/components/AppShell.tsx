@@ -8,6 +8,7 @@ import { useGoalDiscovery } from "@/lib/goal-discovery";
 import { PRODUCT_LANDING_ROUTES, productAreaForPath } from "@/lib/product-navigation";
 import { PullToRefresh } from "./PullToRefresh";
 import { useChallengeInvitations } from "@/lib/challenge-invitations";
+import { SecondaryNavigation } from "./SecondaryNavigation";
 
 const CHALLENGE_NAV = [
   { to: "/challenge", label: "Week", exact: true },
@@ -130,7 +131,11 @@ function AppChrome({ children }: { children: ReactNode }) {
             ? GOAL_NAV
             : null;
   const primaryNav = PRIMARY_NAV.filter(
-    (item) => item.area === "challenge" || item.area === "profile" || hasFitnessTools,
+    (item) =>
+      item.area === "challenge" ||
+      item.area === "goal" ||
+      item.area === "profile" ||
+      hasFitnessTools,
   );
   const prefetchDestination = (to: string) => {
     if (to.startsWith("/bulk") && owner) void prefetchBulk(owner.bulk_profile_id);
@@ -142,33 +147,35 @@ function AppChrome({ children }: { children: ReactNode }) {
         <main
           className={`mx-auto w-full max-w-lg px-4 ${isAccountOnboarding ? "pb-6 pt-0" : `pb-28 ${isChallenge ? "pt-4" : "pt-6"}`}`}
         >
-          {nav ? (
-            <nav aria-label={`${area} sections`} className="mb-4 overflow-x-auto">
+          {area === "challenge" ? (
+            <nav aria-label="challenge sections" className="mb-4 overflow-x-auto">
               <div className="grid min-w-max grid-cols-4 gap-1 rounded-xl bg-card p-1 sm:min-w-0">
-                {nav.map((item) => {
-                  const { to, label, exact } = item;
+                {CHALLENGE_NAV.map((item) => {
                   const activePrefixes = "activePrefixes" in item ? item.activePrefixes : [];
                   const selected =
-                    (exact ? pathname === to : pathname.startsWith(to)) ||
+                    (item.exact ? pathname === item.to : pathname.startsWith(item.to)) ||
                     activePrefixes.some((prefix) => pathname.startsWith(prefix));
                   return (
                     <Link
-                      key={to}
-                      to={to}
+                      key={item.to}
+                      to={item.to}
                       preload="intent"
-                      activeOptions={{ exact }}
-                      onPointerDown={() => prefetchDestination(to)}
-                      onPointerEnter={() => prefetchDestination(to)}
-                      onFocus={() => prefetchDestination(to)}
                       aria-current={selected ? "page" : undefined}
                       className={`flex min-h-11 min-w-[4.5rem] items-center justify-center rounded-lg px-2 text-xs font-semibold whitespace-nowrap transition-[color,background-color,transform,opacity] duration-150 ease-out active:scale-[0.98] active:bg-elevated active:opacity-80 ${selected ? "bg-elevated text-primary" : "text-muted-foreground"}`}
                     >
-                      {label}
+                      {item.label}
                     </Link>
                   );
                 })}
               </div>
             </nav>
+          ) : nav ? (
+            <SecondaryNavigation
+              label={`${area} sections`}
+              items={nav}
+              pathname={pathname}
+              onIntent={prefetchDestination}
+            />
           ) : null}
           <div key={pathname} className="tempo-route-content">
             {children}

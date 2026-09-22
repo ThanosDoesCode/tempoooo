@@ -6,6 +6,8 @@ import { PGlite } from "@electric-sql/pglite";
 
 const root = new URL("../supabase/migrations/", import.meta.url);
 const migrationName = "20260919130000_unify_goal_and_migrate_legacy_meals.sql";
+const nutritionCompatibilityMigrationName =
+  "20260922120000_unified_goal_legacy_nutrition_compatibility.sql";
 
 test("Goal unification is retry-safe and migrates only the authoritative legacy cohort", async () => {
   const db = new PGlite();
@@ -78,6 +80,9 @@ test("Goal unification is retry-safe and migrates only the authoritative legacy 
         legacyProfile,
         JSON.stringify({
           calories: 2900,
+          protein: 141,
+          carbs: 375,
+          fat: 87,
           legacyExerciseDefinitions: {
             "Chest & Back": [{ name: "Barbell Front Raise", min: 8, max: 12 }],
           },
@@ -191,6 +196,56 @@ test("Goal unification is retry-safe and migrates only the authoritative legacy 
             "SELECT count(*) AS n FROM public.bulk_training_plans WHERE bulk_profile_id=$1",
             [legacyProfile],
           )
+        ).rows[0].n,
+      ),
+      1,
+    );
+
+    await db.exec(await readFile(new URL(nutritionCompatibilityMigrationName, root), "utf8"));
+    const migratedPreset = (
+      await db.query(
+        "SELECT id FROM public.bulk_meal_presets WHERE bulk_profile_id=$1 AND source_key='legacy:beef'",
+        [legacyProfile],
+      )
+    ).rows[0].id;
+    const requestId = randomUUID();
+    await db.query("SELECT set_config('request.jwt.claim.sub',$1,false)", [legacyOwner]);
+    await db.exec("SET ROLE authenticated");
+    try {
+      await db.query("SELECT public.log_bulk_meal_preset($1,current_date,$2,current_date)", [
+        migratedPreset,
+        requestId,
+      ]);
+    } finally {
+      await db.exec("RESET ROLE");
+    }
+    const logged = await db.query(
+      `SELECT day.target_calories,day.target_protein_g,day.target_carbs_g,day.target_fat_g,
+        entry.calories,entry.protein_g,entry.carbs_g,entry.fat_g,entry.source_meal_preset_id
+       FROM public.bulk_nutrition_days day
+       JOIN public.bulk_nutrition_entries entry ON entry.nutrition_day_id=day.id
+       WHERE day.bulk_profile_id=$1 AND entry.request_id=$2`,
+      [legacyProfile, requestId],
+    );
+    assert.deepEqual(logged.rows, [
+      {
+        target_calories: "2900.00",
+        target_protein_g: "141.00",
+        target_carbs_g: "375.00",
+        target_fat_g: "87.00",
+        calories: "2900.00",
+        protein_g: "141.00",
+        carbs_g: "375.00",
+        fat_g: "87.00",
+        source_meal_preset_id: migratedPreset,
+      },
+    ]);
+    assert.equal(
+      Number(
+        (
+          await db.query("SELECT count(*) AS n FROM public.bulk_meal_presets WHERE id=$1", [
+            migratedPreset,
+          ])
         ).rows[0].n,
       ),
       1,

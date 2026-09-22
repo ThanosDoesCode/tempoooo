@@ -8,7 +8,10 @@ test("the auth gate preserves the page a signed-out visitor opened", async () =>
   const source = await read("src/routes/_authenticated/route.tsx");
   assert.match(source, /rememberDestination, sanitizeDestination/);
   assert.match(source, /throw redirect\(\{ to: "\/auth", search: destination/);
-  assert.match(source, /rememberDestination\(location\.href\);\s*\n\s*throw redirect\(\{ to: "\/onboarding" \}\)/);
+  assert.match(
+    source,
+    /rememberDestination\(location\.href\);\s*\n\s*throw redirect\(\{ to: "\/onboarding" \}\)/,
+  );
 });
 
 test("sign-in returns the visitor to the invitation instead of the challenge", async () => {
@@ -30,7 +33,10 @@ test("account onboarding hands the visitor back to the invitation", async () => 
 
 test("only same-origin app paths are ever restored after authentication", async () => {
   const source = await read("src/lib/pending-destination.ts");
-  assert.match(source, /if \(!value\.startsWith\("\/"\) \|\| value\.startsWith\("\/\/"\)\) return null;/);
+  assert.match(
+    source,
+    /if \(!value\.startsWith\("\/"\) \|\| value\.startsWith\("\/\/"\)\) return null;/,
+  );
   assert.match(source, /startsWith\("\/auth"\)/);
   assert.match(source, /startsWith\("\/onboarding"\)/);
   assert.match(source, /MAX_AGE_MS/);

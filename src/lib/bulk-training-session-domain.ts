@@ -90,3 +90,30 @@ export function sessionSetLabel(set: BulkTrainingSet, exercise: BulkTrainingSess
   const prefix = exercise.isBodyweight && (set.bilateralWeight ?? 0) > 0 ? "+" : "";
   return `${prefix}${set.bilateralWeight ?? 0} kg × ${set.bilateralReps}`;
 }
+
+export function completedWorkingSets(session: BulkTrainingSession) {
+  return session.exercises.reduce(
+    (total, exercise) =>
+      total + exercise.sets.filter((set) => set.isComplete && set.setType !== "warmup").length,
+    0,
+  );
+}
+
+export function completedSessionVolume(session: BulkTrainingSession) {
+  return session.exercises.reduce(
+    (total, exercise) =>
+      total +
+      exercise.sets.reduce(
+        (sum, set) => sum + (set.isComplete ? sessionSetVolume(set, exercise) : 0),
+        0,
+      ),
+    0,
+  );
+}
+
+export function skippedSessionSets(session: BulkTrainingSession) {
+  return session.exercises.reduce(
+    (total, exercise) => total + exercise.sets.filter((set) => !set.isComplete).length,
+    0,
+  );
+}

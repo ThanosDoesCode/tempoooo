@@ -10,6 +10,7 @@ import { readRetryDelay, shouldRetryRead, userFacingError } from "@/lib/network-
 import {
   deriveLegacyPersonalRecords,
   derivePublicPersonalRecords,
+  mergePersonalRecords,
   type PersonalRecord,
 } from "@/lib/personal-records";
 import { bulkPlanModeFor, useMemberships } from "@/lib/bulk-access";
@@ -42,7 +43,10 @@ function PersonalRecordsPage() {
   const records =
     data && planMode !== "none"
       ? isPublic
-        ? derivePublicPersonalRecords(sessions.data ?? [])
+        ? mergePersonalRecords(
+            derivePublicPersonalRecords(sessions.data ?? []),
+            deriveLegacyPersonalRecords(data),
+          )
         : deriveLegacyPersonalRecords(data)
       : [];
   const selected = records.find((item) => item.key === selectedKey);

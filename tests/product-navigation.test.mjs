@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { PRODUCT_LANDING_ROUTES, productAreaForPath } from "../src/lib/product-navigation.ts";
 import { accountProductMode, preferredBulkMembership } from "../src/lib/bulk-mode.ts";
+import { secondaryNavigationSlot } from "../src/lib/secondary-navigation.ts";
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
@@ -93,7 +94,7 @@ test("bottom links preserve browser history and activation visibility rules", as
   assert.match(shell, /label: "Challenge"[\s\S]*label: "Profile"/);
   assert.match(
     shell,
-    /item\.area === "challenge" \|\| item\.area === "profile" \|\| hasFitnessTools/,
+    /item\.area === "challenge" \|\|[\s\S]*item\.area === "goal" \|\|[\s\S]*item\.area === "profile" \|\|[\s\S]*hasFitnessTools/,
   );
   assert.match(shell, /<Link[\s\S]*to=\{item\.to\}/);
   assert.doesNotMatch(shell, /to=\{item\.to\}[\s\S]{0,200}replace/);
@@ -110,17 +111,45 @@ test("Profile is selected explicitly and has no contextual product navigation", 
   assert.notEqual(productAreaForPath("/profile"), "challenge");
   assert.match(shell, /const selected = area === item\.area/);
   assert.match(shell, /area === "goal"[\s\S]*\? GOAL_NAV[\s\S]*: null/);
-  assert.match(shell, /\{nav \? \([\s\S]*aria-label=\{`\$\{area\} sections`\}/);
+  assert.match(shell, /<SecondaryNavigation[\s\S]*label=\{`\$\{area\} sections`\}/);
   assert.equal(productAreaForPath("/challenge"), "challenge");
 });
 
 test("only one persistent bar exists and secondary navigation stays in page flow", async () => {
-  const shell = await read("src/components/AppShell.tsx");
+  const [shell, secondary] = await Promise.all([
+    read("src/components/AppShell.tsx"),
+    read("src/components/SecondaryNavigation.tsx"),
+  ]);
   assert.equal((shell.match(/fixed inset-x-0 bottom-0/g) ?? []).length, 1);
   assert.match(shell, /aria-label="Primary"/);
-  assert.match(shell, /aria-label=\{`\$\{area\} sections`\}[\s\S]*mb-4 overflow-x-auto/);
+  assert.match(shell, /<SecondaryNavigation/);
+  assert.match(secondary, /className="mb-4 h-12 overflow-hidden"/);
   assert.doesNotMatch(shell, /sticky top-0/);
-  assert.doesNotMatch(shell, /aria-label=\{`\$\{area\} sections`\}[\s\S]{0,160}fixed/);
+  assert.doesNotMatch(secondary, /fixed/);
+});
+
+test("shared secondary navigation keeps the active route in the center carousel slot", async () => {
+  const source = await read("src/components/SecondaryNavigation.tsx");
+  for (let active = 0; active < 4; active++) {
+    assert.equal(secondaryNavigationSlot(active, active, 4), 0);
+    assert.deepEqual(
+      [0, 1, 2, 3].map((index) => secondaryNavigationSlot(index, active, 4)),
+      active === 0
+        ? [0, 1, -2, -1]
+        : active === 1
+          ? [-1, 0, 1, -2]
+          : active === 2
+            ? [-2, -1, 0, 1]
+            : [1, -2, -1, 0],
+    );
+  }
+  assert.match(source, /left-1\/2/);
+  assert.match(source, /translateX\(calc\(-50%/);
+  assert.match(source, /aria-expanded=\{active \? expanded : undefined\}/);
+  assert.match(source, /if \(!root\.current\?\.contains/);
+  assert.match(source, /prefers-reduced-motion: reduce/);
+  assert.match(source, /setSelectionPending\(true\)/);
+  assert.match(source, /setExpanded\(false\)/);
 });
 
 test("authenticated sibling routes share one persistent shell and transition only route content", async () => {
@@ -145,11 +174,14 @@ test("authenticated sibling routes share one persistent shell and transition onl
 });
 
 test("primary and secondary navigation provide bounded immediate press feedback", async () => {
-  const shell = await read("src/components/AppShell.tsx");
-  assert.equal((shell.match(/duration-150 ease-out/g) ?? []).length, 2);
-  assert.match(shell, /active:scale-\[0\.98\][^`]*active:opacity-80/);
+  const [shell, secondary] = await Promise.all([
+    read("src/components/AppShell.tsx"),
+    read("src/components/SecondaryNavigation.tsx"),
+  ]);
+  assert.match(secondary, /duration-150 ease-out/);
+  assert.match(secondary, /active:scale-\[0\.98\]/);
   assert.match(shell, /active:scale-95[^`]*active:opacity-80/);
-  assert.match(shell, /preload="intent"/);
+  assert.match(secondary, /preload="intent"/);
   assert.match(shell, /onPointerDown=\{\(\) => prefetchDestination/);
   assert.match(shell, /onPointerEnter=\{\(\) => prefetchDestination/);
   assert.match(shell, /onFocus=\{\(\) => prefetchDestination/);
@@ -238,7 +270,10 @@ test("contextual navigation uses distinct route-backed tasks", async () => {
   assert.equal(new Set(routes("TRAINING_NAV")).size, 4);
   assert.equal(new Set(routes("MEALS_NAV")).size, 4);
   assert.doesNotMatch(shell, /hash: "(?:plan|presets)"/);
-  assert.match(shell, /activePrefixes\.some\(\(prefix\) => pathname\.startsWith\(prefix\)\)/);
+  assert.match(
+    await read("src/components/SecondaryNavigation.tsx"),
+    /activePrefixes\?\.some\(\(prefix\) => pathname\.startsWith\(prefix\)\)/,
+  );
   for (const nested of ["/bulk/workout/", "/bulk/exercises"])
     assert.match(shell, new RegExp(nested.replaceAll("/", "\\/")));
 
@@ -246,7 +281,8 @@ test("contextual navigation uses distinct route-backed tasks", async () => {
   assert.doesNotMatch(trainingToday, /TrainingPlanEditor|<TrainingPlanSetup/);
   assert.match(trainingMore, /TrainingPlanEditor/);
   assert.match(trainingMore, /TrainingPlanSetup/);
-  assert.match(trainingHistory, /CompletedWorkout/);
+  assert.match(trainingHistory, /PublicWorkoutCard/);
+  assert.match(trainingHistory, /PublicWorkoutDetail/);
 
   assert.match(mealsToday, /BulkNutritionLog/);
   assert.doesNotMatch(mealsToday, /BulkMealPresets/);

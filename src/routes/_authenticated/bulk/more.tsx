@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { CalendarCheck, ChevronRight, History, LineChart, RefreshCcw } from "lucide-react";
+import { ChevronRight, History, RefreshCcw } from "lucide-react";
 import { useState } from "react";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { Card, Note, PendingLabel, SectionTitle } from "@/components/ui-kit";
@@ -14,18 +14,6 @@ export const Route = createFileRoute("/_authenticated/bulk/more")({
 });
 
 const destinations = [
-  {
-    to: "/bulk/progress",
-    label: "Progress",
-    description: "Weight trends, photos and muscle coverage",
-    icon: LineChart,
-  },
-  {
-    to: "/bulk/check-in",
-    label: "Check-In",
-    description: "Review your week and calorie recommendation",
-    icon: CalendarCheck,
-  },
   {
     to: "/bulk/history",
     label: "History",

@@ -2,9 +2,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { DEFAULT_DATA } from "../src/lib/types.ts";
+import { previousEntry, strengthChange } from "../src/lib/calc.ts";
 import {
   deriveLegacyPersonalRecords,
   derivePublicPersonalRecords,
+  mergePersonalRecords,
 } from "../src/lib/personal-records.ts";
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
@@ -156,6 +158,86 @@ test("legacy PRs reuse effective load and dumbbell-pair volume while excluding d
   assert.equal(press.bestVolume.volume, 832);
   assert.equal(pullUp.bestWeight.load, 80);
   assert.equal(pullUp.bestWeight.bodyweight, 70);
+});
+
+test("unified Goal PRs merge preserved legacy history with normalized sessions", () => {
+  const data = structuredClone(DEFAULT_DATA);
+  data.workouts = {
+    "2026-08-20": {
+      date: "2026-08-20",
+      type: "Chest & Back",
+      status: "completed",
+      entries: [{ exercise: "Cable Row", weight: 40, reps: [10, 10, 8] }],
+    },
+  };
+  const normalized = derivePublicPersonalRecords([
+    publicSession({
+      exercises: [
+        publicExercise({
+          name: "Cable Row",
+          sets: [trainingSet({ bilateralWeight: 45, bilateralReps: 8 })],
+        }),
+      ],
+    }),
+  ]);
+  const records = mergePersonalRecords(normalized, deriveLegacyPersonalRecords(data));
+  const row = records.find((record) => record.name === "Cable Row");
+  assert.ok(row);
+  assert.equal(row.exerciseId, "system:cable-row");
+  assert.equal(row.performances.length, 2);
+  assert.equal(row.bestWeight.load, 45);
+  assert.equal(
+    row.performances.some((performance) => performance.date === "2026-08-20"),
+    true,
+  );
+});
+
+test("deleted legacy workouts disappear from PR, Strength Trend and Previous derivations", () => {
+  const data = structuredClone(DEFAULT_DATA);
+  data.workouts = {
+    "2026-08-01": {
+      date: "2026-08-01",
+      type: "Chest & Back",
+      status: "completed",
+      entries: [{ exercise: "Cable Rows", weight: 40, reps: [10, 10, 10] }],
+    },
+    "2026-08-15": {
+      date: "2026-08-15",
+      type: "Chest & Back",
+      status: "completed",
+      entries: [{ exercise: "Cable Rows", weight: 45, reps: [10, 10, 10] }],
+    },
+    "2026-09-01": {
+      date: "2026-09-01",
+      type: "Chest & Back",
+      status: "completed",
+      entries: [{ exercise: "Cable Rows", weight: 60, reps: [8, 8, 8] }],
+    },
+  };
+
+  assert.equal(previousEntry(data, "Cable Rows", "2026-09-10")?.date, "2026-09-01");
+  assert.equal(
+    deriveLegacyPersonalRecords(data)
+      .find((record) => record.name === "Cable Rows")
+      ?.performances.some((performance) => performance.date === "2026-09-01"),
+    true,
+  );
+
+  delete data.workouts["2026-09-01"];
+
+  const records = deriveLegacyPersonalRecords(data);
+  assert.equal(
+    records
+      .find((record) => record.name === "Cable Rows")
+      ?.performances.some((performance) => performance.date === "2026-09-01"),
+    false,
+  );
+  assert.equal(previousEntry(data, "Cable Rows", "2026-09-10")?.date, "2026-08-15");
+  assert.deepEqual(strengthChange(data, "Cable Rows"), {
+    pct: 12.5,
+    latest: "45 kg × 10",
+    sessions: 2,
+  });
 });
 
 test("legacy exercise add and removal keep origin context and completed sessions immutable", async () => {
