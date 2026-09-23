@@ -971,6 +971,7 @@ export type Database = {
       }
       bulk_training_sessions: {
         Row: {
+          bodyweight_kg: number | null
           bulk_profile_id: string
           completed_at: string | null
           created_at: string
@@ -981,10 +982,12 @@ export type Database = {
           status: string
           training_plan_id: string | null
           updated_at: string
+          workout_date: string
           workout_day_name_snapshot: string
           workout_day_order_snapshot: number
         }
         Insert: {
+          bodyweight_kg?: number | null
           bulk_profile_id: string
           completed_at?: string | null
           created_at?: string
@@ -995,10 +998,12 @@ export type Database = {
           status?: string
           training_plan_id?: string | null
           updated_at?: string
+          workout_date?: string
           workout_day_name_snapshot: string
           workout_day_order_snapshot: number
         }
         Update: {
+          bodyweight_kg?: number | null
           bulk_profile_id?: string
           completed_at?: string | null
           created_at?: string
@@ -1009,6 +1014,7 @@ export type Database = {
           status?: string
           training_plan_id?: string | null
           updated_at?: string
+          workout_date?: string
           workout_day_name_snapshot?: string
           workout_day_order_snapshot?: number
         }
@@ -2163,6 +2169,10 @@ export type Database = {
           weekly_target_km: number
         }[]
       }
+      refresh_active_bulk_training_bodyweight: {
+        Args: { _profile: string }
+        Returns: number
+      }
       register_challenge_push_device: {
         Args: {
           _activate: boolean
@@ -2260,6 +2270,10 @@ export type Database = {
       }
       start_bulk_training_session: {
         Args: { _plan_day: string }
+        Returns: string
+      }
+      start_bulk_training_session_for_date: {
+        Args: { _plan_day: string; _workout_date: string }
         Returns: string
       }
       switch_bulk_training_plan: {
