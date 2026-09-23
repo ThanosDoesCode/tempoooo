@@ -1160,15 +1160,43 @@ test("public Bulk workout sessions are snapshot-based, resumable, validated and 
   }
   const mine = await planFor(owner, "Durable Plan");
   const theirs = await planFor(stranger, "Other Plan");
+  const ownerProfile = (
+    await db.query("SELECT bulk_profile_id FROM public.bulk_training_plans WHERE id=$1", [
+      mine.plan,
+    ])
+  ).rows[0].bulk_profile_id;
+  await asUser(owner, () =>
+    db.query(
+      "INSERT INTO public.bulk_weight_entries(bulk_profile_id,log_date,weight_kg) VALUES($1,CURRENT_DATE,61.4)",
+      [ownerProfile],
+    ),
+  );
   await assert.rejects(
     asUser(owner, () => db.query("SELECT public.start_bulk_training_session($1)", [theirs.day])),
     /not found/i,
   );
   const session = (
     await asUser(owner, () =>
-      db.query("SELECT public.start_bulk_training_session($1) AS id", [mine.day]),
+      db.query("SELECT public.start_bulk_training_session_for_date($1,CURRENT_DATE) AS id", [
+        mine.day,
+      ]),
     )
   ).rows[0].id;
+  assert.deepEqual(
+    (
+      await db.query(
+        "SELECT workout_date=CURRENT_DATE AS local_day,bodyweight_kg::text FROM public.bulk_training_sessions WHERE id=$1",
+        [session],
+      )
+    ).rows[0],
+    { local_day: true, bodyweight_kg: "61.40" },
+  );
+  await assert.rejects(
+    asUser(stranger, () =>
+      db.query("SELECT public.refresh_active_bulk_training_bodyweight($1)", [ownerProfile]),
+    ),
+    /Goal profile not found/,
+  );
   assert.equal(
     (
       await asUser(owner, () =>
@@ -1176,6 +1204,23 @@ test("public Bulk workout sessions are snapshot-based, resumable, validated and 
       )
     ).rows[0].id,
     session,
+  );
+  await asUser(owner, () =>
+    db.query(
+      "UPDATE public.bulk_weight_entries SET weight_kg=64 WHERE bulk_profile_id=$1 AND log_date=CURRENT_DATE",
+      [ownerProfile],
+    ),
+  );
+  await asUser(owner, () =>
+    db.query("SELECT public.refresh_active_bulk_training_bodyweight($1)", [ownerProfile]),
+  );
+  assert.equal(
+    (
+      await db.query("SELECT bodyweight_kg::text FROM public.bulk_training_sessions WHERE id=$1", [
+        session,
+      ])
+    ).rows[0].bodyweight_kg,
+    "64.00",
   );
   const snapshot = await asUser(owner, () =>
     db.query(
@@ -1397,6 +1442,23 @@ test("public Bulk workout sessions are snapshot-based, resumable, validated and 
     ).rows[0].id,
     session,
   );
+  await asUser(owner, () =>
+    db.query(
+      "UPDATE public.bulk_weight_entries SET weight_kg=65 WHERE bulk_profile_id=$1 AND log_date=CURRENT_DATE",
+      [ownerProfile],
+    ),
+  );
+  await asUser(owner, () =>
+    db.query("SELECT public.refresh_active_bulk_training_bodyweight($1)", [ownerProfile]),
+  );
+  assert.equal(
+    (
+      await db.query("SELECT bodyweight_kg::text FROM public.bulk_training_sessions WHERE id=$1", [
+        session,
+      ])
+    ).rows[0].bodyweight_kg,
+    "64.00",
+  );
   assert.equal(
     (
       await asUser(owner, () =>
@@ -1451,6 +1513,211 @@ test("public Bulk workout sessions are snapshot-based, resumable, validated and 
   assert.ok(
     Number((await db.query("SELECT count(*) AS n FROM public.bulk_workouts")).rows[0].n) >= 0,
   );
+});
+
+test("active workout bodyweight refresh is per-session, date-safe and owner-only", async () => {
+  const owner = randomUUID();
+  const attacker = randomUUID();
+  for (const user of [owner, attacker]) {
+    await db.query("INSERT INTO auth.users(id) VALUES ($1)", [user]);
+    await db.query("INSERT INTO public.profiles(id,display_name) VALUES ($1,'Weight tester')", [
+      user,
+    ]);
+    await completeBulkOnboarding(user, { preference: "custom" });
+  }
+
+  const plan = (
+    await asUser(owner, () =>
+      db.query("SELECT public.create_empty_bulk_training_plan('Snapshot plan') AS id"),
+    )
+  ).rows[0].id;
+  const version = (
+    await db.query("SELECT updated_at FROM public.bulk_training_plans WHERE id=$1", [plan])
+  ).rows[0].updated_at;
+  await asUser(owner, () =>
+    db.query("SELECT public.save_bulk_training_plan($1,$2,'Snapshot plan',$3::jsonb)", [
+      plan,
+      version,
+      JSON.stringify([
+        {
+          name: "Bodyweight day",
+          exercises: [
+            {
+              exerciseId: "system:pull-up",
+              sets: 1,
+              repMin: 6,
+              repMax: 10,
+              executionMode: "bilateral",
+              notes: null,
+            },
+          ],
+        },
+      ]),
+    ]),
+  );
+  const day = (
+    await db.query("SELECT id FROM public.bulk_training_plan_days WHERE plan_id=$1", [plan])
+  ).rows[0].id;
+  const profile = (
+    await db.query("SELECT bulk_profile_id FROM public.bulk_training_plans WHERE id=$1", [plan])
+  ).rows[0].bulk_profile_id;
+
+  await asUser(owner, () =>
+    db.query(
+      `INSERT INTO public.bulk_weight_entries(bulk_profile_id,log_date,weight_kg)
+       VALUES ($1,CURRENT_DATE-3,60),($1,CURRENT_DATE-1,61),($1,CURRENT_DATE,62)`,
+      [profile],
+    ),
+  );
+  await assert.rejects(
+    asUser(attacker, () =>
+      db.query("SELECT public.start_bulk_training_session_for_date($1,CURRENT_DATE)", [day]),
+    ),
+    /Active workout day not found/,
+  );
+  await assert.rejects(
+    asUser(attacker, () =>
+      db.query("SELECT public.refresh_active_bulk_training_bodyweight($1)", [profile]),
+    ),
+    /Goal profile not found/,
+  );
+
+  const yesterdaySession = (
+    await asUser(owner, () =>
+      db.query("SELECT public.start_bulk_training_session_for_date($1,CURRENT_DATE-1) AS id", [
+        day,
+      ]),
+    )
+  ).rows[0].id;
+  assert.deepEqual(
+    (
+      await db.query(
+        "SELECT workout_date=CURRENT_DATE-1 AS correct_date,bodyweight_kg::text FROM public.bulk_training_sessions WHERE id=$1",
+        [yesterdaySession],
+      )
+    ).rows[0],
+    { correct_date: true, bodyweight_kg: "61.00" },
+  );
+  assert.equal(
+    (
+      await asUser(owner, () =>
+        db.query("SELECT public.start_bulk_training_session_for_date($1,CURRENT_DATE) AS id", [
+          day,
+        ]),
+      )
+    ).rows[0].id,
+    yesterdaySession,
+  );
+  assert.deepEqual(
+    (
+      await db.query(
+        "SELECT workout_date=CURRENT_DATE-1 AS preserved_date,bodyweight_kg::text FROM public.bulk_training_sessions WHERE id=$1",
+        [yesterdaySession],
+      )
+    ).rows[0],
+    { preserved_date: true, bodyweight_kg: "61.00" },
+  );
+  await asUser(owner, () =>
+    db.query("SELECT public.discard_bulk_training_session($1)", [yesterdaySession]),
+  );
+
+  await asUser(owner, () =>
+    db.query(
+      "DELETE FROM public.bulk_weight_entries WHERE bulk_profile_id=$1 AND log_date=CURRENT_DATE",
+      [profile],
+    ),
+  );
+  const currentSession = (
+    await asUser(owner, () =>
+      db.query("SELECT public.start_bulk_training_session_for_date($1,CURRENT_DATE) AS id", [day]),
+    )
+  ).rows[0].id;
+  assert.equal(
+    (
+      await db.query("SELECT bodyweight_kg::text FROM public.bulk_training_sessions WHERE id=$1", [
+        currentSession,
+      ])
+    ).rows[0].bodyweight_kg,
+    "61.00",
+  );
+  await asUser(owner, () =>
+    db.query(
+      "INSERT INTO public.bulk_weight_entries(bulk_profile_id,log_date,weight_kg) VALUES($1,CURRENT_DATE,62)",
+      [profile],
+    ),
+  );
+  await asUser(owner, () =>
+    db.query("SELECT public.refresh_active_bulk_training_bodyweight($1)", [profile]),
+  );
+  await asUser(owner, () =>
+    db.query(
+      "UPDATE public.bulk_weight_entries SET weight_kg=63 WHERE bulk_profile_id=$1 AND log_date=CURRENT_DATE",
+      [profile],
+    ),
+  );
+  await asUser(owner, () =>
+    db.query("SELECT public.refresh_active_bulk_training_bodyweight($1)", [profile]),
+  );
+  assert.equal(
+    (
+      await db.query("SELECT bodyweight_kg::text FROM public.bulk_training_sessions WHERE id=$1", [
+        currentSession,
+      ])
+    ).rows[0].bodyweight_kg,
+    "63.00",
+  );
+  await asUser(owner, () =>
+    db.query("SELECT public.finish_bulk_training_session($1,true)", [currentSession]),
+  );
+  await asUser(owner, () =>
+    db.query(
+      "UPDATE public.bulk_weight_entries SET weight_kg=65 WHERE bulk_profile_id=$1 AND log_date=CURRENT_DATE",
+      [profile],
+    ),
+  );
+  await asUser(owner, () =>
+    db.query("SELECT public.refresh_active_bulk_training_bodyweight($1)", [profile]),
+  );
+  assert.equal(
+    (
+      await db.query("SELECT bodyweight_kg::text FROM public.bulk_training_sessions WHERE id=$1", [
+        currentSession,
+      ])
+    ).rows[0].bodyweight_kg,
+    "63.00",
+  );
+
+  await db.exec("BEGIN");
+  try {
+    await db.exec("DROP INDEX public.bulk_training_sessions_one_active_uidx");
+    const synthetic = await db.query(
+      `INSERT INTO public.bulk_training_sessions(
+         bulk_profile_id,training_plan_id,source_plan_day_id,plan_name_snapshot,
+         workout_day_name_snapshot,workout_day_order_snapshot,status,workout_date,bodyweight_kg
+       ) VALUES
+         ($1,$2,$3,'Snapshot plan','Older day',1,'in_progress',CURRENT_DATE-3,NULL),
+         ($1,$2,$3,'Snapshot plan','Recent day',1,'in_progress',CURRENT_DATE-1,NULL),
+         ($1,$2,$3,'Snapshot plan','No measurement day',1,'in_progress',CURRENT_DATE-10,NULL)
+       RETURNING id,workout_day_name_snapshot`,
+      [profile, plan, day],
+    );
+    await asUser(owner, () =>
+      db.query("SELECT public.refresh_active_bulk_training_bodyweight($1)", [profile]),
+    );
+    const refreshed = await db.query(
+      `SELECT workout_day_name_snapshot,bodyweight_kg::text
+       FROM public.bulk_training_sessions WHERE id=ANY($1::uuid[])
+       ORDER BY workout_day_name_snapshot`,
+      [synthetic.rows.map((row) => row.id)],
+    );
+    assert.deepEqual(refreshed.rows, [
+      { workout_day_name_snapshot: "No measurement day", bodyweight_kg: null },
+      { workout_day_name_snapshot: "Older day", bodyweight_kg: "60.00" },
+      { workout_day_name_snapshot: "Recent day", bodyweight_kg: "61.00" },
+    ]);
+  } finally {
+    await db.exec("ROLLBACK");
+  }
 });
 
 test("completed normalized workout deletion cascades snapshots and preserves all unrelated data", async () => {

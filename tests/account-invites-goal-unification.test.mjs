@@ -97,6 +97,9 @@ test("active workout exercise cards collapse without removing draft state", asyn
   assert.match(source, /hidden=\{collapsedExercises\.has\(exercise\.id\)\}/);
   assert.match(source, /sets logged/);
   assert.match(source, /latestDraftLabel\(exercise, drafts\)/);
-  assert.match(source, /onClick=\{\(\) =>\s*setCollapsedExercises/);
+  assert.match(
+    source,
+    /onClick=\{\(\) => \{[\s\S]*setOpenSetId\(null\);[\s\S]*setCollapsedExercises/,
+  );
   assert.match(source, /motion-reduce:transition-none/);
 });

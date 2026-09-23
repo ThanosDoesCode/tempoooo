@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, Plus, Replace, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowUp, ChevronRight, Plus, Replace, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { PlanExercisePicker } from "@/components/PlanExercisePicker";
 import { Button } from "@/components/ui/button";
@@ -61,6 +61,7 @@ export function TrainingPlanEditor({
   const [name, setName] = useState(plan.name);
   const [days, setDays] = useState<TrainingPlanDay[]>(() => structuredClone(plan.days));
   const [picker, setPicker] = useState<PickerTarget | null>(null);
+  const [selectedDayId, setSelectedDayId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const dirty = useMemo(
@@ -100,6 +101,7 @@ export function TrainingPlanEditor({
     )
       return;
     updateDays(days.filter((_, index) => index !== dayIndex));
+    if (selectedDayId === day.id) setSelectedDayId(null);
   }
 
   function moveDay(from: number, to: number) {
@@ -172,6 +174,7 @@ export function TrainingPlanEditor({
         })),
       });
       await onSaved();
+      setSelectedDayId(null);
       toast.success("Training plan saved");
     } catch (cause) {
       const serverMessage =
@@ -204,169 +207,243 @@ export function TrainingPlanEditor({
         </label>
       </Card>
 
-      {days.map((day, dayIndex) => (
-        <Card key={day.id} className="space-y-3">
-          <div className="flex items-start gap-2">
-            <label className="min-w-0 flex-1 text-xs font-medium text-muted-foreground">
-              Day {dayIndex + 1}
-              <input
-                value={day.name}
-                maxLength={60}
-                onChange={(event) =>
-                  updateDay(dayIndex, (current) => ({ ...current, name: event.target.value }))
-                }
-                aria-label={`Name for workout day ${dayIndex + 1}`}
-                className="mt-1 min-h-11 w-full rounded-xl border border-input bg-elevated px-3 text-base font-semibold text-foreground outline-none focus:border-ring"
-              />
-            </label>
-            <div className="flex pt-5">
-              <IconButton
-                label={`Move ${day.name} up`}
-                disabled={dayIndex === 0}
-                onClick={() => moveDay(dayIndex, dayIndex - 1)}
-              >
-                <ArrowUp />
-              </IconButton>
-              <IconButton
-                label={`Move ${day.name} down`}
-                disabled={dayIndex === days.length - 1}
-                onClick={() => moveDay(dayIndex, dayIndex + 1)}
-              >
-                <ArrowDown />
-              </IconButton>
-              <IconButton
-                label={`Delete ${day.name}`}
-                tone="danger"
-                onClick={() => removeDay(dayIndex)}
-              >
-                <Trash2 />
-              </IconButton>
-            </div>
-          </div>
-
-          {day.exercises.map((exercise, exerciseIndex) => (
-            <div
-              key={exercise.id}
-              className="rounded-xl border border-border/70 bg-elevated/40 p-3"
-            >
-              <div className="flex items-start justify-between gap-2">
+      {selectedDayId === null ? (
+        <div className="space-y-3" aria-label="Workout days">
+          {days.map((day, dayIndex) => (
+            <Card key={day.id} className="space-y-3">
+              <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="font-medium">{exercise.name}</p>
-                  {exercise.exerciseId ? null : (
-                    <p className="text-xs text-danger">Exercise unavailable</p>
-                  )}
+                  <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    Day {dayIndex + 1}
+                  </p>
+                  <h2 className="mt-1 text-lg font-semibold">{day.name}</h2>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {day.exercises.length} exercise{day.exercises.length === 1 ? "" : "s"}
+                  </p>
+                  <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">
+                    {day.exercises.length
+                      ? day.exercises
+                          .slice(0, 3)
+                          .map((exercise) => exercise.name)
+                          .join(", ") + (day.exercises.length > 3 ? "…" : "")
+                      : "No exercises yet"}
+                  </p>
                 </div>
-                <div className="flex">
+                <div className="flex shrink-0">
                   <IconButton
-                    label={`Move ${exercise.name} up`}
-                    disabled={exerciseIndex === 0}
-                    onClick={() => moveExercise(dayIndex, exerciseIndex, exerciseIndex - 1)}
+                    label={`Move ${day.name} up`}
+                    disabled={dayIndex === 0}
+                    onClick={() => moveDay(dayIndex, dayIndex - 1)}
                   >
                     <ArrowUp />
                   </IconButton>
                   <IconButton
-                    label={`Move ${exercise.name} down`}
-                    disabled={exerciseIndex === day.exercises.length - 1}
-                    onClick={() => moveExercise(dayIndex, exerciseIndex, exerciseIndex + 1)}
+                    label={`Move ${day.name} down`}
+                    disabled={dayIndex === days.length - 1}
+                    onClick={() => moveDay(dayIndex, dayIndex + 1)}
                   >
                     <ArrowDown />
                   </IconButton>
                 </div>
               </div>
-              <div className="mt-3 grid grid-cols-3 gap-2">
-                <NumberField
-                  label="Sets"
-                  value={exercise.sets}
-                  min={1}
-                  max={10}
-                  onChange={(value) => updateExercise(dayIndex, exerciseIndex, { sets: value })}
-                />
-                <NumberField
-                  label="Min reps"
-                  value={exercise.repMin}
-                  min={1}
-                  max={100}
-                  onChange={(value) => updateExercise(dayIndex, exerciseIndex, { repMin: value })}
-                />
-                <NumberField
-                  label="Max reps"
-                  value={exercise.repMax}
-                  min={1}
-                  max={100}
-                  onChange={(value) => updateExercise(dayIndex, exerciseIndex, { repMax: value })}
-                />
-              </div>
-              {exercise.supportsUnilateral ? (
-                <label className="mt-3 block text-xs font-medium text-muted-foreground">
-                  Execution
-                  <select
-                    value={exercise.intendedUnilateralMode}
-                    onChange={(event) =>
-                      updateExercise(dayIndex, exerciseIndex, {
-                        intendedUnilateralMode: event.target.value as "bilateral" | "unilateral",
-                      })
-                    }
-                    aria-label={`Execution mode for ${exercise.name}`}
-                    className="mt-1 min-h-11 w-full rounded-xl border border-input bg-elevated px-3 text-sm text-foreground"
-                  >
-                    <option value="bilateral">Bilateral / standard</option>
-                    <option value="unilateral">Unilateral / single side</option>
-                  </select>
-                </label>
-              ) : null}
-              <label className="mt-3 block text-xs font-medium text-muted-foreground">
-                Exercise note
-                <input
-                  value={exercise.notes ?? ""}
-                  maxLength={240}
-                  onChange={(event) =>
-                    updateExercise(dayIndex, exerciseIndex, { notes: event.target.value || null })
-                  }
-                  className="mt-1 min-h-11 w-full rounded-xl border border-input bg-elevated px-3 text-sm text-foreground"
-                />
-              </label>
-              <div className="mt-2 grid grid-cols-2 gap-2">
-                <Button
-                  variant="outline"
-                  className="min-h-11"
-                  onClick={() => setPicker({ dayIndex, exerciseIndex })}
-                >
-                  <Replace aria-hidden="true" /> Replace
-                </Button>
-                <Button
-                  variant="ghost"
-                  className="min-h-11 text-danger"
-                  onClick={() =>
-                    updateDay(dayIndex, (current) => ({
-                      ...current,
-                      exercises: current.exercises.filter((_, index) => index !== exerciseIndex),
-                    }))
-                  }
-                >
-                  <Trash2 aria-hidden="true" /> Remove
-                </Button>
-              </div>
-            </div>
+              <Button
+                variant="outline"
+                className="min-h-11 w-full"
+                onClick={() => setSelectedDayId(day.id)}
+              >
+                Edit Day <ChevronRight aria-hidden="true" />
+              </Button>
+            </Card>
           ))}
-          <Button
-            variant="outline"
-            className="min-h-11 w-full"
-            disabled={day.exercises.length >= 20}
-            onClick={() => setPicker({ dayIndex, exerciseIndex: null })}
-          >
-            <Plus aria-hidden="true" /> Add Exercise
-          </Button>
-        </Card>
-      ))}
+        </div>
+      ) : null}
 
-      <Button
-        variant="outline"
-        className="min-h-11 w-full"
-        disabled={days.length >= 6}
-        onClick={addDay}
-      >
-        <Plus aria-hidden="true" /> Add Workout Day
-      </Button>
+      {days
+        .filter((day) => day.id === selectedDayId)
+        .map((day) => {
+          const dayIndex = days.findIndex((item) => item.id === day.id);
+          return (
+            <Card key={day.id} className="space-y-3">
+              <button
+                type="button"
+                className="flex min-h-11 items-center gap-2 text-sm font-semibold text-primary"
+                onClick={() => setSelectedDayId(null)}
+              >
+                <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Training Plan → {day.name}
+              </button>
+              <div className="flex items-start gap-2">
+                <label className="min-w-0 flex-1 text-xs font-medium text-muted-foreground">
+                  Day {dayIndex + 1}
+                  <input
+                    value={day.name}
+                    maxLength={60}
+                    onChange={(event) =>
+                      updateDay(dayIndex, (current) => ({ ...current, name: event.target.value }))
+                    }
+                    aria-label={`Name for workout day ${dayIndex + 1}`}
+                    className="mt-1 min-h-11 w-full rounded-xl border border-input bg-elevated px-3 text-base font-semibold text-foreground outline-none focus:border-ring"
+                  />
+                </label>
+                <div className="flex pt-5">
+                  <IconButton
+                    label={`Move ${day.name} up`}
+                    disabled={dayIndex === 0}
+                    onClick={() => moveDay(dayIndex, dayIndex - 1)}
+                  >
+                    <ArrowUp />
+                  </IconButton>
+                  <IconButton
+                    label={`Move ${day.name} down`}
+                    disabled={dayIndex === days.length - 1}
+                    onClick={() => moveDay(dayIndex, dayIndex + 1)}
+                  >
+                    <ArrowDown />
+                  </IconButton>
+                  <IconButton
+                    label={`Delete ${day.name}`}
+                    tone="danger"
+                    onClick={() => removeDay(dayIndex)}
+                  >
+                    <Trash2 />
+                  </IconButton>
+                </div>
+              </div>
+
+              {day.exercises.map((exercise, exerciseIndex) => (
+                <div
+                  key={exercise.id}
+                  className="rounded-xl border border-border/70 bg-elevated/40 p-3"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-medium">{exercise.name}</p>
+                      {exercise.exerciseId ? null : (
+                        <p className="text-xs text-danger">Exercise unavailable</p>
+                      )}
+                    </div>
+                    <div className="flex">
+                      <IconButton
+                        label={`Move ${exercise.name} up`}
+                        disabled={exerciseIndex === 0}
+                        onClick={() => moveExercise(dayIndex, exerciseIndex, exerciseIndex - 1)}
+                      >
+                        <ArrowUp />
+                      </IconButton>
+                      <IconButton
+                        label={`Move ${exercise.name} down`}
+                        disabled={exerciseIndex === day.exercises.length - 1}
+                        onClick={() => moveExercise(dayIndex, exerciseIndex, exerciseIndex + 1)}
+                      >
+                        <ArrowDown />
+                      </IconButton>
+                    </div>
+                  </div>
+                  <div className="mt-3 grid grid-cols-3 gap-2">
+                    <NumberField
+                      label="Sets"
+                      value={exercise.sets}
+                      min={1}
+                      max={10}
+                      onChange={(value) => updateExercise(dayIndex, exerciseIndex, { sets: value })}
+                    />
+                    <NumberField
+                      label="Min reps"
+                      value={exercise.repMin}
+                      min={1}
+                      max={100}
+                      onChange={(value) =>
+                        updateExercise(dayIndex, exerciseIndex, { repMin: value })
+                      }
+                    />
+                    <NumberField
+                      label="Max reps"
+                      value={exercise.repMax}
+                      min={1}
+                      max={100}
+                      onChange={(value) =>
+                        updateExercise(dayIndex, exerciseIndex, { repMax: value })
+                      }
+                    />
+                  </div>
+                  {exercise.supportsUnilateral ? (
+                    <label className="mt-3 block text-xs font-medium text-muted-foreground">
+                      Execution
+                      <select
+                        value={exercise.intendedUnilateralMode}
+                        onChange={(event) =>
+                          updateExercise(dayIndex, exerciseIndex, {
+                            intendedUnilateralMode: event.target.value as
+                              "bilateral" | "unilateral",
+                          })
+                        }
+                        aria-label={`Execution mode for ${exercise.name}`}
+                        className="mt-1 min-h-11 w-full rounded-xl border border-input bg-elevated px-3 text-sm text-foreground"
+                      >
+                        <option value="bilateral">Bilateral / standard</option>
+                        <option value="unilateral">Unilateral / single side</option>
+                      </select>
+                    </label>
+                  ) : null}
+                  <label className="mt-3 block text-xs font-medium text-muted-foreground">
+                    Exercise note
+                    <input
+                      value={exercise.notes ?? ""}
+                      maxLength={240}
+                      onChange={(event) =>
+                        updateExercise(dayIndex, exerciseIndex, {
+                          notes: event.target.value || null,
+                        })
+                      }
+                      className="mt-1 min-h-11 w-full rounded-xl border border-input bg-elevated px-3 text-sm text-foreground"
+                    />
+                  </label>
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <Button
+                      variant="outline"
+                      className="min-h-11"
+                      onClick={() => setPicker({ dayIndex, exerciseIndex })}
+                    >
+                      <Replace aria-hidden="true" /> Replace
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      className="min-h-11 text-danger"
+                      onClick={() =>
+                        updateDay(dayIndex, (current) => ({
+                          ...current,
+                          exercises: current.exercises.filter(
+                            (_, index) => index !== exerciseIndex,
+                          ),
+                        }))
+                      }
+                    >
+                      <Trash2 aria-hidden="true" /> Remove
+                    </Button>
+                  </div>
+                </div>
+              ))}
+              <Button
+                variant="outline"
+                className="min-h-11 w-full"
+                disabled={day.exercises.length >= 20}
+                onClick={() => setPicker({ dayIndex, exerciseIndex: null })}
+              >
+                <Plus aria-hidden="true" /> Add Exercise
+              </Button>
+            </Card>
+          );
+        })}
+
+      {selectedDayId === null ? (
+        <Button
+          variant="outline"
+          className="min-h-11 w-full"
+          disabled={days.length >= 6}
+          onClick={addDay}
+        >
+          <Plus aria-hidden="true" /> Add Workout Day
+        </Button>
+      ) : null}
       {error ? (
         <p role="alert" className="rounded-xl bg-danger/10 p-3 text-sm text-danger">
           {error}
@@ -384,7 +461,13 @@ export function TrainingPlanEditor({
           Cancel
         </Button>
         <Button className="min-h-11" disabled={saving || !dirty} onClick={() => void save()}>
-          {saving ? <PendingLabel>Saving plan</PendingLabel> : "Save Changes"}
+          {saving ? (
+            <PendingLabel>Saving plan</PendingLabel>
+          ) : selectedDayId ? (
+            "Save and return"
+          ) : (
+            "Save Changes"
+          )}
         </Button>
       </div>
       {picker ? (

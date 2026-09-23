@@ -171,6 +171,11 @@ export function PublicBulkProgress({
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: bulkWeightQueryKey(bulkProfileId) }),
       queryClient.invalidateQueries({ queryKey: ["bulk-progress-summary"] }),
+      queryClient.invalidateQueries({ queryKey: ["bulk-weekly-recommendation", bulkProfileId] }),
+      queryClient.invalidateQueries({
+        queryKey: ["bulk-training-session", "active", bulkProfileId],
+      }),
+      queryClient.invalidateQueries({ queryKey: ["goal-settings-dashboard", bulkProfileId] }),
     ]);
   };
 
@@ -380,7 +385,7 @@ export function PublicBulkProgress({
                     onClick={async () => {
                       if (!window.confirm("Delete this weigh-in?")) return;
                       try {
-                        await deleteBulkWeight(entry.id);
+                        await deleteBulkWeight(entry.id, bulkProfileId);
                         await invalidateWeights();
                       } catch (error) {
                         const { toast } = await import("sonner");

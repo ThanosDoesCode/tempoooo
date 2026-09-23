@@ -25,6 +25,8 @@ type SessionRow = {
   started_at: string;
   completed_at: string | null;
   updated_at: string;
+  workout_date: string;
+  bodyweight_kg: number | null;
 };
 
 type ExerciseRow = {
@@ -76,6 +78,8 @@ function mapSessions(
     startedAt: session.started_at,
     completedAt: session.completed_at,
     updatedAt: session.updated_at,
+    workoutDate: session.workout_date,
+    bodyweightKg: numberOrNull(session.bodyweight_kg),
     exercises: exercises
       .filter((exercise) => exercise.session_id === session.id)
       .sort((a, b) => a.exercise_order - b.exercise_order)
@@ -227,11 +231,27 @@ export function useCompletedBulkTrainingSessions(
 }
 
 export async function startBulkTrainingSession(planDayId: string): Promise<string> {
-  const { data, error } = await supabase.rpc("start_bulk_training_session", {
-    _plan_day: planDayId,
-  });
+  const now = new Date();
+  const workoutDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const { data, error } = await supabase.rpc(
+    "start_bulk_training_session_for_date" as never,
+    {
+      _plan_day: planDayId,
+      _workout_date: workoutDate,
+    } as never,
+  );
   if (error) throw error;
-  return data;
+  return data as string;
+}
+
+export async function refreshActiveBulkTrainingBodyweight(profileId: string) {
+  const { error } = await supabase.rpc(
+    "refresh_active_bulk_training_bodyweight" as never,
+    {
+      _profile: profileId,
+    } as never,
+  );
+  if (error) throw error;
 }
 
 export async function saveBulkTrainingSet(sessionId: string, set: EditableSessionSet) {

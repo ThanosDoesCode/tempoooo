@@ -191,6 +191,7 @@ function TrainingHistoryPage() {
 }
 
 function PublicWorkoutCard({ session }: { session: BulkTrainingSession }) {
+  const volume = completedSessionVolume(session);
   return (
     <Link
       to="/bulk/training/history"
@@ -203,7 +204,8 @@ function PublicWorkoutCard({ session }: { session: BulkTrainingSession }) {
       </p>
       <p className="num mt-3 text-xs text-muted-foreground">
         {durationLabel(sessionElapsedSeconds(session.startedAt, Date.now(), session.completedAt))} ·{" "}
-        {completedWorkingSets(session)} sets · {Math.round(completedSessionVolume(session))} kg
+        {completedWorkingSets(session)} sets ·{" "}
+        {volume == null ? "Volume unavailable" : `${Math.round(volume)} kg`}
       </p>
     </Link>
   );
@@ -231,6 +233,7 @@ function LegacyWorkoutCard({ workout }: { workout: Workout }) {
 
 function PublicWorkoutDetail({ session }: { session: BulkTrainingSession }) {
   const skipped = skippedSessionSets(session);
+  const volume = completedSessionVolume(session);
   return (
     <div className="space-y-3">
       <Card className="grid grid-cols-3 gap-2 text-center">
@@ -241,7 +244,13 @@ function PublicWorkoutDetail({ session }: { session: BulkTrainingSession }) {
           )}
         />
         <Metric label="Sets" value={String(completedWorkingSets(session))} />
-        <Metric label="Volume" value={`${Math.round(completedSessionVolume(session))} kg`} />
+        <Metric
+          label="Volume"
+          value={volume == null ? "Unavailable" : `${Math.round(volume)} kg`}
+        />
+        {session.bodyweightKg != null ? (
+          <Metric label="Bodyweight" value={`${session.bodyweightKg.toFixed(1)} kg`} />
+        ) : null}
       </Card>
       {session.exercises.map((exercise) => {
         const completed = exercise.sets.filter((set) => set.isComplete);

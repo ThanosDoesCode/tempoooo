@@ -75,7 +75,6 @@ function TrainingMorePage() {
                 queryClient.invalidateQueries({ queryKey: ["bulk-progression"] }),
                 queryClient.invalidateQueries({ queryKey: ["bulk-muscle-coverage"] }),
               ]);
-              setEditing(false);
             }}
           />
         ) : (

@@ -2171,7 +2171,7 @@ export type Database = {
       }
       refresh_active_bulk_training_bodyweight: {
         Args: { _profile: string }
-        Returns: number
+        Returns: number | null
       }
       register_challenge_push_device: {
         Args: {

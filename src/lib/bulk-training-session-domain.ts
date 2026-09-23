@@ -41,17 +41,27 @@ export type BulkTrainingSession = {
   startedAt: string;
   completedAt: string | null;
   updatedAt: string;
+  workoutDate: string;
+  bodyweightKg: number | null;
   exercises: BulkTrainingSessionExercise[];
 };
 
 export type EditableSessionSet = Omit<BulkTrainingSet, "order" | "isExtra" | "isComplete">;
 
-export function sessionSetVolume(set: EditableSessionSet, exercise: BulkTrainingSessionExercise) {
+export function sessionSetVolume(
+  set: EditableSessionSet,
+  exercise: BulkTrainingSessionExercise,
+  bodyweightKg: number | null = null,
+) {
   if (set.setType === "warmup" || !isSessionSetComplete(set, exercise)) return 0;
   if (exercise.executionMode === "unilateral")
     return (
       (set.leftWeight ?? 0) * (set.leftReps ?? 0) + (set.rightWeight ?? 0) * (set.rightReps ?? 0)
     );
+  if (exercise.isBodyweight) {
+    if (bodyweightKg == null) return null;
+    return (bodyweightKg + (set.bilateralWeight ?? 0)) * (set.bilateralReps ?? 0);
+  }
   return (set.bilateralWeight ?? 0) * (set.bilateralReps ?? 0);
 }
 
@@ -79,14 +89,15 @@ export function sessionSetLabel(set: BulkTrainingSet, exercise: BulkTrainingSess
   if (exercise.executionMode === "unilateral") {
     const side = (prefix: "L" | "R", weight: number | null, reps: number | null) => {
       if (reps == null) return `${prefix} —`;
-      return exercise.isBodyweight && weight == null
-        ? `${prefix} ${reps} reps`
+      return exercise.isBodyweight && (weight == null || weight === 0)
+        ? `${prefix} BW × ${reps}`
         : `${prefix} ${weight ?? 0} kg × ${reps}`;
     };
     return `${side("L", set.leftWeight, set.leftReps)} | ${side("R", set.rightWeight, set.rightReps)}`;
   }
   if (set.bilateralReps == null) return "Incomplete";
-  if (exercise.isBodyweight && set.bilateralWeight == null) return `${set.bilateralReps} reps`;
+  if (exercise.isBodyweight && (set.bilateralWeight == null || set.bilateralWeight === 0))
+    return `BW × ${set.bilateralReps}`;
   const prefix = exercise.isBodyweight && (set.bilateralWeight ?? 0) > 0 ? "+" : "";
   return `${prefix}${set.bilateralWeight ?? 0} kg × ${set.bilateralReps}`;
 }
@@ -100,15 +111,18 @@ export function completedWorkingSets(session: BulkTrainingSession) {
 }
 
 export function completedSessionVolume(session: BulkTrainingSession) {
-  return session.exercises.reduce(
+  let unavailable = false;
+  const total = session.exercises.reduce(
     (total, exercise) =>
       total +
-      exercise.sets.reduce(
-        (sum, set) => sum + (set.isComplete ? sessionSetVolume(set, exercise) : 0),
-        0,
-      ),
+      exercise.sets.reduce((sum, set) => {
+        const volume = set.isComplete ? sessionSetVolume(set, exercise, session.bodyweightKg) : 0;
+        if (volume == null) unavailable = true;
+        return sum + (volume ?? 0);
+      }, 0),
     0,
   );
+  return unavailable ? null : total;
 }
 
 export function skippedSessionSets(session: BulkTrainingSession) {

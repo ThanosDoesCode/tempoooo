@@ -82,7 +82,7 @@ test("completed-history labels distinguish standard, unilateral, bodyweight and 
   );
   assert.equal(
     sessionSetLabel(set({ bilateralReps: 10 }), exercise({ isBodyweight: true })),
-    "10 reps",
+    "BW × 10",
   );
   assert.equal(
     sessionSetLabel(
@@ -161,13 +161,18 @@ test("public workout UI resumes durable compact sessions and protects set metada
     ]);
   assert.match(overview, /Start Workout/);
   assert.match(training, /Resume Workout/);
-  for (const label of ["Duration", "Volume", "Previous", "KG", "Reps", "RPE", "Done"])
+  for (const label of ["Duration", "Volume", "Previous", "Reps", "RPE", "Done"])
     assert.match(workout, new RegExp(`>${label}<`));
+  assert.match(workout, /exercise\.isBodyweight \? "\+KG" : "KG"/);
   assert.match(workout, /Add Set/);
   assert.match(workout, /SET_TYPES/);
   assert.match(workout, /RPE_VALUES/);
   assert.match(workout, /data-set-swipe=\{set\.id\}/);
   assert.match(workout, /dragOffset >= 34/);
+  assert.match(workout, /canRemove && dragOffset > 0/);
+  assert.match(workout, /bg-card/);
+  assert.match(workout, /tabIndex=\{swipeOpen \? 0 : -1\}/);
+  assert.match(workout, /Reveal delete action/);
   assert.match(workout, /touchAction: "pan-y"/);
   assert.match(workout, /<Trash2[^>]*aria-hidden="true"/);
   assert.match(workout, /canRemove=\{exercise\.sets\.length > 1\}/);

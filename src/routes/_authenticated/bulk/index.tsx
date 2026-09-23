@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { format } from "date-fns";
-import { useMemo, useRef, useState } from "react";
+import { addDays, format } from "date-fns";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { Bar, Card, Chip, Field, Note, NumInput, SectionTitle, Stat } from "@/components/ui-kit";
@@ -10,6 +11,8 @@ import { useActions, useAppData, useBulkMeta } from "@/lib/store";
 import { RANGES, type MealPlanId, type WorkoutType } from "@/lib/types";
 import { useActiveTrainingPlan } from "@/lib/training-plans-query";
 import { bulkPlanModeFor, useMemberships } from "@/lib/bulk-access";
+import { bulkWeightQueryKey, saveBulkWeight, useBulkWeights } from "@/lib/bulk-progress-query";
+import { bulkWeek, weeklyWeightAverage } from "@/lib/bulk-progress";
 
 export const Route = createFileRoute("/_authenticated/bulk/")({
   head: () => ({
@@ -35,6 +38,7 @@ function TodayPage() {
   const data = useAppData();
   const { bulkId } = useBulkMeta();
   const memberships = useMemberships();
+  const queryClient = useQueryClient();
   const { saveDay } = useActions();
   const today = iso(new Date());
   const [sync, setSync] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -45,6 +49,38 @@ function TodayPage() {
   const planMode = bulkPlanModeFor(memberships.data, bulkId);
   const isPublicGoal = planMode === "public";
   const activePlan = useActiveTrainingPlan(isPublicGoal ? bulkId : null);
+  const goalWeights = useBulkWeights(isPublicGoal ? bulkId : null, "2000-01-01");
+  const todayGoalWeight = goalWeights.data?.find((entry) => entry.logDate === today);
+  const [goalWeightDraft, setGoalWeightDraft] = useState("");
+  const [goalWeightStatus, setGoalWeightStatus] = useState<"idle" | "saving" | "saved" | "error">(
+    "idle",
+  );
+  useEffect(() => {
+    setGoalWeightDraft(todayGoalWeight?.weightKg.toString() ?? "");
+  }, [todayGoalWeight?.weightKg]);
+
+  const saveGoalWeight = async () => {
+    if (!isPublicGoal || !bulkId) return;
+    const weightKg = Number(goalWeightDraft.replace(",", "."));
+    if (!Number.isFinite(weightKg) || weightKg < 20 || weightKg > 400) {
+      setGoalWeightStatus("error");
+      return;
+    }
+    setGoalWeightStatus("saving");
+    try {
+      await saveBulkWeight(bulkId, { logDate: today, weightKg, note: null });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: bulkWeightQueryKey(bulkId) }),
+        queryClient.invalidateQueries({ queryKey: ["bulk-progress-summary"] }),
+        queryClient.invalidateQueries({ queryKey: ["bulk-weekly-recommendation", bulkId] }),
+        queryClient.invalidateQueries({ queryKey: ["bulk-training-session", "active", bulkId] }),
+        queryClient.invalidateQueries({ queryKey: ["goal-settings-dashboard", bulkId] }),
+      ]);
+      setGoalWeightStatus("saved");
+    } catch {
+      setGoalWeightStatus("error");
+    }
+  };
 
   const weekCount = useMemo(() => {
     if (!data) return 0;
@@ -52,6 +88,20 @@ function TodayPage() {
   }, [data]);
 
   const status = useMemo(() => (data ? bulkStatus(data) : null), [data]);
+  const publicWeightSummary = useMemo(() => {
+    if (!isPublicGoal) return null;
+    const current = bulkWeek(today).start;
+    const previous = iso(addDays(new Date(`${current}T12:00:00`), -7));
+    const currentAverage = weeklyWeightAverage(goalWeights.data ?? [], current);
+    const previousAverage = weeklyWeightAverage(goalWeights.data ?? [], previous);
+    return {
+      average: currentAverage.averageKg,
+      change:
+        currentAverage.averageKg != null && previousAverage.averageKg != null
+          ? currentAverage.averageKg - previousAverage.averageKg
+          : null,
+    };
+  }, [goalWeights.data, isPublicGoal, today]);
 
   if (!data || !targets || !status || planMode === "none") {
     return (
@@ -127,7 +177,11 @@ function TodayPage() {
           <p className={`mt-1 text-2xl font-semibold ${toneClass}`}>{status.label}</p>
         </div>
         <div className="text-right">
-          <p className={`num text-2xl font-semibold ${toneClass}`}>{signed(status.rate, 2)}</p>
+          <p className={`num text-2xl font-semibold ${toneClass}`}>
+            {publicWeightSummary?.change == null
+              ? signed(status.rate, 2)
+              : signed(publicWeightSummary.change, 2)}
+          </p>
           <p className="text-[11px] text-muted-foreground">
             kg/week ·{" "}
             {targets.goal === "cut"
@@ -140,7 +194,11 @@ function TodayPage() {
       </div>
 
       <div className="grid grid-cols-3 gap-2">
-        <Stat label="7-day avg" value={fmt(status.currentAvg, 1)} hint="kg" />
+        <Stat
+          label="7-day avg"
+          value={fmt(publicWeightSummary?.average ?? status.currentAvg, 1)}
+          hint="kg"
+        />
         <Stat label="Cal target" value={targets.calories} hint="kcal/day" />
         <Stat
           label="Gym"
@@ -155,11 +213,40 @@ function TodayPage() {
           <SectionTitle>Morning</SectionTitle>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Bodyweight (kg)">
-              <NumInput
-                value={day?.weight}
-                onChange={(v) => set({ weight: v })}
-                placeholder="61.5"
-              />
+              {isPublicGoal ? (
+                <>
+                  <input
+                    inputMode="decimal"
+                    value={goalWeightDraft}
+                    onChange={(event) => {
+                      setGoalWeightDraft(event.target.value);
+                      setGoalWeightStatus("idle");
+                    }}
+                    onBlur={() => void saveGoalWeight()}
+                    placeholder="61.5"
+                    aria-label="Bodyweight in kilograms"
+                    className="num mt-1 w-full rounded-xl border border-input bg-elevated px-3 py-2.5 text-lg font-semibold outline-none transition-colors placeholder:font-normal placeholder:text-muted-foreground/60 focus:border-ring"
+                  />
+                  <span
+                    role={goalWeightStatus === "error" ? "alert" : "status"}
+                    className={`mt-1 block text-[11px] ${goalWeightStatus === "error" ? "text-danger" : "text-muted-foreground"}`}
+                  >
+                    {goalWeightStatus === "saving"
+                      ? "Saving weight…"
+                      : goalWeightStatus === "saved"
+                        ? "Weight saved"
+                        : goalWeightStatus === "error"
+                          ? "Enter 20–400 kg. Your value is still here."
+                          : ""}
+                  </span>
+                </>
+              ) : (
+                <NumInput
+                  value={day?.weight}
+                  onChange={(v) => set({ weight: v })}
+                  placeholder="61.5"
+                />
+              )}
             </Field>
             <Field label="Waist (cm, optional)">
               <NumInput value={day?.waist} onChange={(v) => set({ waist: v })} placeholder="74.0" />

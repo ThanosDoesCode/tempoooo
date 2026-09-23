@@ -2,6 +2,7 @@ import { queryOptions, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { readRetryDelay, shouldRetryRead } from "./network-errors";
 import type { BulkNutritionProgressDay, BulkProgressPhoto, BulkWeightEntry } from "./bulk-progress";
+import { refreshActiveBulkTrainingBodyweight } from "./bulk-training-sessions";
 
 export const bulkWeightQueryKey = (profileId: string) =>
   ["bulk-weight-entries", profileId] as const;
@@ -138,10 +139,12 @@ export async function saveBulkWeight(
     { onConflict: "bulk_profile_id,log_date" },
   );
   if (error) throw error;
+  await refreshActiveBulkTrainingBodyweight(profileId);
 }
-export async function deleteBulkWeight(id: string) {
+export async function deleteBulkWeight(id: string, profileId: string) {
   const { error } = await supabase.from("bulk_weight_entries").delete().eq("id", id);
   if (error) throw error;
+  await refreshActiveBulkTrainingBodyweight(profileId);
 }
 
 export async function uploadBulkProgressPhoto(

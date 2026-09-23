@@ -97,11 +97,13 @@ test("Goal settings changes Bulk or Cut through the existing scoped reset", asyn
   assert.doesNotMatch(migration, /DELETE FROM|challenge_|bulk_meal_presets|bulk_training_sessions/);
 });
 
-test("Goal settings history opens Goal progress instead of Training history", async () => {
+test("Goal settings replaces duplicate progress navigation with real dashboard data", async () => {
   const settings = await read("src/routes/_authenticated/bulk/more.tsx");
-  assert.match(settings, /to: "\/bulk\/progress"/);
-  assert.match(settings, /label: "Progress history"/);
-  assert.match(settings, /Weight, check-ins and progress records/);
+  assert.match(settings, /Weight trend/);
+  assert.match(settings, /Weekly check-ins/);
+  assert.match(settings, /useBulkWeights/);
+  assert.match(settings, /useGoalSettingsDashboard/);
+  assert.doesNotMatch(settings, /Progress history/);
   assert.doesNotMatch(settings, /to: "\/bulk\/(?:history|training\/history)"/);
 });
 

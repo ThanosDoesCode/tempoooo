@@ -1,26 +1,23 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { ChevronRight, History, RefreshCcw } from "lucide-react";
-import { useState } from "react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { RefreshCcw } from "lucide-react";
+import { useMemo, useState } from "react";
+import { addDays, format } from "date-fns";
+import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { Card, Note, PendingLabel, SectionTitle } from "@/components/ui-kit";
 import { bulkPlanModeFor, deactivatePublicGoal, useMemberships } from "@/lib/bulk-access";
 import { userFacingError } from "@/lib/network-errors";
 import { clearBulk, useAppData, useBulkMeta } from "@/lib/store";
+import { localDay } from "@/lib/bulk-progress";
+import { useBulkWeights } from "@/lib/bulk-progress-query";
+import { useGoalSettingsDashboard } from "@/lib/goal-settings-dashboard";
+import { buildCheckInConsistency } from "@/lib/goal-check-in-consistency";
 
 export const Route = createFileRoute("/_authenticated/bulk/more")({
   head: () => ({ meta: [{ title: "Tempo" }] }),
   component: BulkMorePage,
 });
-
-const destinations = [
-  {
-    to: "/bulk/progress",
-    label: "Progress history",
-    description: "Weight, check-ins and progress records",
-    icon: History,
-  },
-] as const;
 
 function BulkMorePage() {
   const navigate = useNavigate();
@@ -29,6 +26,27 @@ function BulkMorePage() {
   const { bulkId } = useBulkMeta();
   const data = useAppData();
   const planMode = bulkPlanModeFor(memberships.data, bulkId);
+  const today = localDay(new Date());
+  const weights = useBulkWeights(
+    planMode === "public" ? bulkId : null,
+    localDay(addDays(new Date(), -30)),
+  );
+  const dashboard = useGoalSettingsDashboard(planMode === "public" ? bulkId : null);
+  const chronologicalWeights = useMemo(
+    () => [...(weights.data ?? [])].sort((a, b) => a.logDate.localeCompare(b.logDate)),
+    [weights.data],
+  );
+  const checkInWeeks = useMemo(
+    () =>
+      dashboard.data
+        ? buildCheckInConsistency(
+            dashboard.data.goalStartedAt,
+            dashboard.data.completedWeekStarts,
+            today,
+          )
+        : [],
+    [dashboard.data, today],
+  );
   const [confirming, setConfirming] = useState(false);
   const [switching, setSwitching] = useState(false);
   const [switchError, setSwitchError] = useState<string | null>(null);
@@ -114,25 +132,104 @@ function BulkMorePage() {
             )}
           </Card>
         ) : null}
-        {destinations.map(({ to, label, description, icon: Icon }) => (
-          <Link
-            key={to}
-            to={to}
-            preload="intent"
-            className="card-surface flex min-h-16 items-center gap-3 p-4 transition active:scale-[0.99] active:bg-elevated"
-          >
-            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
-              <Icon className="h-5 w-5" aria-hidden="true" />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block font-semibold">{label}</span>
-              <span className="mt-0.5 block text-xs leading-5 text-muted-foreground">
-                {description}
-              </span>
-            </span>
-            <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
-          </Link>
-        ))}
+        {planMode === "public" ? (
+          <>
+            <Card>
+              <SectionTitle>Weight trend</SectionTitle>
+              {weights.isLoading ? (
+                <div className="h-28 animate-pulse rounded-xl bg-elevated" />
+              ) : weights.error ? (
+                <button
+                  className="min-h-11 text-sm font-semibold text-danger"
+                  onClick={() => void weights.refetch()}
+                >
+                  Weight could not load. Retry
+                </button>
+              ) : chronologicalWeights.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  Log weight in Goal Today to start your 30-day trend.
+                </p>
+              ) : (
+                <div>
+                  <div className="flex items-end justify-between gap-3">
+                    <p className="num text-2xl font-semibold">
+                      {chronologicalWeights.at(-1)!.weightKg.toFixed(1)} kg
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {chronologicalWeights.length > 1
+                        ? `${chronologicalWeights.at(-1)!.weightKg - chronologicalWeights[0]!.weightKg >= 0 ? "+" : ""}${(chronologicalWeights.at(-1)!.weightKg - chronologicalWeights[0]!.weightKg).toFixed(1)} kg in 30 days`
+                        : "One measurement"}
+                    </p>
+                  </div>
+                  {chronologicalWeights.length > 1 ? (
+                    <div className="mt-3 h-28" aria-label="30-day weight trend chart">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart
+                          data={chronologicalWeights}
+                          margin={{ top: 8, right: 4, bottom: 0, left: -24 }}
+                        >
+                          <XAxis
+                            dataKey="logDate"
+                            tickFormatter={(value) =>
+                              format(new Date(`${value}T12:00:00`), "d MMM")
+                            }
+                            tick={{ fontSize: 10 }}
+                          />
+                          <YAxis domain={["dataMin - 1", "dataMax + 1"]} tick={{ fontSize: 10 }} />
+                          <Tooltip
+                            labelFormatter={(value) =>
+                              format(new Date(`${value}T12:00:00`), "d MMM yyyy")
+                            }
+                            formatter={(value) => [`${Number(value).toFixed(1)} kg`, "Weight"]}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="weightKg"
+                            stroke="var(--primary)"
+                            strokeWidth={2}
+                            dot={false}
+                            isAnimationActive={false}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  ) : null}
+                </div>
+              )}
+            </Card>
+            <Card>
+              <SectionTitle>Weekly check-ins</SectionTitle>
+              {dashboard.isLoading ? (
+                <div className="h-14 animate-pulse rounded-xl bg-elevated" />
+              ) : dashboard.error ? (
+                <button
+                  className="min-h-11 text-sm font-semibold text-danger"
+                  onClick={() => void dashboard.refetch()}
+                >
+                  Check-ins could not load. Retry
+                </button>
+              ) : (
+                <div
+                  className="grid grid-cols-8 gap-1"
+                  aria-label="Previous eight weekly check-ins"
+                >
+                  {checkInWeeks.map((week) => (
+                    <div key={week.weekStart} className="text-center">
+                      <span
+                        role="img"
+                        aria-label={`${week.label}: ${week.status.replace("-", " ")}`}
+                        className={`mx-auto block h-4 w-4 rounded-full ${week.status === "completed" ? "bg-primary" : week.status === "missed" ? "bg-danger/80" : week.status === "current-incomplete" ? "border-2 border-primary" : "bg-muted"}`}
+                      />
+                      <span className="mt-1 block text-[9px] text-muted-foreground">
+                        {week.label}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
+          </>
+        ) : null}
       </div>
     </AppShell>
   );

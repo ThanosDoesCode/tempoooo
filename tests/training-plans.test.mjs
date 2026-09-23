@@ -197,6 +197,11 @@ test("training UI supports generated, preset and empty custom paths without repl
   assert.match(moreRoute, /TrainingPlanEditor/);
   assert.doesNotMatch(migration, /UPDATE public\.bulk_workouts|DELETE FROM public\.bulk_workouts/);
   assert.match(editor, /Save Changes/);
+  assert.match(editor, /Workout days/);
+  assert.match(editor, /Edit Day/);
+  assert.match(editor, /Training Plan →/);
+  assert.match(editor, /days[\s\S]*\.filter\(\(day\) => day\.id === selectedDayId\)/);
+  assert.match(editor, /Save and return/);
   assert.match(editor, /Add Workout Day/);
   assert.match(editor, /Add Exercise/);
   assert.match(editor, /Historical workouts will stay unchanged/);

@@ -349,6 +349,7 @@ export function BulkWorkoutSessionView({
       if (timer) clearTimeout(timer);
       timers.current.delete(setId);
       await removeBulkTrainingSet(session.id, setId);
+      setOpenSetId(null);
       dirty.current.delete(setId);
       const nextDrafts = { ...draftsRef.current };
       delete nextDrafts[setId];
@@ -376,6 +377,7 @@ export function BulkWorkoutSessionView({
   }
 
   async function finish(confirmIncomplete: boolean) {
+    setOpenSetId(null);
     setFinishing(true);
     try {
       await flushAll();
@@ -393,6 +395,7 @@ export function BulkWorkoutSessionView({
   }
 
   async function discard() {
+    setOpenSetId(null);
     setDiscarding(true);
     try {
       await discardBulkTrainingSession(session.id);
@@ -430,16 +433,19 @@ export function BulkWorkoutSessionView({
   );
   const totalSets = session.exercises.reduce((total, exercise) => total + exercise.sets.length, 0);
   const elapsedSeconds = sessionElapsedSeconds(session.startedAt, clock);
-  const totalVolume = session.exercises.reduce(
-    (total, exercise) =>
-      total +
-      exercise.sets.reduce(
-        (exerciseTotal, set) =>
-          exerciseTotal + sessionSetVolume(drafts[set.id] ?? toDraft(set), exercise),
-        0,
-      ),
-    0,
-  );
+  let volumeUnavailable = false;
+  const totalVolume = session.exercises.reduce((total, exercise) => {
+    const exerciseVolume = exercise.sets.reduce((sum, set) => {
+      const volume = sessionSetVolume(
+        drafts[set.id] ?? toDraft(set),
+        exercise,
+        session.bodyweightKg,
+      );
+      if (volume == null) volumeUnavailable = true;
+      return sum + (volume ?? 0);
+    }, 0);
+    return total + exerciseVolume;
+  }, 0);
 
   if (session.status === "completed") return <CompletedWorkout session={session} />;
 
@@ -476,7 +482,7 @@ export function BulkWorkoutSessionView({
           <div>
             <dt className="text-[10px] uppercase tracking-wider text-muted-foreground">Volume</dt>
             <dd className="num mt-0.5 text-sm font-semibold">
-              {Math.round(totalVolume).toLocaleString()} kg
+              {volumeUnavailable ? "Unavailable" : `${Math.round(totalVolume).toLocaleString()} kg`}
             </dd>
           </div>
           <div>
@@ -494,14 +500,15 @@ export function BulkWorkoutSessionView({
             type="button"
             aria-expanded={!collapsedExercises.has(exercise.id)}
             aria-controls={`exercise-${exercise.id}`}
-            onClick={() =>
+            onClick={() => {
+              setOpenSetId(null);
               setCollapsedExercises((current) => {
                 const next = new Set(current);
                 if (next.has(exercise.id)) next.delete(exercise.id);
                 else next.add(exercise.id);
                 return next;
-              })
-            }
+              });
+            }}
             className="flex min-h-11 w-full items-start justify-between gap-3 rounded-lg text-left active:bg-elevated"
           >
             <div className="min-w-0">
@@ -560,12 +567,19 @@ export function BulkWorkoutSessionView({
                 {exercise.notes}
               </p>
             ) : null}
+            {exercise.isBodyweight ? (
+              <p className="mt-2 rounded-lg bg-elevated px-2.5 py-2 text-xs text-muted-foreground">
+                {session.bodyweightKg == null
+                  ? "BW unavailable · Extra weight is still saved · Total unavailable"
+                  : `BW ${session.bodyweightKg.toFixed(1)} kg · Extra weight is logged per set`}
+              </p>
+            ) : null}
             <div className="mt-3 overflow-x-auto pb-1">
               <div className="min-w-[330px]">
                 <div className="grid grid-cols-[2.5rem_minmax(3.75rem,1fr)_3.25rem_3.25rem_2.75rem_2.75rem] gap-1 px-1 text-center text-[9px] font-medium uppercase tracking-wider text-muted-foreground">
                   <span>Set</span>
                   <span>Previous</span>
-                  <span>KG</span>
+                  <span>{exercise.isBodyweight ? "+KG" : "KG"}</span>
                   <span>Reps</span>
                   <span>RPE</span>
                   <span>Done</span>
@@ -590,6 +604,7 @@ export function BulkWorkoutSessionView({
                     onRetry={() => void persist(set.id)}
                     onDone={() => void persist(set.id)}
                     onRemove={() => void removeSet(set.id)}
+                    onSwipeBegin={() => setOpenSetId(null)}
                     onSwipeOpen={() => setOpenSetId(set.id)}
                     onSwipeClose={() =>
                       setOpenSetId((current) => (current === set.id ? null : current))
@@ -675,6 +690,7 @@ function WorkoutSetRow({
   onRetry,
   onDone,
   onRemove,
+  onSwipeBegin,
   onSwipeOpen,
   onSwipeClose,
 }: {
@@ -691,6 +707,7 @@ function WorkoutSetRow({
   onRetry: () => void;
   onDone: () => void;
   onRemove: () => void;
+  onSwipeBegin: () => void;
   onSwipeOpen: () => void;
   onSwipeClose: () => void;
 }) {
@@ -702,8 +719,8 @@ function WorkoutSetRow({
   const gesture = useRef<{ x: number; y: number; pointer: number; horizontal: boolean } | null>(
     null,
   );
-  const [dragOffset, setDragOffset] = useState(swipeOpen ? 56 : 0);
-  useEffect(() => setDragOffset(swipeOpen ? 56 : 0), [swipeOpen]);
+  const [dragOffset, setDragOffset] = useState(swipeOpen ? 64 : 0);
+  useEffect(() => setDragOffset(swipeOpen ? 64 : 0), [swipeOpen]);
   useEffect(() => {
     if (!swipeOpen) return;
     const close = (event: PointerEvent) => {
@@ -726,6 +743,7 @@ function WorkoutSetRow({
       pointer: event.pointerId,
       horizontal: false,
     };
+    onSwipeBegin();
   };
   const moveSwipe = (event: ReactPointerEvent<HTMLDivElement>) => {
     const start = gesture.current;
@@ -739,7 +757,7 @@ function WorkoutSetRow({
     if (Math.abs(dx) > Math.abs(dy) + 6) start.horizontal = true;
     if (!start.horizontal) return;
     event.currentTarget.setPointerCapture(event.pointerId);
-    setDragOffset(Math.max(0, Math.min(64, (swipeOpen ? 56 : 0) + dx)));
+    setDragOffset(Math.max(0, Math.min(64, (swipeOpen ? 64 : 0) + dx)));
   };
   const endSwipe = () => {
     if (!gesture.current) return;
@@ -785,13 +803,14 @@ function WorkoutSetRow({
         className="relative mt-1 overflow-hidden rounded-xl"
         data-set-swipe={set.id}
       >
-        {canRemove ? (
+        {canRemove && dragOffset > 0 ? (
           <button
             type="button"
             aria-label={`${removing ? "Removing" : "Remove"} ${exercise.name} set ${set.order}`}
             disabled={removing}
             onClick={onRemove}
-            className="absolute inset-y-0 left-0 grid w-14 place-items-center bg-danger text-white disabled:opacity-60"
+            tabIndex={swipeOpen ? 0 : -1}
+            className="absolute inset-y-0 left-0 z-0 grid w-16 place-items-center bg-danger text-white disabled:opacity-60"
           >
             <Trash2 className="h-5 w-5" aria-hidden="true" />
           </button>
@@ -804,7 +823,8 @@ function WorkoutSetRow({
           style={{ transform: `translateX(${dragOffset}px)`, touchAction: "pan-y" }}
           className={cn(
             "grid grid-cols-[2.5rem_minmax(3.75rem,1fr)_3.25rem_3.25rem_2.75rem_2.75rem] items-center gap-1 rounded-xl px-1 py-1 transition-transform duration-150 ease-out motion-reduce:transition-none",
-            done ? "bg-good/5" : "bg-elevated/40",
+            "relative z-10 bg-card",
+            done && "ring-1 ring-inset ring-good/20",
           )}
         >
           <button
@@ -825,7 +845,7 @@ function WorkoutSetRow({
             <>
               {field(
                 exercise.isBodyweight ? "added kg" : "kg",
-                draft.bilateralWeight,
+                exercise.isBodyweight ? (draft.bilateralWeight ?? 0) : draft.bilateralWeight,
                 "bilateralWeight",
               )}
               {field("reps", draft.bilateralReps, "bilateralReps", true)}
@@ -870,6 +890,16 @@ function WorkoutSetRow({
             )}
           </button>
         </div>
+        {canRemove && !swipeOpen ? (
+          <button
+            type="button"
+            className="sr-only"
+            onClick={onSwipeOpen}
+            aria-label={`Reveal delete action for ${exercise.name} set ${set.order}`}
+          >
+            Reveal delete action
+          </button>
+        ) : null}
       </div>
       <div
         className="flex min-h-5 items-center justify-end gap-2 px-1 text-[10px] text-muted-foreground"

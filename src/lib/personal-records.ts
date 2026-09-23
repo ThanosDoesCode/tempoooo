@@ -119,8 +119,13 @@ export function derivePublicPersonalRecords(sessions: BulkTrainingSession[]): Pe
               : side === "right"
                 ? set.rightWeight
                 : set.bilateralWeight;
+          const volumeLoad = exercise.isBodyweight
+            ? session.bodyweightKg == null
+              ? null
+              : session.bodyweightKg + (load ?? 0)
+            : load;
           return reps != null && reps > 0
-            ? [{ load, reps, volume: load == null ? null : load * reps }]
+            ? [{ load, reps, volume: volumeLoad == null ? null : volumeLoad * reps }]
             : [];
         });
         if (!values.length) continue;
@@ -147,7 +152,7 @@ export function derivePublicPersonalRecords(sessions: BulkTrainingSession[]): Pe
           volume: values.some((item) => item.volume == null)
             ? null
             : values.reduce((sum, item) => sum + item.volume!, 0),
-          bodyweight: null,
+          bodyweight: session.bodyweightKg ?? null,
         });
         grouped.set(key, group);
       }
