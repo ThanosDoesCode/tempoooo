@@ -8,6 +8,7 @@ import {
   planCompatibility,
   rankTrainingPlans,
   recommendTrainingPlan,
+  resolveTrainingPlanSelectionPreferences,
   type TrainingPlanTemplate,
   type UserTrainingPlan,
 } from "@/lib/training-plans";
@@ -50,25 +51,29 @@ function PlanDetail({ plan }: { plan: TrainingPlanTemplate }) {
 
 function PlanCard({
   plan,
-  targets,
+  preferences,
+  current,
   expanded,
   onToggle,
   onUse,
   pending,
 }: {
   plan: TrainingPlanTemplate;
-  targets: Targets;
+  preferences: ReturnType<typeof resolveTrainingPlanSelectionPreferences>;
+  current: boolean;
   expanded: boolean;
   onToggle: () => void;
   onUse: () => void;
   pending: boolean;
 }) {
-  const compatibility = planCompatibility(
-    plan,
-    targets.experienceLevel!,
-    targets.trainingDaysPerWeek!,
-    targets.availableEquipment!,
-  );
+  const compatibility = preferences
+    ? planCompatibility(
+        plan,
+        preferences.experienceLevel,
+        preferences.trainingDaysPerWeek,
+        preferences.availableEquipment,
+      )
+    : null;
   return (
     <Card className="space-y-3">
       <button
@@ -78,7 +83,14 @@ function PlanCard({
         aria-expanded={expanded}
       >
         <span>
-          <span className="block font-semibold text-foreground">{plan.name}</span>
+          <span className="flex items-center gap-2 font-semibold text-foreground">
+            {plan.name}
+            {current ? (
+              <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] uppercase tracking-wide text-primary">
+                Current
+              </span>
+            ) : null}
+          </span>
           <span className="mt-1 block text-xs capitalize text-muted-foreground">
             {plan.experienceLevel} · {plan.trainingDaysPerWeek} days/week
           </span>
@@ -87,26 +99,32 @@ function PlanCard({
       </button>
       <p className="text-sm leading-relaxed text-muted-foreground">{plan.description}</p>
       <p className="text-xs text-muted-foreground">{plan.splitSummary}</p>
-      {compatibility.equipmentCompatible ? (
+      {compatibility?.equipmentCompatible ? (
         <p className="flex items-center gap-1.5 text-xs font-medium text-good">
           <Check className="h-4 w-4" aria-hidden="true" /> Works with your equipment
         </p>
-      ) : (
+      ) : compatibility ? (
         <p className="rounded-lg bg-warn/10 px-2.5 py-2 text-xs text-warn">
           Requires equipment you did not select:{" "}
           {compatibility.missingEquipment.map(formatEquipment).join(", ")}.
         </p>
-      )}
-      {!compatibility.exactExperience || !compatibility.exactDays ? (
+      ) : null}
+      {compatibility && (!compatibility.exactExperience || !compatibility.exactDays) ? (
         <p className="rounded-lg bg-secondary px-2.5 py-2 text-xs text-muted-foreground">
           Closest available match: {plan.experienceLevel} level, {plan.trainingDaysPerWeek} days per
-          week. Your selection is {targets.experienceLevel}, {targets.trainingDaysPerWeek} days per
-          week.
+          week. Your selection is {preferences!.experienceLevel}, {preferences!.trainingDaysPerWeek}{" "}
+          days per week.
         </p>
       ) : null}
       {expanded ? <PlanDetail plan={plan} /> : null}
-      <Button className="min-h-11 w-full" onClick={onUse} disabled={pending}>
-        {pending ? <PendingLabel>Creating your plan</PendingLabel> : "Use This Plan"}
+      <Button className="min-h-11 w-full" onClick={onUse} disabled={pending || current}>
+        {current ? (
+          "Current plan"
+        ) : pending ? (
+          <PendingLabel>Changing your plan</PendingLabel>
+        ) : (
+          "Use This Plan"
+        )}
       </Button>
     </Card>
   );
@@ -115,11 +133,13 @@ function PlanCard({
 export function TrainingPlanSetup({
   targets,
   replacingPlan = false,
+  currentPlan = null,
   onCreated,
 }: {
   targets: Targets;
   replacingPlan?: boolean;
-  onCreated?: () => void;
+  currentPlan?: UserTrainingPlan | null;
+  onCreated?: () => void | Promise<void>;
 }) {
   const queryClient = useQueryClient();
   const templates = useTrainingPlanTemplates();
@@ -127,31 +147,45 @@ export function TrainingPlanSetup({
   const [showOthers, setShowOthers] = useState(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [customName, setCustomName] = useState("My Training Plan");
-  const preference = targets.trainingSetupPreference!;
+  const preference = targets.trainingSetupPreference;
+  const { availableEquipment, experienceLevel, trainingDaysPerWeek } = targets;
+  const preferences = useMemo(
+    () =>
+      resolveTrainingPlanSelectionPreferences({
+        availableEquipment,
+        experienceLevel,
+        trainingDaysPerWeek,
+      }),
+    [availableEquipment, experienceLevel, trainingDaysPerWeek],
+  );
   const ranked = useMemo(
     () =>
-      rankTrainingPlans(
+      preferences
+        ? rankTrainingPlans(
+            templates.data ?? [],
+            preferences.experienceLevel,
+            preferences.trainingDaysPerWeek,
+            preferences.availableEquipment,
+          )
+        : (templates.data ?? []),
+    [preferences, templates.data],
+  );
+  const recommendation = preferences
+    ? recommendTrainingPlan(
         templates.data ?? [],
-        targets.experienceLevel!,
-        targets.trainingDaysPerWeek!,
-        targets.availableEquipment!,
-      ),
-    [
-      templates.data,
-      targets.availableEquipment,
-      targets.experienceLevel,
-      targets.trainingDaysPerWeek,
-    ],
-  );
-  const recommendation = recommendTrainingPlan(
-    templates.data ?? [],
-    targets.experienceLevel!,
-    targets.trainingDaysPerWeek!,
-    targets.availableEquipment!,
-  );
+        preferences.experienceLevel,
+        preferences.trainingDaysPerWeek,
+        preferences.availableEquipment,
+      )
+    : null;
 
   async function refreshPlan() {
-    await queryClient.invalidateQueries({ queryKey: ["bulk-training-plan"] });
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["bulk-training-plan"] }),
+      queryClient.invalidateQueries({ queryKey: ["bulk-training-session", "active"] }),
+      queryClient.invalidateQueries({ queryKey: ["bulk-progression"] }),
+      queryClient.invalidateQueries({ queryKey: ["bulk-muscle-coverage"] }),
+    ]);
   }
 
   async function choose(plan: TrainingPlanTemplate) {
@@ -162,9 +196,14 @@ export function TrainingPlanSetup({
       else await instantiateTrainingPlan(plan.id, planType);
       await refreshPlan();
       toast.success(replacingPlan ? "Training plan changed" : "Training plan created");
-      onCreated?.();
+      await onCreated?.();
     } catch (error) {
-      toast.error(userFacingError(error, "create your training plan"));
+      toast.error(
+        userFacingError(
+          error,
+          replacingPlan ? "change your training plan" : "create your training plan",
+        ),
+      );
     } finally {
       setPendingId(null);
     }
@@ -182,15 +221,23 @@ export function TrainingPlanSetup({
       else await createEmptyTrainingPlan(name);
       await refreshPlan();
       toast.success(replacingPlan ? "Training plan changed" : "Training plan created");
-      onCreated?.();
+      await onCreated?.();
     } catch (error) {
-      toast.error(userFacingError(error, "create your training plan", { inputPreserved: true }));
+      toast.error(
+        userFacingError(
+          error,
+          replacingPlan ? "change your training plan" : "create your training plan",
+          {
+            inputPreserved: true,
+          },
+        ),
+      );
     } finally {
       setPendingId(null);
     }
   }
 
-  if (preference === "custom") {
+  if (preference === "custom" && !replacingPlan) {
     return (
       <Card className="space-y-4">
         <div>
@@ -228,7 +275,7 @@ export function TrainingPlanSetup({
         onRetry={() => void templates.refetch()}
       />
     );
-  if (!recommendation)
+  if (!templates.data?.length)
     return (
       <DataError
         message="No training plans are available right now."
@@ -236,21 +283,33 @@ export function TrainingPlanSetup({
       />
     );
 
-  const visible = preference === "generated" && !showOthers ? [recommendation] : ranked;
+  const showRecommendationOnly = preference === "generated" && recommendation && !showOthers;
+  const visible = showRecommendationOnly ? [recommendation] : ranked;
   return (
     <div className="space-y-3">
+      {replacingPlan && currentPlan ? (
+        <Card>
+          <SectionTitle>Current plan</SectionTitle>
+          <h2 className="text-lg font-semibold">{currentPlan.name}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {currentPlan.days.length} workout day{currentPlan.days.length === 1 ? "" : "s"}
+          </p>
+        </Card>
+      ) : null}
       <Card className="flex items-start gap-3">
         <span className="rounded-xl bg-primary/10 p-2 text-primary">
           <Dumbbell aria-hidden="true" />
         </span>
         <div>
           <SectionTitle>
-            {preference === "generated" ? "Your recommended plan" : "Tempo plans"}
+            {preference === "generated" && recommendation ? "Your recommended plan" : "Tempo plans"}
           </SectionTitle>
           <p className="text-sm text-muted-foreground">
-            {preference === "generated"
+            {preference === "generated" && recommendation
               ? "Based on your experience, weekly schedule and available equipment."
-              : "Browse the closest matches first, then inspect every workout before choosing."}
+              : preferences
+                ? "Browse the closest matches first, then inspect every workout before choosing."
+                : "Browse the available plans and inspect every workout before choosing."}
           </p>
         </div>
       </Card>
@@ -258,16 +317,17 @@ export function TrainingPlanSetup({
         <PlanCard
           key={plan.id}
           plan={plan}
-          targets={targets}
+          preferences={preferences}
+          current={currentPlan?.sourceTemplateId === plan.id}
           expanded={
-            expandedId === plan.id || (preference === "generated" && plan.id === recommendation.id)
+            expandedId === plan.id || (preference === "generated" && plan.id === recommendation?.id)
           }
           onToggle={() => setExpandedId(expandedId === plan.id ? null : plan.id)}
           onUse={() => void choose(plan)}
           pending={pendingId === plan.id}
         />
       ))}
-      {preference === "generated" ? (
+      {preference === "generated" && recommendation ? (
         <Button
           variant="outline"
           className="min-h-11 w-full"

@@ -21,6 +21,18 @@ function messageOf(error: unknown): string {
   return typeof message === "string" ? message : "";
 }
 
+export function developmentErrorDiagnostic(phase: string, error: unknown): void {
+  if (!import.meta.env.DEV) return;
+  const details = record(error);
+  console.error("[Tempo diagnostic]", {
+    phase,
+    name: error instanceof Error ? error.name : "Error",
+    message: messageOf(error) || "Unknown error",
+    code: typeof details.code === "string" ? details.code : undefined,
+    status: errorStatus(error),
+  });
+}
+
 export function isOffline(): boolean {
   return typeof navigator !== "undefined" && navigator.onLine === false;
 }

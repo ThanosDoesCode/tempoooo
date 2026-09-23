@@ -38,8 +38,14 @@ test("training plan switching is visible, transactional and preserves completed 
   assert.match(more, /useActiveBulkTrainingSession/);
   assert.match(more, /Finish or discard your current workout before changing plans\./);
   assert.match(more, /<TrainingPlanSetup[\s\S]*replacingPlan/);
+  assert.match(more, /currentPlan=\{activePlan\.data\}/);
   assert.match(setup, /replacingPlan \? "Training plan changed" : "Training plan created"/);
+  assert.match(setup, /Current plan/);
+  assert.match(setup, /Browse the available plans/);
+  assert.doesNotMatch(setup, /availableEquipment!/);
   assert.match(query, /switch_bulk_training_plan/);
+  assert.match(query, /developmentErrorDiagnostic\("active_training_plan"/);
+  assert.match(query, /developmentErrorDiagnostic\("switch_training_plan"/);
   assert.match(query, /switch_to_empty_bulk_training_plan/);
   assert.match(migration, /pg_advisory_xact_lock/);
   assert.match(migration, /status = 'in_progress'/);

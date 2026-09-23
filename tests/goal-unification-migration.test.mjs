@@ -157,6 +157,40 @@ test("Goal unification is retry-safe and migrates only the authoritative legacy 
       { exercise_name: "Barbell Front Raise", exercise_id: "custom:barbell-front-raise" },
       { exercise_name: "Pull-Up", exercise_id: "system:pull-up" },
     ]);
+    await db.query("SELECT set_config('request.jwt.claim.sub',$1,false)", [legacyOwner]);
+    await db.exec("SET ROLE authenticated");
+    let visiblePlan;
+    try {
+      visiblePlan = await db.query(
+        "SELECT plan.id,plan.name,(SELECT pg_catalog.array_agg(day.name ORDER BY day.day_order) FROM public.bulk_training_plan_days day WHERE day.plan_id=plan.id) AS days,(SELECT count(*)::integer FROM public.bulk_training_plan_exercises exercise JOIN public.bulk_training_plan_days day ON day.id=exercise.plan_day_id WHERE day.plan_id=plan.id) AS exercise_count FROM public.bulk_training_plans plan WHERE plan.bulk_profile_id=$1 AND plan.active",
+        [legacyProfile],
+      );
+    } finally {
+      await db.exec("RESET ROLE");
+    }
+    assert.deepEqual(visiblePlan.rows, [
+      {
+        id: visiblePlan.rows[0].id,
+        name: "Original Tempo program",
+        days: ["Chest & Back", "Legs", "Arms"],
+        exercise_count: 20,
+      },
+    ]);
+    await db.query("SELECT set_config('request.jwt.claim.sub',$1,false)", [ordinaryOwner]);
+    await db.exec("SET ROLE authenticated");
+    try {
+      assert.equal(
+        (
+          await db.query(
+            "SELECT id FROM public.bulk_training_plans WHERE bulk_profile_id=$1 AND active",
+            [legacyProfile],
+          )
+        ).rows.length,
+        0,
+      );
+    } finally {
+      await db.exec("RESET ROLE");
+    }
     assert.equal(
       Number(
         (

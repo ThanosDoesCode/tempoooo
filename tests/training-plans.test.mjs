@@ -7,6 +7,7 @@ import {
   planCompatibility,
   recommendTrainingPlan,
   replaceTrainingPlanExercise,
+  resolveTrainingPlanSelectionPreferences,
   validateTrainingPlanDraft,
 } from "../src/lib/training-plans.ts";
 import { orderedExerciseDefs } from "../src/lib/types.ts";
@@ -38,6 +39,29 @@ test("full commercial gym expands to broad exercise-library equipment access", (
   ])
     assert.equal(full.has(item), true);
   assert.equal(planCompatibility(plan(), "intermediate", 4, ["full_gym"]).exact, true);
+});
+
+test("Change Plan tolerates migrated Goal targets without inventing onboarding preferences", () => {
+  assert.equal(
+    resolveTrainingPlanSelectionPreferences({
+      experienceLevel: undefined,
+      trainingDaysPerWeek: undefined,
+      availableEquipment: undefined,
+    }),
+    null,
+  );
+  assert.deepEqual(
+    resolveTrainingPlanSelectionPreferences({
+      experienceLevel: "intermediate",
+      trainingDaysPerWeek: 3,
+      availableEquipment: ["full_gym"],
+    }),
+    {
+      experienceLevel: "intermediate",
+      trainingDaysPerWeek: 3,
+      availableEquipment: ["full_gym"],
+    },
+  );
 });
 
 test("equipment compatibility reports missing requirements instead of hiding them", () => {
@@ -181,6 +205,12 @@ test("training UI supports generated, preset and empty custom paths without repl
   assert.match(component, /Tempo plans/);
   assert.match(component, /Create My Training Plan/);
   assert.match(component, /Use This Plan/);
+  assert.match(component, /currentPlan/);
+  assert.match(component, /Current plan/);
+  assert.match(component, /resolveTrainingPlanSelectionPreferences/);
+  assert.doesNotMatch(component, /targets\.availableEquipment!/);
+  assert.match(component, /queryKey: \[\"bulk-training-session\", \"active\"\]/);
+  assert.match(component, /queryKey: \[\"bulk-progression\"\]/);
   assert.match(component, /Works with your equipment/);
   assert.match(query, /instantiate_bulk_training_plan/);
   assert.match(query, /create_empty_bulk_training_plan/);
@@ -194,7 +224,14 @@ test("training UI supports generated, preset and empty custom paths without repl
   );
   assert.doesNotMatch(route, /<TrainingPlanSetup|TrainingPlanEditor/);
   assert.match(moreRoute, /TrainingPlanSetup/);
+  assert.match(moreRoute, /currentPlan=\{activePlan\.data\}/);
+  assert.match(moreRoute, /await activePlan\.refetch\(\)/);
   assert.match(moreRoute, /TrainingPlanEditor/);
+  assert.match(moreRoute, /activePlan\.error/);
+  assert.match(moreRoute, /editing \?/);
+  assert.match(moreRoute, /switching \?/);
+  assert.match(query, /\.maybeSingle\(\)/);
+  assert.match(query, /developmentErrorDiagnostic\("active_training_plan_days"/);
   assert.doesNotMatch(migration, /UPDATE public\.bulk_workouts|DELETE FROM public\.bulk_workouts/);
   assert.match(editor, /Save Changes/);
   assert.match(editor, /Workout days/);

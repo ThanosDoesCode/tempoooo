@@ -61,7 +61,11 @@ function TrainingMorePage() {
           <TrainingPlanSetup
             targets={data!.targets}
             replacingPlan
-            onCreated={() => setSwitching(false)}
+            currentPlan={activePlan.data}
+            onCreated={async () => {
+              await activePlan.refetch();
+              setSwitching(false);
+            }}
           />
         </div>
       ) : usesPlanSetup && activePlan.data ? (

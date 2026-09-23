@@ -11,7 +11,7 @@ import { bulkOwnerQueryOptions, preferredBulkMembership, useMemberships } from "
 import { clearBulk, loadBulk, prefetchBulk, useBulkMeta } from "@/lib/store";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { DataError } from "@/components/ui-kit";
-import { userFacingError } from "@/lib/network-errors";
+import { developmentErrorDiagnostic, userFacingError } from "@/lib/network-errors";
 import { isExpectedQueryCancellation } from "@/lib/query-cancellation";
 import { QueryCancellationRecovery } from "@/components/QueryCancellationRecovery";
 
@@ -29,6 +29,9 @@ export const Route = createFileRoute("/_authenticated/bulk")({
 
 function BulkRouteError({ error, reset }: ErrorComponentProps) {
   const router = useRouter();
+  useEffect(() => {
+    if (!isExpectedQueryCancellation(error)) developmentErrorDiagnostic("bulk_route", error);
+  }, [error]);
   if (isExpectedQueryCancellation(error)) {
     return (
       <QueryCancellationRecovery
@@ -68,9 +71,10 @@ function BulkLayout() {
       return;
     }
     if (preferred.bulk_profile_id !== bulkId) {
-      loadBulk(preferred.bulk_profile_id, preferred.role).catch((e: Error) =>
-        setError(userFacingError(e, "load your plan")),
-      );
+      loadBulk(preferred.bulk_profile_id, preferred.role).catch((e: Error) => {
+        developmentErrorDiagnostic("bulk_snapshot", e);
+        setError(userFacingError(e, "load your plan"));
+      });
     }
   }, [memberships, bulkId, navigate]);
 
@@ -84,9 +88,10 @@ function BulkLayout() {
             setError(null);
             const preferred = preferredBulkMembership(memberships);
             if (preferred)
-              void loadBulk(preferred.bulk_profile_id, preferred.role).catch((e: Error) =>
-                setError(userFacingError(e, "load your plan")),
-              );
+              void loadBulk(preferred.bulk_profile_id, preferred.role).catch((e: Error) => {
+                developmentErrorDiagnostic("bulk_snapshot_retry", e);
+                setError(userFacingError(e, "load your plan"));
+              });
           }}
         />
       </AppShell>

@@ -1,6 +1,6 @@
 import { queryOptions, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { readRetryDelay, shouldRetryRead } from "@/lib/network-errors";
+import { developmentErrorDiagnostic, readRetryDelay, shouldRetryRead } from "@/lib/network-errors";
 import type {
   TrainingPlanDay,
   TrainingPlanExercise,
@@ -68,7 +68,10 @@ export const trainingPlanTemplatesQueryOptions = () =>
           .order("exercise_order"),
       ]);
       const error = templates.error ?? days.error ?? exercises.error;
-      if (error) throw error;
+      if (error) {
+        developmentErrorDiagnostic("training_plan_templates", error);
+        throw error;
+      }
       const exerciseRows = (exercises.data ?? []) as (ExerciseRow & { template_day_id: string })[];
       return (templates.data ?? []).map((template) => ({
         id: template.id,
@@ -110,7 +113,10 @@ export const activeTrainingPlanQueryOptions = (bulkProfileId: string | null) =>
         .eq("bulk_profile_id", bulkProfileId)
         .eq("active", true)
         .maybeSingle();
-      if (error) throw error;
+      if (error) {
+        developmentErrorDiagnostic("active_training_plan", error);
+        throw error;
+      }
       if (!plan) return null;
       const { data: days, error: daysError } = await supabase
         .from("bulk_training_plan_days")
@@ -119,7 +125,10 @@ export const activeTrainingPlanQueryOptions = (bulkProfileId: string | null) =>
         )
         .eq("plan_id", plan.id)
         .order("day_order");
-      if (daysError) throw daysError;
+      if (daysError) {
+        developmentErrorDiagnostic("active_training_plan_days", daysError);
+        throw daysError;
+      }
       return {
         id: plan.id,
         sourceTemplateId: plan.source_template_id,
@@ -160,7 +169,10 @@ export async function instantiateTrainingPlan(
     _template_id: templateId,
     _plan_type: planType,
   });
-  if (error) throw error;
+  if (error) {
+    developmentErrorDiagnostic("instantiate_training_plan", error);
+    throw error;
+  }
   return data;
 }
 
@@ -172,7 +184,10 @@ export async function switchTrainingPlan(
     _template_id: templateId,
     _plan_type: planType,
   });
-  if (error) throw error;
+  if (error) {
+    developmentErrorDiagnostic("switch_training_plan", error);
+    throw error;
+  }
   return data;
 }
 
@@ -180,7 +195,10 @@ export async function createEmptyTrainingPlan(name: string): Promise<string> {
   const { data, error } = await supabase.rpc("create_empty_bulk_training_plan", {
     _name: name,
   });
-  if (error) throw error;
+  if (error) {
+    developmentErrorDiagnostic("create_empty_training_plan", error);
+    throw error;
+  }
   return data;
 }
 
@@ -188,7 +206,10 @@ export async function switchToEmptyTrainingPlan(name: string): Promise<string> {
   const { data, error } = await supabase.rpc("switch_to_empty_bulk_training_plan", {
     _name: name,
   });
-  if (error) throw error;
+  if (error) {
+    developmentErrorDiagnostic("switch_to_empty_training_plan", error);
+    throw error;
+  }
   return data;
 }
 
@@ -216,6 +237,9 @@ export async function saveTrainingPlan(input: SaveTrainingPlanInput): Promise<st
     _name: input.name,
     _days: input.days,
   });
-  if (error) throw error;
+  if (error) {
+    developmentErrorDiagnostic("save_training_plan", error);
+    throw error;
+  }
   return data;
 }

@@ -138,6 +138,32 @@ export type PlanCompatibility = {
   exact: boolean;
 };
 
+export type TrainingPlanSelectionPreferences = {
+  experienceLevel: ExperienceLevel;
+  trainingDaysPerWeek: number;
+  availableEquipment: Equipment[];
+};
+
+export function resolveTrainingPlanSelectionPreferences(input: {
+  experienceLevel?: ExperienceLevel | undefined;
+  trainingDaysPerWeek?: number | undefined;
+  availableEquipment?: Equipment[] | undefined;
+}): TrainingPlanSelectionPreferences | null {
+  if (
+    !input.experienceLevel ||
+    !Number.isInteger(input.trainingDaysPerWeek) ||
+    (input.trainingDaysPerWeek ?? 0) < 1 ||
+    (input.trainingDaysPerWeek ?? 0) > 6 ||
+    !Array.isArray(input.availableEquipment)
+  )
+    return null;
+  return {
+    experienceLevel: input.experienceLevel,
+    trainingDaysPerWeek: input.trainingDaysPerWeek!,
+    availableEquipment: input.availableEquipment,
+  };
+}
+
 export function planCompatibility(
   plan: TrainingPlanTemplate,
   experienceLevel: ExperienceLevel,
