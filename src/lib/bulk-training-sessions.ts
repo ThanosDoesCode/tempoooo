@@ -230,6 +230,44 @@ export function useCompletedBulkTrainingSessions(
   return useQuery(completedBulkTrainingSessionsQueryOptions(bulkProfileId, from, to));
 }
 
+/** Completed sessions by persisted workout_date (inclusive local dates). Lightweight: no sets. */
+export const completedSessionDatesQueryOptions = (
+  bulkProfileId: string | null,
+  fromDate: string,
+  toDate: string,
+) =>
+  queryOptions({
+    queryKey: ["bulk-training-sessions", "completed-dates", bulkProfileId, fromDate, toDate],
+    enabled: !!bulkProfileId,
+    queryFn: async () => {
+      if (!bulkProfileId) return [];
+      const { data, error } = await supabase
+        .from("bulk_training_sessions")
+        .select("id, status, workout_date")
+        .eq("bulk_profile_id", bulkProfileId)
+        .eq("status", "completed")
+        .gte("workout_date", fromDate)
+        .lte("workout_date", toDate);
+      if (error) throw error;
+      return (data ?? []).map((row) => ({
+        id: row.id,
+        status: row.status,
+        workoutDate: row.workout_date,
+      }));
+    },
+    staleTime: 30_000,
+    retry: shouldRetryRead,
+    retryDelay: readRetryDelay,
+  });
+
+export function useCompletedSessionDates(
+  bulkProfileId: string | null,
+  fromDate: string,
+  toDate: string,
+) {
+  return useQuery(completedSessionDatesQueryOptions(bulkProfileId, fromDate, toDate));
+}
+
 export async function startBulkTrainingSession(planDayId: string): Promise<string> {
   const now = new Date();
   const workoutDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
