@@ -10,7 +10,7 @@ import { useActions, useAppData, useBulkMeta } from "@/lib/store";
 import { RANGES, type MealPlanId, type WorkoutType } from "@/lib/types";
 import { bulkPlanModeFor, useMemberships } from "@/lib/bulk-access";
 import { bulkWeightQueryKey, saveBulkWeight, useBulkWeights } from "@/lib/bulk-progress-query";
-import { goalWeightStatus, legacyDayWeights } from "@/lib/goal-metrics";
+import { goalWeightStatus as computeGoalStatus, legacyDayWeights } from "@/lib/goal-metrics";
 
 export const Route = createFileRoute("/_authenticated/bulk/")({
   head: () => ({
@@ -82,7 +82,7 @@ function TodayPage() {
   const status = useMemo(
     () =>
       data
-        ? goalWeightStatus({
+        ? computeGoalStatus({
             weights: isPublicGoal ? (goalWeights.data ?? []) : legacyDayWeights(data.days),
             today,
             goal: data.targets.goal,
