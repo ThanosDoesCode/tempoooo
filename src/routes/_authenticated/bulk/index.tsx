@@ -1,18 +1,16 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { addDays, format } from "date-fns";
+import { format } from "date-fns";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { AppShell, PageHeader } from "@/components/AppShell";
-import { Button } from "@/components/ui/button";
-import { Bar, Card, Chip, Field, Note, NumInput, SectionTitle, Stat } from "@/components/ui-kit";
-import { bulkStatus, dayCompletion, fmt, iso, signed, weekDays, weekStartOf } from "@/lib/calc";
+import { Bar, Card, Chip, Field, Note, NumInput, SectionTitle } from "@/components/ui-kit";
+import { dayCompletion, fmt, iso, signed } from "@/lib/calc";
 import { MEAL_PLANS, mealPlan, mealPlanSnapshot } from "@/lib/meals";
 import { useActions, useAppData, useBulkMeta } from "@/lib/store";
 import { RANGES, type MealPlanId, type WorkoutType } from "@/lib/types";
-import { useActiveTrainingPlan } from "@/lib/training-plans-query";
 import { bulkPlanModeFor, useMemberships } from "@/lib/bulk-access";
 import { bulkWeightQueryKey, saveBulkWeight, useBulkWeights } from "@/lib/bulk-progress-query";
-import { bulkWeek, weeklyWeightAverage } from "@/lib/bulk-progress";
+import { goalWeightStatus as computeGoalStatus, legacyDayWeights } from "@/lib/goal-metrics";
 
 export const Route = createFileRoute("/_authenticated/bulk/")({
   head: () => ({
@@ -20,7 +18,7 @@ export const Route = createFileRoute("/_authenticated/bulk/")({
       { title: "Tempo" },
       {
         name: "description",
-        content: "Log bodyweight, nutrition, activity and training in under a minute with Tempo.",
+        content: "Log bodyweight, recovery, activity and notes in under a minute with Tempo.",
       },
       { property: "og:title", content: "Tempo" },
       {
@@ -48,7 +46,6 @@ function TodayPage() {
   const targets = data?.targets;
   const planMode = bulkPlanModeFor(memberships.data, bulkId);
   const isPublicGoal = planMode === "public";
-  const activePlan = useActiveTrainingPlan(isPublicGoal ? bulkId : null);
   const goalWeights = useBulkWeights(isPublicGoal ? bulkId : null, "2000-01-01");
   const todayGoalWeight = goalWeights.data?.find((entry) => entry.logDate === today);
   const [goalWeightDraft, setGoalWeightDraft] = useState("");
@@ -82,26 +79,18 @@ function TodayPage() {
     }
   };
 
-  const weekCount = useMemo(() => {
-    if (!data) return 0;
-    return weekDays(weekStartOf(new Date())).filter((d) => data.days[d]?.gym).length;
-  }, [data]);
-
-  const status = useMemo(() => (data ? bulkStatus(data) : null), [data]);
-  const publicWeightSummary = useMemo(() => {
-    if (!isPublicGoal) return null;
-    const current = bulkWeek(today).start;
-    const previous = iso(addDays(new Date(`${current}T12:00:00`), -7));
-    const currentAverage = weeklyWeightAverage(goalWeights.data ?? [], current);
-    const previousAverage = weeklyWeightAverage(goalWeights.data ?? [], previous);
-    return {
-      average: currentAverage.averageKg,
-      change:
-        currentAverage.averageKg != null && previousAverage.averageKg != null
-          ? currentAverage.averageKg - previousAverage.averageKg
-          : null,
-    };
-  }, [goalWeights.data, isPublicGoal, today]);
+  const status = useMemo(
+    () =>
+      data
+        ? computeGoalStatus({
+            weights: isPublicGoal ? (goalWeights.data ?? []) : legacyDayWeights(data.days),
+            today,
+            goal: data.targets.goal,
+            targetWeeklyGainKg: data.targets.targetWeeklyGainKg ?? null,
+          })
+        : null,
+    [data, goalWeights.data, isPublicGoal, today],
+  );
 
   if (!data || !targets || !status || planMode === "none") {
     return (
@@ -161,6 +150,7 @@ function TodayPage() {
         : status.tone === "danger"
           ? "text-danger"
           : "text-muted-foreground";
+  const targetRate = targets.targetWeeklyGainKg ?? 0.25;
 
   return (
     <AppShell>
@@ -169,43 +159,34 @@ function TodayPage() {
         subtitle="Log the day in under a minute."
       />
 
-      <div className="card-surface fade-up mb-2 flex items-center justify-between gap-3 p-4">
-        <div>
-          <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-            Goal status
-          </p>
-          <p className={`mt-1 text-2xl font-semibold ${toneClass}`}>{status.label}</p>
+      <div className="card-surface fade-up mb-2 p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+              Goal status
+            </p>
+            <p className={`mt-1 text-2xl font-semibold ${toneClass}`}>{status.label}</p>
+          </div>
+          <div className="text-right">
+            <p className={`num text-2xl font-semibold ${toneClass}`}>
+              {status.changeKg == null ? "–" : signed(status.changeKg, 2)}
+            </p>
+            <p className="text-[11px] text-muted-foreground">
+              kg/week ·{" "}
+              {targets.goal === "cut"
+                ? `target -${targetRate}`
+                : targets.goal === "maintain"
+                  ? "target stable"
+                  : `target +${targetRate}`}
+            </p>
+          </div>
         </div>
-        <div className="text-right">
-          <p className={`num text-2xl font-semibold ${toneClass}`}>
-            {publicWeightSummary?.change == null
-              ? signed(status.rate, 2)
-              : signed(publicWeightSummary.change, 2)}
-          </p>
-          <p className="text-[11px] text-muted-foreground">
-            kg/week ·{" "}
-            {targets.goal === "cut"
-              ? `target −${targets.targetWeeklyGainKg ?? 0.25}`
-              : targets.goal === "maintain"
-                ? "target stable"
-                : "target +0.20 to +0.30"}
-          </p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-3 gap-2">
-        <Stat
-          label="7-day avg"
-          value={fmt(publicWeightSummary?.average ?? status.currentAvg, 1)}
-          hint="kg"
-        />
-        <Stat label="Cal target" value={targets.calories} hint="kcal/day" />
-        <Stat
-          label="Gym"
-          value={`${weekCount}/5`}
-          hint="this week"
-          tone={weekCount >= 5 ? "good" : "default"}
-        />
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          {status.detail}
+          {status.currentAverageKg != null
+            ? ` · weekly average ${fmt(status.currentAverageKg, 1)} kg`
+            : ""}
+        </p>
       </div>
 
       <div className="mt-4 space-y-4">
@@ -291,24 +272,7 @@ function TodayPage() {
           </div>
         </Card>
 
-        {isPublicGoal ? (
-          <Card>
-            <SectionTitle>Meals</SectionTitle>
-            <p className="text-sm text-muted-foreground">
-              Log today&apos;s meals from your own presets and see what remains against your Goal
-              targets.
-            </p>
-            <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-              <p>Calories · {targets.calories} kcal</p>
-              <p>Protein · {targets.protein} g</p>
-              <p>Carbs · {targets.carbs} g</p>
-              <p>Fat · {targets.fat} g</p>
-            </div>
-            <Button asChild className="mt-4 min-h-11 w-full">
-              <Link to="/bulk/meals">Open Meals Today</Link>
-            </Button>
-          </Card>
-        ) : (
+        {isPublicGoal ? null : (
           <>
             <Card>
               <SectionTitle>Today&apos;s meal plan</SectionTitle>
@@ -496,52 +460,7 @@ function TodayPage() {
           </Field>
         </Card>
 
-        {isPublicGoal ? (
-          <Card>
-            <SectionTitle>Training</SectionTitle>
-            {activePlan.isLoading ? (
-              <div className="h-20 animate-pulse rounded-xl bg-elevated" />
-            ) : activePlan.data ? (
-              <div>
-                <h3 className="font-semibold">{activePlan.data.name}</h3>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Choose today&apos;s workout from your active plan.
-                </p>
-                {activePlan.data.days.length ? (
-                  <div className="mt-3 flex flex-wrap gap-1.5">
-                    {activePlan.data.days.map((planDay) => (
-                      <span
-                        key={planDay.id}
-                        className="rounded-full bg-elevated px-2.5 py-1 text-xs text-foreground"
-                      >
-                        {planDay.name}
-                      </span>
-                    ))}
-                  </div>
-                ) : null}
-                <Link
-                  to="/bulk/training"
-                  className="mt-4 flex min-h-11 w-full items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground active:scale-[0.98]"
-                >
-                  Open training
-                </Link>
-              </div>
-            ) : (
-              <div>
-                <p className="text-sm leading-6 text-muted-foreground">
-                  You haven&apos;t chosen a training plan yet. Pick a plan to start tracking your
-                  workouts.
-                </p>
-                <Link
-                  to="/bulk/training"
-                  className="mt-4 flex min-h-11 w-full items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground active:scale-[0.98]"
-                >
-                  Choose training plan
-                </Link>
-              </div>
-            )}
-          </Card>
-        ) : (
+        {isPublicGoal ? null : (
           <Card>
             <SectionTitle
               right={
