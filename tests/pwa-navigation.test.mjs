@@ -318,8 +318,8 @@ test("each product area has four contextual destinations and legacy/public data 
   assert.deepEqual(labels("MEALS_NAV"), ["Today", "Presets", "History", "More"]);
   assert.deepEqual(labels("GOAL_NAV"), ["Today", "Progress", "Check-In", "Settings"]);
   assert.doesNotMatch(more, /to="\/bulk\/(?:progress|check-in)"/);
-  assert.match(more, /Weight trend/);
-  assert.match(more, /Weekly check-ins/);
+  assert.match(more, /NutritionTargetsEditor/);
+  assert.doesNotMatch(more, /Weekly check-ins|LineChart/);
   assert.doesNotMatch(more, /Progress history/);
   assert.doesNotMatch(more, /to: "\/bulk\/(?:history|training\/history)"/);
   for (const destination of ["/bulk/progress", "/bulk/check-in", "/bulk/more"])
