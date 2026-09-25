@@ -288,7 +288,9 @@ export function PublicBulkProgress({
                   ? `${summary.completedWorkouts} completed`
                   : `${summary.completedWorkouts} / ${summary.plannedWorkouts}`
             }
-            hint={summary.plannedWorkouts == null ? "No weekly target configured" : "workouts this week"}
+            hint={
+              summary.plannedWorkouts == null ? "No weekly target configured" : "workouts this week"
+            }
           />
           <Metric label={weeklyTargetLabel} value={weeklyTargetValue} hint="per week" />
         </div>

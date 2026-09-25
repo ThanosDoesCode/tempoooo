@@ -32,7 +32,8 @@ export function collectCompletedWorkouts(args: {
   for (const session of args.sessions ?? []) {
     if (session.status !== "completed" || !session.workoutDate) continue;
     const key = `session:${session.id}`;
-    if (!records.has(key)) records.set(key, { key, source: "session", workoutDate: session.workoutDate });
+    if (!records.has(key))
+      records.set(key, { key, source: "session", workoutDate: session.workoutDate });
   }
   const legacyDates = new Set<string>();
   for (const [date, workout] of Object.entries(args.legacyWorkouts ?? {})) {
@@ -101,13 +102,7 @@ function weekAverage(weights: readonly WeightLike[], weekStart: string) {
 }
 
 export type GoalStatusLabel =
-  | "CALIBRATING"
-  | "ON TRACK"
-  | "TOO SLOW"
-  | "TOO FAST"
-  | "ON PACE"
-  | "BELOW PACE"
-  | "ABOVE PACE";
+  "CALIBRATING" | "ON TRACK" | "TOO SLOW" | "TOO FAST" | "ON PACE" | "BELOW PACE" | "ABOVE PACE";
 
 export type GoalStatus = {
   label: GoalStatusLabel;
@@ -146,7 +141,12 @@ export function goalWeightStatus(args: {
   const classify = (change: number) => {
     const diff = change - expected;
     if (Math.abs(diff) <= tolerance) return "on" as const;
-    const tooFast = goal === "cut" ? diff < 0 : goal === "maintain" ? Math.abs(change) > tolerance && change > 0 : diff > 0;
+    const tooFast =
+      goal === "cut"
+        ? diff < 0
+        : goal === "maintain"
+          ? Math.abs(change) > tolerance && change > 0
+          : diff > 0;
     return tooFast ? ("fast" as const) : ("slow" as const);
   };
 
