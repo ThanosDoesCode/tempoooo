@@ -17,7 +17,8 @@ const FIELDS: Array<{ key: Field; label: string; unit: string; min: number; max:
  */
 export function NutritionTargetsEditor() {
   const data = useAppData();
-  const { canEdit } = useBulkMeta();
+  const { role } = useBulkMeta();
+  const canEdit = role !== "viewer";
   const { saveTargets } = useActions();
   const targets = data?.targets;
   const [draft, setDraft] = useState<Record<Field, string>>({
