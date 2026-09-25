@@ -105,10 +105,14 @@ test("Goal settings changes Bulk or Cut through the existing scoped reset", asyn
 
 test("Goal settings replaces duplicate progress navigation with real dashboard data", async () => {
   const settings = await read("src/routes/_authenticated/bulk/more.tsx");
-  assert.match(settings, /Weight trend/);
-  assert.match(settings, /Weekly check-ins/);
-  assert.match(settings, /useBulkWeights/);
-  assert.match(settings, /useGoalSettingsDashboard/);
+  const trends = await read("src/components/GoalTrendCards.tsx");
+  const progress = await read("src/components/PublicBulkProgress.tsx");
+  assert.doesNotMatch(settings, /LineChart|useGoalSettingsDashboard/);
+  assert.match(settings, /NutritionTargetsEditor/);
+  assert.match(trends, /30-day weight/);
+  assert.match(trends, /Weekly check-ins/);
+  assert.match(progress, /<ThirtyDayWeightCard/);
+  assert.match(progress, /<CheckInConsistencyCard/);
   assert.doesNotMatch(settings, /Progress history/);
   assert.doesNotMatch(settings, /to: "\/bulk\/(?:history|training\/history)"/);
 });
@@ -143,10 +147,7 @@ test("public Meals never falls back to legacy presets and future dates are read-
   assert.match(mealsRoute, /publicNutrition \? \([\s\S]*<BulkNutritionLog/);
   assert.match(goalToday, /const isPublicGoal = planMode === "public"/);
   assert.match(goalToday, /const plan = isPublicGoal \? undefined : mealPlan/);
-  assert.match(
-    goalToday,
-    /isPublicGoal \? \([\s\S]*Open Meals Today[\s\S]*\) : \([\s\S]*MEAL_PLANS\.map/,
-  );
+  assert.match(goalToday, /isPublicGoal \? null : \([\s\S]*MEAL_PLANS\.map/);
   assert.match(today, /const isFuture = selectedDate > today/);
   assert.match(today, /Future days are view-only\. Come back on this date to log meals\./);
   assert.match(today, /isFuture \? null : editor/);

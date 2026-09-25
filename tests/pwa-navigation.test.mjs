@@ -318,8 +318,8 @@ test("each product area has four contextual destinations and legacy/public data 
   assert.deepEqual(labels("MEALS_NAV"), ["Today", "Presets", "History", "More"]);
   assert.deepEqual(labels("GOAL_NAV"), ["Today", "Progress", "Check-In", "Settings"]);
   assert.doesNotMatch(more, /to="\/bulk\/(?:progress|check-in)"/);
-  assert.match(more, /Weight trend/);
-  assert.match(more, /Weekly check-ins/);
+  assert.match(more, /NutritionTargetsEditor/);
+  assert.doesNotMatch(more, /Weekly check-ins|LineChart/);
   assert.doesNotMatch(more, /Progress history/);
   assert.doesNotMatch(more, /to: "\/bulk\/(?:history|training\/history)"/);
   for (const destination of ["/bulk/progress", "/bulk/check-in", "/bulk/more"])
@@ -328,10 +328,8 @@ test("each product area has four contextual destinations and legacy/public data 
   assert.doesNotMatch(shell, /location\.reload/);
   assert.doesNotMatch(shell, /hash: "(?:plan|presets)"/);
 
-  assert.match(today, /You haven&apos;t chosen a training plan yet/);
-  assert.match(today, /Choose training plan/);
-  assert.match(today, /activePlan\.data\.days\.map/);
-  assert.match(today, /planDay\.name/);
+  // Today is logging only: the public Training card lives in the Training area.
+  assert.doesNotMatch(today, /Choose training plan|Open Meals Today/);
   assert.match(today, /isPublicGoal[\s\S]*WORKOUT_TYPES\.map/);
 
   assert.match(shell, /hasFitnessTools/);

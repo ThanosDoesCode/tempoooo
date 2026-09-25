@@ -19,7 +19,17 @@ import {
   sum,
   weekStartOf,
 } from "@/lib/calc";
-import { useActions, useAppData } from "@/lib/store";
+import { useActions, useAppData, useBulkMeta } from "@/lib/store";
+import { bulkPlanModeFor, useMemberships } from "@/lib/bulk-access";
+import { useCompletedSessionDates } from "@/lib/bulk-training-sessions";
+import { useActiveTrainingPlan } from "@/lib/training-plans-query";
+import {
+  collectCompletedWorkouts,
+  countWorkoutsInRange,
+  formatWorkoutProgress,
+  resolveWeeklyWorkoutTarget,
+  type CompletedWorkoutRecord,
+} from "@/lib/goal-metrics";
 import type { AppData, Workout } from "@/lib/types";
 
 export const Route = createFileRoute("/_authenticated/bulk/check-in")({
@@ -49,6 +59,20 @@ function CheckInPage() {
   const [share, setShare] = useState(false);
 
   const weekStart = useMemo(() => addDays(weekStartOf(new Date()), weekOffset * 7), [weekOffset]);
+  const { bulkId } = useBulkMeta();
+  const memberships = useMemberships();
+  const publicId = bulkPlanModeFor(memberships.data, bulkId) === "public" ? bulkId : null;
+  const sessions = useCompletedSessionDates(publicId, "2000-01-01", "2999-12-31");
+  const activePlan = useActiveTrainingPlan(publicId);
+  const workoutRecords = useMemo(
+    () =>
+      collectCompletedWorkouts({
+        sessions: sessions.data ?? [],
+        legacyWorkouts: data?.workouts ?? null,
+        legacyDays: data?.days ?? null,
+      }),
+    [sessions.data, data?.workouts, data?.days],
+  );
 
   if (!data) {
     return (
@@ -58,13 +82,20 @@ function CheckInPage() {
     );
   }
 
-  const s = buildWeekSummary(data, weekStart);
+  const s = {
+    ...buildWeekSummary(data, weekStart),
+    gymSessions: countWorkoutsInRange(workoutRecords, iso(weekStart), iso(addDays(weekStart, 6))),
+    gymTarget: resolveWeeklyWorkoutTarget({
+      activePlanDaysPerWeek: activePlan.data?.trainingDaysPerWeek ?? null,
+      targetDaysPerWeek: data.targets.trainingDaysPerWeek ?? null,
+    }),
+  };
 
   if (share) {
     return mode === "weekly" ? (
       <ShareWeek data={data} s={s} onClose={() => setShare(false)} />
     ) : (
-      <ShareMonth data={data} onClose={() => setShare(false)} />
+      <ShareMonth data={data} records={workoutRecords} onClose={() => setShare(false)} />
     );
   }
 
@@ -186,7 +217,7 @@ function CheckInPage() {
               <SectionTitle>Training</SectionTitle>
               <Rows
                 rows={[
-                  ["Gym sessions", `${s.gymSessions}/5`],
+                  ["Gym sessions", formatWorkoutProgress(s.gymSessions, s.gymTarget)],
                   ["Progressed", String(s.progressed)],
                   ["Stayed the same", String(s.same)],
                   ["Regressed", String(s.regressed)],
@@ -224,7 +255,7 @@ function CheckInPage() {
           </div>
         </>
       ) : (
-        <MonthlyPreview data={data} />
+        <MonthlyPreview data={data} records={workoutRecords} />
       )}
 
       <button
@@ -370,7 +401,7 @@ function ShareWeek({
   onClose,
 }: {
   data: AppData;
-  s: ReturnType<typeof buildWeekSummary>;
+  s: ReturnType<typeof buildWeekSummary> & { gymTarget: number | null };
   onClose: () => void;
 }) {
   const latest = sortedDays(data)
@@ -415,7 +446,7 @@ function ShareWeek({
       </div>
       <div className="py-2">
         <ShareHead>Training</ShareHead>
-        <ShareLine label="Sessions" value={`${s.gymSessions}/5`} />
+        <ShareLine label="Sessions" value={formatWorkoutProgress(s.gymSessions, s.gymTarget)} />
         <ShareLine label="Progressed" value={String(s.progressed)} />
         <ShareLine label="Unchanged" value={String(s.same)} />
         <ShareLine label="Regressed" value={String(s.regressed)} />
@@ -474,7 +505,7 @@ function ShareWeek({
   );
 }
 
-function monthlyStats(data: AppData, month: Date) {
+function monthlyStats(data: AppData, month: Date, records: CompletedWorkoutRecord[]) {
   const start = startOfMonth(month);
   const end = endOfMonth(month);
   const days = sortedDays(data).filter((d) => {
@@ -501,7 +532,7 @@ function monthlyStats(data: AppData, month: Date) {
     avgCalories: mean(days.map((d) => d.calories).filter((v): v is number => v != null)),
     avgProtein: mean(days.map((d) => d.protein).filter((v): v is number => v != null)),
     avgFat: mean(days.map((d) => d.fat).filter((v): v is number => v != null)),
-    gymSessions: days.filter((d) => d.gym).length,
+    gymSessions: countWorkoutsInRange(records, iso(start), iso(end)),
     progressed: prog.progressed,
     regressed: prog.regressed,
     running: sum(days.map((d) => d.runningKm ?? 0)),
@@ -555,8 +586,8 @@ function overallStatus(
   return { icon: "🟡", text: "Weight on target, strength stalling", tone: "warn" as const };
 }
 
-function MonthlyPreview({ data }: { data: AppData }) {
-  const m = monthlyStats(data, new Date());
+function MonthlyPreview({ data, records }: { data: AppData; records: CompletedWorkoutRecord[] }) {
+  const m = monthlyStats(data, new Date(), records);
   const publicGoal = !!data.targets.goal;
   return (
     <Card>
@@ -584,8 +615,16 @@ function MonthlyPreview({ data }: { data: AppData }) {
   );
 }
 
-function ShareMonth({ data, onClose }: { data: AppData; onClose: () => void }) {
-  const m = monthlyStats(data, new Date());
+function ShareMonth({
+  data,
+  records,
+  onClose,
+}: {
+  data: AppData;
+  records: CompletedWorkoutRecord[];
+  onClose: () => void;
+}) {
+  const m = monthlyStats(data, new Date(), records);
   const publicGoal = !!data.targets.goal;
   const decision = m.status.label === "ON TARGET" ? "Keep calories unchanged" : "Review calories";
 

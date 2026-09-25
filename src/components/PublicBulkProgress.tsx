@@ -28,10 +28,12 @@ import {
   useBulkProgressPhotos,
   useBulkWeights,
 } from "@/lib/bulk-progress-query";
-import { useCompletedBulkTrainingSessions } from "@/lib/bulk-training-sessions";
+import { useCompletedSessionDates } from "@/lib/bulk-training-sessions";
+import { collectCompletedWorkouts, resolveWeeklyWorkoutTarget } from "@/lib/goal-metrics";
+import { CheckInConsistencyCard, ThirtyDayWeightCard } from "@/components/GoalTrendCards";
 import { useActiveTrainingPlan } from "@/lib/training-plans-query";
 import type { Targets } from "@/lib/types";
-import { refreshBulk } from "@/lib/store";
+import { refreshBulk, useAppData } from "@/lib/store";
 import {
   recommendBulkCalories,
   type BulkWeeklyRecommendation,
@@ -53,12 +55,22 @@ export function PublicBulkProgress({
   const queryClient = useQueryClient();
   const weights = useBulkWeights(bulkProfileId, from);
   const nutrition = useBulkProgressNutrition(bulkProfileId, recommendationFrom, currentWeek.end);
-  const sessions = useCompletedBulkTrainingSessions(
-    bulkProfileId,
-    `${recommendationFrom}T00:00:00`,
-    `${localDay(addDays(parseISO(currentWeek.end), 1))}T00:00:00`,
-  );
+  const sessions = useCompletedSessionDates(bulkProfileId, recommendationFrom, currentWeek.end);
   const plan = useActiveTrainingPlan(bulkProfileId);
+  const appData = useAppData();
+  const completedWorkoutDates = useMemo(
+    () =>
+      collectCompletedWorkouts({
+        sessions: sessions.data ?? [],
+        legacyWorkouts: appData?.workouts ?? null,
+        legacyDays: appData?.days ?? null,
+      }).map((record) => record.workoutDate),
+    [sessions.data, appData?.workouts, appData?.days],
+  );
+  const plannedWorkouts = resolveWeeklyWorkoutTarget({
+    activePlanDaysPerWeek: plan.data?.trainingDaysPerWeek ?? null,
+    targetDaysPerWeek: targets.trainingDaysPerWeek ?? null,
+  });
   const photos = useBulkProgressPhotos(bulkProfileId);
   const [editingWeightId, setEditingWeightId] = useState<string | null>(null);
   const summary = useMemo(
@@ -67,10 +79,8 @@ export function PublicBulkProgress({
         selectedDay: today,
         weights: weights.data ?? [],
         nutritionDays: nutrition.data ?? [],
-        completedWorkoutDates: (sessions.data ?? []).map((session) =>
-          localDay(new Date(session.completedAt!)),
-        ),
-        plannedWorkouts: plan.data?.trainingDaysPerWeek ?? null,
+        completedWorkoutDates,
+        plannedWorkouts,
         targetWeeklyGainKg: targets.targetWeeklyGainKg ?? null,
         currentTargetCalories: targets.calories,
       }),
@@ -78,8 +88,8 @@ export function PublicBulkProgress({
       today,
       weights.data,
       nutrition.data,
-      sessions.data,
-      plan.data,
+      completedWorkoutDates,
+      plannedWorkouts,
       targets.targetWeeklyGainKg,
       targets.calories,
     ],
@@ -90,10 +100,8 @@ export function PublicBulkProgress({
         selectedDay: lastCompletedEnd,
         weights: weights.data ?? [],
         nutritionDays: nutrition.data ?? [],
-        completedWorkoutDates: (sessions.data ?? []).map((session) =>
-          localDay(new Date(session.completedAt!)),
-        ),
-        plannedWorkouts: plan.data?.trainingDaysPerWeek ?? null,
+        completedWorkoutDates,
+        plannedWorkouts,
         targetWeeklyGainKg: targets.targetWeeklyGainKg ?? null,
         currentTargetCalories: targets.calories,
       }),
@@ -101,8 +109,8 @@ export function PublicBulkProgress({
       lastCompletedEnd,
       weights.data,
       nutrition.data,
-      sessions.data,
-      plan.data,
+      completedWorkoutDates,
+      plannedWorkouts,
       targets.targetWeeklyGainKg,
       targets.calories,
     ],
@@ -113,10 +121,8 @@ export function PublicBulkProgress({
         selectedDay: previousCompletedEnd,
         weights: weights.data ?? [],
         nutritionDays: nutrition.data ?? [],
-        completedWorkoutDates: (sessions.data ?? []).map((session) =>
-          localDay(new Date(session.completedAt!)),
-        ),
-        plannedWorkouts: plan.data?.trainingDaysPerWeek ?? null,
+        completedWorkoutDates,
+        plannedWorkouts,
         targetWeeklyGainKg: targets.targetWeeklyGainKg ?? null,
         currentTargetCalories: targets.calories,
       }),
@@ -124,8 +130,8 @@ export function PublicBulkProgress({
       previousCompletedEnd,
       weights.data,
       nutrition.data,
-      sessions.data,
-      plan.data,
+      completedWorkoutDates,
+      plannedWorkouts,
       targets.targetWeeklyGainKg,
       targets.calories,
     ],
@@ -231,6 +237,8 @@ export function PublicBulkProgress({
         </div>
       </Card>
 
+      <ThirtyDayWeightCard profileId={bulkProfileId} />
+
       <WeightEditor
         profileId={bulkProfileId}
         today={today}
@@ -280,7 +288,9 @@ export function PublicBulkProgress({
                   ? `${summary.completedWorkouts} completed`
                   : `${summary.completedWorkouts} / ${summary.plannedWorkouts}`
             }
-            hint={summary.plannedWorkouts == null ? "No active plan target" : "workouts this week"}
+            hint={
+              summary.plannedWorkouts == null ? "No weekly target configured" : "workouts this week"
+            }
           />
           <Metric label={weeklyTargetLabel} value={weeklyTargetValue} hint="per week" />
         </div>
@@ -302,6 +312,8 @@ export function PublicBulkProgress({
           </p>
         ) : null}
       </Card>
+
+      <CheckInConsistencyCard profileId={bulkProfileId} />
 
       <WeeklyCheckIn
         recommendation={recommendation}
