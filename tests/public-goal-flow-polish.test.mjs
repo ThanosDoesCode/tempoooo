@@ -147,10 +147,7 @@ test("public Meals never falls back to legacy presets and future dates are read-
   assert.match(mealsRoute, /publicNutrition \? \([\s\S]*<BulkNutritionLog/);
   assert.match(goalToday, /const isPublicGoal = planMode === "public"/);
   assert.match(goalToday, /const plan = isPublicGoal \? undefined : mealPlan/);
-  assert.match(
-    goalToday,
-    /isPublicGoal \? \([\s\S]*Open Meals Today[\s\S]*\) : \([\s\S]*MEAL_PLANS\.map/,
-  );
+  assert.match(goalToday, /isPublicGoal \? null : \([\s\S]*MEAL_PLANS\.map/);
   assert.match(today, /const isFuture = selectedDate > today/);
   assert.match(today, /Future days are view-only\. Come back on this date to log meals\./);
   assert.match(today, /isFuture \? null : editor/);

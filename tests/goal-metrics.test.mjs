@@ -44,7 +44,10 @@ test("draft legacy workouts do not count", () => {
 
 test("weekly target comes from configuration, never a hardcoded default", () => {
   assert.equal(resolveWeeklyWorkoutTarget({ activePlanDaysPerWeek: 3, targetDaysPerWeek: 5 }), 3);
-  assert.equal(resolveWeeklyWorkoutTarget({ activePlanDaysPerWeek: null, targetDaysPerWeek: 4 }), 4);
+  assert.equal(
+    resolveWeeklyWorkoutTarget({ activePlanDaysPerWeek: null, targetDaysPerWeek: 4 }),
+    4,
+  );
   assert.equal(resolveWeeklyWorkoutTarget({}), null);
   assert.equal(formatWorkoutProgress(2, null), "2");
   assert.equal(formatWorkoutProgress(2, 3), "2/3");
@@ -53,7 +56,11 @@ test("weekly target comes from configuration, never a hardcoded default", () => 
 const w = (logDate, weightKg) => ({ logDate, weightKg });
 
 test("goal status calibrates without enough weigh-ins", () => {
-  const status = goalWeightStatus({ weights: [w("2026-09-22", 70)], today: "2026-09-24", goal: "gain" });
+  const status = goalWeightStatus({
+    weights: [w("2026-09-22", 70)],
+    today: "2026-09-24",
+    goal: "gain",
+  });
   assert.equal(status.label, "CALIBRATING");
   assert.equal(status.changeKg, null);
 });
@@ -79,11 +86,17 @@ test("estimate never reports TOO FAST; confirmed weeks can", () => {
 });
 
 test("Goal pages no longer hardcode a weekly workout target", async () => {
-  for (const file of ["src/routes/_authenticated/bulk/index.tsx", "src/routes/_authenticated/bulk/check-in.tsx"]) {
+  for (const file of [
+    "src/routes/_authenticated/bulk/index.tsx",
+    "src/routes/_authenticated/bulk/check-in.tsx",
+  ]) {
     const source = await readFile(new URL(`../${file}`, import.meta.url), "utf8");
     assert.doesNotMatch(source, /\}\/5`/);
   }
-  const settings = await readFile(new URL("../src/routes/_authenticated/bulk/more.tsx", import.meta.url), "utf8");
+  const settings = await readFile(
+    new URL("../src/routes/_authenticated/bulk/more.tsx", import.meta.url),
+    "utf8",
+  );
   assert.doesNotMatch(settings, /LineChart|buildCheckInConsistency/);
   assert.match(settings, /NutritionTargetsEditor/);
 });
