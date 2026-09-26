@@ -14,7 +14,15 @@ import { userFacingError } from "@/lib/network-errors";
 import {
   startBulkTrainingSession,
   useActiveBulkTrainingSession,
+  useCompletedSessionDates,
 } from "@/lib/bulk-training-sessions";
+import {
+  collectCompletedWorkouts,
+  countWorkoutsInRange,
+  formatWorkoutProgress,
+  mondayOf,
+  resolveWeeklyWorkoutTarget,
+} from "@/lib/goal-metrics";
 import { Button } from "@/components/ui/button";
 import { useBulkProgressionTargets } from "@/lib/bulk-progression-query";
 import { bulkPlanModeFor, useMemberships } from "@/lib/bulk-access";
@@ -52,6 +60,27 @@ function TrainingPage() {
   const [date, setDate] = useState(today);
   const [startingDayId, setStartingDayId] = useState<string | null>(null);
   const activeSession = useActiveBulkTrainingSession(usesPlanSetup ? bulkId : null);
+  const weekStart = mondayOf(today);
+  const weekEnd = iso(new Date(`${weekStart}T12:00:00`).getTime() + 6 * 86_400_000);
+  const weekSessions = useCompletedSessionDates(usesPlanSetup ? bulkId : null, weekStart, weekEnd);
+  const weekMetrics = useMemo(() => {
+    if (!weekSessions.data) return null;
+    const records = collectCompletedWorkouts({
+      sessions: weekSessions.data,
+      legacyWorkouts: data?.workouts ?? null,
+      legacyDays: data?.days ?? null,
+    });
+    const target = resolveWeeklyWorkoutTarget({
+      activePlanDaysPerWeek: activePlan.data?.trainingDaysPerWeek ?? null,
+      targetDaysPerWeek: data?.targets.trainingDaysPerWeek ?? null,
+    });
+    return {
+      progress: formatWorkoutProgress(countWorkoutsInRange(records, weekStart, weekEnd), target),
+      completedDayIds: new Set(
+        weekSessions.data.flatMap((session) => (session.planDayId ? [session.planDayId] : [])),
+      ),
+    };
+  }, [weekSessions.data, data, activePlan.data, weekStart, weekEnd]);
   const progressionInputs = useMemo(
     () =>
       activePlan.data?.days.flatMap((day) =>
@@ -146,6 +175,8 @@ function TrainingPage() {
             startingDayId={startingDayId}
             workoutActive={!!activeSession.data}
             progression={progression.data ?? {}}
+            completedDayIds={weekMetrics?.completedDayIds}
+            weekProgress={weekMetrics?.progress ?? null}
           />
         ) : usesPlanSetup && data ? (
           <Card className="py-8 text-center">

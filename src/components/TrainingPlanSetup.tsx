@@ -347,6 +347,8 @@ export function TrainingPlanOverview({
   startingDayId,
   workoutActive,
   progression,
+  completedDayIds,
+  weekProgress,
 }: {
   plan: UserTrainingPlan;
   onEdit?: () => void;
@@ -354,6 +356,10 @@ export function TrainingPlanOverview({
   startingDayId: string | null;
   workoutActive: boolean;
   progression: Record<string, BulkProgressionResult>;
+  /** Plan days with a completed session this local week (from persisted sessions). */
+  completedDayIds?: ReadonlySet<string>;
+  /** Preformatted "completed/target" for this week, from the shared Goal calculation. */
+  weekProgress?: string | null;
 }) {
   return (
     <div className="space-y-3">
@@ -368,6 +374,12 @@ export function TrainingPlanOverview({
         {plan.description ? (
           <p className="mt-3 text-sm text-muted-foreground">{plan.description}</p>
         ) : null}
+        {weekProgress ? (
+          <p className="mt-2 text-sm">
+            <span className="num font-semibold">{weekProgress}</span>{" "}
+            <span className="text-muted-foreground">workouts this week</span>
+          </p>
+        ) : null}
         {onEdit ? (
           <Button variant="outline" className="mt-4 min-h-11 w-full" onClick={onEdit}>
             Edit Plan
@@ -377,9 +389,16 @@ export function TrainingPlanOverview({
       {plan.days.length ? (
         plan.days.map((day) => (
           <Card key={day.id}>
-            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              Day {day.order}
-            </p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                Day {day.order}
+              </p>
+              {completedDayIds?.has(day.id) ? (
+                <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[11px] font-medium text-primary">
+                  Done this week
+                </span>
+              ) : null}
+            </div>
             <h3 className="mt-1 font-semibold">{day.name}</h3>
             <ul className="mt-3 space-y-2 text-sm">
               {day.exercises.map((exercise) => {
