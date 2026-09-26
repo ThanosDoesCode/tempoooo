@@ -268,6 +268,12 @@ function CheckInPage() {
             </Card>
           </div>
 
+          {publicId && weekOffset === 0 ? (
+            <div className="mt-4">
+              <PublicWeeklyReview bulkProfileId={publicId} targets={data.targets} />
+            </div>
+          ) : null}
+
           <div className="mt-4">
             <Card>
               <SectionTitle>Notes</SectionTitle>
