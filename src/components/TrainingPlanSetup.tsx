@@ -357,7 +357,7 @@ export function TrainingPlanOverview({
   workoutActive: boolean;
   progression: Record<string, BulkProgressionResult>;
   /** Plan days with a completed session this local week (from persisted sessions). */
-  completedDayIds?: ReadonlySet<string>;
+  completedDayIds?: ReadonlySet<string> | undefined;
   /** Preformatted "completed/target" for this week, from the shared Goal calculation. */
   weekProgress?: string | null;
 }) {
