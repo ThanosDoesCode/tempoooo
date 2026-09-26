@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { format, parseISO } from "date-fns";
+import { addDays, format, parseISO } from "date-fns";
 import { useMemo, useState } from "react";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { TrainingSession } from "@/components/TrainingSession";
@@ -61,7 +61,7 @@ function TrainingPage() {
   const [startingDayId, setStartingDayId] = useState<string | null>(null);
   const activeSession = useActiveBulkTrainingSession(usesPlanSetup ? bulkId : null);
   const weekStart = mondayOf(today);
-  const weekEnd = iso(new Date(`${weekStart}T12:00:00`).getTime() + 6 * 86_400_000);
+  const weekEnd = iso(addDays(parseISO(weekStart), 6));
   const weekSessions = useCompletedSessionDates(usesPlanSetup ? bulkId : null, weekStart, weekEnd);
   const weekMetrics = useMemo(() => {
     if (!weekSessions.data) return null;
