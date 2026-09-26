@@ -120,7 +120,8 @@ function CheckInPage() {
         data={data}
         records={workoutRecords}
         goalStatus={statusAt(endOfMonth(new Date()))}
-        onClose={() => setShare(false)} />
+        onClose={() => setShare(false)}
+      />
     );
   }
 

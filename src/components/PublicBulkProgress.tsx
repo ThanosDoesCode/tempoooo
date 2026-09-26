@@ -194,17 +194,8 @@ export function PublicBulkProgress({
   targets: Targets;
 }) {
   const queryClient = useQueryClient();
-  const {
-    today,
-    currentWeek,
-    weights,
-    nutrition,
-    sessions,
-    plan,
-    summary,
-    goal,
-    recommendation,
-  } = usePublicGoalWeeklyAnalysis(bulkProfileId, targets);
+  const { today, currentWeek, weights, nutrition, sessions, plan, summary, goal, recommendation } =
+    usePublicGoalWeeklyAnalysis(bulkProfileId, targets);
   const photos = useBulkProgressPhotos(bulkProfileId);
   const [editingWeightId, setEditingWeightId] = useState<string | null>(null);
   const physiqueGoal = targets.goal ?? "gain";
