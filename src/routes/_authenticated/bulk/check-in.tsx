@@ -15,7 +15,6 @@ import {
   progressionCounts,
   signed,
   sortedDays,
-  statusOf,
   sum,
   weekStartOf,
 } from "@/lib/calc";
@@ -281,7 +280,11 @@ function CheckInPage() {
           </div>
         </>
       ) : (
-        <MonthlyPreview data={data} records={workoutRecords} />
+        <MonthlyPreview
+          data={data}
+          records={workoutRecords}
+          goalStatus={statusAt(endOfMonth(new Date()))}
+        />
       )}
 
       <button
@@ -622,8 +625,16 @@ function overallStatus(
   return { icon: "🟡", text: "Weight on target, strength stalling", tone: "warn" as const };
 }
 
-function MonthlyPreview({ data, records }: { data: AppData; records: CompletedWorkoutRecord[] }) {
-  const m = monthlyStats(data, new Date(), records);
+function MonthlyPreview({
+  data,
+  records,
+  goalStatus,
+}: {
+  data: AppData;
+  records: CompletedWorkoutRecord[];
+  goalStatus: GoalStatus;
+}) {
+  const m = monthlyStats(data, new Date(), records, goalStatus);
   const publicGoal = !!data.targets.goal;
   return (
     <Card>
@@ -654,13 +665,15 @@ function MonthlyPreview({ data, records }: { data: AppData; records: CompletedWo
 function ShareMonth({
   data,
   records,
+  goalStatus,
   onClose,
 }: {
   data: AppData;
   records: CompletedWorkoutRecord[];
+  goalStatus: GoalStatus;
   onClose: () => void;
 }) {
-  const m = monthlyStats(data, new Date(), records);
+  const m = monthlyStats(data, new Date(), records, goalStatus);
   const publicGoal = !!data.targets.goal;
   const decision =
     m.status.basis === "insufficient"
