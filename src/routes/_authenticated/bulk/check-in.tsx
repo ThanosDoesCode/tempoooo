@@ -15,7 +15,6 @@ import {
   progressionCounts,
   signed,
   sortedDays,
-  statusOf,
   sum,
   weekStartOf,
 } from "@/lib/calc";
@@ -27,9 +26,14 @@ import {
   collectCompletedWorkouts,
   countWorkoutsInRange,
   formatWorkoutProgress,
+  goalWeightStatus,
+  legacyDayWeights,
   resolveWeeklyWorkoutTarget,
   type CompletedWorkoutRecord,
+  type GoalStatus,
 } from "@/lib/goal-metrics";
+import { useBulkWeights } from "@/lib/bulk-progress-query";
+import { PublicWeeklyReview } from "@/components/PublicBulkProgress";
 import type { AppData, Workout } from "@/lib/types";
 
 export const Route = createFileRoute("/_authenticated/bulk/check-in")({
@@ -64,6 +68,12 @@ function CheckInPage() {
   const publicId = bulkPlanModeFor(memberships.data, bulkId) === "public" ? bulkId : null;
   const sessions = useCompletedSessionDates(publicId, "2000-01-01", "2999-12-31");
   const activePlan = useActiveTrainingPlan(publicId);
+  const publicWeights = useBulkWeights(publicId, "2000-01-01");
+  // Same weight source and rules as Goal Today, so the badge never disagrees.
+  const statusWeights = useMemo(
+    () => (publicId ? (publicWeights.data ?? []) : data ? legacyDayWeights(data.days) : []),
+    [publicId, publicWeights.data, data],
+  );
   const workoutRecords = useMemo(
     () =>
       collectCompletedWorkouts({
@@ -82,8 +92,19 @@ function CheckInPage() {
     );
   }
 
+  const statusAt = (end: Date): GoalStatus => {
+    const todayIso = iso(new Date());
+    const endIso = iso(end);
+    return goalWeightStatus({
+      weights: statusWeights,
+      today: endIso < todayIso ? endIso : todayIso,
+      goal: data.targets.goal,
+      targetWeeklyGainKg: data.targets.targetWeeklyGainKg ?? null,
+    });
+  };
   const s = {
     ...buildWeekSummary(data, weekStart),
+    goalStatus: statusAt(addDays(weekStart, 6)),
     gymSessions: countWorkoutsInRange(workoutRecords, iso(weekStart), iso(addDays(weekStart, 6))),
     gymTarget: resolveWeeklyWorkoutTarget({
       activePlanDaysPerWeek: activePlan.data?.trainingDaysPerWeek ?? null,
@@ -95,11 +116,16 @@ function CheckInPage() {
     return mode === "weekly" ? (
       <ShareWeek data={data} s={s} onClose={() => setShare(false)} />
     ) : (
-      <ShareMonth data={data} records={workoutRecords} onClose={() => setShare(false)} />
+      <ShareMonth
+        data={data}
+        records={workoutRecords}
+        goalStatus={statusAt(endOfMonth(new Date()))}
+        onClose={() => setShare(false)}
+      />
     );
   }
 
-  const displayedStatus = data.targets.goal ? bulkStatus(data, addDays(s.weekStart, 6)) : s.status;
+  const displayedStatus = s.goalStatus;
   const tone = displayedStatus.tone === "muted" ? "muted" : displayedStatus.tone;
 
   return (
@@ -159,7 +185,7 @@ function CheckInPage() {
                         : "Gain muscle"}
                   </p>
                   <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                    Goal-aware calorie guidance is based on completed weeks and appears in Progress.
+                    {displayedStatus.detail}
                   </p>
                 </>
               ) : (
@@ -243,6 +269,12 @@ function CheckInPage() {
             </Card>
           </div>
 
+          {publicId && weekOffset === 0 ? (
+            <div className="mt-4">
+              <PublicWeeklyReview bulkProfileId={publicId} targets={data.targets} />
+            </div>
+          ) : null}
+
           <div className="mt-4">
             <Card>
               <SectionTitle>Notes</SectionTitle>
@@ -255,7 +287,11 @@ function CheckInPage() {
           </div>
         </>
       ) : (
-        <MonthlyPreview data={data} records={workoutRecords} />
+        <MonthlyPreview
+          data={data}
+          records={workoutRecords}
+          goalStatus={statusAt(endOfMonth(new Date()))}
+        />
       )}
 
       <button
@@ -401,13 +437,13 @@ function ShareWeek({
   onClose,
 }: {
   data: AppData;
-  s: ReturnType<typeof buildWeekSummary> & { gymTarget: number | null };
+  s: ReturnType<typeof buildWeekSummary> & { gymTarget: number | null; goalStatus: GoalStatus };
   onClose: () => void;
 }) {
   const latest = sortedDays(data)
     .filter((d) => d.weight != null)
     .pop();
-  const displayedStatus = data.targets.goal ? bulkStatus(data, addDays(s.weekStart, 6)) : s.status;
+  const displayedStatus = s.goalStatus;
   const targetChange = data.targets.targetWeeklyGainKg ?? 0.25;
   const onGoal = (change: number) =>
     data.targets.goal === "cut"
@@ -505,7 +541,12 @@ function ShareWeek({
   );
 }
 
-function monthlyStats(data: AppData, month: Date, records: CompletedWorkoutRecord[]) {
+function monthlyStats(
+  data: AppData,
+  month: Date,
+  records: CompletedWorkoutRecord[],
+  goalStatus: GoalStatus,
+) {
   const start = startOfMonth(month);
   const end = endOfMonth(month);
   const days = sortedDays(data).filter((d) => {
@@ -542,11 +583,9 @@ function monthlyStats(data: AppData, month: Date, records: CompletedWorkoutRecor
       const dt = parseISO(p.date);
       return dt >= start && dt <= end;
     }),
-    status: data.targets.goal
-      ? bulkStatus(data, end)
-      : statusOf(gained == null ? null : gained / weeks),
+    status: goalStatus,
     overall: data.targets.goal
-      ? goalOverall(bulkStatus(data, end))
+      ? goalOverall(goalStatus)
       : overallStatus(
           gained == null ? null : gained / weeks,
           waists.length > 1 ? (waists[waists.length - 1] as number) - (waists[0] as number) : null,
@@ -560,8 +599,15 @@ function monthlyStats(data: AppData, month: Date, records: CompletedWorkoutRecor
   };
 }
 
-function goalOverall(status: ReturnType<typeof bulkStatus>) {
-  const icon = status.tone === "good" ? "🟢" : status.tone === "danger" ? "🔴" : "🟡";
+function goalOverall(status: GoalStatus) {
+  const icon =
+    status.tone === "good"
+      ? "🟢"
+      : status.tone === "danger"
+        ? "🔴"
+        : status.tone === "muted"
+          ? "⚪"
+          : "🟡";
   return { icon, text: status.label, tone: status.tone };
 }
 
@@ -586,8 +632,16 @@ function overallStatus(
   return { icon: "🟡", text: "Weight on target, strength stalling", tone: "warn" as const };
 }
 
-function MonthlyPreview({ data, records }: { data: AppData; records: CompletedWorkoutRecord[] }) {
-  const m = monthlyStats(data, new Date(), records);
+function MonthlyPreview({
+  data,
+  records,
+  goalStatus,
+}: {
+  data: AppData;
+  records: CompletedWorkoutRecord[];
+  goalStatus: GoalStatus;
+}) {
+  const m = monthlyStats(data, new Date(), records, goalStatus);
   const publicGoal = !!data.targets.goal;
   return (
     <Card>
@@ -618,15 +672,22 @@ function MonthlyPreview({ data, records }: { data: AppData; records: CompletedWo
 function ShareMonth({
   data,
   records,
+  goalStatus,
   onClose,
 }: {
   data: AppData;
   records: CompletedWorkoutRecord[];
+  goalStatus: GoalStatus;
   onClose: () => void;
 }) {
-  const m = monthlyStats(data, new Date(), records);
+  const m = monthlyStats(data, new Date(), records, goalStatus);
   const publicGoal = !!data.targets.goal;
-  const decision = m.status.label === "ON TARGET" ? "Keep calories unchanged" : "Review calories";
+  const decision =
+    m.status.basis === "insufficient"
+      ? "Keep logging weigh-ins"
+      : m.status.label === "ON TRACK" || m.status.label === "ON PACE"
+        ? "Keep calories unchanged"
+        : "Review calories";
 
   return (
     <ShareWrap

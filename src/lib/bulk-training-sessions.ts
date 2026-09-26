@@ -243,7 +243,7 @@ export const completedSessionDatesQueryOptions = (
       if (!bulkProfileId) return [];
       const { data, error } = await supabase
         .from("bulk_training_sessions")
-        .select("id, status, workout_date")
+        .select("id, status, workout_date, source_plan_day_id")
         .eq("bulk_profile_id", bulkProfileId)
         .eq("status", "completed")
         .gte("workout_date", fromDate)
@@ -253,6 +253,7 @@ export const completedSessionDatesQueryOptions = (
         id: row.id,
         status: row.status,
         workoutDate: row.workout_date,
+        planDayId: (row as { source_plan_day_id?: string | null }).source_plan_day_id ?? null,
       }));
     },
     staleTime: 30_000,

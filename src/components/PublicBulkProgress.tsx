@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Camera, Pencil, Trash2 } from "lucide-react";
 import { Card, DataError, PendingLabel, SectionTitle } from "@/components/ui-kit";
 import { Button } from "@/components/ui/button";
+import { Link } from "@tanstack/react-router";
 import { optimizeBulkPhoto } from "@/lib/challenge-evidence";
 import { userFacingError } from "@/lib/network-errors";
 import {
@@ -39,20 +40,14 @@ import {
   type BulkWeeklyRecommendation,
 } from "@/lib/bulk-weekly-recommendation";
 
-export function PublicBulkProgress({
-  bulkProfileId,
-  targets,
-}: {
-  bulkProfileId: string;
-  targets: Targets;
-}) {
+/** Shared weekly analysis so Progress (summary) and Check-In (full review) never diverge. */
+function usePublicGoalWeeklyAnalysis(bulkProfileId: string, targets: Targets) {
   const today = localDay(new Date());
   const currentWeek = bulkWeek(today);
   const from = localDay(addDays(parseISO(currentWeek.start), -84));
   const lastCompletedEnd = localDay(addDays(parseISO(currentWeek.start), -1));
   const previousCompletedEnd = localDay(addDays(parseISO(currentWeek.start), -8));
   const recommendationFrom = localDay(addDays(parseISO(currentWeek.start), -21));
-  const queryClient = useQueryClient();
   const weights = useBulkWeights(bulkProfileId, from);
   const nutrition = useBulkProgressNutrition(bulkProfileId, recommendationFrom, currentWeek.end);
   const sessions = useCompletedSessionDates(bulkProfileId, recommendationFrom, currentWeek.end);
@@ -71,8 +66,6 @@ export function PublicBulkProgress({
     activePlanDaysPerWeek: plan.data?.trainingDaysPerWeek ?? null,
     targetDaysPerWeek: targets.trainingDaysPerWeek ?? null,
   });
-  const photos = useBulkProgressPhotos(bulkProfileId);
-  const [editingWeightId, setEditingWeightId] = useState<string | null>(null);
   const summary = useMemo(
     () =>
       weeklyProgressSummary({
@@ -160,6 +153,51 @@ export function PublicBulkProgress({
       }),
     [completedSummary, priorSummary, goal.currentWeightKg, targets.goal, targets.targetWeight],
   );
+  return {
+    today,
+    currentWeek,
+    weights,
+    nutrition,
+    sessions,
+    plan,
+    summary,
+    completedSummary,
+    goal,
+    recommendation,
+  };
+}
+
+/** Full weekly recommendation workflow. Rendered on Check-In, the review destination. */
+export function PublicWeeklyReview({
+  bulkProfileId,
+  targets,
+}: {
+  bulkProfileId: string;
+  targets: Targets;
+}) {
+  const { recommendation, completedSummary } = usePublicGoalWeeklyAnalysis(bulkProfileId, targets);
+  return (
+    <WeeklyCheckIn
+      recommendation={recommendation}
+      summary={completedSummary}
+      profileId={bulkProfileId}
+      goal={targets.goal ?? "gain"}
+    />
+  );
+}
+
+export function PublicBulkProgress({
+  bulkProfileId,
+  targets,
+}: {
+  bulkProfileId: string;
+  targets: Targets;
+}) {
+  const queryClient = useQueryClient();
+  const { today, currentWeek, weights, nutrition, sessions, plan, summary, goal, recommendation } =
+    usePublicGoalWeeklyAnalysis(bulkProfileId, targets);
+  const photos = useBulkProgressPhotos(bulkProfileId);
+  const [editingWeightId, setEditingWeightId] = useState<string | null>(null);
   const physiqueGoal = targets.goal ?? "gain";
   const weeklyTargetLabel =
     physiqueGoal === "cut"
@@ -315,12 +353,16 @@ export function PublicBulkProgress({
 
       <CheckInConsistencyCard profileId={bulkProfileId} />
 
-      <WeeklyCheckIn
-        recommendation={recommendation}
-        summary={completedSummary}
-        profileId={bulkProfileId}
-        goal={physiqueGoal}
-      />
+      <Card>
+        <SectionTitle>Weekly recommendation</SectionTitle>
+        <p className="text-sm font-semibold">{recommendation.headline}</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          The full review, calorie changes, coaching notes and ChatGPT export are on Check-In.
+        </p>
+        <Button asChild variant="outline" className="mt-3 min-h-11 w-full">
+          <Link to="/bulk/check-in">Open Check-In</Link>
+        </Button>
+      </Card>
 
       <Card>
         <SectionTitle>Nutrition this week</SectionTitle>
