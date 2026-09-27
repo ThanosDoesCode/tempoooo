@@ -8,6 +8,7 @@ import { bulkPlanModeFor, deactivatePublicGoal, useMemberships } from "@/lib/bul
 import { userFacingError } from "@/lib/network-errors";
 import { clearBulk, useAppData, useBulkMeta } from "@/lib/store";
 import { NutritionTargetsEditor } from "@/components/NutritionTargetsEditor";
+import { WeeklyWorkoutGoalEditor } from "@/components/WeeklyWorkoutGoalEditor";
 
 export const Route = createFileRoute("/_authenticated/bulk/more")({
   head: () => ({ meta: [{ title: "Tempo" }] }),
@@ -106,6 +107,7 @@ function BulkMorePage() {
             )}
           </Card>
         ) : null}
+        {planMode === "public" ? <WeeklyWorkoutGoalEditor /> : null}
         {planMode === "public" || planMode === "legacy" ? <NutritionTargetsEditor /> : null}
       </div>
     </AppShell>

@@ -34,6 +34,7 @@ export function TrainingSummary({ data, on = new Date() }: { data: AppData; on?:
     };
   }, [sessions.data, data.workouts, data.days, on, today]);
   const target = resolveWeeklyWorkoutTarget({
+    weeklyWorkoutGoal: data.targets.weeklyWorkoutGoal ?? null,
     targetDaysPerWeek: data.targets.trainingDaysPerWeek ?? null,
   });
   return (

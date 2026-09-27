@@ -254,3 +254,25 @@ test("training UI supports generated, preset and empty custom paths without repl
   assert.match(editMigration, /Exercise does not support unilateral mode/);
   assert.doesNotMatch(editMigration, /bulk_workouts|bulk_training_plan_templates\s+SET/);
 });
+
+test("training setup exposes all three creation options in fresh and replacing flows", async () => {
+  const [component, query] = await Promise.all([
+    read("src/components/TrainingPlanSetup.tsx"),
+    read("src/lib/training-plans-query.ts"),
+  ]);
+  // The three options are surfaced explicitly, not derived silently from onboarding.
+  assert.match(component, /Generate my program/);
+  assert.match(component, /Choose a Tempo program/);
+  assert.match(component, /Create my own program/);
+  assert.match(component, /role="radiogroup"/);
+  // Custom creation is reachable regardless of the stored onboarding preference (mode state,
+  // not `preference`, drives which body renders) and works when replacing an active plan.
+  assert.match(component, /mode === "custom"/);
+  assert.match(component, /switchToEmptyTrainingPlan|switchToEmptyTrainingPlan\(name\)/);
+  assert.match(component, /createEmptyTrainingPlan/);
+  // Replacing does not auto-swap: the current plan stays active until the user creates the new one.
+  assert.match(component, /current plan stays active until you create this one/i);
+  // Both empty-plan RPCs exist for the fresh and replacing paths.
+  assert.match(query, /create_empty_bulk_training_plan/);
+  assert.match(query, /switch_to_empty_bulk_training_plan/);
+});

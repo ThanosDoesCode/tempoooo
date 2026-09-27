@@ -107,6 +107,7 @@ function CheckInPage() {
     goalStatus: statusAt(addDays(weekStart, 6)),
     gymSessions: countWorkoutsInRange(workoutRecords, iso(weekStart), iso(addDays(weekStart, 6))),
     gymTarget: resolveWeeklyWorkoutTarget({
+      weeklyWorkoutGoal: data.targets.weeklyWorkoutGoal ?? null,
       activePlanDaysPerWeek: activePlan.data?.trainingDaysPerWeek ?? null,
       targetDaysPerWeek: data.targets.trainingDaysPerWeek ?? null,
     }),

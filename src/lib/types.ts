@@ -41,6 +41,12 @@ export type DailyLog = {
   note?: string | undefined;
   gym?: boolean | undefined;
   workoutType?: WorkoutType | undefined;
+  /**
+   * Explicit rest day for this date. Satisfies the daily-completion workout requirement
+   * without a workout. Never creates a training session, counts toward the weekly workout
+   * total, marks a plan day complete, or affects PRs/statistics.
+   */
+  restDay?: boolean | undefined;
 };
 
 export type ExerciseEntry = {
@@ -90,6 +96,8 @@ export type Targets = {
   goal?: PhysiqueGoal | undefined;
   experienceLevel?: ExperienceLevel | undefined;
   trainingDaysPerWeek?: number | undefined;
+  /** Weekly completed-workout goal, independent of the plan's structured-day count. */
+  weeklyWorkoutGoal?: number | undefined;
   availableEquipment?: Equipment[] | undefined;
   trainingSetupPreference?: TrainingSetupPreference | undefined;
   onboardingCompletedAt?: string | undefined;
@@ -199,5 +207,6 @@ export const DEFAULT_DATA: AppData = {
     water: 3,
     startWeight: 61.5,
     targetWeight: 75,
+    weeklyWorkoutGoal: 5,
   },
 };

@@ -57,18 +57,79 @@ export function countWorkoutsInRange(
   return records.filter((record) => record.workoutDate >= from && record.workoutDate <= to).length;
 }
 
-/** Configured weekly workout target. Returns null when none is configured; never guesses. */
+/**
+ * Configured weekly workout goal. This is how many workouts the user aims to complete
+ * per week and is deliberately independent of the plan's structured-day count: a 3-day
+ * plan can carry a 5-workout weekly goal. The explicit `weeklyWorkoutGoal` wins; the
+ * plan/onboarding day counts are only legacy fallbacks. Returns null when nothing is
+ * configured; never guesses.
+ */
 export function resolveWeeklyWorkoutTarget(args: {
+  weeklyWorkoutGoal?: number | null;
   activePlanDaysPerWeek?: number | null;
   targetDaysPerWeek?: number | null;
 }): number | null {
   const valid = (value: number | null | undefined) =>
     typeof value === "number" && Number.isInteger(value) && value > 0 ? value : null;
-  return valid(args.activePlanDaysPerWeek) ?? valid(args.targetDaysPerWeek);
+  return (
+    valid(args.weeklyWorkoutGoal) ??
+    valid(args.targetDaysPerWeek) ??
+    valid(args.activePlanDaysPerWeek)
+  );
 }
 
 export function formatWorkoutProgress(completed: number, target: number | null) {
   return target == null ? `${completed}` : `${completed}/${target}`;
+}
+
+// ---------- Cross-module daily completion (public Goal) ----------
+
+export type DayCompletionKey = "bodyweight" | "sleep" | "activity" | "meal" | "workout";
+
+export type DayCompletionRequirement = {
+  key: DayCompletionKey;
+  label: string;
+  done: boolean;
+};
+
+/**
+ * Cross-module daily completion for the public Goal, from authoritative persisted records.
+ * Five equally weighted (20% each) requirements:
+ *  1. bodyweight recorded (bulk_weights),
+ *  2. sleep duration AND quality recorded (bulk_days),
+ *  3. daily activity actually entered — steps recorded, or cycling/running distance > 0
+ *     (a bare zero never auto-counts),
+ *  4. at least one meal logged (bulk_nutrition_entries),
+ *  5. a workout completed (bulk_training_sessions) OR an explicit rest day (bulk_days).
+ *
+ * A genuinely completed workout takes precedence over an explicit rest day so the two can
+ * never present a contradictory state.
+ */
+export function dayCompletionRequirements(inputs: {
+  bodyweightRecorded: boolean;
+  sleepRecorded: boolean;
+  activityRecorded: boolean;
+  mealLogged: boolean;
+  workoutCompleted: boolean;
+  restDay: boolean;
+}): DayCompletionRequirement[] {
+  const workoutLabel = inputs.workoutCompleted
+    ? "Workout completed"
+    : inputs.restDay
+      ? "Rest day"
+      : "Workout or rest day";
+  return [
+    { key: "bodyweight", label: "Bodyweight logged", done: inputs.bodyweightRecorded },
+    { key: "sleep", label: "Sleep hours and quality", done: inputs.sleepRecorded },
+    { key: "activity", label: "Daily activity", done: inputs.activityRecorded },
+    { key: "meal", label: "Meal logged", done: inputs.mealLogged },
+    { key: "workout", label: workoutLabel, done: inputs.workoutCompleted || inputs.restDay },
+  ];
+}
+
+export function dayCompletionPercent(requirements: readonly DayCompletionRequirement[]) {
+  if (!requirements.length) return 0;
+  return Math.round((requirements.filter((r) => r.done).length / requirements.length) * 100);
 }
 
 // ---------- Weight trend and Goal status ----------

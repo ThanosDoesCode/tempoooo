@@ -10,7 +10,15 @@ import { useActions, useAppData, useBulkMeta } from "@/lib/store";
 import { RANGES, type MealPlanId, type WorkoutType } from "@/lib/types";
 import { bulkPlanModeFor, useMemberships } from "@/lib/bulk-access";
 import { bulkWeightQueryKey, saveBulkWeight, useBulkWeights } from "@/lib/bulk-progress-query";
-import { goalWeightStatus as computeGoalStatus, legacyDayWeights } from "@/lib/goal-metrics";
+import {
+  dayCompletionPercent,
+  dayCompletionRequirements,
+  goalWeightStatus as computeGoalStatus,
+  legacyDayWeights,
+} from "@/lib/goal-metrics";
+import { useBulkNutritionDay } from "@/lib/bulk-nutrition-query";
+import { useCompletedSessionDates } from "@/lib/bulk-training-sessions";
+import { Check, X } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/bulk/")({
   head: () => ({
@@ -48,6 +56,12 @@ function TodayPage() {
   const isPublicGoal = planMode === "public";
   const goalWeights = useBulkWeights(isPublicGoal ? bulkId : null, "2000-01-01");
   const todayGoalWeight = goalWeights.data?.find((entry) => entry.logDate === today);
+  const nutritionToday = useBulkNutritionDay(isPublicGoal ? bulkId : null, today);
+  const completedSessionsToday = useCompletedSessionDates(
+    isPublicGoal ? bulkId : null,
+    today,
+    today,
+  );
   const [goalWeightDraft, setGoalWeightDraft] = useState("");
   const [goalWeightStatus, setGoalWeightStatus] = useState<"idle" | "saving" | "saved" | "error">(
     "idle",
@@ -141,7 +155,18 @@ function TodayPage() {
   };
 
   const plan = isPublicGoal ? undefined : mealPlan(day?.mealPlan);
-  const completion = dayCompletion({ ...day, date: today }, !!data.workouts[today]);
+  const workoutCompletedToday = (completedSessionsToday.data?.length ?? 0) > 0;
+  const requirements = dayCompletionRequirements({
+    bodyweightRecorded: !!todayGoalWeight,
+    sleepRecorded: day?.sleepHours != null && day?.sleepQuality != null,
+    activityRecorded: day?.steps != null || (day?.cyclingKm ?? 0) > 0 || (day?.runningKm ?? 0) > 0,
+    mealLogged: (nutritionToday.data?.entries.length ?? 0) > 0,
+    workoutCompleted: workoutCompletedToday,
+    restDay: day?.restDay === true,
+  });
+  const completion = isPublicGoal
+    ? dayCompletionPercent(requirements)
+    : dayCompletion({ ...day, date: today }, !!data.workouts[today]);
   const toneClass =
     status.tone === "good"
       ? "text-good"
@@ -496,6 +521,52 @@ function TodayPage() {
               style={{ width: `${completion}%` }}
             />
           </div>
+          {isPublicGoal ? (
+            <ul className="mb-3 space-y-1.5">
+              {requirements.map((req) => (
+                <li key={req.key} className="flex items-center gap-2 text-sm">
+                  <span
+                    className={`grid h-5 w-5 shrink-0 place-items-center rounded-full ${req.done ? "bg-primary/15 text-primary" : "bg-secondary text-muted-foreground"}`}
+                  >
+                    {req.done ? (
+                      <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                    ) : (
+                      <X className="h-3.5 w-3.5" aria-hidden="true" />
+                    )}
+                  </span>
+                  <span className={req.done ? "text-foreground" : "text-muted-foreground"}>
+                    {req.label}
+                  </span>
+                  <span className="sr-only">{req.done ? "complete" : "not complete"}</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {isPublicGoal ? (
+            workoutCompletedToday ? (
+              <p className="mb-3 rounded-xl bg-secondary px-3 py-2 text-xs text-muted-foreground">
+                A completed workout counts for today. Rest day is unavailable.
+              </p>
+            ) : (
+              <button
+                type="button"
+                aria-pressed={day?.restDay === true}
+                onClick={() => set({ restDay: !(day?.restDay === true) })}
+                className={`mb-3 flex min-h-11 w-full items-center justify-between rounded-xl border px-3 text-sm font-medium transition-colors ${
+                  day?.restDay === true
+                    ? "border-primary/40 bg-primary/10 text-primary"
+                    : "border-input text-foreground active:bg-elevated"
+                }`}
+              >
+                <span>Rest day</span>
+                <span className="text-xs text-muted-foreground">
+                  {day?.restDay === true
+                    ? "Counts as done · tap to undo"
+                    : "No workout planned today?"}
+                </span>
+              </button>
+            )
+          ) : null}
           <button
             onClick={() => void saveNow()}
             disabled={sync === "saving"}

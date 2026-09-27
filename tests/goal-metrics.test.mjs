@@ -4,6 +4,8 @@ import { readFile } from "node:fs/promises";
 import {
   collectCompletedWorkouts,
   countWorkoutsInRange,
+  dayCompletionPercent,
+  dayCompletionRequirements,
   formatWorkoutProgress,
   goalWeightStatus,
   resolveWeeklyWorkoutTarget,
@@ -42,15 +44,81 @@ test("draft legacy workouts do not count", () => {
   assert.equal(records.length, 0);
 });
 
-test("weekly target comes from configuration, never a hardcoded default", () => {
-  assert.equal(resolveWeeklyWorkoutTarget({ activePlanDaysPerWeek: 3, targetDaysPerWeek: 5 }), 3);
+test("weekly goal is independent of plan structure and never a hardcoded default", () => {
+  // The explicit weekly goal wins over both the plan's day count and the onboarding preference:
+  // a 3-day plan with a 5-workout weekly goal must report 5, not 3.
+  assert.equal(
+    resolveWeeklyWorkoutTarget({
+      weeklyWorkoutGoal: 5,
+      activePlanDaysPerWeek: 3,
+      targetDaysPerWeek: 3,
+    }),
+    5,
+  );
+  // Without an explicit goal, the plan's day count no longer wins over the onboarding target.
+  assert.equal(resolveWeeklyWorkoutTarget({ activePlanDaysPerWeek: 3, targetDaysPerWeek: 5 }), 5);
   assert.equal(
     resolveWeeklyWorkoutTarget({ activePlanDaysPerWeek: null, targetDaysPerWeek: 4 }),
     4,
   );
+  // Plan day count remains the last-resort fallback when nothing else is configured.
+  assert.equal(resolveWeeklyWorkoutTarget({ activePlanDaysPerWeek: 3 }), 3);
   assert.equal(resolveWeeklyWorkoutTarget({}), null);
+  assert.equal(resolveWeeklyWorkoutTarget({ weeklyWorkoutGoal: 0 }), null);
   assert.equal(formatWorkoutProgress(2, null), "2");
-  assert.equal(formatWorkoutProgress(2, 3), "2/3");
+  assert.equal(formatWorkoutProgress(4, 5), "4/5");
+});
+
+const allInputs = {
+  bodyweightRecorded: true,
+  sleepRecorded: true,
+  activityRecorded: true,
+  mealLogged: true,
+  workoutCompleted: true,
+  restDay: false,
+};
+
+test("five equally weighted requirements, 20% each", () => {
+  assert.equal(dayCompletionPercent(dayCompletionRequirements(allInputs)), 100);
+  assert.equal(
+    dayCompletionPercent(dayCompletionRequirements({ ...allInputs, workoutCompleted: false })),
+    80,
+  );
+  assert.equal(
+    dayCompletionPercent(
+      dayCompletionRequirements({
+        bodyweightRecorded: true,
+        sleepRecorded: false,
+        activityRecorded: false,
+        mealLogged: false,
+        workoutCompleted: false,
+        restDay: false,
+      }),
+    ),
+    20,
+  );
+});
+
+test("rest day satisfies the workout requirement without a workout", () => {
+  const reqs = dayCompletionRequirements({ ...allInputs, workoutCompleted: false, restDay: true });
+  const workout = reqs.find((r) => r.key === "workout");
+  assert.equal(workout.done, true);
+  assert.equal(workout.label, "Rest day");
+  assert.equal(dayCompletionPercent(reqs), 100);
+});
+
+test("a completed workout takes precedence over an explicit rest day", () => {
+  const reqs = dayCompletionRequirements({ ...allInputs, workoutCompleted: true, restDay: true });
+  const workout = reqs.find((r) => r.key === "workout");
+  assert.equal(workout.label, "Workout completed");
+  assert.equal(workout.done, true);
+});
+
+test("missing workout and no rest day leaves the requirement open", () => {
+  const reqs = dayCompletionRequirements({ ...allInputs, workoutCompleted: false, restDay: false });
+  const workout = reqs.find((r) => r.key === "workout");
+  assert.equal(workout.done, false);
+  assert.equal(workout.label, "Workout or rest day");
 });
 
 const w = (logDate, weightKg) => ({ logDate, weightKg });

@@ -130,6 +130,50 @@ function PlanCard({
   );
 }
 
+type CreationMode = "generated" | "tempo_preset" | "custom";
+
+const MODE_OPTIONS: { value: CreationMode; label: string }[] = [
+  { value: "generated", label: "Generate my program" },
+  { value: "tempo_preset", label: "Choose a Tempo program" },
+  { value: "custom", label: "Create my own program" },
+];
+
+function ModeSelector({
+  mode,
+  onChange,
+  disabled,
+}: {
+  mode: CreationMode;
+  onChange: (mode: CreationMode) => void;
+  disabled: boolean;
+}) {
+  return (
+    <Card className="space-y-2">
+      <SectionTitle>How do you want to set up training?</SectionTitle>
+      <div className="grid gap-2" role="radiogroup" aria-label="Training setup method">
+        {MODE_OPTIONS.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            role="radio"
+            aria-checked={mode === option.value}
+            disabled={disabled}
+            onClick={() => onChange(option.value)}
+            className={`flex min-h-11 items-center justify-between rounded-xl border px-3 text-left text-sm font-medium transition-colors disabled:opacity-60 ${
+              mode === option.value
+                ? "border-primary/50 bg-primary/10 text-primary"
+                : "border-input text-foreground active:bg-elevated"
+            }`}
+          >
+            {option.label}
+            {mode === option.value ? <Check className="h-4 w-4" aria-hidden="true" /> : null}
+          </button>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
 export function TrainingPlanSetup({
   targets,
   replacingPlan = false,
@@ -148,6 +192,9 @@ export function TrainingPlanSetup({
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [customName, setCustomName] = useState("My Training Plan");
   const preference = targets.trainingSetupPreference;
+  const [mode, setMode] = useState<CreationMode>(() =>
+    preference === "generated" ? "generated" : preference === "custom" ? "custom" : "tempo_preset",
+  );
   const { availableEquipment, experienceLevel, trainingDaysPerWeek } = targets;
   const preferences = useMemo(
     () =>
@@ -191,7 +238,7 @@ export function TrainingPlanSetup({
   async function choose(plan: TrainingPlanTemplate) {
     setPendingId(plan.id);
     try {
-      const planType = preference === "generated" ? "generated" : "tempo_preset";
+      const planType = mode === "generated" ? "generated" : "tempo_preset";
       if (replacingPlan) await switchTrainingPlan(plan.id, planType);
       else await instantiateTrainingPlan(plan.id, planType);
       await refreshPlan();
@@ -237,75 +284,102 @@ export function TrainingPlanSetup({
     }
   }
 
-  if (preference === "custom" && !replacingPlan) {
-    return (
-      <Card className="space-y-4">
-        <div>
-          <SectionTitle>Create my training plan</SectionTitle>
-          <h2 className="text-xl font-semibold">Start with an empty plan</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Name your plan now. You can add workout days and exercises in the plan editor next.
-          </p>
-        </div>
-        <label className="block text-xs font-medium text-muted-foreground">
-          Plan name
-          <input
-            value={customName}
-            maxLength={80}
-            onChange={(event) => setCustomName(event.target.value)}
-            className="mt-1 min-h-11 w-full rounded-xl border border-input bg-elevated px-3 text-base text-foreground outline-none focus:border-ring"
-          />
-        </label>
-        <Button className="min-h-11 w-full" onClick={createCustom} disabled={pendingId !== null}>
-          {pendingId === "custom" ? (
-            <PendingLabel>Creating your plan</PendingLabel>
-          ) : (
-            "Create My Training Plan"
-          )}
-        </Button>
+  const currentPlanCard =
+    replacingPlan && currentPlan ? (
+      <Card>
+        <SectionTitle>Current plan</SectionTitle>
+        <h2 className="text-lg font-semibold">{currentPlan.name}</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {currentPlan.days.length} workout day{currentPlan.days.length === 1 ? "" : "s"}
+        </p>
       </Card>
+    ) : null;
+  const modeSelector = (
+    <ModeSelector mode={mode} onChange={setMode} disabled={pendingId !== null} />
+  );
+
+  if (mode === "custom") {
+    return (
+      <div className="space-y-3">
+        {currentPlanCard}
+        {modeSelector}
+        <Card className="space-y-4">
+          <div>
+            <SectionTitle>Create my own program</SectionTitle>
+            <h2 className="text-xl font-semibold">Start with an empty plan</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Name your plan now. You can add workout days and exercises in the plan editor next.
+              {replacingPlan ? " Your current plan stays active until you create this one." : ""}
+            </p>
+          </div>
+          <label className="block text-xs font-medium text-muted-foreground">
+            Plan name
+            <input
+              value={customName}
+              maxLength={80}
+              onChange={(event) => setCustomName(event.target.value)}
+              className="mt-1 min-h-11 w-full rounded-xl border border-input bg-elevated px-3 text-base text-foreground outline-none focus:border-ring"
+            />
+          </label>
+          <Button className="min-h-11 w-full" onClick={createCustom} disabled={pendingId !== null}>
+            {pendingId === "custom" ? (
+              <PendingLabel>Creating your plan</PendingLabel>
+            ) : (
+              "Create My Training Plan"
+            )}
+          </Button>
+        </Card>
+      </div>
     );
   }
 
-  if (templates.isLoading) return <div className="h-48 animate-pulse rounded-2xl bg-card" />;
+  if (templates.isLoading)
+    return (
+      <div className="space-y-3">
+        {currentPlanCard}
+        {modeSelector}
+        <div className="h-48 animate-pulse rounded-2xl bg-card" />
+      </div>
+    );
   if (templates.error)
     return (
-      <DataError
-        message={userFacingError(templates.error, "load training plans")}
-        onRetry={() => void templates.refetch()}
-      />
+      <div className="space-y-3">
+        {currentPlanCard}
+        {modeSelector}
+        <DataError
+          message={userFacingError(templates.error, "load training plans")}
+          onRetry={() => void templates.refetch()}
+        />
+      </div>
     );
   if (!templates.data?.length)
     return (
-      <DataError
-        message="No training plans are available right now."
-        onRetry={() => void templates.refetch()}
-      />
+      <div className="space-y-3">
+        {currentPlanCard}
+        {modeSelector}
+        <DataError
+          message="No training plans are available right now."
+          onRetry={() => void templates.refetch()}
+        />
+      </div>
     );
 
-  const showRecommendationOnly = preference === "generated" && recommendation && !showOthers;
+  const showRecommendationOnly = mode === "generated" && recommendation && !showOthers;
   const visible = showRecommendationOnly ? [recommendation] : ranked;
   return (
     <div className="space-y-3">
-      {replacingPlan && currentPlan ? (
-        <Card>
-          <SectionTitle>Current plan</SectionTitle>
-          <h2 className="text-lg font-semibold">{currentPlan.name}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {currentPlan.days.length} workout day{currentPlan.days.length === 1 ? "" : "s"}
-          </p>
-        </Card>
-      ) : null}
+      {currentPlanCard}
+      {modeSelector}
       <Card className="flex items-start gap-3">
         <span className="rounded-xl bg-primary/10 p-2 text-primary">
           <Dumbbell aria-hidden="true" />
         </span>
         <div>
           <SectionTitle>
-            {preference === "generated" && recommendation ? "Your recommended plan" : "Tempo plans"}
+            {mode === "generated" && recommendation ? "Your recommended plan" : "Tempo plans"}
           </SectionTitle>
           <p className="text-sm text-muted-foreground">
-            {preference === "generated" && recommendation
+            {mode === "generated" && recommendation
               ? "Based on your experience, weekly schedule and available equipment."
               : preferences
                 ? "Browse the closest matches first, then inspect every workout before choosing."
@@ -320,14 +394,14 @@ export function TrainingPlanSetup({
           preferences={preferences}
           current={currentPlan?.sourceTemplateId === plan.id}
           expanded={
-            expandedId === plan.id || (preference === "generated" && plan.id === recommendation?.id)
+            expandedId === plan.id || (mode === "generated" && plan.id === recommendation?.id)
           }
           onToggle={() => setExpandedId(expandedId === plan.id ? null : plan.id)}
           onUse={() => void choose(plan)}
           pending={pendingId === plan.id}
         />
       ))}
-      {preference === "generated" && recommendation ? (
+      {mode === "generated" && recommendation ? (
         <Button
           variant="outline"
           className="min-h-11 w-full"

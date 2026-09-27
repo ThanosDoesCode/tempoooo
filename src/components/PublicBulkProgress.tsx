@@ -63,6 +63,7 @@ function usePublicGoalWeeklyAnalysis(bulkProfileId: string, targets: Targets) {
     [sessions.data, appData?.workouts, appData?.days],
   );
   const plannedWorkouts = resolveWeeklyWorkoutTarget({
+    weeklyWorkoutGoal: targets.weeklyWorkoutGoal ?? null,
     activePlanDaysPerWeek: plan.data?.trainingDaysPerWeek ?? null,
     targetDaysPerWeek: targets.trainingDaysPerWeek ?? null,
   });
