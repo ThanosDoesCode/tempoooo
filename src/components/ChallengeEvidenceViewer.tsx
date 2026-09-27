@@ -168,6 +168,8 @@ export function ChallengeEvidenceViewer({ paths, expired }: { paths: string[]; e
                         key={url}
                         src={url}
                         alt={`Activity evidence screenshot ${index + 1}`}
+                        loading={index === 0 ? "eager" : "lazy"}
+                        decoding="async"
                         onError={() =>
                           setFailedUrls((current) => {
                             const next = new Set(current);

@@ -736,6 +736,8 @@ function ShareMonth({
                     key={`${p.id}-${i}`}
                     src={src as string}
                     alt="Monthly progress"
+                    loading="lazy"
+                    decoding="async"
                     className="h-24 w-20 rounded-lg object-cover"
                   />
                 )),

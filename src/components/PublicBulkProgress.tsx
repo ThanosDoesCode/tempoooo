@@ -872,6 +872,8 @@ function ProgressPhotos({
                 <img
                   src={photo.signedUrl}
                   alt={`${photo.viewType} progress from ${photo.logDate}`}
+                  loading="lazy"
+                  decoding="async"
                   className="aspect-[3/4] w-full object-cover"
                 />
               ) : (

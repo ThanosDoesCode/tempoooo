@@ -749,6 +749,8 @@ function PhotosSection({ data }: { data: AppData }) {
                     <img
                       src={p[slot]}
                       alt={`${slot} progress`}
+                      loading="lazy"
+                      decoding="async"
                       className="h-28 w-full object-cover"
                     />
                   ) : (
