@@ -1,5 +1,6 @@
 import { useCallback, useSyncExternalStore } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { inspectPrivateImage } from "@/lib/private-image-upload";
 import { createSaveQueue } from "./workout-save";
 import {
   DEFAULT_DATA,
@@ -397,17 +398,12 @@ export function useActions() {
   const setPhotoImage = useCallback(
     async (photoId: string, slot: "front" | "side" | "back", file: File) => {
       if (!state || !bulkId || !canWrite()) throw new Error("Bulk photo access denied");
-      const originalExtension = file.name.split(".").at(-1)?.toLowerCase();
-      const extension =
-        file.type === "image/webp"
-          ? "webp"
-          : file.type === "image/jpeg"
-            ? "jpg"
-            : originalExtension?.replace(/[^a-z0-9]/g, "").slice(0, 8) || "image";
+      const imageType = await inspectPrivateImage(file);
+      const extension = imageType.extension;
       const path = `${bulkId}/${photoId}/${slot}-${Date.now()}.${extension}`;
       const bucket = supabase.storage.from("bulk-progress-photos");
       const up = await bucket.upload(path, file, {
-        contentType: file.type || "application/octet-stream",
+        contentType: imageType.mimeType,
       });
       if (up.error) throw up.error;
       const updated = await supabase

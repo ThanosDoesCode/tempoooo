@@ -75,6 +75,12 @@ function fixture(distance, duration = "", type = "run", storageThrows = false) {
       if (name === "@/lib/numeric") return numeric;
       if (name === "@/lib/challenge-evidence")
         return { optimizeEvidenceImage: async (file) => file };
+      if (name === "@/lib/private-image-upload")
+        return {
+          PRIVATE_IMAGE_MAX_BYTES: 15 * 1024 * 1024,
+          inspectPrivateImage: async () => ({ mimeType: "image/jpeg", extension: "jpg" }),
+          isPrivateImageValidationError: () => false,
+        };
       if (name === "sonner") return { toast: { success: (message) => toasts.push(message) } };
       if (name === "@/lib/auth") return { useAuth: () => ({ user: { id: "test-user" } }) };
       if (name === "@/lib/challenge")

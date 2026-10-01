@@ -2,6 +2,7 @@ import { queryOptions, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { readRetryDelay, shouldRetryRead } from "./network-errors";
 import type { BulkNutritionProgressDay, BulkProgressPhoto, BulkWeightEntry } from "./bulk-progress";
+import { inspectPrivateImage, STANDARD_PRIVATE_IMAGE_MIME_TYPES } from "./private-image-upload";
 import { refreshActiveBulkTrainingBodyweight } from "./bulk-training-sessions";
 
 export const bulkWeightQueryKey = (profileId: string) =>
@@ -157,12 +158,12 @@ export async function uploadBulkProgressPhoto(
   },
 ) {
   const id = crypto.randomUUID();
-  const extension =
-    input.file.type === "image/webp" ? "webp" : input.file.type === "image/jpeg" ? "jpg" : "png";
+  const imageType = await inspectPrivateImage(input.file, STANDARD_PRIVATE_IMAGE_MIME_TYPES);
+  const extension = imageType.extension;
   const path = `${profileId}/public/${id}/photo.${extension}`;
   const bucket = supabase.storage.from("bulk-progress-photos");
   const uploaded = await bucket.upload(path, input.file, {
-    contentType: input.file.type,
+    contentType: imageType.mimeType,
     upsert: false,
   });
   if (uploaded.error) throw uploaded.error;

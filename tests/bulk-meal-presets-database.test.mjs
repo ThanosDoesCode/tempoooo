@@ -21,7 +21,12 @@ before(async () => {
       SELECT nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
     $$;
     CREATE FUNCTION auth.jwt() RETURNS jsonb LANGUAGE sql STABLE AS $$ SELECT '{}'::jsonb $$;
-    CREATE TABLE storage.buckets(id text PRIMARY KEY, public boolean NOT NULL DEFAULT false);
+    CREATE TABLE storage.buckets(
+      id text PRIMARY KEY,
+      public boolean NOT NULL DEFAULT false,
+      file_size_limit bigint,
+      allowed_mime_types text[]
+    );
     INSERT INTO storage.buckets(id, public) VALUES
       ('challenge-evidence', true),('bulk-progress-photos', true),('payment-evidence', true);
     CREATE TABLE storage.objects(id uuid PRIMARY KEY, bucket_id text, name text);

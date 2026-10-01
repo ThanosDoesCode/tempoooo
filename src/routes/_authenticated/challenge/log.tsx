@@ -12,6 +12,11 @@ import { userFacingError } from "@/lib/network-errors";
 import { safeStravaUrl } from "@/lib/safe-url";
 import { optimizeEvidenceImage } from "@/lib/challenge-evidence";
 import {
+  inspectPrivateImage,
+  isPrivateImageValidationError,
+  PRIVATE_IMAGE_MAX_BYTES,
+} from "@/lib/private-image-upload";
+import {
   activityMetrics,
   DEFAULT_TARGET_KM,
   formatPace,
@@ -20,7 +25,7 @@ import {
 } from "@/lib/challenge";
 
 const MAX_EVIDENCE_FILES = 4;
-const MAX_EVIDENCE_FILE_BYTES = 15 * 1024 * 1024;
+const MAX_EVIDENCE_FILE_BYTES = PRIVATE_IMAGE_MAX_BYTES;
 
 export const Route = createFileRoute("/_authenticated/challenge/log")({
   head: () => ({
@@ -173,14 +178,18 @@ function LogActivity() {
     setDistance(normalizeDecimal(distance));
     setDuration(normalizeDecimal(duration));
     setPending("uploading");
+    const paths: string[] = [];
     try {
-      const paths: string[] = [];
       for (const selectedFile of files) {
+        const selectedType = await inspectPrivateImage(selectedFile);
         const uploadFile = await optimizeEvidenceImage(selectedFile);
-        const ext = uploadFile.name.split(".").pop() ?? "jpg";
+        const optimizedType =
+          uploadFile === selectedFile ? selectedType : await inspectPrivateImage(uploadFile);
+        const ext = optimizedType.extension;
         const path = `${challenge.id}/${user.id}/${crypto.randomUUID()}.${ext}`;
         const up = await supabase.storage.from("challenge-evidence").upload(path, uploadFile, {
-          contentType: uploadFile.type || "application/octet-stream",
+          contentType: optimizedType.mimeType,
+          upsert: false,
         });
         if (up.error) throw up.error;
         paths.push(path);
@@ -211,7 +220,21 @@ function LogActivity() {
       toast.success("Activity saved.");
       void navigate({ to: "/challenge" });
     } catch (e) {
-      setRequestError(userFacingError(e, "save the activity", { inputPreserved: true }));
+      if (paths.length) {
+        try {
+          await supabase.storage.from("challenge-evidence").remove(paths);
+        } catch {
+          // The database write did not complete. Best-effort cleanup prevents
+          // partially uploaded evidence without hiding the original failure.
+        }
+      }
+      if (isPrivateImageValidationError(e)) {
+        setValidationError(
+          "Choose valid JPG, PNG, WebP, GIF, HEIC or HEIF images up to 15 MB each.",
+        );
+      } else {
+        setRequestError(userFacingError(e, "save the activity", { inputPreserved: true }));
+      }
     } finally {
       setPending(null);
     }

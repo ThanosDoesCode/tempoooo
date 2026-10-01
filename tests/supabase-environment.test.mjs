@@ -92,3 +92,10 @@ test("service-role credentials remain server-only and never use a VITE prefix", 
     /process\.env\["VITE_SUPABASE_URL"\] \|\| process\.env\["SUPABASE_URL"\]/,
   );
 });
+
+test("privileged server functions validate the current auth user, not only local JWT claims", async () => {
+  const middleware = await read("src/integrations/supabase/auth-middleware.ts");
+  assert.match(middleware, /supabase\.auth\.getUser\(token\)/);
+  assert.match(middleware, /userId: data\.user\.id/);
+  assert.doesNotMatch(middleware, /supabase\.auth\.getClaims\(token\)/);
+});

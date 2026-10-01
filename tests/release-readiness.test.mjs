@@ -97,7 +97,8 @@ test("release validation bounds modified-client Challenge text and evidence inpu
   assert.match(migration, /challenge_payments_evidence_path_length_ck/);
   assert.match(migration, /NOT VALID/);
   assert.match(activity, /const MAX_EVIDENCE_FILES = 4/);
-  assert.match(activity, /const MAX_EVIDENCE_FILE_BYTES = 15 \* 1024 \* 1024/);
+  assert.match(activity, /const MAX_EVIDENCE_FILE_BYTES = PRIVATE_IMAGE_MAX_BYTES/);
+  assert.match(activity, /inspectPrivateImage/);
   assert.match(activity, /maxLength=\{500\}/);
   assert.match(activity, /aria-label=\{`Remove evidence screenshot \$\{i \+ 1\}`\}/);
 });

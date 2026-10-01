@@ -6,6 +6,11 @@ import { Card, DataError, PendingLabel, SectionTitle } from "@/components/ui-kit
 import { Button } from "@/components/ui/button";
 import { Link } from "@tanstack/react-router";
 import { optimizeBulkPhoto } from "@/lib/challenge-evidence";
+import {
+  inspectPrivateImage,
+  isPrivateImageValidationError,
+  STANDARD_PRIVATE_IMAGE_MIME_TYPES,
+} from "@/lib/private-image-upload";
 import { userFacingError } from "@/lib/network-errors";
 import {
   bulkWeek,
@@ -774,16 +779,10 @@ function ProgressPhotos({
   const [error, setError] = useState<string | null>(null);
   const upload = async () => {
     if (!file || pending) return;
-    if (
-      !["image/jpeg", "image/png", "image/webp"].includes(file.type) ||
-      file.size > 15 * 1024 * 1024
-    ) {
-      setError("Choose a JPG, PNG or WebP image up to 15 MB.");
-      return;
-    }
     setPending(true);
     setError(null);
     try {
+      await inspectPrivateImage(file, STANDARD_PRIVATE_IMAGE_MIME_TYPES);
       const optimized = await optimizeBulkPhoto(file);
       await uploadBulkProgressPhoto(profileId, {
         file: optimized,
@@ -796,7 +795,11 @@ function ProgressPhotos({
       setNote("");
       if (fileRef.current) fileRef.current.value = "";
     } catch (cause) {
-      setError(userFacingError(cause, "upload your progress photo"));
+      setError(
+        isPrivateImageValidationError(cause)
+          ? "Choose a valid JPG, PNG or WebP image up to 15 MB."
+          : userFacingError(cause, "upload your progress photo"),
+      );
     } finally {
       setPending(false);
     }

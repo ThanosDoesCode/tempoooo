@@ -18,7 +18,12 @@ const platformSchema = `SET TIME ZONE 'UTC';
     CREATE TABLE auth.users(id uuid PRIMARY KEY);
     CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
     CREATE FUNCTION auth.jwt() RETURNS jsonb LANGUAGE sql STABLE AS $$ SELECT '{}'::jsonb $$;
-    CREATE TABLE storage.buckets(id text PRIMARY KEY, public boolean NOT NULL DEFAULT false);
+    CREATE TABLE storage.buckets(
+      id text PRIMARY KEY,
+      public boolean NOT NULL DEFAULT false,
+      file_size_limit bigint,
+      allowed_mime_types text[]
+    );
     INSERT INTO storage.buckets(id, public) VALUES
       ('challenge-evidence', true),('bulk-progress-photos', true),('payment-evidence', true);
     CREATE TABLE storage.objects(id uuid PRIMARY KEY, bucket_id text, name text);
@@ -4684,6 +4689,21 @@ test("security audit blocks direct cross-user, anon, unsafe-link and legacy func
       )
     ).rows[0].private,
   );
+  const privateImageBuckets = await db.query(
+    "SELECT id,file_size_limit,allowed_mime_types FROM storage.buckets WHERE id IN ('challenge-evidence','bulk-progress-photos','payment-evidence') ORDER BY id",
+  );
+  assert.equal(privateImageBuckets.rows.length, 3);
+  for (const bucket of privateImageBuckets.rows) {
+    assert.equal(Number(bucket.file_size_limit), 15 * 1024 * 1024);
+    assert.deepEqual(bucket.allowed_mime_types, [
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+      "image/gif",
+      "image/heic",
+      "image/heif",
+    ]);
+  }
 });
 
 test("Goal acknowledgement is writable only on the authenticated user's profile", async () => {

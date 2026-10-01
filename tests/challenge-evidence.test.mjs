@@ -19,8 +19,232 @@ import {
   isEvidenceRequestCancellation,
   resolveEvidenceUrls,
 } from "../src/lib/challenge-evidence-viewer.ts";
+import {
+  inspectPrivateImage,
+  PRIVATE_IMAGE_MAX_BYTES,
+  PRIVATE_IMAGE_MAX_DIMENSION,
+  PRIVATE_IMAGE_MAX_PIXELS,
+  PrivateImageValidationError,
+  STANDARD_PRIVATE_IMAGE_MIME_TYPES,
+} from "../src/lib/private-image-upload.ts";
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
+const onePixelPng = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Zl9sAAAAASUVORK5CYII=",
+  "base64",
+);
+const decodedAs = (width, height) => async () => ({ width, height });
+
+function pngHeader(width, height) {
+  const bytes = new Uint8Array(24);
+  bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0);
+  bytes.set(new TextEncoder().encode("IHDR"), 12);
+  new DataView(bytes.buffer).setUint32(16, width);
+  new DataView(bytes.buffer).setUint32(20, height);
+  return bytes;
+}
+
+function isoBmffFile(majorBrand, compatibleBrand = "mif1") {
+  const bytes = new Uint8Array(65);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(0, 24);
+  bytes.set(new TextEncoder().encode("ftyp"), 4);
+  bytes.set(new TextEncoder().encode(majorBrand), 8);
+  bytes.set(new TextEncoder().encode(compatibleBrand), 16);
+  view.setUint32(24, 32);
+  bytes.set(new TextEncoder().encode("meta"), 28);
+  view.setUint32(36, 20);
+  bytes.set(new TextEncoder().encode("ispe"), 40);
+  view.setUint32(48, 1);
+  view.setUint32(52, 1);
+  view.setUint32(56, 9);
+  bytes.set(new TextEncoder().encode("mdat"), 60);
+  bytes[64] = 1;
+  return bytes;
+}
+
+test("private image validation uses content signatures rather than trusting MIME metadata", async () => {
+  const image = new File([onePixelPng], "evidence.bin", { type: "" });
+  assert.deepEqual(await inspectPrivateImage(image, undefined, decodedAs(1, 1)), {
+    mimeType: "image/png",
+    extension: "png",
+  });
+
+  await assert.rejects(
+    inspectPrivateImage(
+      new File(["<svg><script>alert(1)</script></svg>"], "evidence.png", {
+        type: "image/png",
+      }),
+    ),
+    (error) =>
+      error instanceof PrivateImageValidationError &&
+      error.code === "invalid_private_image_content",
+  );
+  await assert.rejects(
+    inspectPrivateImage(
+      new File([onePixelPng], "evidence.jpg", { type: "image/jpeg" }),
+      undefined,
+      decodedAs(1, 1),
+    ),
+    (error) =>
+      error instanceof PrivateImageValidationError && error.code === "private_image_type_mismatch",
+  );
+});
+
+test("empty, markup, executable and arbitrary binary files never reach image decoding", async () => {
+  const disguised = [
+    ["empty.png", new Uint8Array()],
+    ["page.png", new TextEncoder().encode("<!doctype html><html></html>")],
+    ["vector.png", new TextEncoder().encode("<?xml version='1.0'?><svg></svg>")],
+    ["program.png", new Uint8Array([0x4d, 0x5a, 0x90, 0x00])],
+    ["binary.png", new Uint8Array([0x00, 0x01, 0x02, 0x03, 0x04])],
+  ];
+  let decodes = 0;
+  for (const [name, bytes] of disguised)
+    await assert.rejects(
+      inspectPrivateImage(new File([bytes], name, { type: "image/png" }), undefined, async () => {
+        decodes += 1;
+        return { width: 1, height: 1 };
+      }),
+      (error) => error instanceof PrivateImageValidationError,
+    );
+  assert.equal(decodes, 0);
+});
+
+test("standard image files must decode and truncated headers are rejected", async () => {
+  await assert.rejects(
+    inspectPrivateImage(
+      new File([onePixelPng], "broken.png", { type: "image/png" }),
+      undefined,
+      async () => {
+        throw new Error("decode failed");
+      },
+    ),
+    (error) =>
+      error instanceof PrivateImageValidationError && error.code === "private_image_decode_failed",
+  );
+  for (const [name, bytes, type] of [
+    ["truncated.jpg", new Uint8Array([0xff, 0xd8, 0xff]), "image/jpeg"],
+    ["truncated.png", pngHeader(1, 1).slice(0, 8), "image/png"],
+    ["truncated.webp", new TextEncoder().encode("RIFF0000WEBP"), "image/webp"],
+    ["truncated.gif", new TextEncoder().encode("GIF89a"), "image/gif"],
+  ])
+    await assert.rejects(
+      inspectPrivateImage(new File([bytes], name, { type }), undefined, decodedAs(1, 1)),
+      (error) =>
+        error instanceof PrivateImageValidationError &&
+        error.code === "private_image_decode_failed",
+    );
+});
+
+test("private image validation rejects dangerous dimensions before browser decode", async () => {
+  let decoded = false;
+  await assert.rejects(
+    inspectPrivateImage(
+      new File([pngHeader(PRIVATE_IMAGE_MAX_DIMENSION + 1, 1)], "wide.png", {
+        type: "image/png",
+      }),
+      undefined,
+      async () => {
+        decoded = true;
+        return { width: 1, height: 1 };
+      },
+    ),
+    (error) =>
+      error instanceof PrivateImageValidationError &&
+      error.code === "private_image_dimensions_exceeded",
+  );
+  await assert.rejects(
+    inspectPrivateImage(
+      new File([pngHeader(9_000, 9_000)], "too-many-pixels.png", { type: "image/png" }),
+      undefined,
+      decodedAs(9_000, 9_000),
+    ),
+    (error) =>
+      error instanceof PrivateImageValidationError &&
+      error.code === "private_image_dimensions_exceeded",
+  );
+  assert.equal(PRIVATE_IMAGE_MAX_PIXELS, 80_000_000);
+  assert.equal(decoded, false);
+});
+
+test("HEIC/HEIF brands stay narrow while legitimate iPhone files tolerate missing codecs", async () => {
+  assert.deepEqual(
+    await inspectPrivateImage(
+      new File([isoBmffFile("heic")], "iphone.heic", { type: "image/heic" }),
+      undefined,
+      async () => {
+        throw new Error("codec unavailable");
+      },
+    ),
+    { mimeType: "image/heic", extension: "heic" },
+  );
+  await assert.rejects(
+    inspectPrivateImage(
+      new File([isoBmffFile("avif")], "different-codec.heif", { type: "image/heif" }),
+      undefined,
+      decodedAs(1, 1),
+    ),
+    (error) =>
+      error instanceof PrivateImageValidationError &&
+      error.code === "invalid_private_image_content",
+  );
+  await assert.rejects(
+    inspectPrivateImage(
+      new File([isoBmffFile("heic").slice(0, 56)], "truncated.heic", { type: "image/heic" }),
+      undefined,
+      decodedAs(1, 1),
+    ),
+    (error) =>
+      error instanceof PrivateImageValidationError &&
+      error.code === "invalid_private_image_content",
+  );
+});
+
+test("private image validation enforces byte limits and path-specific formats", async () => {
+  await assert.rejects(
+    inspectPrivateImage(
+      new File([new TextEncoder().encode("GIF89a\u0001\u0000\u0001\u0000")], "progress.gif", {
+        type: "image/gif",
+      }),
+      STANDARD_PRIVATE_IMAGE_MIME_TYPES,
+      decodedAs(1, 1),
+    ),
+    (error) =>
+      error instanceof PrivateImageValidationError &&
+      error.code === "invalid_private_image_content",
+  );
+  await assert.rejects(
+    inspectPrivateImage(
+      new File([new Uint8Array(PRIVATE_IMAGE_MAX_BYTES + 1)], "oversized.jpg", {
+        type: "image/jpeg",
+      }),
+      undefined,
+      decodedAs(1, 1),
+    ),
+    (error) =>
+      error instanceof PrivateImageValidationError && error.code === "invalid_private_image_size",
+  );
+});
+
+test("private upload paths validate content and clean partial Challenge evidence", async () => {
+  const [challengeLog, publicProgress, progressQuery, legacyStore, migration] = await Promise.all([
+    read("src/routes/_authenticated/challenge/log.tsx"),
+    read("src/components/PublicBulkProgress.tsx"),
+    read("src/lib/bulk-progress-query.ts"),
+    read("src/lib/store.ts"),
+    read("supabase/migrations/20261001120000_harden_private_image_uploads.sql"),
+  ]);
+  for (const source of [challengeLog, publicProgress, progressQuery, legacyStore])
+    assert.match(source, /inspectPrivateImage/);
+  assert.match(challengeLog, /from\("challenge-evidence"\)\.remove\(paths\)/);
+  assert.match(migration, /file_size_limit = 15728640/);
+  assert.match(migration, /allowed_mime_types/);
+  assert.match(migration, /public = false/);
+  assert.match(migration, /challenge-evidence/);
+  assert.match(migration, /bulk-progress-photos/);
+  assert.match(migration, /payment-evidence/);
+});
 
 test("evidence dimensions preserve aspect ratio without upscaling", () => {
   assert.deepEqual(evidenceDimensions(3200, 1800), { width: 1600, height: 900 });

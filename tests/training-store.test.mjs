@@ -46,6 +46,10 @@ async function fixture() {
       if (name === "react")
         return { useCallback: (fn) => fn, useSyncExternalStore: (_subscribe, get) => get() };
       if (name.includes("supabase/client")) return { supabase };
+      if (name === "@/lib/private-image-upload")
+        return {
+          inspectPrivateImage: async () => ({ mimeType: "image/jpeg", extension: "jpg" }),
+        };
       if (name === "./workout-save") return { createSaveQueue };
       if (name === "./types") return { DEFAULT_DATA };
       throw new Error(name);
