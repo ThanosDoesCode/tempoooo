@@ -3,6 +3,26 @@ export const STARTUP_READ_DEADLINE_MS = 10_000;
 
 export type StartupPhase = "restoring" | "ready" | "recoverable-error" | "signed-out";
 
+export type StartupDeadlineState = {
+  startupComplete: boolean;
+  sessionRestored: boolean;
+  recoverableError: boolean;
+};
+
+/**
+ * The root deadline protects only local session restoration. Protected routes
+ * have their own bounded read deadlines and error UI. Timing the whole pending
+ * route here would race and cancel valid profile/membership reads on slow cold
+ * starts.
+ */
+export function shouldArmStartupDeadline({
+  startupComplete,
+  sessionRestored,
+  recoverableError,
+}: StartupDeadlineState) {
+  return !startupComplete && !sessionRestored && !recoverableError;
+}
+
 export type StartupReadiness = {
   startupComplete?: boolean;
   sessionRestored: boolean;

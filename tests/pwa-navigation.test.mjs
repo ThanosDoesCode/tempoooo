@@ -5,6 +5,7 @@ import { PULL_REFRESH_THRESHOLD, pullGesture } from "../src/lib/pull-to-refresh.
 import {
   canDismissStartupScreen,
   resolveStartupPhase,
+  shouldArmStartupDeadline,
   STARTUP_DEADLINE_MS,
   StartupTimeoutError,
   withStartupDeadline,
@@ -126,6 +127,33 @@ test("startup state always leaves restoring after settled data or its deadline",
       sessionUserId: null,
     }),
     "signed-out",
+  );
+});
+
+test("the root startup deadline never races authenticated route reads", () => {
+  assert.equal(
+    shouldArmStartupDeadline({
+      startupComplete: false,
+      sessionRestored: false,
+      recoverableError: false,
+    }),
+    true,
+  );
+  assert.equal(
+    shouldArmStartupDeadline({
+      startupComplete: false,
+      sessionRestored: true,
+      recoverableError: false,
+    }),
+    false,
+  );
+  assert.equal(
+    shouldArmStartupDeadline({
+      startupComplete: true,
+      sessionRestored: true,
+      recoverableError: false,
+    }),
+    false,
   );
 });
 

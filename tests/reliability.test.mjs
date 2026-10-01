@@ -104,7 +104,9 @@ test("authenticated cold start retries transient identity/profile reads without 
   assert.match(route, /startupDiagnostic\("memberships_resolved"/);
   assert.match(root, /routePending/);
   assert.match(root, /resolveStartupPhase/);
-  assert.match(root, /Tempo startup timed out/);
+  assert.match(root, /shouldArmStartupDeadline/);
+  assert.match(root, /Tempo session restoration timed out/);
+  assert.doesNotMatch(root, /queryClient\.cancelQueries\(\{\s*predicate/);
   assert.match(root, /startupPhase === "recoverable-error"/);
 });
 

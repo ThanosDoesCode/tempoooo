@@ -25,7 +25,12 @@ import {
   resetUserScopedQueries,
 } from "@/lib/query-cancellation";
 import { clearAccountScopedBrowserData } from "@/lib/browser-data";
-import { resolveStartupPhase, STARTUP_DEADLINE_MS, startupDiagnostic } from "@/lib/startup";
+import {
+  resolveStartupPhase,
+  shouldArmStartupDeadline,
+  STARTUP_DEADLINE_MS,
+  startupDiagnostic,
+} from "@/lib/startup";
 
 function NotFoundComponent() {
   return (
@@ -206,6 +211,7 @@ function RootComponent() {
   useEffect(() => {
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       const nextUserId = session?.user.id ?? null;
+      setStartupError(null);
       setStartupSession({ restored: true, userId: nextUserId });
       if (!authenticatedUserChanged(previousUserId.current, nextUserId)) {
         previousUserId.current = nextUserId;
@@ -227,6 +233,7 @@ function RootComponent() {
       .then(({ data: sessionData, error }) => {
         if (!active) return;
         if (error) throw error;
+        setStartupError(null);
         setStartupSession({ restored: true, userId: sessionData.session?.user.id ?? null });
         startupDiagnostic("auth_resolved", { signedIn: !!sessionData.session?.user });
       })
@@ -248,19 +255,19 @@ function RootComponent() {
   });
 
   useEffect(() => {
-    if (startupPhase !== "restoring") return;
+    if (
+      !shouldArmStartupDeadline({
+        startupComplete,
+        sessionRestored: startupSession.restored,
+        recoverableError: startupError !== null,
+      })
+    )
+      return;
     const deadline = window.setTimeout(() => {
-      void queryClient.cancelQueries({
-        predicate: ({ queryKey }) =>
-          queryKey[0] === "authenticated-user" ||
-          queryKey[0] === "account-profile" ||
-          queryKey[0] === "bulk-memberships" ||
-          queryKey[0] === "goal-discovery",
-      });
-      setStartupError(new Error("Tempo startup timed out"));
+      setStartupError(new Error("Tempo session restoration timed out"));
     }, STARTUP_DEADLINE_MS);
     return () => window.clearTimeout(deadline);
-  }, [queryClient, startupAttempt, startupPhase]);
+  }, [startupAttempt, startupComplete, startupError, startupSession.restored]);
 
   useEffect(() => {
     if (startupComplete || startupPhase === "restoring") return;
