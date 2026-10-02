@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import vm from "node:vm";
 import ts from "typescript";
+import { renderToStaticMarkup } from "react-dom/server";
+import * as jsxRuntime from "react/jsx-runtime";
 
 // Execute the actual browser adapter with deterministic browser/provider/auth
 // boundaries. Vite's import.meta.env is replaced only inside this test sandbox.
@@ -24,6 +26,7 @@ const compiled = ts.transpileModule(source.replaceAll("import.meta.env", "__test
 }).outputText;
 function browserFixture({
   permission = "granted",
+  appId = "app-id",
   saved = null,
   scriptFailures = 0,
   initFailures = 0,
@@ -132,7 +135,7 @@ function browserFixture({
       specifier.includes("privileged-rpcs.functions")
         ? { disableChallengePushAccount }
         : { supabase },
-    __testEnv: { VITE_ONESIGNAL_APP_ID: "app-id", DEV: true },
+    __testEnv: { VITE_ONESIGNAL_APP_ID: appId, DEV: true },
     console: {
       ...console,
       error(message) {
@@ -158,6 +161,8 @@ function browserFixture({
       },
     },
     window: {
+      addEventListener() {},
+      removeEventListener() {},
       isSecureContext: true,
       Notification: {},
       PushManager: {},
@@ -526,4 +531,153 @@ test("switching accounts while enabling rejects the previous user's registration
     f.calls.some(([name, body]) => name === "endpoint" && body.action === "register"),
     false,
   );
+});
+
+// Render the actual card with deterministic hook/effect scheduling, using the
+// real browser adapter above. This checks the header, explanatory copy and CTA together.
+const compiledCard = ts.transpileModule(notificationComponent, {
+  compilerOptions: {
+    module: ts.ModuleKind.CommonJS,
+    target: ts.ScriptTarget.ES2022,
+    jsx: ts.JsxEmit.ReactJSX,
+  },
+}).outputText;
+async function notificationCard(fixture) {
+  const states = [];
+  let hookIndex = 0;
+  let effect;
+  const context = {
+    exports: {},
+    Notification: fixture.context.Notification,
+    window: fixture.context.window,
+    require(name) {
+      if (name === "react")
+        return {
+          useState(initial) {
+            const index = hookIndex++;
+            if (!(index in states)) states[index] = initial;
+            return [
+              states[index],
+              (value) => {
+                states[index] = typeof value === "function" ? value(states[index]) : value;
+              },
+            ];
+          },
+          useEffect(callback) {
+            effect ??= callback;
+          },
+        };
+      if (name === "react/jsx-runtime") return jsxRuntime;
+      if (name === "@/lib/challenge-push") return fixture.api;
+      if (name === "@/components/ui-kit")
+        return { PendingLabel: ({ children }) => jsxRuntime.jsx("span", { children }) };
+      return { Bell: () => null, ChevronRight: () => null, TriangleAlert: () => null };
+    },
+  };
+  vm.runInNewContext(compiledCard, context);
+  function render() {
+    hookIndex = 0;
+    return renderToStaticMarkup(context.exports.ChallengeNotifications({ userId: "user-a" }));
+  }
+  render();
+  const cleanup = effect();
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  const html = render();
+  cleanup();
+  return html;
+}
+
+test("iPhone Home Screen default permission is ready/off, with Enable and no automatic permission request", async () => {
+  for (const standaloneMethod of ["media", "navigator"]) {
+    const f = browserFixture({ permission: "default" });
+    f.context.navigator.userAgent = "iPhone";
+    if (standaloneMethod === "media") f.context.window.matchMedia = () => ({ matches: true });
+    else f.context.navigator.standalone = true;
+    assert.equal(f.api.pushAvailability().kind, "supported");
+    const html = await notificationCard(f);
+    assert.match(html, />Not requested</);
+    assert.match(html, /Enable notifications/);
+    assert.doesNotMatch(html, /Unsupported|Not configured|Temporarily unavailable/);
+    assert.equal(
+      f.calls.some(([action]) => action === "permission"),
+      false,
+    );
+    assert.ok(f.calls.some(([action]) => action === "init"));
+  }
+});
+
+test("configuration, install guidance, genuine unsupported and permission denied have consistent card states", async () => {
+  const unconfigured = browserFixture({ appId: "", permission: "default" });
+  assert.equal(unconfigured.api.pushAvailability().kind, "configuration-unavailable");
+  const missingHtml = await notificationCard(unconfigured);
+  assert.match(missingHtml, />Not configured</);
+  assert.doesNotMatch(
+    missingHtml,
+    /Unsupported|permission has not been granted|Enable notifications/,
+  );
+  assert.equal(unconfigured.calls.length, 0);
+
+  const safari = browserFixture({ permission: "default" });
+  safari.context.navigator.userAgent = "iPhone";
+  const installHtml = await notificationCard(safari);
+  assert.match(installHtml, />Open from Home Screen</);
+  assert.match(installHtml, /Add to Home Screen/);
+  assert.doesNotMatch(
+    installHtml,
+    /Unsupported|permission has not been granted|Enable notifications/,
+  );
+
+  const unsupported = browserFixture({ permission: "default" });
+  delete unsupported.context.window.PushManager;
+  const unsupportedHtml = await notificationCard(unsupported);
+  assert.match(unsupportedHtml, />Unsupported</);
+  assert.doesNotMatch(unsupportedHtml, /permission has not been granted|Enable notifications/);
+
+  const denied = browserFixture({ permission: "denied" });
+  const deniedHtml = await notificationCard(denied);
+  assert.match(deniedHtml, />Permission denied</);
+  assert.doesNotMatch(deniedHtml, /Unsupported/);
+  assert.equal(
+    denied.calls.some(([action]) => action === "permission"),
+    false,
+  );
+});
+
+test("standard registration Push API works without a global constructor, but secure/worker/notification requirements remain", () => {
+  const f = browserFixture({ permission: "default" });
+  f.context.navigator.userAgent = "iPhone";
+  f.context.navigator.standalone = true;
+  delete f.context.window.PushManager;
+  f.context.window.ServiceWorkerRegistration = function () {};
+  Object.defineProperty(f.context.window.ServiceWorkerRegistration.prototype, "pushManager", {
+    get() {
+      throw new Error("Do not invoke the getter on the prototype");
+    },
+  });
+  assert.equal(f.api.pushAvailability().kind, "supported");
+  f.context.window.isSecureContext = false;
+  assert.equal(f.api.pushAvailability().kind, "unsupported");
+  f.context.window.isSecureContext = true;
+  delete f.context.navigator.serviceWorker;
+  assert.equal(f.api.pushAvailability().kind, "unsupported");
+  f.context.navigator.serviceWorker = {};
+  delete f.context.window.Notification;
+  assert.equal(f.api.pushAvailability().kind, "unsupported");
+});
+
+test("temporary SDK failure offers initialization Retry rather than Unsupported or permission guidance", async () => {
+  const f = browserFixture({ permission: "default", initFailures: 99 });
+  const html = await notificationCard(f);
+  assert.match(html, />Temporarily unavailable</);
+  assert.match(html, /Retry notifications/);
+  assert.doesNotMatch(html, /Unsupported|permission has not been granted/);
+  assert.equal(f.calls.filter(([action]) => action === "init").length, 3);
+});
+
+test("OneSignal app ID uses an explicit Vite build-time read for capability detection and init", async () => {
+  assert.match(source, /const oneSignalAppId = import.meta.env.VITE_ONESIGNAL_APP_ID;/);
+  assert.doesNotMatch(source, /import.meta.env\["VITE_ONESIGNAL_APP_ID"\]/);
+  const f = browserFixture({ appId: "public-test-app-id" });
+  await f.api.prepareChallengePush("user-a");
+  assert.equal(f.calls.find(([action]) => action === "init")[1].appId, "public-test-app-id");
 });

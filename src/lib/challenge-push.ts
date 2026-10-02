@@ -19,6 +19,7 @@ declare global {
     OneSignalDeferred?: Array<(sdk: PushSdk) => void>;
   }
 }
+const oneSignalAppId = import.meta.env.VITE_ONESIGNAL_APP_ID;
 const markerKey = "challenge-push-device";
 type DeviceMarker = { userId: string; id: string };
 let sdkPromise: Promise<PushSdk> | undefined;
@@ -41,28 +42,52 @@ function marker(): DeviceMarker | null {
   }
 }
 
-export function pushUnavailableReason(): string | null {
-  if (!import.meta.env["VITE_ONESIGNAL_APP_ID"])
-    return "Challenge notifications have not been configured yet.";
+export type PushAvailability =
+  | { kind: "supported"; reason: null }
+  | { kind: "configuration-unavailable" | "home-screen-required" | "unsupported"; reason: string };
+
+export function pushAvailability(): PushAvailability {
+  if (!oneSignalAppId?.trim())
+    return {
+      kind: "configuration-unavailable",
+      reason: "Challenge notifications have not been configured yet.",
+    };
   const ios =
     /iPad|iPhone|iPod/.test(navigator.userAgent) ||
     (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-  if (
-    ios &&
-    !window.matchMedia("(display-mode: standalone)").matches &&
-    !(navigator as Navigator & { standalone?: boolean }).standalone
-  ) {
-    return "On iPhone or iPad (iOS 16.4+), use Share → Add to Home Screen, then open the app from that icon to enable notifications.";
+  const standalone =
+    window.matchMedia?.("(display-mode: standalone)").matches === true ||
+    (navigator as Navigator & { standalone?: boolean }).standalone === true;
+  if (ios && !standalone) {
+    return {
+      kind: "home-screen-required",
+      reason:
+        "On iPhone or iPad (iOS 16.4+), use Share → Add to Home Screen, then open the app from that icon to enable notifications.",
+    };
   }
+  // Push subscriptions are exposed through ServiceWorkerRegistration.pushManager.
+  // Check that standard API as well as the global interface, without registering a worker.
+  const hasPushApi =
+    typeof window.PushManager !== "undefined" ||
+    (typeof window.ServiceWorkerRegistration !== "undefined" &&
+      "pushManager" in window.ServiceWorkerRegistration.prototype);
   if (
     !window.isSecureContext ||
     !("Notification" in window) ||
     !("serviceWorker" in navigator) ||
-    !("PushManager" in window)
+    !hasPushApi
   ) {
-    return "Push notifications are not supported in this browser. Try a supported browser over HTTPS.";
+    return {
+      kind: "unsupported",
+      reason:
+        "Push notifications are not supported in this browser. Try a supported browser over HTTPS.",
+    };
   }
-  return null;
+  return { kind: "supported", reason: null };
+}
+
+export function pushUnavailableReason(): string | null {
+  return pushAvailability().reason;
 }
 
 function safeInitDiagnostic(value: unknown, fallback: string, maxLength: number) {
@@ -111,7 +136,7 @@ function logPushDiagnostic(
 async function initSdk(sdk: PushSdk) {
   try {
     await sdk.init({
-      appId: import.meta.env["VITE_ONESIGNAL_APP_ID"],
+      appId: oneSignalAppId,
       serviceWorkerPath: "OneSignalSDKWorker.js",
       serviceWorkerParam: { scope: "/" },
       allowLocalhostAsSecureOrigin: import.meta.env.DEV,

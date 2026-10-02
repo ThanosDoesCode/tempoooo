@@ -4,7 +4,8 @@ import { PendingLabel } from "@/components/ui-kit";
 import {
   disableChallengePush,
   enableChallengePush,
-  pushUnavailableReason,
+  pushAvailability,
+  type PushAvailability,
   reconcileChallengePush,
   type PushSdk,
 } from "@/lib/challenge-push";
@@ -13,7 +14,7 @@ export function ChallengeNotifications({ userId }: { userId: string }) {
   const [sdk, setSdk] = useState<PushSdk | null>(null);
   const [on, setOn] = useState(false);
   const [serviceState, setServiceState] = useState<
-    "checking" | "ready" | "unsupported" | "temporary-failure"
+    "checking" | "ready" | Exclude<PushAvailability["kind"], "supported"> | "temporary-failure"
   >("checking");
   const [phase, setPhase] = useState<"checking" | "enabling" | "disabling" | null>("checking");
   const [feedback, setFeedback] = useState<{
@@ -56,7 +57,8 @@ export function ChallengeNotifications({ userId }: { userId: string }) {
     setOn(false);
     setServiceState("checking");
     setPhase("checking");
-    const reason = pushUnavailableReason();
+    const availability = pushAvailability();
+    const reason = availability.reason;
     setFeedback(reason ? { text: reason, tone: "info" } : null);
     if (!reason) {
       void (async () => {
@@ -82,7 +84,7 @@ export function ChallengeNotifications({ userId }: { userId: string }) {
         }
       })();
     } else {
-      setServiceState("unsupported");
+      setServiceState(availability.kind);
       setPhase(null);
     }
     return () => {
@@ -157,15 +159,19 @@ export function ChallengeNotifications({ userId }: { userId: string }) {
                     ? serviceState === "temporary-failure"
                       ? "Temporarily unavailable"
                       : "Needs attention"
-                    : serviceState === "unsupported"
-                      ? "Unsupported"
-                      : permissionDenied
-                        ? "Permission denied"
-                        : permissionMissing
-                          ? "Not requested"
-                          : on
-                            ? "On"
-                            : "Off"}
+                    : serviceState === "configuration-unavailable"
+                      ? "Not configured"
+                      : serviceState === "home-screen-required"
+                        ? "Open from Home Screen"
+                        : serviceState === "unsupported"
+                          ? "Unsupported"
+                          : permissionDenied
+                            ? "Permission denied"
+                            : permissionMissing
+                              ? "Not requested"
+                              : on
+                                ? "On"
+                                : "Off"}
           </span>
           <ChevronRight
             className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-90"
@@ -176,23 +182,27 @@ export function ChallengeNotifications({ userId }: { userId: string }) {
           <p className="text-[11px] leading-relaxed text-muted-foreground">
             Get updates when your opponent logs activity, completes the week, or changes a payment.
           </p>
-          {!on && phase === null && permissionMissing && feedback?.tone !== "error" ? (
+          {!on &&
+          serviceState === "ready" &&
+          phase === null &&
+          permissionMissing &&
+          feedback?.tone !== "error" ? (
             <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
               Notification permission has not been granted on this device. Tempo asks only after you
               tap Enable notifications.
             </p>
           ) : null}
-          {!on && phase === null && permissionDenied ? (
+          {!on && serviceState === "ready" && phase === null && permissionDenied ? (
             <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
               Notification permission is denied on this device. You can allow Tempo in your browser
               or iPhone notification settings.
             </p>
           ) : null}
           <div className="mt-2 flex flex-wrap gap-2 text-xs">
-            {!on ? (
+            {!on && (serviceState === "ready" || serviceState === "checking") ? (
               <button
                 type="button"
-                disabled={!sdk || phase !== null}
+                disabled={!sdk || phase !== null || permissionDenied}
                 onClick={() => void enable()}
                 className="rounded-lg bg-primary px-3 py-2 font-semibold text-primary-foreground disabled:opacity-50"
               >
