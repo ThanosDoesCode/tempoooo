@@ -111,7 +111,6 @@ const rows = Array.from({ length: 1207 }, (_, i) => ({
   duration_seconds: 1800,
   evidence_path: "private/path",
   extra_evidence_paths: ["private/extra"],
-  evidence_expired_at: null,
   edited: true,
 }));
 
@@ -128,7 +127,6 @@ test("recent feed is bounded, explicitly projected and deterministically ordered
   for (const field of [
     "evidence_path",
     "extra_evidence_paths",
-    "evidence_expired_at",
     "edited",
     "external_activity_url",
     "duration_seconds",
@@ -136,6 +134,7 @@ test("recent feed is bounded, explicitly projected and deterministically ordered
   ])
     assert.ok(calls[0].fields.split(",").includes(field));
   assert.ok(!calls[0].fields.includes("*"));
+  assert.ok(!calls[0].fields.split(",").includes("evidence_expired_at"));
   const second = await api.fetchActivityPage("challenge", first.next);
   assert.equal(second.rows.length, 20);
   assert.equal(paging.uniqueActivityPages([first, second]).length, 40);

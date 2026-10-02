@@ -1895,11 +1895,6 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      challenge_activity_summary: {
-        Args: { _challenge: string; _start?: string; _end?: string }
-        Returns: Json
-      }
-
       accept_bulk_invitation: {
         Args: { _caller: string; _email: string; _token: string }
         Returns: string

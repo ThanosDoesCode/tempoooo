@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFile, readdir } from "node:fs/promises";
 import { createHash, randomUUID } from "node:crypto";
 import { PGlite } from "@electric-sql/pglite";
+import { ACTIVITY_FIELDS } from "../src/lib/challenge-activity-data.ts";
 
 const db = new PGlite();
 const a = randomUUID(),
@@ -5086,4 +5087,27 @@ test("activity summary counts stored is_qualified even when it differs from curr
   } finally {
     await db.exec("ROLLBACK");
   }
+});
+
+test("paginated activity projection selects only columns in the accumulated challenge schema", async () => {
+  const columns = (
+    await db.query(
+      "SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name='challenge_activities'",
+    )
+  ).rows.map((row) => row.column_name);
+  const selected = ACTIVITY_FIELDS.split(",");
+  for (const field of selected)
+    assert.ok(columns.includes(field), `Selected activity column exists: ${field}`);
+  assert.equal(selected.includes("evidence_expired_at"), false);
+  const challenge = await freshChallenge("Activity projection regression");
+  await activity(a, 5, challenge);
+  const result = await asUser(a, () =>
+    db.query(
+      `SELECT ${ACTIVITY_FIELDS} FROM public.challenge_activities WHERE challenge_id=$1 ORDER BY activity_date DESC, created_at DESC, id ASC LIMIT 21`,
+      [challenge],
+    ),
+  );
+  assert.equal(result.rows.length, 1);
+  assert.equal(result.rows[0].evidence_path, "private-test-evidence");
+  assert.equal(Number(result.rows[0].qualifying_equivalent_km), 5);
 });
