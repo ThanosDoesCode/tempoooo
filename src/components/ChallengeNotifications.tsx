@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Bell, ChevronRight, TriangleAlert } from "lucide-react";
 import { PendingLabel } from "@/components/ui-kit";
 import {
@@ -21,25 +21,28 @@ export function ChallengeNotifications({ userId }: { userId: string }) {
     text: string;
     tone: "info" | "success" | "error";
   } | null>(null);
+  const mutationPending = useRef(false);
+  const operationVersion = useRef(0);
   const [retryKey, setRetryKey] = useState(0);
   useEffect(() => {
     let alive = true;
     let current: PushSdk | null = null;
     let refreshing = false;
     const refresh = async (force = false) => {
-      if (refreshing) return;
+      if (refreshing || mutationPending.current) return;
+      const version = operationVersion.current;
       refreshing = true;
       try {
         const result = await reconcileChallengePush(userId, { force });
         current = result.sdk;
-        if (alive) {
+        if (alive && version === operationVersion.current && !mutationPending.current) {
           setSdk(result.sdk);
           setOn(result.enabled);
           setServiceState("ready");
           setFeedback(null);
         }
       } catch {
-        if (alive) {
+        if (alive && version === operationVersion.current && !mutationPending.current) {
           setServiceState("temporary-failure");
           setFeedback({
             text: "Notification status is temporarily unavailable. Retry notifications in a moment.",
@@ -89,12 +92,16 @@ export function ChallengeNotifications({ userId }: { userId: string }) {
     }
     return () => {
       alive = false;
+      operationVersion.current += 1;
+      mutationPending.current = false;
       current?.User.PushSubscription.removeEventListener("change", onChange);
       window.removeEventListener("focus", onChange);
     };
   }, [userId, retryKey]);
   const enable = async () => {
-    if (!sdk) return;
+    if (!sdk || mutationPending.current) return;
+    mutationPending.current = true;
+    const version = ++operationVersion.current;
     setPhase("enabling");
     setFeedback({
       text: "Registering this device. This can take a few seconds.",
@@ -102,29 +109,43 @@ export function ChallengeNotifications({ userId }: { userId: string }) {
     });
     try {
       await enableChallengePush(sdk, userId);
+      if (version !== operationVersion.current) return;
+      setServiceState("ready");
       setOn(true);
       setFeedback({ text: "Challenge notifications enabled on this device.", tone: "success" });
     } catch (error) {
+      if (version !== operationVersion.current) return;
       setOn(false);
       setFeedback({ text: (error as Error).message, tone: "error" });
     } finally {
-      setPhase(null);
+      if (version === operationVersion.current) {
+        mutationPending.current = false;
+        setPhase(null);
+      }
     }
   };
   const disable = async () => {
+    if (mutationPending.current) return;
+    mutationPending.current = true;
+    const version = ++operationVersion.current;
     setPhase("disabling");
     setFeedback({ text: "Disabling challenge notifications…", tone: "info" });
     try {
       await disableChallengePush(sdk);
+      if (version !== operationVersion.current) return;
       setOn(false);
       setFeedback({
         text: "Challenge notifications disabled on all devices.",
         tone: "success",
       });
     } catch (error) {
+      if (version !== operationVersion.current) return;
       setFeedback({ text: (error as Error).message, tone: "error" });
     } finally {
-      setPhase(null);
+      if (version === operationVersion.current) {
+        mutationPending.current = false;
+        setPhase(null);
+      }
     }
   };
   const permissionMissing =

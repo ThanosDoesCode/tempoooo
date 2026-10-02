@@ -87,13 +87,13 @@ test("authenticated cold start retries transient identity/profile reads without 
     read("src/routes/_authenticated/route.tsx"),
     read("src/routes/__root.tsx"),
   ]);
-  assert.match(auth, /shouldRetryRead\(0, error\)\) throw error/);
+  assert.match(auth, /isInvalidSessionError\(error\)/);
   assert.match(auth, /signOut\(\{ scope: "local" \}\)/);
   assert.match(auth, /retry: shouldRetryRead/);
   assert.match(profile, /\.maybeSingle\(\)/);
   assert.match(profile, /retry: shouldRetryRead/);
   assert.match(route, /errorComponent: AuthenticatedRouteError/);
-  assert.match(route, /restore your Tempo session/);
+  assert.match(route, /load your account/);
   assert.match(route, /Promise\.all\(\[/);
   assert.match(route, /bulkOwnerQueryOptions\(\)/);
   assert.match(route, /withStartupDeadline\(/);

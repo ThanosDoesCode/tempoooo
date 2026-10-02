@@ -3,15 +3,39 @@ import type { Session, User } from "@supabase/supabase-js";
 import { queryOptions } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { clearAccountScopedBrowserData } from "@/lib/browser-data";
-import { readRetryDelay, shouldRetryRead } from "@/lib/network-errors";
+import { readRetryDelay, shouldRetryRead, errorStatus } from "@/lib/network-errors";
+
+import { withStartupDeadline } from "@/lib/startup";
+
+export function isInvalidSessionError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const details = error as { name?: string; code?: string };
+  return (
+    details.name === "AuthSessionMissingError" ||
+    errorStatus(error) === 401 ||
+    (errorStatus(error) === 400 &&
+      [
+        "bad_jwt",
+        "session_not_found",
+        "user_not_found",
+        "refresh_token_not_found",
+        "refresh_token_already_used",
+      ].includes(details.code ?? ""))
+  );
+}
 
 export const authenticatedUserQueryOptions = () =>
   queryOptions({
     queryKey: ["authenticated-user"],
     queryFn: async () => {
-      const { data, error } = await supabase.auth.getUser();
-      if (error && !data.user && shouldRetryRead(0, error)) throw error;
-      if (error && !data.user) {
+      // Three attempts plus backoff fit inside the route's existing 10s deadline.
+      const { data, error } = await withStartupDeadline(
+        supabase.auth.getUser(),
+        "authentication",
+        undefined,
+        2500,
+      );
+      if (error && !data.user && isInvalidSessionError(error)) {
         await supabase.auth.signOut({ scope: "local" });
         return null;
       }
@@ -29,15 +53,28 @@ export function useAuth() {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
+    let alive = true;
+    let authEventReceived = false;
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
+      authEventReceived = true;
+      if (!alive) return;
       setSession(s);
       setReady(true);
     });
-    void supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setReady(true);
-    });
-    return () => sub.subscription.unsubscribe();
+    void supabase.auth
+      .getSession()
+      .then(({ data, error }) => {
+        if (!alive || authEventReceived || error) return;
+        setSession(data.session);
+        setReady(true);
+      })
+      .catch(() => {
+        /* The authenticated route owns bounded retry/recovery UI. */
+      });
+    return () => {
+      alive = false;
+      sub.subscription.unsubscribe();
+    };
   }, []);
 
   return { session, user: session?.user ?? null, ready };

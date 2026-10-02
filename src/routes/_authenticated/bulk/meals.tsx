@@ -1,3 +1,4 @@
+import { PageSkeleton } from "@/components/PageSkeleton";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { BulkNutritionLog } from "@/components/BulkNutritionLog";
@@ -35,7 +36,7 @@ function BulkMealsPage() {
         }
       />
       {!bulkId || !data || planMode === "none" ? (
-        <div className="h-40 animate-pulse rounded-2xl bg-card" aria-label="Loading meals" />
+        <PageSkeleton label="Loading meals" />
       ) : publicNutrition ? (
         <BulkNutritionLog
           bulkProfileId={bulkId}

@@ -4,6 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   ACTIVITY_FIELDS,
   ACTIVITY_PAGE_SIZE,
+  RECENT_ACTIVITY_FIRST_PAGE_SIZE,
+  RECENT_ACTIVITY_OLDER_PAGE_SIZE,
   activityCursorFilter,
   activityPage,
   uniqueActivityPages,
@@ -356,12 +358,23 @@ export function useActivities(challengeId: string | undefined, range?: ActivityD
       "challenge-activities",
       challengeId,
       "feed",
+      range ? "week" : "recent-5-10",
       range?.start ?? null,
       range?.end ?? null,
     ],
     staleTime: 30_000,
     initialPageParam: null as ActivityCursor | null,
-    queryFn: ({ pageParam }) => fetchActivityPage(challengeId!, pageParam, range),
+    queryFn: ({ pageParam }) =>
+      fetchActivityPage(
+        challengeId!,
+        pageParam,
+        range,
+        range
+          ? ACTIVITY_PAGE_SIZE
+          : pageParam
+            ? RECENT_ACTIVITY_OLDER_PAGE_SIZE
+            : RECENT_ACTIVITY_FIRST_PAGE_SIZE,
+      ),
     getNextPageParam: (page) => page.next ?? undefined,
   });
   return { ...query, activities: uniqueActivityPages(query.data?.pages ?? []) };

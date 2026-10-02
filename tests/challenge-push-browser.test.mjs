@@ -27,12 +27,15 @@ const compiled = ts.transpileModule(source.replaceAll("import.meta.env", "__test
 function browserFixture({
   permission = "granted",
   appId = "app-id",
+  requestedPermission = permission,
+  registerPendingResponses = 0,
   saved = null,
   scriptFailures = 0,
   initFailures = 0,
   initFailureMessage = "temporary init failure",
   accountEnabled: initialAccountEnabled = false,
   optedIn = false,
+  optInDelay = false,
   optInFailures: initialOptInFailures = 0,
   registerFailures: initialRegisterFailures = 0,
 } = {}) {
@@ -71,11 +74,17 @@ function browserFixture({
             optInFailures -= 1;
             throw new Error("temporary opt-in failure");
           }
-          this.optedIn = true;
+          const complete = () => {
+            this.optedIn = true;
+            for (const listener of listeners) listener();
+          };
+          if (optInDelay) setTimeout(complete, 1);
+          else complete();
         },
         async optOut() {
           calls.push(["optOut"]);
           this.optedIn = false;
+          for (const listener of listeners) listener();
         },
         addEventListener(_event, listener) {
           listeners.add(listener);
@@ -104,6 +113,10 @@ function browserFixture({
         if (body.action === "identity")
           return { data: { external_id: `private-capability-${uid}`, enabled: accountEnabled } };
         if (body.action === "register") {
+          if (registerPendingResponses > 0) {
+            registerPendingResponses -= 1;
+            return { data: { enabled: false } };
+          }
           if (registerFailures > 0) {
             registerFailures -= 1;
             return { error: new Error("provider synchronization pending") };
@@ -157,7 +170,8 @@ function browserFixture({
       permission,
       async requestPermission() {
         calls.push(["permission"]);
-        return permission;
+        context.Notification.permission = requestedPermission;
+        return requestedPermission;
       },
     },
     window: {
@@ -263,7 +277,7 @@ test("manual notification retry can recover after the bounded SDK attempts are e
   assert.equal(f.calls.filter(([name]) => name === "script").length, 4);
 });
 test("enable requests permission before any network work and registers only its device", async () => {
-  const f = browserFixture();
+  const f = browserFixture({ permission: "default", requestedPermission: "granted" });
   await f.api.prepareChallengePush("user-a");
   f.calls.length = 0;
   const enabling = f.api.enableChallengePush(f.sdk, "user-a");
@@ -542,7 +556,7 @@ const compiledCard = ts.transpileModule(notificationComponent, {
     jsx: ts.JsxEmit.ReactJSX,
   },
 }).outputText;
-async function notificationCard(fixture) {
+async function notificationCard(fixture, interactive = false) {
   const states = [];
   let hookIndex = 0;
   let effect;
@@ -553,6 +567,11 @@ async function notificationCard(fixture) {
     require(name) {
       if (name === "react")
         return {
+          useRef(initial) {
+            const index = hookIndex++;
+            if (!(index in states)) states[index] = { current: initial };
+            return states[index];
+          },
           useState(initial) {
             const index = hookIndex++;
             if (!(index in states)) states[index] = initial;
@@ -577,11 +596,19 @@ async function notificationCard(fixture) {
   vm.runInNewContext(compiledCard, context);
   function render() {
     hookIndex = 0;
-    return renderToStaticMarkup(context.exports.ChallengeNotifications({ userId: "user-a" }));
+    const tree = context.exports.ChallengeNotifications({ userId: "user-a" });
+    return interactive ? tree : renderToStaticMarkup(tree);
   }
   render();
   const cleanup = effect();
-  await new Promise((resolve) => setTimeout(resolve, 30));
+  // Wait for the actual card state instead of assuming loaded CI timers finish in 30ms.
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const tree = render();
+    const html = interactive ? renderToStaticMarkup(tree) : tree;
+    if (!html.includes("Checking…")) break;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  if (interactive) return { render, cleanup };
   const html = render();
   cleanup();
   return html;
@@ -680,4 +707,124 @@ test("OneSignal app ID uses an explicit Vite build-time read for capability dete
   const f = browserFixture({ appId: "public-test-app-id" });
   await f.api.prepareChallengePush("user-a");
   assert.equal(f.calls.find(([action]) => action === "init")[1].appId, "public-test-app-id");
+});
+
+test("On -> account-wide Disable -> Enable once retries propagation internally and preserves the session", async () => {
+  const f = browserFixture({ accountEnabled: true, optedIn: true, registerPendingResponses: 2 });
+  await f.api.prepareChallengePush("user-a");
+  assert.equal(await f.api.pushIsEnabled(f.sdk), true);
+  await f.api.disableChallengePush(f.sdk);
+  assert.equal(f.accountEnabled(), false);
+  assert.equal(f.sdk.User.PushSubscription.optedIn, false);
+  await f.api.enableChallengePush(f.sdk, "user-a");
+  assert.equal(f.accountEnabled(), true);
+  assert.equal(await f.api.pushIsEnabled(f.sdk), true);
+  assert.equal(
+    f.calls.filter(([action, body]) => action === "endpoint" && body.action === "register").length,
+    3,
+  );
+  assert.equal(
+    f.calls.some(([action]) => action === "permission" || action === "logout"),
+    false,
+  );
+  assert.doesNotMatch(
+    source,
+    /router\.invalidate|resetUserScopedQueries|auth\.signOut|auth\.getUser/,
+  );
+});
+
+test("unsuccessful explicit activation is bounded, remains Off and returns a notification-only error", async () => {
+  const f = browserFixture({ registerPendingResponses: 99 });
+  await f.api.prepareChallengePush("user-a");
+  await assert.rejects(
+    f.api.enableChallengePush(f.sdk, "user-a"),
+    /Could not update notifications/,
+  );
+  assert.equal(
+    f.calls.filter(([action, body]) => action === "endpoint" && body.action === "register").length,
+    8,
+  );
+  assert.equal(f.accountEnabled(), false);
+  assert.equal(f.storage.size, 1); // Preserve the detach marker for safe logout.
+});
+
+test("account switching during activation retry never registers the next account from the old operation", async () => {
+  const f = browserFixture({ registerPendingResponses: 99 });
+  await f.api.prepareChallengePush("user-a");
+  const enabling = f.api.enableChallengePush(f.sdk, "user-a");
+  await new Promise((resolve) => setTimeout(resolve, 1));
+  const before = f.calls.filter(
+    ([action, body]) => action === "endpoint" && body.action === "register",
+  ).length;
+  f.switchUser("user-b");
+  await assert.rejects(enabling, /account changed/);
+  assert.equal(
+    f.calls.filter(([action, body]) => action === "endpoint" && body.action === "register").length,
+    before,
+  );
+  assert.equal(f.accountEnabled(), false);
+});
+
+function findButton(tree, label) {
+  if (!tree || typeof tree !== "object") return null;
+  if (Array.isArray(tree)) return tree.map((child) => findButton(child, label)).find(Boolean);
+  if (tree.type === "button" && renderToStaticMarkup(tree).includes(label)) return tree;
+  return findButton(tree.props?.children, label);
+}
+for (const fails of [false, true]) {
+  test(`notification card keeps SDK events local during Disable -> Enable (${fails ? "exhausted" : "recovered"})`, async () => {
+    const f = browserFixture({ accountEnabled: true, optedIn: true });
+    const card = await notificationCard(f, true);
+    try {
+      assert.match(renderToStaticMarkup(card.render()), />On</);
+      findButton(card.render(), "Disable on all devices").props.onClick();
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      assert.match(renderToStaticMarkup(card.render()), />Off</);
+      // Force provider propagation or terminal registration failure, not auth failure.
+      if (fails) f.fail();
+      findButton(card.render(), "Enable notifications").props.onClick();
+      const pending = renderToStaticMarkup(card.render());
+      assert.match(pending, /Enabling…|Enabling notifications/);
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      const html = renderToStaticMarkup(card.render());
+      assert.match(html, fails ? /Could not update notifications/ : />On</);
+      assert.doesNotMatch(html, /restore your Tempo session|Tempo couldn't start/);
+      assert.equal(
+        f.calls.some(([name]) => name === "permission" || name === "logout"),
+        false,
+      );
+    } finally {
+      card.cleanup();
+    }
+  });
+}
+
+test("explicit Enable waits for OneSignal optedIn propagation before registration", async () => {
+  const f = browserFixture({ optInDelay: true });
+  await f.api.prepareChallengePush("user-a");
+  await f.api.enableChallengePush(f.sdk, "user-a");
+  assert.equal(f.sdk.User.PushSubscription.optedIn, true);
+  assert.equal(await f.api.pushIsEnabled(f.sdk), true);
+  assert.equal(f.calls.filter(([action]) => action === "optIn").length, 1);
+  assert.equal(
+    f.calls.some(([action]) => action === "permission"),
+    false,
+  );
+});
+test("a stalled notification optIn times out inside the card without touching auth", async () => {
+  const f = browserFixture();
+  f.sdk.User.PushSubscription.optIn = () => new Promise(() => {});
+  const card = await notificationCard(f, true);
+  try {
+    findButton(card.render(), "Enable notifications").props.onClick();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.match(renderToStaticMarkup(card.render()), /Could not update notifications/);
+    assert.doesNotMatch(renderToStaticMarkup(card.render()), /restore your Tempo session/);
+    assert.equal(
+      f.calls.some(([action]) => action === "logout"),
+      false,
+    );
+  } finally {
+    card.cleanup();
+  }
 });

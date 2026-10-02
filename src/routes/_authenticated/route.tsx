@@ -5,6 +5,7 @@ import {
   useRouter,
   type ErrorComponentProps,
 } from "@tanstack/react-router";
+import { PageSkeleton } from "@/components/PageSkeleton";
 import { AppShell } from "@/components/AppShell";
 import { authenticatedUserQueryOptions, syncProfile } from "@/lib/auth";
 import { accountProfileQueryOptions } from "@/lib/account-profile";
@@ -22,7 +23,7 @@ export const Route = createFileRoute("/_authenticated")({
   ssr: false,
   beforeLoad: async ({ context, location }) => {
     const user = await withStartupDeadline(
-      context.queryClient.ensureQueryData(authenticatedUserQueryOptions()),
+      context.queryClient.fetchQuery(authenticatedUserQueryOptions()),
       "authentication",
       () => {
         void context.queryClient.cancelQueries({ queryKey: ["authenticated-user"], exact: true });
@@ -83,6 +84,9 @@ export const Route = createFileRoute("/_authenticated")({
     return { user };
   },
   component: AuthenticatedLayout,
+  pendingComponent: AuthenticatedPending,
+  pendingMs: 0,
+  pendingMinMs: 0,
   errorComponent: AuthenticatedRouteError,
 });
 
@@ -106,17 +110,17 @@ function AuthenticatedRouteError({ error, reset }: ErrorComponentProps) {
     );
   }
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="w-full max-w-sm">
+    <AppShell>
+      <div className="w-full">
         <DataError
-          message={userFacingError(error, "restore your Tempo session")}
+          message={userFacingError(error, "load your account")}
           onRetry={() => {
             reset();
             void router.invalidate();
           }}
         />
       </div>
-    </main>
+    </AppShell>
   );
 }
 
@@ -124,6 +128,14 @@ function AuthenticatedLayout() {
   return (
     <AppShell>
       <Outlet />
+    </AppShell>
+  );
+}
+
+function AuthenticatedPending() {
+  return (
+    <AppShell>
+      <PageSkeleton label="Checking your account" />
     </AppShell>
   );
 }

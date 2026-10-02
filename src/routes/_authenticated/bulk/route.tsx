@@ -1,3 +1,4 @@
+import { PageSkeleton } from "@/components/PageSkeleton";
 import {
   createFileRoute,
   Outlet,
@@ -104,12 +105,7 @@ function BulkLayout() {
     (!memberships && !error) ||
     (preferred && bulkId !== preferred.bulk_profile_id)
   ) {
-    return (
-      <div className="space-y-3" aria-label="Loading plan">
-        <div className="h-24 animate-pulse rounded-2xl bg-card" />
-        <div className="h-40 animate-pulse rounded-2xl bg-card" />
-      </div>
-    );
+    return <PageSkeleton label="Loading plan" />;
   }
   return <Outlet />;
 }

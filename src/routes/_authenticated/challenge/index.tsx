@@ -12,6 +12,7 @@ import {
   Trash2,
   Trophy,
 } from "lucide-react";
+import { PageSkeleton, ActivityFeedSkeleton } from "@/components/PageSkeleton";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { ChallengeTermsSummary } from "@/components/challenge-rules";
 import { Card, DataError, Note, PendingLabel, SectionTitle } from "@/components/ui-kit";
@@ -158,7 +159,7 @@ function ChallengeHome() {
   if (isLoading) {
     return (
       <AppShell>
-        <div className="h-40 animate-pulse rounded-2xl bg-card" />
+        <PageSkeleton label="Loading Challenge" />
       </AppShell>
     );
   }
@@ -302,12 +303,7 @@ function ChallengeHome() {
           Recent activity
         </SectionTitle>
         <div className="space-y-2">
-          {activitiesLoading ? (
-            <>
-              <div className="h-20 animate-pulse rounded-2xl bg-card" />
-              <div className="h-20 animate-pulse rounded-2xl bg-card" />
-            </>
-          ) : null}
+          {activitiesLoading ? <ActivityFeedSkeleton /> : null}
           {!activitiesLoading &&
             recent.map((activity) => {
               const metrics = activityMetrics(activity);

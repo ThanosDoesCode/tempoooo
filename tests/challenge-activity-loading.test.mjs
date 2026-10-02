@@ -194,3 +194,28 @@ test("malformed cursors cannot inject filters; overview uses server totals, paym
   assert.match(home, /invalidateQueries\(\{ queryKey: \["challenge-activities"\]/);
   assert.match(log, /invalidateQueries\(\{ queryKey: \["challenge-activities"\]/);
 });
+
+test("dashboard initially fetches 5 plus sentinel, then 10 plus sentinel without skipping records", async () => {
+  const { api, calls, options } = fixture(rows);
+  api.useActivities("challenge");
+  const query = options();
+  const first = await query.queryFn({ pageParam: null });
+  assert.equal(first.rows.length, 5);
+  assert.equal(calls[0].limit, 6);
+  const second = await query.queryFn({ pageParam: query.getNextPageParam(first) });
+  assert.equal(second.rows.length, 10);
+  assert.equal(calls[1].limit, 11);
+  const third = await query.queryFn({ pageParam: query.getNextPageParam(second) });
+  assert.equal(third.rows.length, 10);
+  const merged = paging.uniqueActivityPages([first, second, third]);
+  assert.equal(merged.length, 25);
+  assert.deepEqual(
+    merged.map((row) => row.id),
+    rows.slice(0, 25).map((row) => row.id),
+  );
+  const small = fixture(rows.slice(0, 4));
+  small.api.useActivities("challenge");
+  const page = await small.options().queryFn({ pageParam: null });
+  assert.equal(page.rows.length, 4);
+  assert.equal(small.options().getNextPageParam(page), undefined);
+});

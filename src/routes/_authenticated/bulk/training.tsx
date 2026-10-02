@@ -1,3 +1,4 @@
+import { PageSkeleton } from "@/components/PageSkeleton";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { addDays, format, parseISO } from "date-fns";
@@ -106,7 +107,7 @@ function TrainingPage() {
   if (planMode === "none") {
     return (
       <AppShell>
-        <div className="h-40 animate-pulse rounded-2xl bg-card" />
+        <PageSkeleton />
       </AppShell>
     );
   }
@@ -132,7 +133,7 @@ function TrainingPage() {
         {...(!usesPlanSetup ? { subtitle: format(parseISO(date), "EEEE, d MMMM") } : {})}
       />
       {usesPlanSetup && activeSession.isLoading ? (
-        <div className="mb-3 h-20 animate-pulse rounded-2xl bg-card" />
+        <div className="mb-3 h-20 motion-safe:animate-pulse rounded-2xl bg-card" />
       ) : activeSession.data ? (
         <Card className="mb-3 border-primary/40 bg-primary/5">
           <p className="text-xs font-semibold uppercase tracking-wider text-primary">
@@ -163,7 +164,7 @@ function TrainingPage() {
       ) : null}
       <div>
         {usesPlanSetup && activePlan.isLoading ? (
-          <div className="h-48 animate-pulse rounded-2xl bg-card" />
+          <div className="h-48 motion-safe:animate-pulse rounded-2xl bg-card" />
         ) : usesPlanSetup && activePlan.error ? (
           <DataError
             message={userFacingError(activePlan.error, "load your training plan")}
@@ -231,7 +232,7 @@ function TrainingPage() {
             readOnly={role === "viewer"}
           />
         ) : (
-          <div className="h-40 animate-pulse rounded-2xl bg-card" />
+          <PageSkeleton />
         )}
       </div>
     </AppShell>

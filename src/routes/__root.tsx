@@ -199,6 +199,7 @@ function RootComponent() {
   const routePending = useRouterState({ select: (state) => state.status === "pending" });
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const setStartupCoverVisible = useContext(StartupCoverContext);
+  const authEventRevision = useRef(0);
   const previousUserId = useRef<string | null | undefined>(undefined);
   const [startupComplete, setStartupComplete] = useState(false);
   const [startupAttempt, setStartupAttempt] = useState(0);
@@ -210,6 +211,7 @@ function RootComponent() {
 
   useEffect(() => {
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      authEventRevision.current += 1;
       const nextUserId = session?.user.id ?? null;
       setStartupError(null);
       setStartupSession({ restored: true, userId: nextUserId });
@@ -227,18 +229,20 @@ function RootComponent() {
 
   useEffect(() => {
     let active = true;
+    const revision = authEventRevision.current;
     setStartupSession({ restored: false, userId: null });
     void supabase.auth
       .getSession()
       .then(({ data: sessionData, error }) => {
-        if (!active) return;
+        if (!active || revision !== authEventRevision.current) return;
         if (error) throw error;
         setStartupError(null);
         setStartupSession({ restored: true, userId: sessionData.session?.user.id ?? null });
         startupDiagnostic("auth_resolved", { signedIn: !!sessionData.session?.user });
       })
       .catch((error: unknown) => {
-        if (active) setStartupError(error instanceof Error ? error : new Error("Session failed"));
+        if (active && revision === authEventRevision.current)
+          setStartupError(error instanceof Error ? error : new Error("Session failed"));
       });
     return () => {
       active = false;

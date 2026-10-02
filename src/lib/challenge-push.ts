@@ -230,8 +230,26 @@ async function endpoint<T>(body: Record<string, unknown>): Promise<T> {
   return data as T;
 }
 
+// SDK/auth-lock delays are notification-card failures, never startup failures.
+async function notificationOperation<T>(operation: Promise<T>): Promise<T> {
+  let timeout: number | undefined;
+  try {
+    return await Promise.race([
+      operation,
+      new Promise<never>((_, reject) => {
+        timeout = window.setTimeout(
+          () => reject(new Error("Could not update notifications. Please retry in a moment.")),
+          20_000,
+        );
+      }),
+    ]);
+  } finally {
+    if (timeout !== undefined) window.clearTimeout(timeout);
+  }
+}
+
 async function assertCurrentUser(userId: string) {
-  const { data } = await supabase.auth.getSession();
+  const { data } = await notificationOperation(supabase.auth.getSession());
   if (data.session?.user.id !== userId)
     throw new Error("Your account changed. Reload before enabling notifications.");
 }
@@ -251,7 +269,8 @@ export async function prepareChallengePush(userId: string) {
   await assertCurrentUser(userId);
   accountPreference.set(userId, identity.enabled);
   if (identifiedUserId !== userId) {
-    await sdk.login(identity.external_id);
+    await notificationOperation(sdk.login(identity.external_id));
+    await assertCurrentUser(userId);
     identifiedUserId = userId;
   }
   logPushDiagnostic("identity_sync", {
@@ -292,39 +311,50 @@ export async function pushIsEnabled(sdk: PushSdk) {
 
 export async function enableChallengePush(sdk: PushSdk, userId: string) {
   // Request synchronously from the click handler, before network awaits (Safari).
-  const permission = await Notification.requestPermission();
+  const permission =
+    Notification.permission === "granted" ? "granted" : await Notification.requestPermission();
   if (permission !== "granted")
     throw new Error("Notifications are off. You can allow them later in your browser settings.");
   await assertCurrentUser(userId);
-  await sdk.User.PushSubscription.optIn();
+  await notificationOperation(sdk.User.PushSubscription.optIn());
   const id = await subscriptionId(sdk);
   await assertCurrentUser(userId);
+  // Retain the ownership marker even if registration partially succeeds then fails.
+  // Logout must still be able to detach this device safely.
   localStorage.setItem(markerKey, JSON.stringify({ userId, id }));
-  const result = await registerWithSynchronizationRetry(id, true);
+  const result = await registerWithSynchronizationRetry(id, true, userId);
 
   if (!result?.enabled) {
     throw new Error("Could not enable notifications. Please retry notifications.");
   }
+  await assertCurrentUser(userId);
   accountPreference.set(userId, true);
   lastReconciliation = { userId, at: Date.now(), value: { sdk, enabled: true } };
 }
 
-async function registerWithSynchronizationRetry(subscriptionId: string, activate: boolean) {
+async function registerWithSynchronizationRetry(
+  subscriptionId: string,
+  activate: boolean,
+  userId: string,
+) {
   let result: { enabled: boolean } | null = null;
   for (let attempt = 0; attempt < 8; attempt += 1) {
+    await assertCurrentUser(userId);
     try {
       result = await endpoint<{ enabled: boolean }>({
         action: "register",
         subscription_id: subscriptionId,
         activate,
       });
-      break;
+      if (result.enabled || !activate) break;
+      throw new Error("Device registration is still synchronizing");
     } catch {
       if (attempt === 7)
         throw new Error("Could not update notifications. Please retry in a moment.");
       await new Promise((resolve) => window.setTimeout(resolve, 1500));
     }
   }
+  await assertCurrentUser(userId);
   return result;
 }
 
@@ -358,7 +388,7 @@ export async function refreshChallengePush(sdk: PushSdk, userId: string) {
     });
     logPushDiagnostic("subscription_optin_start", { outcome: "started" });
     try {
-      await sdk.User.PushSubscription.optIn();
+      await notificationOperation(sdk.User.PushSubscription.optIn());
       id = await subscriptionId(sdk);
       logPushDiagnostic("subscription_optin_complete", { outcome: "complete" });
     } catch {
@@ -370,7 +400,7 @@ export async function refreshChallengePush(sdk: PushSdk, userId: string) {
     await assertCurrentUser(userId);
   }
 
-  const result = await registerWithSynchronizationRetry(id, false);
+  const result = await registerWithSynchronizationRetry(id, false, userId);
   if (result?.enabled) {
     localStorage.setItem(markerKey, JSON.stringify({ userId, id }));
   }

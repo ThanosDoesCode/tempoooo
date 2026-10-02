@@ -1,3 +1,4 @@
+import { PageSkeleton } from "@/components/PageSkeleton";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { format } from "date-fns";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -109,7 +110,7 @@ function TodayPage() {
   if (!data || !targets || !status || planMode === "none") {
     return (
       <AppShell>
-        <div className="h-40 animate-pulse rounded-2xl bg-card" />
+        <PageSkeleton />
       </AppShell>
     );
   }

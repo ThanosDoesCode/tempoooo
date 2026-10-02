@@ -1,3 +1,4 @@
+import { PageSkeleton } from "@/components/PageSkeleton";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -201,7 +202,7 @@ function ProfilePage() {
       </Card>
 
       {bulkAccessLoading ? (
-        <div className="mt-3 h-36 animate-pulse rounded-2xl bg-card" aria-label="Loading plan" />
+        <PageSkeleton label="Loading plan" />
       ) : bulkAccessError ? (
         <Card className="mt-3">
           <SectionTitle>Fitness tools</SectionTitle>

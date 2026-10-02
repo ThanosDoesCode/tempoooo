@@ -1,6 +1,8 @@
 import type { Activity } from "./challenge";
 
 export const ACTIVITY_PAGE_SIZE = 20;
+export const RECENT_ACTIVITY_FIRST_PAGE_SIZE = 5;
+export const RECENT_ACTIVITY_OLDER_PAGE_SIZE = 10;
 export const ACTIVITY_FIELDS =
   "id,challenge_id,user_id,activity_type,distance_km,equivalent_km,qualifying_equivalent_km,is_qualified,average_speed_kmh,average_pace_seconds_per_km,activity_date,duration_seconds,evidence_path,extra_evidence_paths,external_activity_url,note,edited,created_at,updated_at";
 export type ActivityCursor = Pick<Activity, "activity_date" | "created_at" | "id">;
