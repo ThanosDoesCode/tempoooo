@@ -196,7 +196,7 @@ test("Bulk activation revocation still clears local data and redirects", async (
 });
 
 test("admin diagnostics are server-authorized and return no private notification payload", async () => {
-  const [functions, server, route, pushMigration, bulkMigration, access, progress] =
+  const [functions, server, route, pushMigration, bulkMigration, access, profile] =
     await Promise.all([
       read("src/lib/privileged-rpcs.functions.ts"),
       read("src/lib/privileged-rpcs.server.ts"),
@@ -204,7 +204,7 @@ test("admin diagnostics are server-authorized and return no private notification
       read("supabase/migrations/20260831120000_challenge_push_notifications.sql"),
       read("supabase/migrations/20260905120000_public_bulk_activation.sql"),
       read("src/lib/bulk-access.ts"),
-      read("src/routes/_authenticated/bulk/progress.tsx"),
+      read("src/routes/_authenticated/profile.tsx"),
     ]);
   assert.match(functions, /getAdminDiagnostics[\s\S]*requireSupabaseAuth/);
   assert.match(server, /\.from\("bulk_admins"\)[\s\S]*\.eq\("user_id", caller\)/);
@@ -219,7 +219,7 @@ test("admin diagnostics are server-authorized and return no private notification
   assert.match(route, /Private operational status/);
   assert.match(route, /bulkAdminQueryOptions/);
   assert.match(access, /supabase\.rpc\("is_bulk_admin"\)/);
-  assert.match(progress, /\{isAdmin \? \([\s\S]*Production diagnostics/);
+  assert.match(profile, /\{isAdmin \? \([\s\S]*Production diagnostics/);
   assert.match(
     bulkMigration,
     /INSERT INTO public\.bulk_admins\(user_id\)[\s\S]*FROM public\.bulk_members[\s\S]*WHERE role = 'owner'/,
@@ -236,7 +236,7 @@ test("Bulk personal backup remains exact stored JSON and carries Tempo branding"
   assert.match(progress, /JSON\.stringify\(data\)/);
   assert.match(progress, /tempo-bulk-backup-/);
   assert.match(progress, /Restore backup/);
-  assert.match(progress, /to="\/bulk\/diagnostics"/);
+  assert.doesNotMatch(progress, /to="\/bulk\/diagnostics"/);
 });
 
 test("push observability stays structured while dedupe and sync retry remain intact", async () => {

@@ -55,11 +55,11 @@ test("training plan switching is visible, transactional and preserves completed 
 });
 
 test("inactive public Goal access is hidden without changing legacy My Bulk", async () => {
-  const [access, mode, guard, profile, onboarding, migration] = await Promise.all([
+  const [access, mode, guard, settings, onboarding, migration] = await Promise.all([
     read("src/lib/bulk-access.ts"),
     read("src/lib/bulk-mode.ts"),
     read("src/routes/_authenticated/bulk/route.tsx"),
-    read("src/routes/_authenticated/profile.tsx"),
+    read("src/routes/_authenticated/bulk/more.tsx"),
     read("src/routes/_authenticated/bulk-onboarding.tsx"),
     read("supabase/migrations/20260908120000_public_goal_mobile_flow_hardening.sql"),
   ]);
@@ -67,10 +67,10 @@ test("inactive public Goal access is hidden without changing legacy My Bulk", as
   assert.match(access, /goal_status/);
   assert.match(access, /is_active: profile\?\.goal_status !== "inactive"/);
   assert.match(guard, /preferredBulkMembership/);
-  assert.match(profile, /deactivatePublicGoal/);
-  assert.match(profile, /clearBulk\(\)/);
-  assert.match(profile, /is_active: false/);
-  assert.match(profile, /startsWith\("bulk"\)/);
+  assert.match(settings, /deactivatePublicGoal/);
+  assert.match(settings, /clearBulk\(\)/);
+  assert.match(settings, /is_active: false/);
+  assert.match(settings, /startsWith\("bulk"\)/);
   assert.match(onboarding, /complete_goal_onboarding/);
   assert.match(migration, /goal_status IS NULL OR goal_status IN \('active', 'inactive'\)/);
   assert.match(

@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { addMonths, format, parseISO, endOfMonth } from "date-fns";
 import { useMemo, useRef, useState } from "react";
 import {
@@ -44,7 +44,7 @@ import {
   type PhotoSet,
   type SplitType,
 } from "@/lib/types";
-import { bulkPlanModeFor, useBulkAdmin, useMemberships } from "@/lib/bulk-access";
+import { bulkPlanModeFor, useMemberships } from "@/lib/bulk-access";
 import { PublicBulkProgress } from "@/components/PublicBulkProgress";
 
 export const Route = createFileRoute("/_authenticated/bulk/progress")({
@@ -97,7 +97,6 @@ function ProgressPage() {
 }
 
 function LegacyProgressPage({ data }: { data: AppData }) {
-  const { data: isAdmin } = useBulkAdmin();
   const [monthIdx, setMonthIdx] = useState(() => {
     const now = new Date();
     const idx = MONTHS.findIndex((m) => format(m, "yyyy-MM") === format(now, "yyyy-MM"));
@@ -361,21 +360,6 @@ function LegacyProgressPage({ data }: { data: AppData }) {
 
         <TrainingSummary data={data} />
         <PhotosSection data={data} />
-        {isAdmin ? (
-          <Card>
-            <SectionTitle>Operations</SectionTitle>
-            <p className="text-xs text-muted-foreground">
-              Review push delivery failures and retry health without exposing challenge data.
-            </p>
-            <Link
-              to="/bulk/diagnostics"
-              preload="intent"
-              className="mt-3 flex min-h-11 w-full items-center justify-center rounded-xl border border-border bg-elevated px-3 py-2 text-sm font-medium text-foreground active:scale-[0.98]"
-            >
-              Production diagnostics
-            </Link>
-          </Card>
-        ) : null}
       </div>
     </AppShell>
   );

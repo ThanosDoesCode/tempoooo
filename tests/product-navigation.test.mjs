@@ -264,10 +264,9 @@ test("contextual navigation uses distinct route-backed tasks", async () => {
     "/bulk/meals",
     "/bulk/meals/presets",
     "/bulk/meals/history",
-    "/bulk/meals/more",
   ]);
   assert.equal(new Set(routes("TRAINING_NAV")).size, 4);
-  assert.equal(new Set(routes("MEALS_NAV")).size, 4);
+  assert.equal(new Set(routes("MEALS_NAV")).size, 3);
   assert.doesNotMatch(shell, /hash: "(?:plan|presets)"/);
   assert.match(
     await read("src/components/SecondaryNavigation.tsx"),
@@ -318,5 +317,5 @@ test("every Meals tab remains in the unified Goal meal experience", async () => 
   assert.doesNotMatch(presets, /Navigate|to="\/bulk"|replace/);
   assert.match(today, /BulkNutritionLog/);
   assert.match(history, /MealsHistoryPage/);
-  assert.match(more, /MealsMorePage/);
+  assert.match(more, /redirect\(\{ to: "\/bulk\/meals\/presets", replace: true \}\)/);
 });

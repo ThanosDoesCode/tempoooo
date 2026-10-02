@@ -329,7 +329,7 @@ test("Tempo navigation exposes optional fitness areas only after persisted activ
   assert.match(denied, /Goal is optional/);
 });
 
-test("each product area has four contextual destinations and legacy/public data paths remain", async () => {
+test("product areas expose distinct contextual destinations and preserve legacy/public data paths", async () => {
   const [shell, more, today, productNavigation] = await Promise.all([
     read("src/components/AppShell.tsx"),
     read("src/routes/_authenticated/bulk/more.tsx"),
@@ -341,9 +341,16 @@ test("each product area has four contextual destinations and legacy/public data 
     assert.ok(source, `${constant} missing`);
     return [...source.matchAll(/label: "([^"]+)"/g)].map((match) => match[1]);
   };
-  assert.deepEqual(labels("CHALLENGE_NAV"), ["Week", "Add", "History", "Money"]);
+  assert.deepEqual(labels("CHALLENGE_NAV"), [
+    "Week",
+    "Add",
+    "Rules",
+    "Targets",
+    "History",
+    "Payments",
+  ]);
   assert.deepEqual(labels("TRAINING_NAV"), ["Today", "PRs", "History", "More"]);
-  assert.deepEqual(labels("MEALS_NAV"), ["Today", "Presets", "History", "More"]);
+  assert.deepEqual(labels("MEALS_NAV"), ["Today", "Presets", "History"]);
   assert.deepEqual(labels("GOAL_NAV"), ["Today", "Progress", "Check-In", "Settings"]);
   assert.doesNotMatch(more, /to="\/bulk\/(?:progress|check-in)"/);
   assert.match(more, /NutritionTargetsEditor/);

@@ -3,7 +3,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Download, Plane } from "lucide-react";
 import { AppShell, PageHeader } from "@/components/AppShell";
-import { RulesCard } from "@/components/challenge-rules";
 import { Card, DataError, Note, PendingLabel, SectionTitle } from "@/components/ui-kit";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
@@ -702,10 +701,6 @@ function Payments() {
           )}
         </section>
       ) : null}
-
-      <section className="mt-5">
-        <RulesCard terms={challenge} />
-      </section>
 
       <Note>
         Only the payer can mark or settle a payment, only the recipient can confirm one they

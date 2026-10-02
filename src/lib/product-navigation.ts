@@ -9,6 +9,8 @@ export const PRODUCT_LANDING_ROUTES = {
 } as const;
 
 export function productAreaForPath(pathname: string): ProductArea | null {
+  if (pathname === "/bulk/diagnostics" || pathname.startsWith("/bulk/diagnostics/"))
+    return "profile";
   if (pathname === "/profile" || pathname.startsWith("/profile/")) return "profile";
   if (pathname === "/bulk-onboarding" || pathname === "/bulk-access-denied") return "profile";
   if (pathname.startsWith("/invite/challenge/")) return "challenge";

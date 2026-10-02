@@ -32,6 +32,7 @@ import { Route as AuthenticatedChallengeHistoryRouteImport } from './routes/_aut
 import { Route as AuthenticatedChallengeLogRouteImport } from './routes/_authenticated/challenge/log'
 import { Route as AuthenticatedChallengeNewRouteImport } from './routes/_authenticated/challenge/new'
 import { Route as AuthenticatedChallengePaymentsRouteImport } from './routes/_authenticated/challenge/payments'
+import { Route as AuthenticatedChallengeRulesRouteImport } from './routes/_authenticated/challenge/rules'
 import { Route as AuthenticatedChallengeTargetsRouteImport } from './routes/_authenticated/challenge/targets'
 import { Route as AuthenticatedBulkMealsHistoryRouteImport } from './routes/_authenticated/bulk/meals_.history'
 import { Route as AuthenticatedBulkMealsMoreRouteImport } from './routes/_authenticated/bulk/meals_.more'
@@ -169,6 +170,12 @@ const AuthenticatedChallengePaymentsRoute =
     path: '/challenge/payments',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedChallengeRulesRoute =
+  AuthenticatedChallengeRulesRouteImport.update({
+    id: '/challenge/rules',
+    path: '/challenge/rules',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedChallengeTargetsRoute =
   AuthenticatedChallengeTargetsRouteImport.update({
     id: '/challenge/targets',
@@ -245,6 +252,7 @@ export interface FileRoutesByFullPath {
   '/challenge/log': typeof AuthenticatedChallengeLogRoute
   '/challenge/new': typeof AuthenticatedChallengeNewRoute
   '/challenge/payments': typeof AuthenticatedChallengePaymentsRoute
+  '/challenge/rules': typeof AuthenticatedChallengeRulesRoute
   '/challenge/targets': typeof AuthenticatedChallengeTargetsRoute
   '/bulk/': typeof AuthenticatedBulkIndexRoute
   '/challenge/': typeof AuthenticatedChallengeIndexRoute
@@ -277,6 +285,7 @@ export interface FileRoutesByTo {
   '/challenge/log': typeof AuthenticatedChallengeLogRoute
   '/challenge/new': typeof AuthenticatedChallengeNewRoute
   '/challenge/payments': typeof AuthenticatedChallengePaymentsRoute
+  '/challenge/rules': typeof AuthenticatedChallengeRulesRoute
   '/challenge/targets': typeof AuthenticatedChallengeTargetsRoute
   '/bulk': typeof AuthenticatedBulkIndexRoute
   '/challenge': typeof AuthenticatedChallengeIndexRoute
@@ -312,6 +321,7 @@ export interface FileRoutesById {
   '/_authenticated/challenge/log': typeof AuthenticatedChallengeLogRoute
   '/_authenticated/challenge/new': typeof AuthenticatedChallengeNewRoute
   '/_authenticated/challenge/payments': typeof AuthenticatedChallengePaymentsRoute
+  '/_authenticated/challenge/rules': typeof AuthenticatedChallengeRulesRoute
   '/_authenticated/challenge/targets': typeof AuthenticatedChallengeTargetsRoute
   '/_authenticated/bulk/': typeof AuthenticatedBulkIndexRoute
   '/_authenticated/challenge/': typeof AuthenticatedChallengeIndexRoute
@@ -347,6 +357,7 @@ export interface FileRouteTypes {
     | '/challenge/log'
     | '/challenge/new'
     | '/challenge/payments'
+    | '/challenge/rules'
     | '/challenge/targets'
     | '/bulk/'
     | '/challenge/'
@@ -379,6 +390,7 @@ export interface FileRouteTypes {
     | '/challenge/log'
     | '/challenge/new'
     | '/challenge/payments'
+    | '/challenge/rules'
     | '/challenge/targets'
     | '/bulk'
     | '/challenge'
@@ -413,6 +425,7 @@ export interface FileRouteTypes {
     | '/_authenticated/challenge/log'
     | '/_authenticated/challenge/new'
     | '/_authenticated/challenge/payments'
+    | '/_authenticated/challenge/rules'
     | '/_authenticated/challenge/targets'
     | '/_authenticated/bulk/'
     | '/_authenticated/challenge/'
@@ -595,6 +608,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedChallengePaymentsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/challenge/rules': {
+      id: '/_authenticated/challenge/rules'
+      path: '/challenge/rules'
+      fullPath: '/challenge/rules'
+      preLoaderRoute: typeof AuthenticatedChallengeRulesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/challenge/targets': {
       id: '/_authenticated/challenge/targets'
       path: '/challenge/targets'
@@ -717,6 +737,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedChallengeLogRoute: typeof AuthenticatedChallengeLogRoute
   AuthenticatedChallengeNewRoute: typeof AuthenticatedChallengeNewRoute
   AuthenticatedChallengePaymentsRoute: typeof AuthenticatedChallengePaymentsRoute
+  AuthenticatedChallengeRulesRoute: typeof AuthenticatedChallengeRulesRoute
   AuthenticatedChallengeTargetsRoute: typeof AuthenticatedChallengeTargetsRoute
   AuthenticatedChallengeIndexRoute: typeof AuthenticatedChallengeIndexRoute
   AuthenticatedInviteChallengeTokenRoute: typeof AuthenticatedInviteChallengeTokenRoute
@@ -733,6 +754,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedChallengeLogRoute: AuthenticatedChallengeLogRoute,
   AuthenticatedChallengeNewRoute: AuthenticatedChallengeNewRoute,
   AuthenticatedChallengePaymentsRoute: AuthenticatedChallengePaymentsRoute,
+  AuthenticatedChallengeRulesRoute: AuthenticatedChallengeRulesRoute,
   AuthenticatedChallengeTargetsRoute: AuthenticatedChallengeTargetsRoute,
   AuthenticatedChallengeIndexRoute: AuthenticatedChallengeIndexRoute,
   AuthenticatedInviteChallengeTokenRoute:

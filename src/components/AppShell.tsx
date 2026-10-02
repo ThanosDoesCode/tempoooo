@@ -13,13 +13,10 @@ import { SecondaryNavigation } from "./SecondaryNavigation";
 const CHALLENGE_NAV = [
   { to: "/challenge", label: "Week", exact: true },
   { to: "/challenge/log", label: "Add", exact: false },
+  { to: "/challenge/rules", label: "Rules", exact: false },
+  { to: "/challenge/targets", label: "Targets", exact: false },
   { to: "/challenge/history", label: "History", exact: false },
-  {
-    to: "/challenge/payments",
-    label: "Money",
-    exact: false,
-    activePrefixes: ["/challenge/targets"],
-  },
+  { to: "/challenge/payments", label: "Payments", exact: false },
 ] as const;
 
 const TRAINING_NAV = [
@@ -47,7 +44,6 @@ const MEALS_NAV = [
     label: "History",
     exact: false,
   },
-  { to: "/bulk/meals/more", label: "More", exact: false },
 ] as const;
 
 const GOAL_NAV = [
@@ -58,7 +54,7 @@ const GOAL_NAV = [
     to: "/bulk/more",
     label: "Settings",
     exact: false,
-    activePrefixes: ["/bulk/history", "/bulk/diagnostics"],
+    activePrefixes: ["/bulk/history"],
   },
 ] as const;
 

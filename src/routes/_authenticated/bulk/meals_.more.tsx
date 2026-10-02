@@ -1,15 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { AppShell, PageHeader } from "@/components/AppShell";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
+// Preserve old bookmarks while removing the empty Meal tools destination.
 export const Route = createFileRoute("/_authenticated/bulk/meals_/more")({
-  head: () => ({ meta: [{ title: "Tempo" }] }),
-  component: MealsMorePage,
+  beforeLoad: () => {
+    throw redirect({ to: "/bulk/meals/presets", replace: true });
+  },
 });
-
-function MealsMorePage() {
-  return (
-    <AppShell>
-      <PageHeader title="Meal tools" subtitle="Manage reusable meals and nutrition records." />
-    </AppShell>
-  );
-}

@@ -44,8 +44,8 @@ function Targets() {
       <PageHeader
         title="Weekly terms"
         subtitle="Base terms stay fixed; future targets can vary."
-        backTo="/challenge/payments"
-        backLabel="Money"
+        backTo="/challenge"
+        backLabel="Week"
       />
       {isLoading || (challenge && targetsQuery.isLoading) ? (
         <div className="h-40 animate-pulse rounded-2xl bg-card" aria-label="Loading weekly terms" />
