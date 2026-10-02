@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import {
   deriveBulkProgressionTargets,
   practicalLoad,
+  previousPerformanceForActiveSet,
   weakerSideFor,
 } from "../src/lib/bulk-progression.ts";
 
@@ -22,6 +23,8 @@ const set = (order, overrides = {}) => ({
   order,
   isExtra: false,
   isComplete: true,
+  setType: "normal",
+  rpe: null,
   bilateralWeight: 20,
   bilateralReps: 10,
   leftWeight: null,
@@ -93,6 +96,39 @@ test("bilateral progression uses planned sets, practical loads and ignores extra
   ]);
   assert.equal(mixed.decision, "maintain_load_increase_reps");
   assert.equal(practicalLoad(23.1), 22.5);
+});
+
+test("Previous follows the active set type while warmups stay out of working progression", () => {
+  const history = session(
+    exercise([
+      set(1, { setType: "warmup", bilateralWeight: 10, bilateralReps: 15 }),
+      set(2, { bilateralWeight: 20, bilateralReps: 10 }),
+      set(3, { bilateralWeight: 20, bilateralReps: 10 }),
+      set(4, { bilateralWeight: 20, bilateralReps: 10 }),
+    ]),
+  );
+  const progression = result(target(), [history]);
+
+  assert.equal(progression.previousPerformance.length, 3);
+  assert.deepEqual(
+    progression.previousPerformance.map((item) => item.bilateralReps),
+    [10, 10, 10],
+  );
+  assert.equal(progression.previousBySetType.warmup[0].bilateralReps, 15);
+  assert.equal(
+    previousPerformanceForActiveSet(progression, ["normal", "normal", "normal"], 0).bilateralReps,
+    10,
+  );
+  assert.equal(
+    previousPerformanceForActiveSet(progression, ["warmup", "normal", "normal"], 0).bilateralReps,
+    15,
+  );
+  assert.equal(
+    previousPerformanceForActiveSet(progression, ["normal", "normal", "normal"], 0).bilateralReps,
+    10,
+  );
+  assert.equal(previousPerformanceForActiveSet(progression, ["drop"], 0), undefined);
+  assert.equal(progression.decision, "maintain_load_increase_reps");
 });
 
 test("incomplete or invalid planned data cannot produce positive progression", () => {

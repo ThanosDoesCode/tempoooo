@@ -109,7 +109,9 @@ export function derivePublicPersonalRecords(sessions: BulkTrainingSession[]): Pe
       const identity = exercise.sourceExerciseId ?? `name:${exercise.name}`;
       const sides = exercise.executionMode === "unilateral" ? (["left", "right"] as const) : [null];
       for (const side of sides) {
-        const sets = exercise.sets.filter((set) => set.isComplete);
+        const sets = exercise.sets.filter(
+          (set) => set.isComplete && (set.setType ?? "normal") !== "warmup",
+        );
         const values = sets.flatMap((set) => {
           const reps =
             side === "left" ? set.leftReps : side === "right" ? set.rightReps : set.bilateralReps;

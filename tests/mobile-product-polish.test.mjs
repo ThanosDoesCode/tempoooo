@@ -16,6 +16,8 @@ const trainingSet = (overrides = {}) => ({
   order: 1,
   isExtra: false,
   isComplete: true,
+  setType: "normal",
+  rpe: null,
   bilateralWeight: 20,
   bilateralReps: 8,
   leftWeight: null,
@@ -62,6 +64,7 @@ test("public PRs use completed sets, keep stable identities and expose each reco
       publicExercise({
         name: "Renamed Cable Row",
         sets: [
+          trainingSet({ setType: "warmup", bilateralWeight: 100, bilateralReps: 30 }),
           trainingSet({ bilateralWeight: 20, bilateralReps: 12 }),
           trainingSet({ bilateralWeight: 25, bilateralReps: 8 }),
           trainingSet({ bilateralWeight: 30, bilateralReps: 20, isComplete: false }),

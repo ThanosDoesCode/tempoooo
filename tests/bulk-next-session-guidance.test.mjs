@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import {
   buildBulkNextSessionGuidance,
   formatPreviousPerformance,
+  perSetRepObjective,
   sensibleRepObjective,
 } from "../src/lib/bulk-next-session-guidance.ts";
 import { deriveBulkProgressionTargets } from "../src/lib/bulk-progression.ts";
@@ -20,6 +21,7 @@ const target = (overrides = {}) => ({
 });
 
 const previousSet = (overrides = {}) => ({
+  setType: "normal",
   bilateralLoad: 22.5,
   bilateralReps: 10,
   leftLoad: null,
@@ -54,6 +56,7 @@ const result = (overrides = {}) => ({
     previousSet({ bilateralReps: 11 }),
     previousSet({ bilateralReps: 10 }),
   ],
+  previousBySetType: { warmup: [], normal: [], failure: [], drop: [] },
   ...overrides,
 });
 
@@ -63,14 +66,15 @@ test("increase-load guidance formats the next practical load and current prescri
     target(),
   );
   assert.equal(guidance.headline, "Increase load");
-  assert.equal(guidance.targetText, "25 kg · 3 × 8–12 reps");
+  assert.equal(guidance.targetText, "25 kg · 3 sets · 8–12 reps each");
   assert.match(guidance.reasonText, /top of the rep range/i);
 });
 
-test("rep guidance advances total reps without exceeding the current plan ceiling", () => {
+test("rep guidance translates the exact aggregate objective into a practical per-set target", () => {
   const build = result();
   assert.equal(sensibleRepObjective(build), 34);
-  assert.match(buildBulkNextSessionGuidance(build, target()).targetText, /34\+ total reps/);
+  assert.deepEqual(perSetRepObjective(build), [12, 11, 11]);
+  assert.match(buildBulkNextSessionGuidance(build, target()).targetText, /12 \/ 11 \/ 11 reps/);
   const nearCeiling = result({
     previousPerformance: [
       previousSet({ bilateralReps: 12 }),
@@ -79,7 +83,11 @@ test("rep guidance advances total reps without exceeding the current plan ceilin
     ],
   });
   assert.equal(sensibleRepObjective(nearCeiling), 36);
-  assert.match(buildBulkNextSessionGuidance(nearCeiling, target()).targetText, /36 total reps/);
+  assert.deepEqual(perSetRepObjective(nearCeiling), [12, 12, 12]);
+  assert.match(
+    buildBulkNextSessionGuidance(nearCeiling, target()).targetText,
+    /12 \/ 12 \/ 12 reps/,
+  );
   assert.doesNotMatch(buildBulkNextSessionGuidance(nearCeiling, target()).targetText, /37/);
 });
 
@@ -92,7 +100,7 @@ test("reduction and repeat guidance are neutral and preserve the plan range", ()
     }),
     target(),
   );
-  assert.equal(reduction.targetText, "20 kg · rebuild inside 8–12 reps");
+  assert.equal(reduction.targetText, "20 kg · rebuild 8–12 reps each set");
   assert.match(reduction.reasonText, /last two sessions stayed below/);
   assert.doesNotMatch(reduction.reasonText, /fail|bad|poor/i);
   const repeat = buildBulkNextSessionGuidance(
@@ -115,12 +123,12 @@ test("first, incompatible, ambiguous and unavailable history use neutral plan gu
       }),
       target(),
     );
-    assert.equal(guidance.targetText, "Use the plan target · 3 × 8–12 reps");
+    assert.equal(guidance.targetText, "Use the plan target · 3 sets · 8–12 reps each");
     assert.equal(guidance.previousPerformanceText, null);
     assert.doesNotMatch(guidance.reasonText, /error|failed/i);
   }
   const unavailable = buildBulkNextSessionGuidance(undefined, target({ repMin: 6, repMax: 10 }));
-  assert.equal(unavailable.targetText, "3 × 6–10 reps");
+  assert.equal(unavailable.targetText, "3 sets · 6–10 reps each");
   assert.equal(unavailable.priority, "baseline");
 });
 
@@ -210,7 +218,8 @@ test("bodyweight guidance shows reps or external load without fake body mass", (
   });
   const repsGuidance = buildBulkNextSessionGuidance(bodyweight, target());
   assert.equal(repsGuidance.previousPerformanceText, "10 / 9 / 8");
-  assert.match(repsGuidance.targetText, /28\+ total reps/);
+  assert.deepEqual(perSetRepObjective(bodyweight), [10, 9, 9]);
+  assert.match(repsGuidance.targetText, /10 \/ 9 \/ 9 reps/);
   assert.doesNotMatch(`${repsGuidance.targetText} ${repsGuidance.previousPerformanceText}`, /0 kg/);
 
   const add = buildBulkNextSessionGuidance(
@@ -292,7 +301,7 @@ test("progression snapshots only planned sets so extras cannot inflate guidance"
 test("current plan range controls guidance after an edit", () => {
   const edited = result({ targetSets: 4, repTargetMin: 5, repTargetMax: 8 });
   const guidance = buildBulkNextSessionGuidance(edited, target());
-  assert.match(guidance.targetText, /32 total reps/);
+  assert.match(guidance.targetText, /4 sets · 5–8 reps each/);
   assert.doesNotMatch(guidance.targetText, /8–12/);
 });
 
@@ -320,7 +329,8 @@ test("overview and active workout render guidance from the one batched progressi
   assert.match(overview, /Next:/);
   assert.match(workout, /previousSetLabel/);
   assert.match(workout, />Previous</);
-  assert.match(workout, /Target today:/);
+  assert.match(workout, />Target:</);
+  assert.match(workout, /previousPerformanceForActiveSet/);
   assert.match(workout, /Progression guidance is unavailable|buildBulkNextSessionGuidance/);
   assert.match(query, /fetchRecentCompletedBulkTrainingSessions\(bulkProfileId, 30\)/);
   assert.doesNotMatch(query, /forEach[\s\S]*fetchRecentCompletedBulkTrainingSessions/);

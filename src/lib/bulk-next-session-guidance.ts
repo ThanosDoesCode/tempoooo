@@ -39,7 +39,7 @@ const finite = (value: number | null | undefined): value is number =>
 const kg = (value: number) => `${Number(value.toFixed(2))} kg`;
 const externalKg = (value: number) => `+${kg(value)}`;
 const planTarget = (target: Pick<BulkProgressionTargetInput, "targetSets" | "repMin" | "repMax">) =>
-  `${target.targetSets} × ${target.repMin}–${target.repMax} reps`;
+  `${target.targetSets} sets · ${target.repMin}–${target.repMax} reps each`;
 
 function reps(values: Array<number | null>) {
   return values.map((value) => (value == null ? "—" : value)).join(" / ");
@@ -113,6 +113,24 @@ function previousRepTotal(result: BulkProgressionResult) {
   return sets.reduce((sum, set) => sum + (set.bilateralReps ?? 0), 0);
 }
 
+function previousRepSequence(result: BulkProgressionResult): number[] | null {
+  const sets = result.previousPerformance ?? [];
+  if (sets.length < result.targetSets) return null;
+  if (result.executionMode === "unilateral") {
+    const left = sets.slice(0, result.targetSets).map((set) => set.leftReps);
+    const right = sets.slice(0, result.targetSets).map((set) => set.rightReps);
+    if (!left.every(finite) || !right.every(finite)) return null;
+    const leftValues = left as number[];
+    const rightValues = right as number[];
+    return leftValues.reduce((sum, value) => sum + value, 0) <=
+      rightValues.reduce((sum, value) => sum + value, 0)
+      ? leftValues
+      : rightValues;
+  }
+  const values = sets.slice(0, result.targetSets).map((set) => set.bilateralReps);
+  return values.every(finite) ? (values as number[]) : null;
+}
+
 export function sensibleRepObjective(result: BulkProgressionResult): number | null {
   if (!result.previousPerformance?.length) return null;
   const ceiling = result.targetSets * result.repTargetMax;
@@ -121,13 +139,26 @@ export function sensibleRepObjective(result: BulkProgressionResult): number | nu
   return Math.min(previous + 1, ceiling);
 }
 
-function repObjectiveText(result: BulkProgressionResult) {
+export function perSetRepObjective(result: BulkProgressionResult): number[] | null {
   const objective = sensibleRepObjective(result) ?? result.targetTotalReps;
-  if (!objective) return `build reps toward ${result.repTargetMax}`;
-  const ceiling = result.targetSets * result.repTargetMax;
-  return objective >= ceiling
-    ? `aim for ${ceiling} total reps`
-    : `aim for ${objective}+ total reps`;
+  const previous = previousRepSequence(result);
+  if (!objective || !previous || result.targetSets <= 0) return null;
+  const target = previous.map((value) => Math.min(value, result.repTargetMax));
+  let remaining = objective - target.reduce((sum, value) => sum + value, 0);
+  for (let index = target.length - 1; index >= 0 && remaining > 0; index -= 1) {
+    const room = Math.max(0, result.repTargetMax - target[index]!);
+    const added = Math.min(room, remaining);
+    target[index] = target[index]! + added;
+    remaining -= added;
+  }
+  return remaining === 0 ? target : null;
+}
+
+function repObjectiveText(result: BulkProgressionResult) {
+  const target = perSetRepObjective(result);
+  if (target)
+    return `${target.join(" / ")} reps${result.executionMode === "unilateral" ? " each side" : ""}`;
+  return `${result.targetSets} sets · ${result.repTargetMin}–${result.repTargetMax} reps each`;
 }
 
 function sideTargets(result: BulkProgressionResult, verb: "keep" | "use") {
@@ -156,28 +187,29 @@ function targetText(result: BulkProgressionResult) {
   }
   if (result.decision === "reduce_load") {
     if (result.executionMode === "unilateral")
-      return `${sideTargets(result, "use")} · rebuild inside ${result.repTargetMin}–${result.repTargetMax} reps`;
-    if (!finite(result.recommendedLoad)) return `Repeat ${prescription}`;
+      return `${sideTargets(result, "use")} · rebuild ${result.repTargetMin}–${result.repTargetMax} reps each set`;
+    if (!finite(result.recommendedLoad)) return `Repeat · ${prescription}`;
     const load = result.isBodyweight
       ? externalKg(result.recommendedLoad)
       : kg(result.recommendedLoad);
-    return `${load} · rebuild inside ${result.repTargetMin}–${result.repTargetMax} reps`;
+    return `${load} · rebuild ${result.repTargetMin}–${result.repTargetMax} reps each set`;
   }
   if (result.decision === "repeat_target") {
     if (
       result.executionMode === "unilateral" &&
       (finite(result.leftRecommendedLoad) || finite(result.rightRecommendedLoad))
     )
-      return `${sideTargets(result, "keep")} · repeat ${result.repTargetMin}–${result.repTargetMax} reps`;
+      return `${sideTargets(result, "keep")} · repeat ${result.repTargetMin}–${result.repTargetMax} reps each set`;
     if (finite(result.recommendedLoad) && (!result.isBodyweight || result.recommendedLoad > 0))
-      return `${result.isBodyweight ? externalKg(result.recommendedLoad) : kg(result.recommendedLoad)} · repeat ${result.repTargetMin}–${result.repTargetMax} reps`;
+      return `${result.isBodyweight ? externalKg(result.recommendedLoad) : kg(result.recommendedLoad)} · repeat ${result.repTargetMin}–${result.repTargetMax} reps each set`;
     return `Repeat ${prescription}`;
   }
   if (result.executionMode === "unilateral") {
     const sides = sideTargets(result, "keep");
+    const objective = repObjectiveText(result);
     if (result.weakerSide && result.weakerSide !== "balanced")
-      return `${sides} and bring the ${result.weakerSide} side closer to ${result.repTargetMax} reps`;
-    return `${sides} and build reps`;
+      return `${sides} · ${objective} · let the ${result.weakerSide} side set the pace`;
+    return `${sides} · ${objective}`;
   }
   const objective = repObjectiveText(result);
   if (result.isBodyweight && (!finite(result.recommendedLoad) || result.recommendedLoad === 0))

@@ -1,4 +1,5 @@
 import type {
+  BulkSetType,
   BulkTrainingSession,
   BulkTrainingSessionExercise,
   BulkTrainingSet,
@@ -41,6 +42,7 @@ export type BulkProgressionTargetInput = {
 };
 
 export type BulkProgressionPreviousSet = {
+  setType: BulkSetType;
   bilateralLoad: number | null;
   bilateralReps: number | null;
   leftLoad: number | null;
@@ -48,6 +50,8 @@ export type BulkProgressionPreviousSet = {
   rightLoad: number | null;
   rightReps: number | null;
 };
+
+export type BulkProgressionPreviousBySetType = Record<BulkSetType, BulkProgressionPreviousSet[]>;
 
 export type BulkProgressionResult = {
   planExerciseId: string;
@@ -70,6 +74,7 @@ export type BulkProgressionResult = {
   weakerSide: "left" | "right" | "balanced" | null;
   dataStatus: "none" | "partial" | "usable";
   previousPerformance: BulkProgressionPreviousSet[] | null;
+  previousBySetType: BulkProgressionPreviousBySetType;
 };
 
 type Occurrence = {
@@ -102,6 +107,12 @@ const empty = (
   weakerSide: null,
   dataStatus: "none",
   previousPerformance: null,
+  previousBySetType: {
+    warmup: [],
+    normal: [],
+    failure: [],
+    drop: [],
+  },
 });
 
 export function practicalLoad(value: number) {
@@ -118,18 +129,60 @@ function median(values: number[]) {
   return sorted.length % 2 ? sorted[middle]! : (sorted[middle - 1]! + sorted[middle]!) / 2;
 }
 
-const planned = (exercise: BulkTrainingSessionExercise) =>
-  exercise.sets.filter((set) => !set.isExtra).slice(0, exercise.targetSets);
+const persistedSetType = (set: BulkTrainingSet): BulkSetType => set.setType ?? "normal";
+
+// Plan progression is based on the prescribed normal working sets. Special set
+// types remain in history and can be shown under Previous, but they must not
+// displace or inflate the working-set progression target.
+const plannedWorkingSets = (exercise: BulkTrainingSessionExercise) =>
+  exercise.sets
+    .filter((set) => !set.isExtra && persistedSetType(set) === "normal")
+    .slice(0, exercise.targetSets);
+
+const toPreviousSet = (set: BulkTrainingSet): BulkProgressionPreviousSet => ({
+  setType: persistedSetType(set),
+  bilateralLoad: set.bilateralWeight,
+  bilateralReps: set.bilateralReps,
+  leftLoad: set.leftWeight,
+  leftReps: set.leftReps,
+  rightLoad: set.rightWeight,
+  rightReps: set.rightReps,
+});
 
 const previousPerformance = (exercise: BulkTrainingSessionExercise): BulkProgressionPreviousSet[] =>
-  planned(exercise).map((set) => ({
-    bilateralLoad: set.bilateralWeight,
-    bilateralReps: set.bilateralReps,
-    leftLoad: set.leftWeight,
-    leftReps: set.leftReps,
-    rightLoad: set.rightWeight,
-    rightReps: set.rightReps,
-  }));
+  plannedWorkingSets(exercise).map(toPreviousSet);
+
+const SET_TYPES: BulkSetType[] = ["warmup", "normal", "failure", "drop"];
+
+function previousBySetType(history: Occurrence[]): BulkProgressionPreviousBySetType {
+  return Object.fromEntries(
+    SET_TYPES.map((setType) => {
+      const latestCompatible = history.find((item) =>
+        item.exercise.sets.some((set) => set.isComplete && persistedSetType(set) === setType),
+      );
+      const sets = latestCompatible
+        ? latestCompatible.exercise.sets
+            .filter((set) => set.isComplete && persistedSetType(set) === setType)
+            .sort((a, b) => a.order - b.order)
+            .map(toPreviousSet)
+        : [];
+      return [setType, sets];
+    }),
+  ) as BulkProgressionPreviousBySetType;
+}
+
+export function previousPerformanceForActiveSet(
+  result: BulkProgressionResult | null | undefined,
+  currentSetTypes: BulkSetType[],
+  setIndex: number,
+) {
+  const setType = currentSetTypes[setIndex];
+  if (!setType) return undefined;
+  const typeIndex = currentSetTypes
+    .slice(0, setIndex)
+    .filter((candidate) => candidate === setType).length;
+  return result?.previousBySetType[setType]?.[typeIndex];
+}
 
 function validWeight(value: number | null) {
   return value != null && Number.isFinite(value) && value >= 0 && value <= 1000;
@@ -175,7 +228,7 @@ function selectHistory(
   const exact = compatible.filter(
     (item) => item.exercise.sourcePlanExerciseId === target.planExerciseId,
   );
-  if (exact.length) return { history: exact.slice(0, 3), reason: null };
+  if (exact.length) return { history: exact, reason: null };
   const sameActiveIdentity = targets.filter(
     (item) => item.exerciseId === target.exerciseId && item.executionMode === target.executionMode,
   ).length;
@@ -190,18 +243,20 @@ function selectHistory(
       reason: incompatibleExists ? ("incompatible_history" as const) : ("no_history" as const),
     };
   }
-  return { history: compatible.slice(0, 3), reason: null };
+  return { history: compatible, reason: null };
 }
 
 function commonResult(
   target: BulkProgressionTargetInput,
   occurrence: Occurrence,
+  allHistory: Occurrence[],
 ): BulkProgressionResult {
   return {
     ...empty(target, "build_reps"),
     sourceSessionId: occurrence.sessionId,
     dataStatus: "usable",
     previousPerformance: previousPerformance(occurrence.exercise),
+    previousBySetType: previousBySetType(allHistory),
   };
 }
 
@@ -210,7 +265,7 @@ function severeBilateral(
   target: BulkProgressionTargetInput,
   weightedPhase: boolean,
 ) {
-  const sets = planned(occurrence.exercise);
+  const sets = plannedWorkingSets(occurrence.exercise);
   if (sets.length < target.targetSets) return false;
   return sets.every((set) => {
     if (!set.isComplete) return false;
@@ -224,11 +279,19 @@ function severeBilateral(
 
 function bilateral(
   target: BulkProgressionTargetInput,
-  history: Occurrence[],
+  allHistory: Occurrence[],
 ): BulkProgressionResult {
+  const history = allHistory.filter((item) => plannedWorkingSets(item.exercise).length > 0);
+  if (!history.length)
+    return {
+      ...empty(target, "incomplete_planned_sets"),
+      decision: "repeat_target",
+      dataStatus: "partial",
+      previousBySetType: previousBySetType(allHistory),
+    };
   const latest = history[0]!;
-  const sets = planned(latest.exercise);
-  const base = commonResult(target, latest);
+  const sets = plannedWorkingSets(latest.exercise);
+  const base = commonResult(target, latest, allHistory);
   if (
     sets.length < target.targetSets ||
     sets.some((set) => !set.isComplete || !validRep(set.bilateralReps))
@@ -282,7 +345,7 @@ function bilateral(
     };
   const compatiblePhase = history.filter((item) =>
     target.isBodyweight
-      ? planned(item.exercise).some((set) => (set.bilateralWeight ?? 0) > 0)
+      ? plannedWorkingSets(item.exercise).some((set) => (set.bilateralWeight ?? 0) > 0)
       : true,
   );
   if (
@@ -331,7 +394,7 @@ export function weakerSideFor(sets: BulkTrainingSet[]): "left" | "right" | "bala
 }
 
 function severeUnilateral(occurrence: Occurrence, target: BulkProgressionTargetInput) {
-  const sets = planned(occurrence.exercise);
+  const sets = plannedWorkingSets(occurrence.exercise);
   if (sets.length < target.targetSets) return false;
   return sets.every(
     (set) =>
@@ -345,11 +408,19 @@ function severeUnilateral(occurrence: Occurrence, target: BulkProgressionTargetI
 
 function unilateral(
   target: BulkProgressionTargetInput,
-  history: Occurrence[],
+  allHistory: Occurrence[],
 ): BulkProgressionResult {
+  const history = allHistory.filter((item) => plannedWorkingSets(item.exercise).length > 0);
+  if (!history.length)
+    return {
+      ...empty(target, "incomplete_planned_sets"),
+      decision: "repeat_target",
+      dataStatus: "partial",
+      previousBySetType: previousBySetType(allHistory),
+    };
   const latest = history[0]!;
-  const sets = planned(latest.exercise);
-  const base = commonResult(target, latest);
+  const sets = plannedWorkingSets(latest.exercise);
+  const base = commonResult(target, latest, allHistory);
   const weakerSide = weakerSideFor(sets);
   if (
     sets.length < target.targetSets ||

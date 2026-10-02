@@ -51,7 +51,11 @@ import {
   sessionSetVolume,
   type BulkSetType,
 } from "@/lib/bulk-training-session-domain";
-import type { BulkProgressionPreviousSet, BulkProgressionResult } from "@/lib/bulk-progression";
+import {
+  previousPerformanceForActiveSet,
+  type BulkProgressionPreviousSet,
+  type BulkProgressionResult,
+} from "@/lib/bulk-progression";
 import { buildBulkNextSessionGuidance } from "@/lib/bulk-next-session-guidance";
 
 type SetDraft = EditableSessionSet;
@@ -101,6 +105,18 @@ function previousSetLabel(
   if (previous.bilateralReps == null) return "—";
   if (exercise.isBodyweight && !previous.bilateralLoad) return `BW × ${previous.bilateralReps}`;
   return `${previous.bilateralLoad ?? 0}×${previous.bilateralReps}`;
+}
+
+function previousForActiveSet(
+  result: BulkProgressionResult | undefined,
+  exercise: BulkTrainingSessionExercise,
+  drafts: Record<string, SetDraft>,
+  setIndex: number,
+) {
+  const currentTypes = exercise.sets.map(
+    (candidate) => (drafts[candidate.id] ?? toDraft(candidate)).setType,
+  );
+  return previousPerformanceForActiveSet(result, currentTypes, setIndex);
 }
 
 function latestDraftLabel(exercise: BulkTrainingSessionExercise, drafts: Record<string, SetDraft>) {
@@ -556,7 +572,7 @@ export function BulkWorkoutSessionView({
                   aria-label={`Next-session guidance for ${exercise.name}`}
                 >
                   <p className="text-primary">
-                    <span className="font-semibold">Target today:</span> {guidance.targetText}
+                    <span className="font-semibold">Target:</span> {guidance.targetText}
                   </p>
                   <p className="mt-0.5 text-muted-foreground">{guidance.reasonText}</p>
                 </div>
@@ -579,10 +595,20 @@ export function BulkWorkoutSessionView({
                 <div className="grid grid-cols-[2.5rem_minmax(3.75rem,1fr)_3.25rem_3.25rem_2.75rem_2.75rem] gap-1 px-1 text-center text-[9px] font-medium uppercase tracking-wider text-muted-foreground">
                   <span>Set</span>
                   <span>Previous</span>
-                  <span>{exercise.isBodyweight ? "+KG" : "KG"}</span>
-                  <span>Reps</span>
+                  <span className="col-span-2">Current</span>
                   <span>RPE</span>
                   <span>Done</span>
+                </div>
+                <div
+                  aria-hidden="true"
+                  className="grid grid-cols-[2.5rem_minmax(3.75rem,1fr)_3.25rem_3.25rem_2.75rem_2.75rem] gap-1 px-1 text-center text-[8px] uppercase tracking-wider text-muted-foreground/80"
+                >
+                  <span />
+                  <span />
+                  <span>{exercise.isBodyweight ? "+KG" : "KG"}</span>
+                  <span>Reps</span>
+                  <span />
+                  <span />
                 </div>
                 {exercise.sets.map((set, index) => (
                   <WorkoutSetRow
@@ -595,8 +621,12 @@ export function BulkWorkoutSessionView({
                     canRemove={exercise.sets.length > 1}
                     swipeOpen={openSetId === set.id}
                     previous={previousSetLabel(
-                      progression[exercise.sourcePlanExerciseId ?? `session:${exercise.id}`]
-                        ?.previousPerformance?.[index],
+                      previousForActiveSet(
+                        progression[exercise.sourcePlanExerciseId ?? `session:${exercise.id}`],
+                        exercise,
+                        drafts,
+                        index,
+                      ),
                       exercise,
                     )}
                     {...(saveErrors[set.id] ? { error: saveErrors[set.id] } : {})}
