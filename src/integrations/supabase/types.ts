@@ -1916,6 +1916,10 @@ export type Database = {
         Args: { _expected_current_calories: number; _new_calories: number }
         Returns: boolean
       }
+      challenge_activity_summary: {
+        Args: { _challenge: string; _end?: string; _start?: string }
+        Returns: Json
+      }
       challenge_today: { Args: { _c: string }; Returns: string }
       challenge_week_of: { Args: { _c: string; _d: string }; Returns: number }
       challenge_week_open: {
