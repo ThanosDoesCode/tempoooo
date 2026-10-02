@@ -32,16 +32,13 @@ function FinalizedWeekDetail() {
   const challenge = challengeQuery.data;
   const membersQuery = useChallengeMembers(challenge?.id);
   const weeksQuery = useWeeks(challenge?.id);
-  const activitiesQuery = useActivities(challenge?.id);
   const weekRows = (weeksQuery.data ?? []).filter((week) => week.week_number === weekNumber);
   const reference = weekRows[0];
-  const activities = reference
-    ? (activitiesQuery.data ?? []).filter(
-        (activity) =>
-          activity.activity_date >= reference.week_start &&
-          activity.activity_date <= reference.week_end,
-      )
-    : [];
+  const activitiesQuery = useActivities(challenge?.id, {
+    start: reference?.week_start ?? "",
+    end: reference?.week_end ?? "",
+  });
+  const activities = activitiesQuery.activities;
   const loading =
     challengeQuery.isLoading ||
     membersQuery.isLoading ||
@@ -88,7 +85,7 @@ function FinalizedWeekDetail() {
       {!loading && !error && (!challenge || !reference || !Number.isInteger(weekNumber)) ? (
         <Note>This finalized week is unavailable or does not belong to your Challenge.</Note>
       ) : null}
-      {!loading && !error && challenge && reference ? (
+      {!loading && (!error || activities.length > 0) && challenge && reference ? (
         <div className="space-y-4">
           {weekRows.map((week) => (
             <ParticipantWeek
@@ -96,9 +93,20 @@ function FinalizedWeekDetail() {
               week={week}
               name={participantName(week.user_id)}
               legacyPhotoOwed={challenge.legacy_photo_owed}
+              hasMore={activitiesQuery.hasNextPage}
               activities={activities.filter((activity) => activity.user_id === week.user_id)}
             />
           ))}
+          {activitiesQuery.hasNextPage ? (
+            <button
+              type="button"
+              disabled={activitiesQuery.isFetchingNextPage}
+              onClick={() => void activitiesQuery.fetchNextPage()}
+              className="min-h-11 w-full rounded-xl border border-border text-sm disabled:opacity-60"
+            >
+              {activitiesQuery.isFetchingNextPage ? "Loading older…" : "Load older"}
+            </button>
+          ) : null}
         </div>
       ) : null}
     </AppShell>
@@ -109,12 +117,14 @@ function ParticipantWeek({
   week,
   name,
   legacyPhotoOwed,
+  hasMore,
   activities,
 }: {
   week: WeekRow;
   name: string;
   legacyPhotoOwed: boolean;
   activities: Activity[];
+  hasMore: boolean;
 }) {
   const result = week.paused
     ? "No penalty"
@@ -158,7 +168,11 @@ function ParticipantWeek({
             ))}
           </div>
         ) : (
-          <Note>No activities were logged for this participant in this week.</Note>
+          <Note>
+            {hasMore
+              ? "Load older to see any remaining activities for this participant."
+              : "No activities were logged for this participant in this week."}
+          </Note>
         )}
       </div>
     </Card>

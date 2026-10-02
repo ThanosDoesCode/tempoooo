@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Download, Plane } from "lucide-react";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { Card, DataError, Note, PendingLabel, SectionTitle } from "@/components/ui-kit";
@@ -15,7 +15,8 @@ import {
   settleMyDebts,
   summarizeActivities,
   todayIn,
-  useActivities,
+  useActivitySummary,
+  fetchActivitiesForExport,
   usePayments,
   useChallengeMembers,
   useMyChallenge,
@@ -55,12 +56,8 @@ function Payments() {
   const { data: payments, isLoading: paymentsLoading, error: paymentsError } = paymentsQuery;
   const weeksQuery = useWeeks(challenge?.id);
   const { data: weeks, isLoading: weeksLoading, error: weeksError } = weeksQuery;
-  const activitiesQuery = useActivities(challenge?.id);
-  const {
-    data: activities,
-    isLoading: activitiesLoading,
-    error: activitiesError,
-  } = activitiesQuery;
+  const activitiesQuery = useActivitySummary(challenge?.id);
+  const { data: summaries, isLoading: activitiesLoading, error: activitiesError } = activitiesQuery;
   const pausesQuery = useTravelPauses(challenge?.id);
   const { data: travelPauses, isLoading: pausesLoading, error: pausesError } = pausesQuery;
   const weekTargetsQuery = useWeekTargets(challenge?.id);
@@ -78,6 +75,32 @@ function Payments() {
   const [travelError, setTravelError] = useState<string | null>(null);
   const [travelNotice, setTravelNotice] = useState<string | null>(null);
   const [pauseRemoveArmed, setPauseRemoveArmed] = useState<string | null>(null);
+
+  const [exporting, setExporting] = useState(false);
+  const exportPending = useRef(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const exportCsv = async () => {
+    if (!challenge || !members || exportPending.current) return;
+    exportPending.current = true;
+    setExporting(true);
+    setExportError(null);
+    try {
+      const activities = await fetchActivitiesForExport(challenge.id);
+      downloadChallengeCsv(
+        challenge,
+        members,
+        activities,
+        weeks ?? [],
+        travelPauses ?? [],
+        weekTargetsQuery.data ?? [],
+      );
+    } catch (error) {
+      setExportError(userFacingError(error, "export challenge data"));
+    } finally {
+      exportPending.current = false;
+      setExporting(false);
+    }
+  };
 
   const rows = payments ?? [];
   const open = rows.filter((p) => p.status !== "confirmed_paid");
@@ -99,7 +122,9 @@ function Payments() {
   const selectedPauseWeek = Number(pauseWeek || currentWeek);
   const comparison = (members ?? []).map((member) => ({
     ...member,
-    stats: summarizeActivities(activities ?? [], member.userId),
+    stats:
+      summaries?.find((row) => row.userId === member.userId)?.stats ??
+      summarizeActivities([], member.userId),
   }));
 
   const refresh = () => qc.invalidateQueries({ queryKey: ["challenge-payments"] });
@@ -528,24 +553,20 @@ function Payments() {
         {challenge && members ? (
           <button
             type="button"
-            disabled={activitiesLoading || weekTargetsQuery.isLoading}
-            onClick={() =>
-              downloadChallengeCsv(
-                challenge,
-                members,
-                activities ?? [],
-                weeks ?? [],
-                travelPauses ?? [],
-                weekTargetsQuery.data ?? [],
-              )
-            }
+            disabled={exporting || activitiesLoading || weekTargetsQuery.isLoading}
+            onClick={() => void exportCsv()}
             className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-border py-2.5 text-sm font-medium disabled:opacity-60"
           >
             <Download className="h-4 w-4" aria-hidden="true" />
-            {activitiesLoading || weekTargetsQuery.isLoading
+            {exporting || activitiesLoading || weekTargetsQuery.isLoading
               ? "Preparing challenge data…"
               : "Download challenge data (CSV)"}
           </button>
+        ) : null}
+        {exportError ? (
+          <p role="alert" className="mt-2 text-xs text-danger">
+            {exportError} Try the download again.
+          </p>
         ) : null}
         <Note>
           The export includes both players, every activity, stored pace and speed, qualifying

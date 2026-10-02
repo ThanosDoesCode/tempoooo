@@ -30,7 +30,7 @@ import {
   penaltyTextFor,
   qualifiedEquivalentKm,
   resolvedTargetForWeek,
-  sumWeek,
+  useActivitySummary,
   targetOverrideForWeek,
   todayIn,
   useActivities,
@@ -79,11 +79,7 @@ function ChallengeHome() {
   const membersQuery = useChallengeMembers(challenge?.id);
   const { data: members, isLoading: membersLoading, error: membersError } = membersQuery;
   const activitiesQuery = useActivities(challenge?.id);
-  const {
-    data: activities,
-    isLoading: activitiesLoading,
-    error: activitiesError,
-  } = activitiesQuery;
+  const { activities, isLoading: activitiesLoading, error: activitiesError } = activitiesQuery;
   const pausesQuery = useTravelPauses(challenge?.id);
   const { data: travelPauses, isLoading: pausesLoading, error: pausesError } = pausesQuery;
   const weeksQuery = useWeeks(challenge?.id);
@@ -157,6 +153,8 @@ function ChallengeHome() {
     return { n, ...weekBounds(challenge, n), hours: hoursLeft(challenge, n) };
   }, [challenge]);
 
+  const summaryQuery = useActivitySummary(challenge?.id, week ?? { start: "", end: "" });
+
   if (isLoading) {
     return (
       <AppShell>
@@ -200,12 +198,18 @@ function ChallengeHome() {
   const today = todayIn(challenge.timezone);
   const me = members?.find((member) => member.userId === user?.id);
   const opponent = members?.find((member) => member.userId !== user?.id);
-  const meTotals =
-    week && user
-      ? sumWeek(activities ?? [], user.id, week.start, week.end)
-      : { running: 0, cycling: 0, equivalent: 0, rows: [] };
-  const opponentTotals =
-    week && opponent ? sumWeek(activities ?? [], opponent.userId, week.start, week.end) : null;
+  const meTotals = summaryQuery.data?.find((row) => row.userId === user?.id) ?? {
+    running: 0,
+    cycling: 0,
+    equivalent: 0,
+  };
+  const opponentTotals = opponent
+    ? (summaryQuery.data?.find((row) => row.userId === opponent.userId) ?? {
+        running: 0,
+        cycling: 0,
+        equivalent: 0,
+      })
+    : null;
   const mePaused = !!(week && user && weekPaused(travelPauses, user.id, week.n));
   const opponentPaused = !!(week && opponent && weekPaused(travelPauses, opponent.userId, week.n));
   const commonTarget = week
@@ -219,10 +223,10 @@ function ChallengeHome() {
     week && opponent
       ? resolvedTargetForWeek(challenge, weekTargets, travelPauses, opponent.userId, week.n)
       : commonTarget;
-  const recent = (activities ?? []).slice(0, 20);
+  const recent = activities;
   const needsOpponent = !membersLoading && (members?.length ?? 0) < (challenge.max_members ?? 2);
   const progressLoading =
-    membersLoading || activitiesLoading || pausesLoading || weekTargetsLoading;
+    membersLoading || summaryQuery.isLoading || pausesLoading || weekTargetsLoading;
 
   return (
     <AppShell>
@@ -236,7 +240,7 @@ function ChallengeHome() {
         </p>
       </header>
 
-      {membersError || activitiesError || pausesError || weekTargetsError ? (
+      {membersError || activitiesError || summaryQuery.error || pausesError || weekTargetsError ? (
         <div className="mb-3">
           <DataError
             title="Some challenge data did not load"
@@ -245,6 +249,7 @@ function ChallengeHome() {
               void Promise.all([
                 membersQuery.refetch(),
                 activitiesQuery.refetch(),
+                summaryQuery.refetch(),
                 pausesQuery.refetch(),
                 weekTargetsQuery.refetch(),
               ]);
@@ -291,7 +296,9 @@ function ChallengeHome() {
       </Link>
 
       <section className="mt-5">
-        <SectionTitle right={<span className="text-[11px] text-muted-foreground">Latest 20</span>}>
+        <SectionTitle
+          right={<span className="text-[11px] text-muted-foreground">{recent.length} loaded</span>}
+        >
           Recent activity
         </SectionTitle>
         <div className="space-y-2">
@@ -457,6 +464,20 @@ function ChallengeHome() {
             </Note>
           ) : null}
         </div>
+        {activitiesQuery.hasNextPage ? (
+          <button
+            type="button"
+            disabled={activitiesQuery.isFetchingNextPage}
+            onClick={() => void activitiesQuery.fetchNextPage()}
+            className="mt-3 min-h-11 w-full rounded-xl border border-border text-sm font-medium disabled:opacity-60"
+          >
+            {activitiesQuery.isFetchingNextPage ? (
+              <PendingLabel>Loading older…</PendingLabel>
+            ) : (
+              "Load older"
+            )}
+          </button>
+        ) : null}
       </section>
 
       <section className="mt-5">
@@ -552,7 +573,7 @@ function ChallengeHome() {
   );
 }
 
-type ProgressTotals = ReturnType<typeof sumWeek>;
+type ProgressTotals = { running: number; cycling: number; equivalent: number };
 
 function ParticipantProgress({
   label,

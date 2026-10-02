@@ -1,6 +1,15 @@
 import { addDays, format, parseISO } from "date-fns";
-import { queryOptions, useQuery } from "@tanstack/react-query";
+import { queryOptions, useQuery, useInfiniteQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  ACTIVITY_FIELDS,
+  ACTIVITY_PAGE_SIZE,
+  activityCursorFilter,
+  activityPage,
+  uniqueActivityPages,
+  type ActivityCursor,
+  type ActivityDateRange,
+} from "./challenge-activity-data";
 import { getRelatedProfiles } from "./privileged-rpcs.functions";
 
 export type Challenge = {
@@ -319,29 +328,83 @@ export function useChallengeMembers(challengeId: string | undefined) {
   });
 }
 
-export function useActivities(challengeId: string | undefined) {
+export async function fetchActivityPage(
+  challengeId: string,
+  cursor: ActivityCursor | null = null,
+  range?: ActivityDateRange,
+  pageSize = ACTIVITY_PAGE_SIZE,
+) {
+  let query = supabase
+    .from("challenge_activities")
+    .select(ACTIVITY_FIELDS)
+    .eq("challenge_id", challengeId)
+    .order("activity_date", { ascending: false })
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: true })
+    .limit(pageSize + 1);
+  if (range) query = query.gte("activity_date", range.start).lte("activity_date", range.end);
+  if (cursor) query = query.or(activityCursorFilter(cursor));
+  const { data, error } = await query;
+  if (error) throw error;
+  return activityPage((data ?? []) as unknown as Activity[], pageSize);
+}
+
+export function useActivities(challengeId: string | undefined, range?: ActivityDateRange) {
+  const query = useInfiniteQuery({
+    enabled: !!challengeId && (!range || !!range.start),
+    queryKey: [
+      "challenge-activities",
+      challengeId,
+      "feed",
+      range?.start ?? null,
+      range?.end ?? null,
+    ],
+    staleTime: 30_000,
+    initialPageParam: null as ActivityCursor | null,
+    queryFn: ({ pageParam }) => fetchActivityPage(challengeId!, pageParam, range),
+    getNextPageParam: (page) => page.next ?? undefined,
+  });
+  return { ...query, activities: uniqueActivityPages(query.data?.pages ?? []) };
+}
+
+/** Full history is read only after an explicit export request, never on route entry. */
+export async function fetchActivitiesForExport(challengeId: string) {
+  const pages = [];
+  let cursor: ActivityCursor | null = null;
+  do {
+    const page = await fetchActivityPage(challengeId, cursor, undefined, 500);
+    pages.push(page);
+    cursor = page.next;
+  } while (cursor);
+  return uniqueActivityPages(pages);
+}
+
+export type ActivitySummary = {
+  userId: string;
+  running: number;
+  cycling: number;
+  equivalent: number;
+  stats: LifetimeStats;
+};
+
+export function useActivitySummary(challengeId: string | undefined, range?: ActivityDateRange) {
   return useQuery({
-    enabled: !!challengeId,
-    queryKey: ["challenge-activities", challengeId],
+    enabled: !!challengeId && (!range || !!range.start),
+    queryKey: [
+      "challenge-activities",
+      challengeId,
+      "summary",
+      range?.start ?? null,
+      range?.end ?? null,
+    ],
     staleTime: 30_000,
     queryFn: async () => {
-      const rows: Activity[] = [];
-      const pageSize = 500;
-      for (let from = 0; ; from += pageSize) {
-        const { data, error } = await supabase
-          .from("challenge_activities")
-          .select("*")
-          .eq("challenge_id", challengeId!)
-          .order("activity_date", { ascending: false })
-          .order("created_at", { ascending: false })
-          .order("id", { ascending: true })
-          .range(from, from + pageSize - 1);
-        if (error) throw error;
-        const page = (data ?? []) as unknown as Activity[];
-        rows.push(...page);
-        if (page.length < pageSize) break;
-      }
-      return rows;
+      const { data, error } = await supabase.rpc("challenge_activity_summary", {
+        _challenge: challengeId!,
+        ...(range ? { _start: range.start, _end: range.end } : {}),
+      });
+      if (error) throw error;
+      return data as unknown as ActivitySummary[];
     },
   });
 }

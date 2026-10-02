@@ -4969,3 +4969,121 @@ test("deleting an auth account cascades its owner membership and preserves a sha
   );
   assert.equal(available.rows[0].available, true);
 });
+
+test("member-only activity summaries match stored qualification and live totals without touching snapshots", async () => {
+  const challenge = await freshChallenge("Summary regression");
+  await activity(a, 5, challenge);
+  await activity(a, 6, challenge, "cycle");
+  await activity(b, 3, challenge);
+  await asUser(a, () =>
+    db.query(
+      "INSERT INTO public.challenge_activities(challenge_id,user_id,activity_type,distance_km,duration_seconds,activity_date,evidence_path) VALUES ($1,$2,'run',5,2400,CURRENT_DATE,'test')",
+      [challenge, a],
+    ),
+  );
+  await db.query(
+    "INSERT INTO public.challenge_weeks(challenge_id,user_id,week_number,week_start,week_end) VALUES ($1,$2,1,CURRENT_DATE,CURRENT_DATE+6)",
+    [challenge, a],
+  );
+  const before = (
+    await db.query("SELECT * FROM public.challenge_weeks WHERE challenge_id=$1", [challenge])
+  ).rows;
+  const {
+    rows: [{ summary }],
+  } = await asUser(a, () =>
+    db.query("SELECT public.challenge_activity_summary($1,CURRENT_DATE,CURRENT_DATE) AS summary", [
+      challenge,
+    ]),
+  );
+  const own = summary.find((row) => row.userId === a);
+  assert.equal(own.running, 10);
+  assert.equal(own.cycling, 6);
+  assert.equal(own.equivalent, 7);
+  assert.equal(own.stats.totalKm, 16);
+  assert.equal(own.stats.activities, 3);
+  assert.equal(own.stats.qualifiedActivities, 2);
+  assert.equal(own.stats.averageSpeedKmh, (16 * 3600) / (1800 + 1080 + 2400));
+  assert.equal(summary.find((row) => row.userId === b).equivalent, 3);
+  const all = await asUser(b, () =>
+    db.query("SELECT public.challenge_activity_summary($1) AS summary", [challenge]),
+  );
+  assert.deepEqual(all.rows[0].summary, summary);
+  assert.deepEqual(
+    (await db.query("SELECT * FROM public.challenge_weeks WHERE challenge_id=$1", [challenge]))
+      .rows,
+    before,
+  );
+  await assert.rejects(
+    asUser(c, () => db.query("SELECT public.challenge_activity_summary($1)", [challenge])),
+    /membership required/i,
+  );
+  assert.equal(
+    (
+      await asUser(c, () =>
+        db.query("SELECT id FROM public.challenge_activities WHERE challenge_id=$1", [challenge]),
+      )
+    ).rows.length,
+    0,
+  );
+  await assert.rejects(
+    asUser(a, () =>
+      db.query("SELECT public.challenge_activity_summary($1,CURRENT_DATE,NULL)", [challenge]),
+    ),
+    /Invalid activity date range/,
+  );
+  assert.equal(
+    (
+      await db.query(
+        "SELECT has_function_privilege('anon','public.challenge_activity_summary(uuid,date,date)','EXECUTE') AS allowed",
+      )
+    ).rows[0].allowed,
+    false,
+  );
+  const empty = await asUser(a, () =>
+    db.query(
+      "SELECT public.challenge_activity_summary($1,CURRENT_DATE-14,CURRENT_DATE-7) AS summary",
+      [challenge],
+    ),
+  );
+  assert.deepEqual(empty.rows[0].summary, []);
+});
+
+test("activity summary counts stored is_qualified even when it differs from current thresholds", async () => {
+  const challenge = await freshChallenge("Stored qualification regression");
+  await activity(a, 5, challenge);
+  await activity(a, 6, challenge, "cycle");
+  await asUser(a, () =>
+    db.query(
+      "INSERT INTO public.challenge_activities(challenge_id,user_id,activity_type,distance_km,duration_seconds,activity_date,evidence_path) VALUES ($1,$2,'run',5,2400,CURRENT_DATE,'test')",
+      [challenge, a],
+    ),
+  );
+  await db.exec("BEGIN");
+  try {
+    // The accumulated schema generates this column. Temporarily detach its
+    // expression in this isolated test transaction to simulate stored historical
+    // decisions that disagree with current thresholds; rollback restores it.
+    await db.exec(
+      "ALTER TABLE public.challenge_activities ALTER COLUMN is_qualified DROP EXPRESSION",
+    );
+    await db.query(
+      "UPDATE public.challenge_activities SET is_qualified = (duration_seconds = 2400) WHERE challenge_id=$1",
+      [challenge],
+    );
+    const {
+      rows: [{ summary }],
+    } = await asUser(a, () =>
+      db.query("SELECT public.challenge_activity_summary($1) AS summary", [challenge]),
+    );
+    const own = summary.find((row) => row.userId === a);
+    assert.equal(own.stats.activities, 3);
+    assert.equal(
+      own.stats.qualifiedActivities,
+      1,
+      "one stored true, despite two performances meeting current thresholds",
+    );
+    assert.equal(own.equivalent, 7, "qualifying distance aggregation is unchanged");
+  } finally {
+    await db.exec("ROLLBACK");
+  }
+});
