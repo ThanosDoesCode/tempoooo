@@ -732,7 +732,7 @@ function NutritionEntryEditor({
         {!adding ? (
           <Button
             variant="outline"
-            className="min-h-11 rounded-xl"
+            className="h-[54px] w-full rounded-[16px]"
             disabled={disabled}
             onClick={onCancel}
           >
