@@ -618,8 +618,8 @@ export function BulkWorkoutSessionView({
                   : `BW ${session.bodyweightKg.toFixed(1)} kg · Log extra weight per set`}
               </p>
             ) : null}
-            <div className="mt-5">
-              <div className="grid grid-cols-[40px_minmax(0,1fr)_minmax(0,1fr)_48px] gap-2 px-1 text-center text-xs text-muted-foreground">
+            <div className="mt-[14px] space-y-2">
+              <div className="grid grid-cols-[44px_minmax(0,1fr)_minmax(0,1fr)_48px] gap-2 px-3 text-center text-xs text-muted-foreground">
                 <span>Set</span>
                 <span>{exercise.isBodyweight ? "+kg" : "kg"}</span>
                 <span>Reps</span>
@@ -745,7 +745,7 @@ export function BulkWorkoutSessionView({
         Discard workout
       </Button>
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 px-5 pt-3 pb-[calc(12px+env(safe-area-inset-bottom))] backdrop-blur">
-        <div className="mx-auto max-w-lg">
+        <div className="mx-auto max-w-2xl">
           {activeExercise && nextSet ? (
             <Button
               className="h-[54px] w-full rounded-[16px]"
@@ -763,7 +763,7 @@ export function BulkWorkoutSessionView({
           <button
             type="button"
             disabled={finishing || discarding || adding.size > 0 || removing.size > 0}
-            className="mt-1 min-h-11 w-full text-sm text-primary disabled:opacity-50"
+            className="mt-1 min-h-11 w-full text-sm text-muted-foreground disabled:opacity-50"
             onClick={() => (incomplete ? setFinishDialog(true) : void finish(false))}
           >
             {finishing ? "Finishing…" : "Finish workout"}
@@ -771,7 +771,7 @@ export function BulkWorkoutSessionView({
         </div>
       </div>
       <AlertDialog open={finishDialog} onOpenChange={setFinishDialog}>
-        <AlertDialogContent className="max-w-[calc(100%-2rem)] rounded-2xl">
+        <AlertDialogContent className="w-[calc(100%-2rem)] max-w-sm rounded-[20px] sm:rounded-[20px]">
           <AlertDialogHeader>
             <AlertDialogTitle>Finish with incomplete sets?</AlertDialogTitle>
             <AlertDialogDescription>
@@ -779,7 +779,7 @@ export function BulkWorkoutSessionView({
               missing values will remain empty in history.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
+          <AlertDialogFooter className="flex-col gap-2 sm:flex-row sm:gap-2 sm:space-x-0">
             <AlertDialogCancel className="min-h-11">Keep logging</AlertDialogCancel>
             <AlertDialogAction className="min-h-11" onClick={() => void finish(true)}>
               Finish anyway
@@ -788,7 +788,7 @@ export function BulkWorkoutSessionView({
         </AlertDialogContent>
       </AlertDialog>
       <AlertDialog open={discardDialog} onOpenChange={setDiscardDialog}>
-        <AlertDialogContent className="max-w-[calc(100%-2rem)] rounded-2xl">
+        <AlertDialogContent className="w-[calc(100%-2rem)] max-w-sm rounded-[20px] sm:rounded-[20px]">
           <AlertDialogHeader>
             <AlertDialogTitle>Discard this workout?</AlertDialogTitle>
             <AlertDialogDescription>
@@ -797,10 +797,12 @@ export function BulkWorkoutSessionView({
                 : "This empty workout draft will be removed."}
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="min-h-11">Keep workout</AlertDialogCancel>
+          <AlertDialogFooter className="flex-col gap-2 sm:flex-row sm:gap-2 sm:space-x-0">
+            <AlertDialogCancel className="mt-0 min-h-[52px] w-full rounded-[16px] sm:w-auto">
+              Keep workout
+            </AlertDialogCancel>
             <AlertDialogAction
-              className="min-h-11 bg-destructive text-destructive-foreground"
+              className="min-h-[52px] w-full rounded-[16px] bg-danger text-white hover:bg-danger/90 sm:w-auto"
               onClick={() => void discard()}
             >
               {discarding ? "Discarding..." : "Discard workout"}
@@ -928,11 +930,11 @@ function WorkoutSetRow({
       ? `${draft.bilateralWeight != null ? `${draft.bilateralWeight} kg` : exercise.isBodyweight ? "BW" : "—"} · ${draft.bilateralReps ?? "—"} reps`
       : `${draft.leftReps ?? "—"}/${draft.rightReps ?? "—"} reps`;
   return (
-    <>
+    <div className="rounded-[20px] border border-border bg-card pb-1">
       <div
         ref={rowRef}
         onFocusCapture={onSelect}
-        className="relative mt-1 overflow-hidden rounded-xl"
+        className="relative overflow-hidden rounded-[20px]"
         data-set-swipe={set.id}
       >
         {canRemove && dragOffset > 0 ? (
@@ -954,7 +956,7 @@ function WorkoutSetRow({
           onPointerCancel={endSwipe}
           style={{ transform: `translateX(${dragOffset}px)`, touchAction: "pan-y" }}
           className={cn(
-            "grid grid-cols-[40px_minmax(0,1fr)_minmax(0,1fr)_48px] items-center gap-2 rounded-[14px] px-1 py-1 transition-transform duration-150 ease-out motion-reduce:transition-none",
+            "grid grid-cols-[44px_minmax(0,1fr)_minmax(0,1fr)_48px] items-center gap-2 rounded-[14px] px-3 py-2 transition-transform duration-150 ease-out motion-reduce:transition-none",
             "relative z-10 bg-card",
             done && "ring-1 ring-inset ring-good/20",
           )}
@@ -1019,7 +1021,7 @@ function WorkoutSetRow({
           </button>
         ) : null}
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-x-2 px-1 text-xs text-muted-foreground">
+      <div className="flex flex-wrap items-center justify-between gap-x-2 px-3 text-xs text-muted-foreground">
         <span className="min-w-0 break-words">Previous: {previous}</span>
         <button
           type="button"
@@ -1034,7 +1036,7 @@ function WorkoutSetRow({
         </button>
       </div>
       <div
-        className="flex min-h-5 items-center justify-end gap-2 px-1 text-[10px] text-muted-foreground"
+        className="flex items-center justify-end gap-2 px-3 text-[10px] text-muted-foreground"
         aria-live="polite"
       >
         {saving ? "Saving..." : error ? "Save failed" : done ? "Saved" : ""}
@@ -1128,7 +1130,7 @@ function WorkoutSetRow({
           </DrawerFooter>
         </DrawerContent>
       </Drawer>
-    </>
+    </div>
   );
 }
 

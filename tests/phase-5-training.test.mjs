@@ -636,6 +636,22 @@ test("Phase 5 plan selection retains template/generated/custom paths and blocks 
   assert.ok(f.calls.some(([n]) => n === "createEmptyTrainingPlan"));
   assert.match(planSource, /const planType = mode === "generated" \? "generated" : "tempo_preset"/);
   assert.match(planSource, /rankTrainingPlans/);
+  const blocked = fixture(
+    planSource,
+    "TrainingPlanSetup",
+    { targets: {}, selectionDisabled: true },
+    { templates: [template] },
+  );
+  const blockedCard = nodes(
+    blocked.render(),
+    (n) => typeof n.type === "function" && n.type.name === "PlanCard",
+  )[0];
+  assert.equal(blockedCard.props.disabled, true);
+  blockedCard.props.onUse();
+  find(blocked.render(), "Build my own plan").props.onClick();
+  find(blocked.render(), "Create My Training Plan").props.onClick();
+  await new Promise(setImmediate);
+  assert.equal(blocked.calls.length, 0);
 });
 
 test("Phase 5 actual Training route starts one session, resumes its exact id and guards query errors", async () => {
@@ -653,6 +669,7 @@ test("Phase 5 actual Training route starts one session, resumes its exact id and
     resolveStart;
   const modules = {
     "@/components/AppShell": { AppShell: "AppShell", PageHeader: "PageHeader" },
+    "@/components/NavRows": { NavRows: "NavRows" },
     "@/components/PageSkeleton": { PageSkeleton: "PageSkeleton" },
     "@/components/TrainingSession": { TrainingSession: "TrainingSession" },
     "@/components/TrainingPlanSetup": { TrainingPlanOverview: "TrainingPlanOverview" },

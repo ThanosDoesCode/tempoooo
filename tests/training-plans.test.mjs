@@ -229,7 +229,10 @@ test("training UI supports generated, preset and empty custom paths without repl
   assert.match(moreRoute, /TrainingPlanEditor/);
   assert.match(moreRoute, /activePlan\.error/);
   assert.match(moreRoute, /editing \?/);
-  assert.match(moreRoute, /switching \?/);
+  assert.match(
+    moreRoute,
+    /selectionDisabled=\{[\s\S]*activeSession\.isLoading \|\| !!activeSession\.error \|\| !!activeSession\.data/,
+  );
   assert.match(query, /\.maybeSingle\(\)/);
   assert.match(query, /developmentErrorDiagnostic\("active_training_plan_days"/);
   assert.doesNotMatch(migration, /UPDATE public\.bulk_workouts|DELETE FROM public\.bulk_workouts/);

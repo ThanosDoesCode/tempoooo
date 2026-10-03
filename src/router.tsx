@@ -3,6 +3,7 @@ import { QueryClient } from "@tanstack/react-query";
 import { createRouter } from "@tanstack/react-router";
 import { routeTree } from "./routeTree.gen";
 import { readRetryDelay, shouldRetryRead } from "./lib/network-errors";
+import { trackInAppHistory } from "./lib/in-app-back";
 
 export const getRouter = () => {
   const queryClient = new QueryClient({
@@ -29,5 +30,6 @@ export const getRouter = () => {
     defaultPreloadStaleTime: 30_000,
   });
 
+  trackInAppHistory(router.history);
   return router;
 };

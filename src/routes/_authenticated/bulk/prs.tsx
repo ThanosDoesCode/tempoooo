@@ -63,8 +63,9 @@ function PersonalRecordsPage() {
           <PageHeader
             title="Personal records"
             subtitle="Your strongest completed performances."
-            backTo="/bulk/progress"
-            backLabel="Progress"
+            historyBack
+            backTo="/bulk/training"
+            backLabel="Back"
           />
           {sessions.error && isPublic ? (
             <DataError

@@ -9,6 +9,7 @@ import { isFocusScreen, mainTabForPath, MAIN_TABS, type MainTab } from "@/lib/ma
 import { PullToRefresh } from "./PullToRefresh";
 import { useChallengeInvitations } from "@/lib/challenge-invitations";
 import { LogSheet } from "./LogSheet";
+import { HistoryBackLink } from "./HistoryBackLink";
 
 const TAB_ICONS: Record<MainTab, LucideIcon> = {
   today: Home,
@@ -44,6 +45,10 @@ function AppChrome({ children }: { children: ReactNode }) {
   const owner = preferredBulkMembership(memberships);
   const hasFitnessTools = owner !== null;
   const activeTab = mainTabForPath(pathname);
+  const trainingWidth =
+    pathname.startsWith("/bulk/training") ||
+    pathname.startsWith("/bulk/workout/") ||
+    pathname.startsWith("/bulk/exercises");
   const prefetchDestination = (to: string) => {
     if (to.startsWith("/bulk") && owner) void prefetchBulk(owner.bulk_profile_id);
   };
@@ -52,7 +57,7 @@ function AppChrome({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-background">
       <PullToRefresh>
         <main
-          className={`mx-auto w-full max-w-lg px-5 ${isAccountOnboarding ? "pb-6 pt-0" : `${focusScreen ? "pb-10" : "pb-28"} ${isChallenge ? "pt-4" : "pt-6"}`}`}
+          className={`mx-auto w-full ${trainingWidth ? "max-w-2xl" : "max-w-lg"} px-5 ${isAccountOnboarding ? "pb-6 pt-0" : `${focusScreen ? "pb-10" : "pb-28"} ${isChallenge ? "pt-4" : "pt-6"}`}`}
         >
           <div key={pathname} className="tempo-route-content">
             {children}
@@ -172,6 +177,7 @@ export function PageHeader({
   backTo,
   backLabel = "Back",
   backParams,
+  historyBack = false,
 }: {
   title: string;
   subtitle?: string;
@@ -180,10 +186,14 @@ export function PageHeader({
   backLabel?: string;
   /** Path params when backTo is a parameterised route (e.g. /challenge/activity/$activityId). */
   backParams?: Record<string, string>;
+  /** Use the actual in-app history; backTo is only the safe deep-link fallback. */
+  historyBack?: boolean;
 }) {
   return (
     <header className="fade-up mb-5">
-      {backTo ? (
+      {backTo && historyBack ? (
+        <HistoryBackLink fallback={backTo} />
+      ) : backTo ? (
         <Link
           to={backTo}
           {...(backParams ? { params: backParams } : {})}

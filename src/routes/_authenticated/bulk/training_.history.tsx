@@ -164,8 +164,9 @@ function TrainingHistoryPage() {
       <PageHeader
         title="Training history"
         subtitle="Completed workouts, newest first."
-        backTo="/bulk/progress"
-        backLabel="Progress"
+        historyBack
+        backTo="/bulk/training"
+        backLabel="Back"
       />
       {planMode === "none" || sessions.isLoading ? (
         <div className="h-40 animate-pulse rounded-2xl bg-card" />

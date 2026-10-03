@@ -34,7 +34,8 @@ test("training plan switching is visible, transactional and preserves completed 
     read("src/lib/training-plans-query.ts"),
     read("supabase/migrations/20260908120000_public_goal_mobile_flow_hardening.sql"),
   ]);
-  assert.match(more, /Change plan/);
+  assert.match(more, /<TrainingPlanSetup/);
+  assert.match(more, /selectionDisabled=/);
   assert.match(more, /useActiveBulkTrainingSession/);
   assert.match(more, /Finish or discard your current workout before changing plans\./);
   assert.match(more, /<TrainingPlanSetup[\s\S]*replacingPlan/);

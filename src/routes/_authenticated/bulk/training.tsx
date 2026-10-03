@@ -3,6 +3,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { addDays, format, parseISO } from "date-fns";
 import { useMemo, useRef, useState } from "react";
+import { NavRows } from "@/components/NavRows";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { TrainingSession } from "@/components/TrainingSession";
 import { TrainingPlanOverview } from "@/components/TrainingPlanSetup";
@@ -158,11 +159,11 @@ function TrainingPage() {
       {usesPlanSetup && activeSession.isLoading ? (
         <div className="mb-3 h-20 motion-safe:animate-pulse rounded-2xl bg-card" />
       ) : activeSession.data ? (
-        <Card className="mb-3 border-primary/40 bg-primary/5">
+        <Card className="mb-[14px] space-y-[14px] border-primary/40 bg-primary/10">
           <p className="text-sm font-medium text-primary">Workout in progress</p>
-          <p className="mt-1 font-semibold">{activeSession.data.workoutDayName}</p>
+          <p className="mt-1 text-xl font-semibold">{activeSession.data.workoutDayName}</p>
           <p className="text-xs text-muted-foreground">{activeSession.data.planName}</p>
-          <Button asChild className="mt-3 min-h-11 w-full">
+          <Button asChild className="h-[54px] w-full rounded-[16px]">
             <Link to="/bulk/workout/$sessionId" params={{ sessionId: activeSession.data.id }}>
               Resume workout
             </Link>
@@ -263,28 +264,14 @@ function TrainingPage() {
         )}
       </div>
       {usesPlanSetup ? (
-        <div className="mt-[14px] flex flex-col">
-          <Link
-            to="/bulk/training/more"
-            preload="intent"
-            className="flex min-h-11 items-center justify-between text-sm text-primary"
-          >
-            Plan and setup <span aria-hidden="true">›</span>
-          </Link>
-          <Link
-            to="/bulk/training/history"
-            preload="intent"
-            className="flex min-h-11 items-center justify-between text-sm text-muted-foreground"
-          >
-            Past workouts <span aria-hidden="true">›</span>
-          </Link>
-          <Link
-            to="/bulk/prs"
-            preload="intent"
-            className="flex min-h-11 items-center justify-between text-sm text-muted-foreground"
-          >
-            Personal records <span aria-hidden="true">›</span>
-          </Link>
+        <div className="mt-[14px]">
+          <NavRows
+            rows={[
+              { to: "/bulk/training/more", label: "Plan and setup", hint: "Manage your program" },
+              { to: "/bulk/training/history", label: "Past workouts", hint: "Completed sessions" },
+              { to: "/bulk/prs", label: "Personal records", hint: "Your best performances" },
+            ]}
+          />
         </div>
       ) : null}
     </AppShell>

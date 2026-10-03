@@ -256,6 +256,7 @@ function ExerciseLibraryPage() {
             ? `Choose an exercise for ${addTo}.`
             : "Browse Tempo exercises or save movements that are unique to your setup."
         }
+        historyBack
         backTo="/bulk/training"
         backLabel="Training"
       />

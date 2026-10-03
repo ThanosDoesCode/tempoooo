@@ -13,7 +13,6 @@ import { useActiveBulkTrainingSession } from "@/lib/bulk-training-sessions";
 import { userFacingError } from "@/lib/network-errors";
 import { useAppData, useBulkMeta } from "@/lib/store";
 import { useActiveTrainingPlan } from "@/lib/training-plans-query";
-import { toast } from "sonner";
 import { bulkPlanModeFor, useMemberships } from "@/lib/bulk-access";
 
 export const Route = createFileRoute("/_authenticated/bulk/training_/more")({
@@ -32,7 +31,6 @@ function TrainingMorePage() {
   const activeSession = useActiveBulkTrainingSession(usesPlanSetup ? bulkId : null);
   const coverage = useBulkMuscleCoverage(usesPlanSetup ? (activePlan.data ?? null) : null);
   const [editing, setEditing] = useState(false);
-  const [switching, setSwitching] = useState(false);
 
   if (planMode === "none") {
     return (
@@ -44,7 +42,7 @@ function TrainingMorePage() {
 
   return (
     <AppShell>
-      <PageHeader title="Your plan" backTo="/bulk/training" backLabel="Training" />
+      <PageHeader title="Your plan" historyBack backTo="/bulk/training" backLabel="Training" />
 
       {usesPlanSetup && activePlan.isLoading ? (
         <div className="h-48 animate-pulse rounded-2xl bg-card" />
@@ -53,21 +51,6 @@ function TrainingMorePage() {
           message={userFacingError(activePlan.error, "load your training plan")}
           onRetry={() => void activePlan.refetch()}
         />
-      ) : usesPlanSetup && activePlan.data && switching ? (
-        <div className="space-y-3">
-          <Button variant="ghost" className="min-h-11" onClick={() => setSwitching(false)}>
-            Keep current plan
-          </Button>
-          <TrainingPlanSetup
-            targets={data!.targets}
-            replacingPlan
-            currentPlan={activePlan.data}
-            onCreated={async () => {
-              await activePlan.refetch();
-              setSwitching(false);
-            }}
-          />
-        </div>
       ) : usesPlanSetup && activePlan.data ? (
         editing ? (
           <TrainingPlanEditor
@@ -82,9 +65,14 @@ function TrainingMorePage() {
             }}
           />
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-[14px]">
             <Card>
-              <SectionTitle>Current plan</SectionTitle>
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <SectionTitle>Current plan</SectionTitle>
+                <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs text-primary">
+                  Active
+                </span>
+              </div>
               <h2 className="text-xl font-semibold">{activePlan.data.name}</h2>
               <p className="mt-1 text-sm text-muted-foreground">
                 {activePlan.data.days.length} workout day
@@ -97,20 +85,39 @@ function TrainingMorePage() {
               >
                 Edit training plan
               </Button>
-              <Button
-                variant="ghost"
-                className="mt-2 min-h-11 w-full"
-                disabled={activeSession.isLoading || !!activeSession.error}
-                onClick={() => {
-                  if (activeSession.data) {
-                    toast.error("Finish or discard your current workout before changing plans.");
-                    return;
-                  }
-                  setSwitching(true);
-                }}
-              >
-                Change plan
-              </Button>
+              <details className="mt-3 border-t border-border pt-2">
+                <summary className="flex min-h-11 cursor-pointer items-center justify-between font-medium">
+                  Workout days <ChevronRight className="h-5 w-5" aria-hidden="true" />
+                </summary>
+                {activePlan.data.days.map((day) => (
+                  <div key={day.id} className="py-3 first:pt-0 last:pb-0">
+                    <h3 className="font-medium">
+                      Day {day.order} · {day.name}
+                    </h3>
+                    <ol className="mt-2 space-y-2 text-sm text-muted-foreground">
+                      {day.exercises.map((exercise) => (
+                        <li key={exercise.id} className="flex justify-between gap-3">
+                          <span className="min-w-0">{exercise.name}</span>
+                          <span className="num shrink-0">
+                            {exercise.sets} × {exercise.repMin}–{exercise.repMax}
+                          </span>
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                ))}
+              </details>
+              <details className="mt-3 border-t border-border pt-2">
+                <summary className="flex min-h-11 cursor-pointer items-center font-medium">
+                  Muscle coverage
+                </summary>
+                <BulkMuscleCoverage
+                  result={coverage.data}
+                  loading={coverage.isLoading}
+                  error={coverage.error}
+                  onRetry={() => void coverage.refetch()}
+                />
+              </details>
             </Card>
             {activeSession.error ? (
               <DataError
@@ -118,31 +125,23 @@ function TrainingMorePage() {
                 onRetry={() => void activeSession.refetch()}
               />
             ) : null}
-            <Card className="divide-y divide-border">
-              {activePlan.data.days.map((day) => (
-                <div key={day.id} className="py-3 first:pt-0 last:pb-0">
-                  <h3 className="font-medium">
-                    Day {day.order} · {day.name}
-                  </h3>
-                  <ol className="mt-2 space-y-2 text-sm text-muted-foreground">
-                    {day.exercises.map((exercise) => (
-                      <li key={exercise.id} className="flex justify-between gap-3">
-                        <span className="min-w-0">{exercise.name}</span>
-                        <span className="num shrink-0">
-                          {exercise.sets} × {exercise.repMin}–{exercise.repMax}
-                        </span>
-                      </li>
-                    ))}
-                  </ol>
-                </div>
-              ))}
-            </Card>
-            <BulkMuscleCoverage
-              result={coverage.data}
-              loading={coverage.isLoading}
-              error={coverage.error}
-              onRetry={() => void coverage.refetch()}
+            <TrainingPlanSetup
+              targets={data!.targets}
+              replacingPlan
+              currentPlan={activePlan.data}
+              showCurrentPlan={false}
+              selectionDisabled={
+                activeSession.isLoading || !!activeSession.error || !!activeSession.data
+              }
+              onCreated={async () => {
+                await activePlan.refetch();
+              }}
             />
+            {activeSession.data ? (
+              <p className="text-sm text-muted-foreground">
+                Finish or discard your current workout before changing plans.
+              </p>
+            ) : null}
           </div>
         )
       ) : usesPlanSetup && data ? (

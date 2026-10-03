@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronDown, ChevronUp } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import type { Targets } from "@/lib/types";
 import {
@@ -79,13 +79,7 @@ function PlanCard({
       )
     : null;
   return (
-    <Card
-      className={
-        bestMatch
-          ? "space-y-[14px] border-primary/40"
-          : "space-y-2 border-0 rounded-none shadow-none"
-      }
-    >
+    <Card className={bestMatch ? "space-y-[14px] border-primary/40" : "space-y-2"}>
       {bestMatch ? <p className="text-xs font-medium text-primary">Best match</p> : null}
       <button
         type="button"
@@ -93,8 +87,8 @@ function PlanCard({
         className="flex min-h-11 w-full items-start justify-between gap-3 text-left"
         aria-expanded={expanded}
       >
-        <span>
-          <span className="flex items-center gap-2 font-semibold text-foreground">
+        <span className="min-w-0">
+          <span className="flex flex-wrap items-center gap-2 font-semibold text-foreground">
             {plan.name}
             {current ? (
               <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[11px] text-primary">
@@ -108,17 +102,15 @@ function PlanCard({
         </span>
         {expanded ? <ChevronUp aria-hidden="true" /> : <ChevronDown aria-hidden="true" />}
       </button>
-      {bestMatch || expanded ? (
+      {expanded ? (
         <p className="text-sm leading-relaxed text-muted-foreground">{plan.description}</p>
       ) : null}
-      {bestMatch || expanded ? (
-        <p className="text-xs text-muted-foreground">{plan.splitSummary}</p>
-      ) : null}
-      {(bestMatch || expanded) && compatibility?.equipmentCompatible ? (
+      {expanded ? <p className="text-xs text-muted-foreground">{plan.splitSummary}</p> : null}
+      {compatibility?.equipmentCompatible ? (
         <p className="flex items-center gap-1.5 text-xs font-medium text-good">
           <Check className="h-4 w-4" aria-hidden="true" /> Works with your equipment
         </p>
-      ) : (bestMatch || expanded) && compatibility ? (
+      ) : compatibility ? (
         <p className="rounded-lg bg-secondary px-2.5 py-2 text-xs text-muted-foreground">
           Requires equipment you did not select:{" "}
           {compatibility.missingEquipment.map(formatEquipment).join(", ")}.
@@ -202,11 +194,15 @@ export function TrainingPlanSetup({
   replacingPlan = false,
   currentPlan = null,
   onCreated,
+  showCurrentPlan = true,
+  selectionDisabled = false,
 }: {
   targets: Targets;
   replacingPlan?: boolean;
   currentPlan?: UserTrainingPlan | null;
   onCreated?: () => void | Promise<void>;
+  showCurrentPlan?: boolean;
+  selectionDisabled?: boolean;
 }) {
   const queryClient = useQueryClient();
   const templates = useTrainingPlanTemplates();
@@ -259,7 +255,7 @@ export function TrainingPlanSetup({
   }
 
   async function choose(plan: TrainingPlanTemplate) {
-    if (choosing.current) return;
+    if (choosing.current || selectionDisabled) return;
     choosing.current = true;
     setPendingId(plan.id);
     try {
@@ -283,7 +279,7 @@ export function TrainingPlanSetup({
   }
 
   async function createCustom() {
-    if (choosing.current) return;
+    if (choosing.current || selectionDisabled) return;
     const name = customName.trim();
     if (name.length < 2) {
       toast.error("Enter a plan name with at least 2 characters.");
@@ -314,7 +310,7 @@ export function TrainingPlanSetup({
   }
 
   const currentPlanCard =
-    replacingPlan && currentPlan ? (
+    showCurrentPlan && replacingPlan && currentPlan ? (
       <Card>
         <SectionTitle>Current plan</SectionTitle>
         <h2 className="text-lg font-semibold">{currentPlan.name}</h2>
@@ -325,10 +321,20 @@ export function TrainingPlanSetup({
     ) : null;
   const modeSelector = (
     <details className="rounded-[20px] border border-border px-4">
-      <summary className="flex min-h-11 cursor-pointer items-center text-sm text-muted-foreground">
-        Setup options · templates, generated or custom
+      <summary className="flex min-h-14 cursor-pointer items-center justify-between text-sm font-medium text-foreground">
+        <span>
+          Setup options
+          <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
+            Templates, generated or custom
+          </span>
+        </span>
+        <ChevronDown className="h-5 w-5" aria-hidden="true" />
       </summary>
-      <ModeSelector mode={mode} onChange={setMode} disabled={pendingId !== null} />
+      <ModeSelector
+        mode={mode}
+        onChange={setMode}
+        disabled={pendingId !== null || selectionDisabled}
+      />
     </details>
   );
 
@@ -355,7 +361,11 @@ export function TrainingPlanSetup({
               className="mt-1 min-h-11 w-full rounded-xl border border-input bg-elevated px-3 text-base text-foreground outline-none focus:border-ring"
             />
           </label>
-          <Button className="min-h-11 w-full" onClick={createCustom} disabled={pendingId !== null}>
+          <Button
+            className="min-h-11 w-full"
+            onClick={createCustom}
+            disabled={pendingId !== null || selectionDisabled}
+          >
             {pendingId === "custom" ? (
               <PendingLabel>Creating your plan</PendingLabel>
             ) : (
@@ -410,7 +420,7 @@ export function TrainingPlanSetup({
       onToggle={() => setExpandedId(expandedId === plan.id ? null : plan.id)}
       onUse={() => void choose(plan)}
       pending={pendingId === plan.id}
-      disabled={pendingId !== null}
+      disabled={pendingId !== null || selectionDisabled}
     />
   );
   return (
@@ -423,16 +433,16 @@ export function TrainingPlanSetup({
       </p>
       {currentPlanCard}
       {best ? renderPlan(best, !!recommendation) : null}
-      <div className="card-surface divide-y divide-border overflow-hidden">
+      <div className="space-y-[14px]">
         {ranked.filter((plan) => plan.id !== best?.id).map((plan) => renderPlan(plan))}
       </div>
       <Button
         variant="outline"
-        className="min-h-11 w-full"
-        disabled={pendingId !== null}
+        className="flex min-h-14 w-full justify-between rounded-[20px] bg-card px-4"
+        disabled={pendingId !== null || selectionDisabled}
         onClick={() => setMode("custom")}
       >
-        Build my own plan
+        Build my own plan <ChevronRight className="h-5 w-5" aria-hidden="true" />
       </Button>
       {modeSelector}
     </div>
@@ -467,19 +477,21 @@ export function TrainingPlanOverview({
     plan.days[0];
   return (
     <div className="space-y-[14px]">
-      <p className="text-sm text-muted-foreground">
-        {plan.name}
-        {day ? ` · Day ${day.order} of ${plan.days.length}` : ""}
-      </p>
-      {weekProgress ? (
-        <p className="text-sm text-muted-foreground">
-          <span className="num text-foreground">{weekProgress}</span> workouts this week
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-[13px] font-medium text-muted-foreground">
+          {plan.name}
+          {day ? ` · Day ${day.order} of ${plan.days.length}` : ""}
         </p>
-      ) : null}
+        {weekProgress ? (
+          <p className="text-sm text-muted-foreground">
+            <span className="num text-foreground">{weekProgress}</span> workouts this week
+          </p>
+        ) : null}
+      </div>
       {day ? (
         <>
           <div>
-            <h2 className="text-[30px] font-semibold tracking-tight">{day.name}</h2>
+            <h2 className="text-[32px] font-semibold leading-tight tracking-tight">{day.name}</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               {day.exercises.length} exercises
               {completedDayIds?.has(day.id) ? " · Completed this week" : ""}
@@ -528,16 +540,23 @@ export function TrainingPlanOverview({
                 repMax: exercise.repMax,
               });
               return (
-                <li key={exercise.id} className="flex min-h-16 items-start gap-3 py-3">
-                  <span className="num mt-1 w-5 shrink-0 text-sm text-muted-foreground">
+                <li key={exercise.id} className="flex min-h-16 items-start gap-3 py-[14px]">
+                  <span className="num mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-elevated text-xs text-muted-foreground">
                     {index + 1}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="text-[15px] font-medium">{exercise.name}</p>
+                    <p className="text-[16px] font-medium leading-snug">{exercise.name}</p>
                     <p className="mt-1 text-[13px] text-muted-foreground">
                       {exercise.sets} × {exercise.repMin}–{exercise.repMax}
                     </p>
-                    <p className="mt-1 text-xs text-muted-foreground">{guidance.targetText}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {next?.dataStatus === "usable" ? guidance.targetText : "No previous session"}
+                    </p>
+                    {guidance.previousPerformanceText ? (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Previous: {guidance.previousPerformanceText}
+                      </p>
+                    ) : null}
                     {exercise.notes ? (
                       <p className="mt-1 text-xs text-muted-foreground">{exercise.notes}</p>
                     ) : null}
