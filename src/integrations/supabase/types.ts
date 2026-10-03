@@ -1916,6 +1916,10 @@ export type Database = {
         Args: { _expected_current_calories: number; _new_calories: number }
         Returns: boolean
       }
+      cancel_pending_challenge: {
+        Args: { _caller: string; _challenge: string }
+        Returns: boolean
+      }
       challenge_activity_summary: {
         Args: { _challenge: string; _end?: string; _start?: string }
         Returns: Json
@@ -2118,9 +2122,22 @@ export type Database = {
         Returns: {
           challenge_id: string
           challenge_name: string
+          duration_weeks: number
           expires_at: string
           invitation_id: string
           inviter_username: string
+          legacy_photo_owed: boolean
+          penalty_high_custom: string
+          penalty_high_eur: number
+          penalty_low_custom: string
+          penalty_low_eur: number
+          penalty_medium_custom: string
+          penalty_medium_eur: number
+          penalty_mode: string
+          start_date: string
+          timezone: string
+          travel_pause_enabled: boolean
+          travel_pause_home_countries: string[]
           weekly_target_km: number
         }[]
       }
