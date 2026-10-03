@@ -71,7 +71,7 @@ export function ChallengeWaiting({
   };
 
   return (
-    <>
+    <div className="space-y-3.5">
       <header className="fade-up mb-1">
         <p className="text-sm text-muted-foreground">{challenge.duration_weeks}-week challenge</p>
         <h1 className="mt-1 text-3xl font-semibold tracking-tight">Waiting for {atUser}</h1>
@@ -156,6 +156,6 @@ export function ChallengeWaiting({
           Cancelling removes the invite and the challenge. You can start a new one anytime.
         </Note>
       ) : null}
-    </>
+    </div>
   );
 }
