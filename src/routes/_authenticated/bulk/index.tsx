@@ -12,7 +12,10 @@ import { preferredBulkMembership, useMemberships } from "@/lib/bulk-access";
 import { useBulkWeights } from "@/lib/bulk-progress-query";
 import { useBulkNutritionDay } from "@/lib/bulk-nutrition-query";
 import { totalNutrition } from "@/lib/bulk-nutrition";
-import { useCompletedSessionDates } from "@/lib/bulk-training-sessions";
+import {
+  useActiveBulkTrainingSession,
+  useCompletedSessionDates,
+} from "@/lib/bulk-training-sessions";
 import { useActiveTrainingPlan } from "@/lib/training-plans-query";
 import {
   collectCompletedWorkouts,
@@ -38,6 +41,7 @@ function TodayPage() {
   const nutrition = useBulkNutritionDay(publicGoal ? id : null, today);
   const from = iso(startOfWeek(new Date(), { weekStartsOn: 1 }));
   const sessions = useCompletedSessionDates(id, from, today);
+  const activeSession = useActiveBulkTrainingSession(publicGoal ? id : null);
   const plan = useActiveTrainingPlan(publicGoal ? id : null);
   const { saveDay } = useActions();
   const [restPending, setRestPending] = useState(false);
@@ -76,7 +80,7 @@ function TodayPage() {
     (nutrition.data?.entries.length ?? 0) > 0 || day?.calories != null,
   ];
   const target = resolveWeeklyWorkoutTarget({
-    weeklyWorkoutGoal: data?.targets.weeklyWorkoutGoal ?? null,
+    weeklyWorkoutGoal: data?.targets.weeklyWorkoutGoal ?? 5,
     targetDaysPerWeek: data?.targets.trainingDaysPerWeek ?? null,
     activePlanDaysPerWeek: plan.data?.trainingDaysPerWeek ?? null,
   });
@@ -103,7 +107,7 @@ function TodayPage() {
       </span>
       {label === "Workout" && !done ? (
         <span className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground">
-          {plan.data ? "Start" : "Choose plan"}
+          {activeSession.data ? "Resume" : plan.data ? "Start" : "Choose plan"}
         </span>
       ) : (
         <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
@@ -168,7 +172,9 @@ function TodayPage() {
                   ? "Workout completed"
                   : rest
                     ? "Rest day"
-                    : (plan.data?.name ?? "Choose a training plan"),
+                    : (activeSession.data?.workoutDayName ??
+                      plan.data?.name ??
+                      "Choose a training plan"),
                 habits[2]!,
                 "/bulk/training",
               )}

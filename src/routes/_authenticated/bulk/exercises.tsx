@@ -3,7 +3,7 @@ import { Plus } from "lucide-react";
 import { useDeferredValue, useState } from "react";
 import { z } from "zod";
 import { AppShell, PageHeader } from "@/components/AppShell";
-import { Card, DataError, PendingLabel, SectionTitle } from "@/components/ui-kit";
+import { DataError, PendingLabel, SectionTitle } from "@/components/ui-kit";
 import {
   createCustomExercise,
   deleteCustomExercise,
@@ -11,6 +11,7 @@ import {
 } from "@/lib/exercise-library-query";
 import {
   EXERCISE_EQUIPMENT,
+  EXERCISE_MUSCLE_CATEGORIES,
   EXERCISE_EXPERIENCE_LEVELS,
   MUSCLE_GROUPS,
   type ExerciseEquipment,
@@ -48,6 +49,7 @@ function ExerciseLibraryPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search);
+  const [category, setCategory] = useState<keyof typeof EXERCISE_MUSCLE_CATEGORIES | "">("");
   const [muscle, setMuscle] = useState<MuscleGroup | "">("");
   const [equipment, setEquipment] = useState<ExerciseEquipment | "">("");
   const [experience, setExperience] = useState<ExerciseExperienceLevel | "">("");
@@ -58,6 +60,7 @@ function ExerciseLibraryPage() {
     {
       search: deferredSearch,
       primaryMuscle: muscle || undefined,
+      primaryMuscles: category ? EXERCISE_MUSCLE_CATEGORIES[category] : undefined,
       equipment: equipment || undefined,
       unilateralOnly,
       experienceLevel: experience || undefined,
@@ -247,7 +250,7 @@ function ExerciseLibraryPage() {
   return (
     <AppShell>
       <PageHeader
-        title={addingToWorkout ? "Add to workout" : "Exercise library"}
+        title={addingToWorkout ? "Add to workout" : "Exercises"}
         subtitle={
           addingToWorkout
             ? `Choose an exercise for ${addTo}.`
@@ -257,8 +260,7 @@ function ExerciseLibraryPage() {
         backLabel="Training"
       />
 
-      <Card>
-        <SectionTitle>Find an exercise</SectionTitle>
+      <div>
         <input
           type="search"
           value={search}
@@ -268,87 +270,114 @@ function ExerciseLibraryPage() {
           }}
           placeholder="Search by exercise name"
           aria-label="Search exercises"
-          className="min-h-11 w-full rounded-xl border border-input bg-elevated px-3 text-base outline-none focus:border-ring"
+          className="h-12 w-full rounded-[14px] border border-input bg-card px-4 text-base outline-none focus:border-ring"
         />
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <select
-            value={muscle}
-            onChange={(event) => {
-              setMuscle(event.target.value as MuscleGroup | "");
-              resetPage();
-            }}
-            aria-label="Filter by primary muscle"
-            className="min-h-11 min-w-0 rounded-xl border border-input bg-elevated px-2 text-sm"
-          >
-            <option value="">All muscles</option>
-            {MUSCLE_GROUPS.map((item) => (
-              <option key={item} value={item}>
-                {label(item)}
-              </option>
-            ))}
-          </select>
-          <select
-            value={equipment}
-            onChange={(event) => {
-              setEquipment(event.target.value as ExerciseEquipment | "");
-              resetPage();
-            }}
-            aria-label="Filter by equipment"
-            className="min-h-11 min-w-0 rounded-xl border border-input bg-elevated px-2 text-sm"
-          >
-            <option value="">All equipment</option>
-            {EXERCISE_EQUIPMENT.map((item) => (
-              <option key={item} value={item}>
-                {label(item)}
-              </option>
-            ))}
-          </select>
-          <select
-            value={origin}
-            onChange={(event) => {
-              setOrigin(event.target.value as typeof origin);
-              resetPage();
-            }}
-            aria-label="Filter by exercise source"
-            className="min-h-11 min-w-0 rounded-xl border border-input bg-elevated px-2 text-sm"
-          >
-            <option value="all">Tempo + mine</option>
-            <option value="system">Tempo exercises</option>
-            <option value="custom">My exercises</option>
-          </select>
-          <select
-            value={experience}
-            onChange={(event) => {
-              setExperience(event.target.value as ExerciseExperienceLevel | "");
-              resetPage();
-            }}
-            aria-label="Filter by experience level"
-            className="min-h-11 min-w-0 rounded-xl border border-input bg-elevated px-2 text-sm"
-          >
-            <option value="">All experience</option>
-            {EXERCISE_EXPERIENCE_LEVELS.map((item) => (
-              <option key={item} value={item}>
-                {label(item)}
-              </option>
-            ))}
-          </select>
-          <label className="flex min-h-11 items-center gap-2 rounded-xl border border-input px-3 text-sm">
-            <input
-              type="checkbox"
-              checked={unilateralOnly}
-              onChange={(event) => {
-                setUnilateralOnly(event.target.checked);
+        <div
+          className="-mx-5 mt-3 flex gap-2 overflow-x-auto px-5"
+          role="group"
+          aria-label="Muscle categories"
+        >
+          {["", ...Object.keys(EXERCISE_MUSCLE_CATEGORIES)].map((item) => (
+            <button
+              key={item}
+              type="button"
+              aria-pressed={category === item && !muscle}
+              className={`min-h-11 shrink-0 rounded-full border px-4 text-sm ${category === item && !muscle ? "border-primary/40 bg-primary/10 text-primary" : "border-border text-muted-foreground"}`}
+              onClick={() => {
+                setCategory(item as keyof typeof EXERCISE_MUSCLE_CATEGORIES | "");
+                setMuscle("");
                 resetPage();
               }}
-            />
-            Unilateral
-          </label>
+            >
+              {item || "All"}
+            </button>
+          ))}
         </div>
-      </Card>
+        <details className="mt-3">
+          <summary className="flex min-h-11 cursor-pointer items-center text-sm text-muted-foreground">
+            Filters
+          </summary>
+          <div className="grid grid-cols-2 gap-2">
+            <select
+              value={muscle}
+              onChange={(event) => {
+                setMuscle(event.target.value as MuscleGroup | "");
+                setCategory("");
+                resetPage();
+              }}
+              aria-label="Filter by primary muscle"
+              className="min-h-11 min-w-0 rounded-xl border border-input bg-elevated px-2 text-sm"
+            >
+              <option value="">All muscles</option>
+              {MUSCLE_GROUPS.map((item) => (
+                <option key={item} value={item}>
+                  {label(item)}
+                </option>
+              ))}
+            </select>
+            <select
+              value={equipment}
+              onChange={(event) => {
+                setEquipment(event.target.value as ExerciseEquipment | "");
+                resetPage();
+              }}
+              aria-label="Filter by equipment"
+              className="min-h-11 min-w-0 rounded-xl border border-input bg-elevated px-2 text-sm"
+            >
+              <option value="">All equipment</option>
+              {EXERCISE_EQUIPMENT.map((item) => (
+                <option key={item} value={item}>
+                  {label(item)}
+                </option>
+              ))}
+            </select>
+            <select
+              value={origin}
+              onChange={(event) => {
+                setOrigin(event.target.value as typeof origin);
+                resetPage();
+              }}
+              aria-label="Filter by exercise source"
+              className="min-h-11 min-w-0 rounded-xl border border-input bg-elevated px-2 text-sm"
+            >
+              <option value="all">Tempo + mine</option>
+              <option value="system">Tempo exercises</option>
+              <option value="custom">My exercises</option>
+            </select>
+            <select
+              value={experience}
+              onChange={(event) => {
+                setExperience(event.target.value as ExerciseExperienceLevel | "");
+                resetPage();
+              }}
+              aria-label="Filter by experience level"
+              className="min-h-11 min-w-0 rounded-xl border border-input bg-elevated px-2 text-sm"
+            >
+              <option value="">All experience</option>
+              {EXERCISE_EXPERIENCE_LEVELS.map((item) => (
+                <option key={item} value={item}>
+                  {label(item)}
+                </option>
+              ))}
+            </select>
+            <label className="flex min-h-11 items-center gap-2 rounded-xl border border-input px-3 text-sm">
+              <input
+                type="checkbox"
+                checked={unilateralOnly}
+                onChange={(event) => {
+                  setUnilateralOnly(event.target.checked);
+                  resetPage();
+                }}
+              />
+              Unilateral
+            </label>
+          </div>
+        </details>
+      </div>
 
       <details className="card-surface mt-4 p-4">
         <summary className="flex min-h-11 cursor-pointer items-center font-semibold">
-          Add custom exercise
+          Add your own exercise
         </summary>
         <div className="mt-3 space-y-4">
           <label className="block text-xs text-muted-foreground">
@@ -430,7 +459,7 @@ function ExerciseLibraryPage() {
         ) : library.error ? (
           <DataError message="Could not load exercises." onRetry={() => void library.refetch()} />
         ) : library.data?.exercises.length ? (
-          <div className="space-y-2">
+          <div className="card-surface divide-y divide-border overflow-hidden">
             {library.data.exercises.map((item) => {
               const savedAdditions = addTo
                 ? (data?.targets.legacyExerciseDefinitions?.[addTo] ?? [])
@@ -464,7 +493,7 @@ function ExerciseLibraryPage() {
                         ? `${item.name} is already in workout`
                         : `Add ${item.name} to workout`
                   }
-                  className={`card-surface flex min-h-16 w-full items-center justify-between gap-3 p-3 text-left transition active:scale-[0.98] active:bg-elevated disabled:cursor-wait ${pending ? "border-primary/50 bg-primary/5" : ""} ${alreadyInWorkout && !addedByLibrary ? "opacity-60" : ""}`}
+                  className={`flex min-h-16 w-full items-center justify-between gap-3 p-3 text-left transition active:scale-[0.98] active:bg-elevated disabled:cursor-wait ${pending ? "border-primary/50 bg-primary/5" : ""} ${alreadyInWorkout && !addedByLibrary ? "opacity-60" : ""}`}
                 >
                   <span className="min-w-0">
                     <span className="block font-medium text-foreground">{item.name}</span>
@@ -490,7 +519,7 @@ function ExerciseLibraryPage() {
                   </span>
                 </button>
               ) : (
-                <div key={item.id} className="card-surface p-3">
+                <div key={item.id} className="min-h-16 p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="font-medium text-foreground">{item.name}</p>

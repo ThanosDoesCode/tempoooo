@@ -38,7 +38,9 @@ function BulkWorkoutPage() {
   );
   return (
     <AppShell>
-      <PageHeader title="Workout" backTo="/bulk/training" backLabel="Training" />
+      {!session.data ? (
+        <PageHeader title="Workout" backTo="/bulk/training" backLabel="Training" />
+      ) : null}
       {session.isLoading ? (
         <div className="space-y-3">
           <div className="h-28 animate-pulse rounded-2xl bg-card" />
@@ -50,7 +52,11 @@ function BulkWorkoutPage() {
           onRetry={() => void session.refetch()}
         />
       ) : session.data ? (
-        <BulkWorkoutSessionView session={session.data} progression={progression.data ?? {}} />
+        <BulkWorkoutSessionView
+          key={session.data.id}
+          session={session.data}
+          progression={progression.data ?? {}}
+        />
       ) : (
         <div className="rounded-2xl bg-card p-4 text-center">
           <p className="font-semibold">Workout unavailable</p>

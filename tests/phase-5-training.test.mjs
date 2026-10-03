@@ -1,0 +1,712 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import { createRequire } from "node:module";
+import vm from "node:vm";
+import ts from "typescript";
+import * as domain from "../src/lib/bulk-training-session-domain.ts";
+import * as plans from "../src/lib/training-plans.ts";
+import * as progression from "../src/lib/bulk-progression.ts";
+import * as guidance from "../src/lib/bulk-next-session-guidance.ts";
+import { EXERCISE_MUSCLE_CATEGORIES, MUSCLE_GROUPS } from "../src/lib/exercise-library.ts";
+import { isFocusScreen, LOG_ACTIONS } from "../src/lib/main-navigation.ts";
+const read = (p) => readFile(new URL(`../${p}`, import.meta.url), "utf8");
+const require = createRequire(import.meta.url);
+const jsx = (type, props) => ({ type, props });
+const nodes = (tree, predicate) =>
+  !tree || typeof tree !== "object"
+    ? []
+    : Array.isArray(tree)
+      ? tree.flatMap((child) => nodes(child, predicate))
+      : [...(predicate(tree) ? [tree] : []), ...nodes(tree.props?.children, predicate)];
+const text = (tree) =>
+  tree == null || typeof tree === "boolean"
+    ? ""
+    : Array.isArray(tree)
+      ? tree.map(text).join(" ")
+      : typeof tree === "object"
+        ? text(tree.props?.children)
+        : String(tree);
+const find = (tree, label) =>
+  nodes(
+    tree,
+    (n) =>
+      text(n).trim().replace(/\s+/g, " ") === label && (n.type === "button" || n.type === "Button"),
+  )[0];
+const workoutSource = await read("src/components/BulkWorkoutSession.tsx");
+const planSource = await read("src/components/TrainingPlanSetup.tsx");
+const makeSet = (id, order, overrides = {}) => ({
+  id,
+  order,
+  isExtra: false,
+  isComplete: false,
+  setType: "normal",
+  rpe: null,
+  bilateralWeight: null,
+  bilateralReps: null,
+  leftWeight: null,
+  leftReps: null,
+  rightWeight: null,
+  rightReps: null,
+  ...overrides,
+});
+const exercise = (id = "ex1", overrides = {}) => ({
+  id,
+  sourceExerciseId: "system:press",
+  sourcePlanExerciseId: id,
+  name: id === "ex1" ? "Real press" : "Real row",
+  order: id === "ex1" ? 1 : 2,
+  executionMode: "bilateral",
+  isBodyweight: false,
+  targetSets: 2,
+  targetRepMin: 8,
+  targetRepMax: 12,
+  notes: "Bench notch 3",
+  sets: [makeSet(`${id}-s1`, 1), makeSet(`${id}-s2`, 2)],
+  ...overrides,
+});
+const session = (overrides = {}) => ({
+  id: "session1",
+  bulkProfileId: "owner1",
+  planId: "plan1",
+  planName: "Actual program",
+  planDayId: "day1",
+  workoutDayName: "Actual workout",
+  workoutDayOrder: 1,
+  status: "in_progress",
+  startedAt: "2026-10-03T10:00:00Z",
+  completedAt: null,
+  updatedAt: "2026-10-03T10:00:00Z",
+  workoutDate: "2026-10-03",
+  bodyweightKg: 70,
+  exercises: [exercise(), exercise("ex2")],
+  ...overrides,
+});
+// Execute authored component handlers, preserving hook slots and refs across renders.
+// UI wrappers are inert; no replica of mutation, draft or recommendation logic is used.
+function fixture(source, exportName, initialProps, options = {}) {
+  let props = initialProps,
+    index = 0,
+    fail = false,
+    blocker = null,
+    timerId = 0;
+  const slots = [],
+    calls = [],
+    invalidations = [],
+    destinations = [],
+    effects = [],
+    timers = new Map(),
+    storage = new Map(options.storage ?? []);
+  const record = async (name, ...args) => {
+    calls.push([name, ...args]);
+    if (blocker) await blocker;
+    if (fail) throw Error("Network request failed");
+  };
+  const modules = {
+    react: {
+      useState(initial) {
+        const i = index++;
+        slots[i] ??= { value: typeof initial === "function" ? initial() : initial };
+        return [
+          slots[i].value,
+          (next) => {
+            slots[i].value = typeof next === "function" ? next(slots[i].value) : next;
+          },
+        ];
+      },
+      useRef(initial) {
+        return (slots[index++] ??= { current: initial });
+      },
+      useMemo(fn) {
+        index++;
+        return fn();
+      },
+      useEffect(fn, deps) {
+        const i = index++;
+        const prev = slots[i];
+        if (!prev || deps?.some((d, j) => d !== prev.deps?.[j])) {
+          effects.push(fn);
+          slots[i] = { deps };
+        }
+      },
+    },
+    "react/jsx-runtime": { jsx, jsxs: jsx, Fragment: "fragment" },
+    "@tanstack/react-router": {
+      Link: "Link",
+      useNavigate: () => async (d) => destinations.push(d),
+      createFileRoute: () => (config) => config,
+    },
+    "@tanstack/react-query": {
+      useQueryClient: () => ({ invalidateQueries: async (q) => invalidations.push(q.queryKey) }),
+    },
+    sonner: {
+      toast: { success: (m) => calls.push(["success", m]), error: (m) => calls.push(["error", m]) },
+    },
+    "@/lib/utils": { cn: (...c) => c.filter(Boolean).join(" ") },
+    "@/lib/network-errors": { userFacingError: () => "Save failed. Input preserved." },
+    "@/lib/bulk-training-session-domain": domain,
+    "@/lib/bulk-progression": progression,
+    "@/lib/bulk-next-session-guidance": guidance,
+    "@/lib/bulk-training-sessions": Object.fromEntries(
+      [
+        "saveBulkTrainingSet",
+        "addBulkTrainingSet",
+        "removeBulkTrainingSet",
+        "finishBulkTrainingSession",
+        "discardBulkTrainingSession",
+      ].map((name) => [name, (...args) => record(name, ...args)]),
+    ),
+    "@/lib/training-plans": plans,
+    "@/lib/training-plans-query": {
+      useTrainingPlanTemplates: () => ({
+        data: options.templates ?? [],
+        isLoading: false,
+        error: null,
+      }),
+      ...Object.fromEntries(
+        [
+          "instantiateTrainingPlan",
+          "switchTrainingPlan",
+          "switchToEmptyTrainingPlan",
+          "createEmptyTrainingPlan",
+        ].map((name) => [name, (...a) => record(name, ...a)]),
+      ),
+    },
+  };
+  const schedule = (fn) => {
+    timers.set(++timerId, fn);
+    return timerId;
+  };
+  const browser = {
+    localStorage: {
+      getItem: (k) => storage.get(k) ?? null,
+      setItem: (k, v) => storage.set(k, v),
+      removeItem: (k) => storage.delete(k),
+    },
+    setInterval: () => 0,
+    clearInterval() {},
+  };
+  const context = {
+    exports: {},
+    window: browser,
+    document: { addEventListener() {}, removeEventListener() {} },
+    setTimeout: schedule,
+    clearTimeout: (id) => timers.delete(id),
+    console,
+    require(name) {
+      if (options.modules?.[name]) return options.modules[name];
+      if (modules[name]) return modules[name];
+      if (name === "date-fns") return require(name);
+      if (name.includes("ui") || name === "lucide-react" || name.includes("DecimalInput"))
+        return new Proxy({}, { get: (_, key) => String(key) });
+      throw Error(name);
+    },
+  };
+  vm.runInNewContext(
+    ts.transpileModule(source + (source === workoutSource ? "\nexport { WorkoutSetRow };" : ""), {
+      compilerOptions: {
+        module: ts.ModuleKind.CommonJS,
+        target: ts.ScriptTarget.ES2022,
+        jsx: ts.JsxEmit.ReactJSX,
+      },
+    }).outputText,
+    context,
+  );
+  return {
+    render() {
+      index = 0;
+      return exportName === "Route"
+        ? context.exports.Route.component(props)
+        : context.exports[exportName](props);
+    },
+    update(next) {
+      props = next;
+    },
+    calls,
+    invalidations,
+    destinations,
+    storage,
+    setFail(v) {
+      fail = v;
+    },
+    setBlocker(p) {
+      blocker = p;
+    },
+    runEffects() {
+      effects.splice(0).forEach((fn) => fn());
+    },
+    async flushTimers() {
+      const pending = [...timers.values()];
+      timers.clear();
+      await Promise.all(pending.map((fn) => fn()));
+      await new Promise(setImmediate);
+    },
+    type(name) {
+      return context.exports[name];
+    },
+  };
+}
+const setRows = (tree) =>
+  nodes(tree, (n) => typeof n.type === "function" && n.type.name === "WorkoutSetRow");
+
+test("Phase 5 focus shows real exercises, keeps hidden sets mounted, and preserves per-set RPE drafts", async () => {
+  const f = fixture(workoutSource, "BulkWorkoutSessionView", {
+    session: session(),
+    progression: {},
+  });
+  let tree = f.render();
+  assert.match(text(tree), /Actual workout/);
+  assert.equal(setRows(tree).length, 4);
+  assert.equal(nodes(tree, (n) => n.type === "section" && n.props.hidden).length, 1);
+  assert.match(text(tree), /Bench notch 3/);
+  setRows(tree)[0].props.onChange({
+    bilateralWeight: 22.5,
+    bilateralReps: 10,
+    rpe: 8.5,
+    setType: "drop",
+  });
+  find(f.render(), "Next exercise").props.onClick();
+  tree = f.render();
+  assert.equal(setRows(tree)[0].props.draft.rpe, 8.5);
+  await f.flushTimers();
+  const saved = f.calls.find(([name]) => name === "saveBulkTrainingSet");
+  assert.equal(saved[1], "session1");
+  assert.equal(saved[2].rpe, 8.5);
+  assert.equal(saved[2].setType, "drop");
+  assert.equal(saved[2].bilateralWeight, 22.5);
+});
+
+test("Phase 5 resumes server and unsynced RPE without another session or cross-account drafts", async () => {
+  const value = session({
+    exercises: [
+      exercise("ex1", {
+        sets: [makeSet("saved", 1, { rpe: 9.5, bilateralWeight: 20, bilateralReps: 10 })],
+      }),
+    ],
+  });
+  const key = "tempo:bulk-workout-draft:owner1:session1";
+  const recovered = {
+    saved: {
+      id: "saved",
+      rpe: 8,
+      setType: "failure",
+      bilateralWeight: 22.5,
+      bilateralReps: 10,
+      leftWeight: null,
+      leftReps: null,
+      rightWeight: null,
+      rightReps: null,
+    },
+    foreign: { id: "foreign", rpe: 10 },
+  };
+  const f = fixture(
+    workoutSource,
+    "BulkWorkoutSessionView",
+    { session: value, progression: {} },
+    { storage: [[key, JSON.stringify(recovered)]] },
+  );
+  assert.equal(setRows(f.render())[0].props.draft.rpe, 8);
+  assert.equal(setRows(f.render()).length, 1);
+  f.runEffects();
+  await f.flushTimers();
+  assert.equal(f.calls.find(([n]) => n === "saveBulkTrainingSet")[2].rpe, 8);
+  const fresh = fixture(workoutSource, "BulkWorkoutSessionView", {
+    session: value,
+    progression: {},
+  });
+  assert.equal(setRows(fresh.render())[0].props.draft.rpe, 9.5);
+});
+
+test("Phase 5 RPE drawer keeps original optional choices and saves through the row's existing callback", () => {
+  const updates = [];
+  const props = {
+    exercise: exercise(),
+    set: makeSet("set", 1),
+    draft: { ...makeSet("set", 1), rpe: 8 },
+    saving: false,
+    removing: false,
+    canRemove: true,
+    swipeOpen: false,
+    previous: "20×10",
+    onSelect() {},
+    onChange: (patch) => updates.push(patch),
+    onDone() {},
+    onRemove() {},
+    onRetry() {},
+    onSwipeBegin() {},
+    onSwipeOpen() {},
+    onSwipeClose() {},
+  };
+  const f = fixture(workoutSource, "WorkoutSetRow", props);
+  const rpe = nodes(
+    f.render(),
+    (n) => n.type === "button" && n.props["aria-label"]?.includes("RPE"),
+  )[0];
+  assert.ok(rpe);
+  rpe.props.onClick();
+  const choices = nodes(
+    f.render(),
+    (n) => n.type === "button" && typeof n.props["aria-pressed"] === "boolean",
+  );
+  assert.deepEqual(
+    choices.map((n) => Number(text(n))),
+    [6, 7, 7.5, 8, 8.5, 9, 9.5, 10],
+  );
+  find(f.render(), "9.5").props.onClick();
+  find(f.render(), "Done").props.onClick();
+  assert.equal(updates.at(-1).rpe, 9.5);
+  find(f.render(), "Clear RPE").props.onClick();
+  assert.equal(updates.at(-1).rpe, null);
+  assert.match(text(f.render()), /Previous:\s+20×10/);
+});
+
+test("Phase 5 add/remove set handlers keep snapshots and use the same session RPCs", async () => {
+  const f = fixture(workoutSource, "BulkWorkoutSessionView", {
+    session: session(),
+    progression: {},
+  });
+  await find(f.render(), "Add set").props.onClick();
+  await new Promise(setImmediate);
+  assert.ok(
+    f.calls.some(
+      ([name, id, ex]) => name === "addBulkTrainingSet" && id === "session1" && ex === "ex1",
+    ),
+  );
+  setRows(f.render())[0].props.onRemove();
+  await new Promise(setImmediate);
+  assert.ok(
+    f.calls.some(
+      ([name, id, set]) =>
+        name === "removeBulkTrainingSet" && id === "session1" && set === "ex1-s1",
+    ),
+  );
+});
+
+test("Phase 5 finish flushes RPE, prevents duplicate completion and invalidates Today/Progress readers", async () => {
+  const value = session({
+    exercises: [
+      exercise("ex1", {
+        sets: [
+          makeSet("set", 1, { isComplete: true, bilateralWeight: 20, bilateralReps: 10, rpe: 8 }),
+        ],
+      }),
+    ],
+  });
+  const f = fixture(workoutSource, "BulkWorkoutSessionView", { session: value, progression: {} });
+  setRows(f.render())[0].props.onChange({ rpe: 9.5 });
+  let release;
+  f.setBlocker(
+    new Promise((resolve) => {
+      release = resolve;
+    }),
+  );
+  const finish = find(f.render(), "Finish workout");
+  finish.props.onClick();
+  finish.props.onClick();
+  release();
+  await new Promise(setImmediate);
+  await new Promise(setImmediate);
+  assert.equal(f.calls.filter(([n]) => n === "finishBulkTrainingSession").length, 1);
+  const save = f.calls.findIndex(([n]) => n === "saveBulkTrainingSet");
+  assert.ok(save >= 0 && save < f.calls.findIndex(([n]) => n === "finishBulkTrainingSession"));
+  assert.equal(f.calls[save][2].rpe, 9.5);
+  assert.equal(f.storage.has("tempo:bulk-workout-draft:owner1:session1"), false);
+  for (const key of [
+    "bulk-training-session",
+    "bulk-training-sessions",
+    "bulk-progression",
+    "bulk-progress-summary",
+  ])
+    assert.ok(f.invalidations.some((k) => k[0] === key));
+  assert.equal(f.destinations.length, 0); // confirmed refetch transitions this route to completion
+});
+
+test("Phase 5 failed saves preserve RPE draft and prevent finish; completing never fabricates missing values", async () => {
+  const f = fixture(workoutSource, "BulkWorkoutSessionView", {
+    session: session(),
+    progression: {},
+  });
+  f.setFail(true);
+  setRows(f.render())[0].props.onChange({ bilateralWeight: 20, bilateralReps: 10, rpe: 8.5 });
+  await f.flushTimers();
+  const confirm = nodes(
+    f.render(),
+    (n) => n.type === "AlertDialogAction" && text(n) === "Finish anyway",
+  )[0];
+  confirm.props.onClick();
+  await new Promise(setImmediate);
+  assert.equal(f.calls.filter(([n]) => n === "finishBulkTrainingSession").length, 0);
+  assert.equal(setRows(f.render())[0].props.draft.rpe, 8.5);
+  assert.ok(f.storage.size);
+  assert.match(text(f.render()), /missing values will remain empty in history/);
+});
+
+test("Phase 5 completion uses immutable duration, working sets, actual volume and stored RPE", () => {
+  const saved = session({
+    status: "completed",
+    completedAt: "2026-10-03T10:02:03Z",
+    exercises: [
+      exercise("ex1", {
+        sets: [
+          makeSet("s1", 1, { isComplete: true, bilateralWeight: 20, bilateralReps: 10, rpe: 9.5 }),
+          makeSet("s2", 2, {
+            isComplete: true,
+            setType: "warmup",
+            bilateralWeight: 10,
+            bilateralReps: 10,
+          }),
+        ],
+      }),
+    ],
+  });
+  const f = fixture(workoutSource, "CompletedWorkout", { session: saved });
+  assert.match(text(f.render()), /2:03/);
+  assert.match(text(f.render()), /200 kg/);
+  assert.match(text(f.render()), /RPE\s+9.5/);
+  assert.ok(nodes(f.render(), (n) => n.type === "Link" && n.props.to === "/bulk").length);
+  const missingBW = fixture(workoutSource, "CompletedWorkout", {
+    session: {
+      ...saved,
+      bodyweightKg: null,
+      exercises: [{ ...saved.exercises[0], isBodyweight: true }],
+    },
+  });
+  assert.match(text(missingBW.render()), /Unavailable/);
+});
+
+test("Phase 5 overview selects actual next incomplete day, preserves day order, and does not guess workouts", () => {
+  const plan = {
+    name: "Real 3-day plan",
+    days: [1, 2, 3].map((order) => ({
+      id: `d${order}`,
+      name: `Real day ${order}`,
+      order,
+      exercises: [
+        {
+          id: `e${order}`,
+          name: `Stored exercise ${order}`,
+          sets: 3,
+          repMin: 8,
+          repMax: 12,
+          intendedUnilateralMode: "bilateral",
+          isBodyweight: false,
+          exerciseId: "system:press",
+          notes: "Stored setup",
+        },
+      ],
+    })),
+  };
+  const starts = [];
+  const f = fixture(planSource, "TrainingPlanOverview", {
+    plan,
+    onStart: (id) => starts.push(id),
+    startingDayId: null,
+    workoutActive: false,
+    progression: {},
+    completedDayIds: new Set(["d1"]),
+    weekProgress: "1/5",
+  });
+  assert.match(text(f.render()), /Real day 2/);
+  assert.match(text(f.render()), /1\/5/);
+  find(f.render(), "Start workout").props.onClick();
+  assert.deepEqual(starts, ["d2"]);
+  nodes(f.render(), (n) => n.type === "select")[0].props.onChange({ target: { value: "d3" } });
+  assert.match(text(f.render()), /Stored exercise 3/);
+  f.update({
+    plan: { ...plan, days: [] },
+    onStart() {},
+    startingDayId: null,
+    workoutActive: false,
+    progression: {},
+  });
+  assert.match(text(f.render()), /Add workout days/);
+  assert.equal(find(f.render(), "Start workout"), undefined);
+});
+
+test("Phase 5 bodyweight, unilateral and RPE do not change previous-performance or progression math", () => {
+  const ex = exercise("ex1", { isBodyweight: true });
+  const set = makeSet("set", 1, { bilateralWeight: 5, bilateralReps: 10, rpe: 10 });
+  assert.equal(domain.sessionSetVolume(set, ex, 70), 750);
+  assert.equal(domain.sessionSetVolume({ ...set, rpe: null }, ex, 70), 750);
+  assert.equal(domain.sessionSetVolume(set, ex, null), null);
+  const target = {
+    planExerciseId: "ex1",
+    exerciseId: "system:press",
+    executionMode: "bilateral",
+    isBodyweight: false,
+    targetSets: 2,
+    repMin: 8,
+    repMax: 12,
+  };
+  const previous = (rpe) =>
+    session({
+      status: "completed",
+      completedAt: "2026-10-03T11:00:00Z",
+      exercises: [
+        exercise("ex1", {
+          sets: [1, 2].map((order) =>
+            makeSet(`s${order}`, order, {
+              isComplete: true,
+              bilateralWeight: 20,
+              bilateralReps: 12,
+              rpe,
+            }),
+          ),
+        }),
+      ],
+    });
+  const lowRpe = progression.deriveBulkProgressionTargets([target], [previous(6)]);
+  const highRpe = progression.deriveBulkProgressionTargets([target], [previous(10)]);
+  assert.equal(lowRpe.ex1.dataStatus, "usable");
+  assert.deepEqual(highRpe, lowRpe);
+  const unilateral = { ...ex, executionMode: "unilateral", isBodyweight: false };
+  assert.equal(
+    domain.sessionSetVolume(
+      { ...set, leftWeight: 10, leftReps: 8, rightWeight: 12, rightReps: 7 },
+      unilateral,
+    ),
+    164,
+  );
+});
+
+test("Phase 5 library categories cover existing metadata without duplicates or client page filtering", async () => {
+  const muscles = Object.values(EXERCISE_MUSCLE_CATEGORIES).flat();
+  assert.deepEqual([...muscles].sort(), [...MUSCLE_GROUPS].sort());
+  assert.equal(new Set(muscles).size, muscles.length);
+  const query = await read("src/lib/exercise-library-query.ts");
+  assert.match(query, /query\.in\("primary_muscle", \[\.\.\.filters\.primaryMuscles\]\)/);
+});
+
+test("Phase 5 keeps original routes, goal separate from frequency, historical editing/deletion and owner security", async () => {
+  assert.ok(isFocusScreen("/bulk/workout/session1"));
+  assert.equal(LOG_ACTIONS.find((a) => a.key === "workout").to, "/bulk/training");
+  const training = await read("src/routes/_authenticated/bulk/training.tsx");
+  const today = await read("src/routes/_authenticated/bulk/index.tsx");
+  for (const source of [training, today])
+    assert.match(source, /weeklyWorkoutGoal: data\?\.targets\.weeklyWorkoutGoal \?\? 5/);
+  assert.match(training, /if \(starting\.current/);
+  assert.match(training, /activeSession\.data\.id/);
+  const history = await read("src/routes/_authenticated/bulk/training_.history.tsx");
+  assert.match(history, /Delete workout\?/);
+  assert.match(history, /PublicWorkoutDetail/);
+  const metadata = await read("supabase/migrations/20260915120000_workout_set_metadata.sql");
+  assert.match(metadata, /_rpe < 6 OR _rpe > 10 OR _rpe \* 2 <> trunc\(_rpe \* 2\)/);
+  assert.match(metadata, /SECURITY DEFINER SET search_path = ''/);
+  const bodyweight = await read(
+    "supabase/migrations/20260923120000_snapshot_public_workout_bodyweight.sql",
+  );
+  assert.match(bodyweight, /IF existing_id IS NOT NULL THEN RETURN result_id/);
+  assert.match(bodyweight, /w\.log_date<=_workout_date/);
+  assert.doesNotMatch(planSource, /saveTargets|weeklyWorkoutGoal\s*:/);
+});
+
+test("Phase 5 plan selection retains template/generated/custom paths and blocks repeated creation", async () => {
+  const template = {
+    id: "template1",
+    slug: "real",
+    name: "Stored template",
+    description: "Stored description",
+    experienceLevel: "beginner",
+    trainingDaysPerWeek: 3,
+    requiredEquipment: [],
+    splitSummary: "Stored split",
+    days: [],
+  };
+  const f = fixture(planSource, "TrainingPlanSetup", { targets: {} }, { templates: [template] });
+  let release;
+  f.setBlocker(
+    new Promise((resolve) => {
+      release = resolve;
+    }),
+  );
+  const card = nodes(
+    f.render(),
+    (n) => typeof n.type === "function" && n.type.name === "PlanCard",
+  )[0];
+  card.props.onUse();
+  card.props.onUse();
+  release();
+  await new Promise(setImmediate);
+  assert.equal(f.calls.filter(([n]) => n === "instantiateTrainingPlan").length, 1);
+  assert.equal(f.calls.find(([n]) => n === "instantiateTrainingPlan")[2], "tempo_preset");
+  find(f.render(), "Build my own plan").props.onClick();
+  assert.match(text(f.render()), /Start with an empty plan/);
+  find(f.render(), "Create My Training Plan").props.onClick();
+  await new Promise(setImmediate);
+  assert.ok(f.calls.some(([n]) => n === "createEmptyTrainingPlan"));
+  assert.match(planSource, /const planType = mode === "generated" \? "generated" : "tempo_preset"/);
+  assert.match(planSource, /rankTrainingPlans/);
+});
+
+test("Phase 5 actual Training route starts one session, resumes its exact id and guards query errors", async () => {
+  const source = await read("src/routes/_authenticated/bulk/training.tsx");
+  const q = (data) => ({ data, isLoading: false, error: null, refetch() {} });
+  const active = q(null),
+    currentPlan = q({
+      id: "real-plan",
+      name: "Preserved plan",
+      updatedAt: "v1",
+      days: [],
+      trainingDaysPerWeek: 3,
+    });
+  let starts = 0,
+    resolveStart;
+  const modules = {
+    "@/components/AppShell": { AppShell: "AppShell", PageHeader: "PageHeader" },
+    "@/components/PageSkeleton": { PageSkeleton: "PageSkeleton" },
+    "@/components/TrainingSession": { TrainingSession: "TrainingSession" },
+    "@/components/TrainingPlanSetup": { TrainingPlanOverview: "TrainingPlanOverview" },
+    "@/lib/calc": { iso: (d) => require("date-fns").format(d, "yyyy-MM-dd") },
+    "@/lib/auth": { useAuth: () => ({ user: { id: "owner" } }) },
+    "@/lib/store": {
+      useAppData: () => ({ targets: { weeklyWorkoutGoal: 5 }, workouts: {}, days: {} }),
+      useBulkMeta: () => ({ bulkId: "owner", role: "owner" }),
+      useActions: () => ({}),
+    },
+    "@/lib/bulk-access": { bulkPlanModeFor: () => "public", useMemberships: () => q([]) },
+    "@/lib/training-plans-query": { useActiveTrainingPlan: () => currentPlan },
+    "@/lib/bulk-progression-query": { useBulkProgressionTargets: () => q({}) },
+    "@/lib/goal-metrics": {
+      collectCompletedWorkouts: () => [],
+      countWorkoutsInRange: () => 0,
+      formatWorkoutProgress: (n, target) => `${n}/${target}`,
+      mondayOf: (d) => d,
+      resolveWeeklyWorkoutTarget: (a) => a.weeklyWorkoutGoal,
+    },
+    "@/lib/bulk-training-sessions": {
+      useActiveBulkTrainingSession: () => active,
+      useCompletedSessionDates: () => q([]),
+      startBulkTrainingSession: async () => {
+        starts++;
+        await new Promise((r) => {
+          resolveStart = r;
+        });
+        return "same-session";
+      },
+    },
+  };
+  const f = fixture(source, "Route", {}, { modules });
+  let overview = nodes(f.render(), (n) => n.type === "TrainingPlanOverview")[0];
+  assert.equal(overview.props.plan.name, "Preserved plan");
+  assert.equal(overview.props.weekProgress, "0/5");
+  overview.props.onStart("day1");
+  overview.props.onStart("day1");
+  assert.equal(starts, 1);
+  resolveStart();
+  await new Promise(setImmediate);
+  assert.equal(f.destinations[0].params.sessionId, "same-session");
+  active.data = { id: "existing-session", workoutDayName: "Preserved workout" };
+  overview = nodes(f.render(), (n) => n.type === "TrainingPlanOverview")[0];
+  assert.equal(overview.props.workoutActive, true);
+  assert.match(text(f.render()), /Resume workout/);
+  overview.props.onStart("different-day");
+  await new Promise(setImmediate);
+  assert.equal(starts, 1);
+  assert.equal(f.destinations.at(-1).params.sessionId, "existing-session");
+  active.data = null;
+  active.error = Error("Read failed");
+  overview = nodes(f.render(), (n) => n.type === "TrainingPlanOverview")[0];
+  assert.equal(overview.props.workoutActive, true);
+  overview.props.onStart("day1");
+  assert.equal(starts, 1);
+});

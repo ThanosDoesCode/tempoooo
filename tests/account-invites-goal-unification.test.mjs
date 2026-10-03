@@ -90,16 +90,12 @@ test("legacy owner Goal conversion preserves source data and seeds owned presets
   assert.doesNotMatch(presetsRoute, /LegacyMealPresets|MEAL_PLANS/);
 });
 
-test("active workout exercise cards collapse without removing draft state", async () => {
+test("focused workout exercises stay mounted without removing draft state", async () => {
   const source = await read("src/components/BulkWorkoutSession.tsx");
-  assert.match(source, /collapsedExercises/);
-  assert.match(source, /aria-expanded=\{!collapsedExercises\.has\(exercise\.id\)\}/);
-  assert.match(source, /hidden=\{collapsedExercises\.has\(exercise\.id\)\}/);
-  assert.match(source, /sets logged/);
-  assert.match(source, /latestDraftLabel\(exercise, drafts\)/);
-  assert.match(
-    source,
-    /onClick=\{\(\) => \{[\s\S]*setOpenSetId\(null\);[\s\S]*setCollapsedExercises/,
-  );
+  assert.match(source, /activeExerciseIndex/);
+  assert.match(source, /hidden=\{exerciseIndex !== activeIndex\}/);
+  assert.match(source, /Next exercise/);
+  assert.match(source, /Previous exercise/);
+  assert.match(source, /readLocalDrafts/);
   assert.match(source, /motion-reduce:transition-none/);
 });

@@ -200,11 +200,11 @@ test("training UI supports generated, preset and empty custom paths without repl
       read("supabase/migrations/20260905180000_bulk_training_plans.sql"),
       read("supabase/migrations/20260906120000_edit_bulk_training_plans.sql"),
     ]);
-  assert.match(component, /Your recommended plan/);
-  assert.match(component, /See Other Plans/);
-  assert.match(component, /Tempo plans/);
+  assert.match(component, /Best match/);
+  assert.match(component, /ranked\.filter/);
+  assert.match(component, /Choose a plan/);
   assert.match(component, /Create My Training Plan/);
-  assert.match(component, /Use This Plan/);
+  assert.match(component, /Use this plan/);
   assert.match(component, /currentPlan/);
   assert.match(component, /Current plan/);
   assert.match(component, /resolveTrainingPlanSelectionPreferences/);

@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronDown, ChevronUp, Dumbbell } from "lucide-react";
+import { Check, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
 import type { Targets } from "@/lib/types";
 import {
@@ -57,6 +57,8 @@ function PlanCard({
   onToggle,
   onUse,
   pending,
+  bestMatch = false,
+  disabled = false,
 }: {
   plan: TrainingPlanTemplate;
   preferences: ReturnType<typeof resolveTrainingPlanSelectionPreferences>;
@@ -65,6 +67,8 @@ function PlanCard({
   onToggle: () => void;
   onUse: () => void;
   pending: boolean;
+  bestMatch?: boolean;
+  disabled?: boolean;
 }) {
   const compatibility = preferences
     ? planCompatibility(
@@ -75,7 +79,14 @@ function PlanCard({
       )
     : null;
   return (
-    <Card className="space-y-3">
+    <Card
+      className={
+        bestMatch
+          ? "space-y-[14px] border-primary/40"
+          : "space-y-2 border-0 rounded-none shadow-none"
+      }
+    >
+      {bestMatch ? <p className="text-xs font-medium text-primary">Best match</p> : null}
       <button
         type="button"
         onClick={onToggle}
@@ -86,7 +97,7 @@ function PlanCard({
           <span className="flex items-center gap-2 font-semibold text-foreground">
             {plan.name}
             {current ? (
-              <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] uppercase tracking-wide text-primary">
+              <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[11px] text-primary">
                 Current
               </span>
             ) : null}
@@ -97,19 +108,25 @@ function PlanCard({
         </span>
         {expanded ? <ChevronUp aria-hidden="true" /> : <ChevronDown aria-hidden="true" />}
       </button>
-      <p className="text-sm leading-relaxed text-muted-foreground">{plan.description}</p>
-      <p className="text-xs text-muted-foreground">{plan.splitSummary}</p>
-      {compatibility?.equipmentCompatible ? (
+      {bestMatch || expanded ? (
+        <p className="text-sm leading-relaxed text-muted-foreground">{plan.description}</p>
+      ) : null}
+      {bestMatch || expanded ? (
+        <p className="text-xs text-muted-foreground">{plan.splitSummary}</p>
+      ) : null}
+      {(bestMatch || expanded) && compatibility?.equipmentCompatible ? (
         <p className="flex items-center gap-1.5 text-xs font-medium text-good">
           <Check className="h-4 w-4" aria-hidden="true" /> Works with your equipment
         </p>
-      ) : compatibility ? (
-        <p className="rounded-lg bg-warn/10 px-2.5 py-2 text-xs text-warn">
+      ) : (bestMatch || expanded) && compatibility ? (
+        <p className="rounded-lg bg-secondary px-2.5 py-2 text-xs text-muted-foreground">
           Requires equipment you did not select:{" "}
           {compatibility.missingEquipment.map(formatEquipment).join(", ")}.
         </p>
       ) : null}
-      {compatibility && (!compatibility.exactExperience || !compatibility.exactDays) ? (
+      {(bestMatch || expanded) &&
+      compatibility &&
+      (!compatibility.exactExperience || !compatibility.exactDays) ? (
         <p className="rounded-lg bg-secondary px-2.5 py-2 text-xs text-muted-foreground">
           Closest available match: {plan.experienceLevel} level, {plan.trainingDaysPerWeek} days per
           week. Your selection is {preferences!.experienceLevel}, {preferences!.trainingDaysPerWeek}{" "}
@@ -117,15 +134,21 @@ function PlanCard({
         </p>
       ) : null}
       {expanded ? <PlanDetail plan={plan} /> : null}
-      <Button className="min-h-11 w-full" onClick={onUse} disabled={pending || current}>
-        {current ? (
-          "Current plan"
-        ) : pending ? (
-          <PendingLabel>Changing your plan</PendingLabel>
-        ) : (
-          "Use This Plan"
-        )}
-      </Button>
+      {bestMatch || expanded ? (
+        <Button
+          className="h-[52px] w-full rounded-[16px]"
+          onClick={onUse}
+          disabled={disabled || pending || current}
+        >
+          {current ? (
+            "Current plan"
+          ) : pending ? (
+            <PendingLabel>Changing your plan</PendingLabel>
+          ) : (
+            "Use this plan"
+          )}
+        </Button>
+      ) : null}
     </Card>
   );
 }
@@ -188,7 +211,7 @@ export function TrainingPlanSetup({
   const queryClient = useQueryClient();
   const templates = useTrainingPlanTemplates();
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [showOthers, setShowOthers] = useState(false);
+  const choosing = useRef(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [customName, setCustomName] = useState("My Training Plan");
   const preference = targets.trainingSetupPreference;
@@ -236,6 +259,8 @@ export function TrainingPlanSetup({
   }
 
   async function choose(plan: TrainingPlanTemplate) {
+    if (choosing.current) return;
+    choosing.current = true;
     setPendingId(plan.id);
     try {
       const planType = mode === "generated" ? "generated" : "tempo_preset";
@@ -252,16 +277,19 @@ export function TrainingPlanSetup({
         ),
       );
     } finally {
+      choosing.current = false;
       setPendingId(null);
     }
   }
 
   async function createCustom() {
+    if (choosing.current) return;
     const name = customName.trim();
     if (name.length < 2) {
       toast.error("Enter a plan name with at least 2 characters.");
       return;
     }
+    choosing.current = true;
     setPendingId("custom");
     try {
       if (replacingPlan) await switchToEmptyTrainingPlan(name);
@@ -280,6 +308,7 @@ export function TrainingPlanSetup({
         ),
       );
     } finally {
+      choosing.current = false;
       setPendingId(null);
     }
   }
@@ -295,7 +324,12 @@ export function TrainingPlanSetup({
       </Card>
     ) : null;
   const modeSelector = (
-    <ModeSelector mode={mode} onChange={setMode} disabled={pendingId !== null} />
+    <details className="rounded-[20px] border border-border px-4">
+      <summary className="flex min-h-11 cursor-pointer items-center text-sm text-muted-foreground">
+        Setup options · templates, generated or custom
+      </summary>
+      <ModeSelector mode={mode} onChange={setMode} disabled={pendingId !== null} />
+    </details>
   );
 
   if (mode === "custom") {
@@ -364,52 +398,43 @@ export function TrainingPlanSetup({
       </div>
     );
 
-  const showRecommendationOnly = mode === "generated" && recommendation && !showOthers;
-  const visible = showRecommendationOnly ? [recommendation] : ranked;
+  const best = recommendation ?? ranked[0];
+  const renderPlan = (plan: TrainingPlanTemplate, bestMatch = false) => (
+    <PlanCard
+      key={plan.id}
+      plan={plan}
+      preferences={preferences}
+      current={currentPlan?.sourceTemplateId === plan.id}
+      expanded={expandedId === plan.id}
+      bestMatch={bestMatch}
+      onToggle={() => setExpandedId(expandedId === plan.id ? null : plan.id)}
+      onUse={() => void choose(plan)}
+      pending={pendingId === plan.id}
+      disabled={pendingId !== null}
+    />
+  );
   return (
-    <div className="space-y-3">
+    <div className="space-y-[14px]">
+      <h2 className="text-[30px] font-semibold tracking-tight">Choose a plan</h2>
+      <p className="text-sm text-muted-foreground">
+        {preferences
+          ? "Matched to your experience, schedule and equipment."
+          : "Explore every workout before choosing your plan."}
+      </p>
       {currentPlanCard}
+      {best ? renderPlan(best, !!recommendation) : null}
+      <div className="card-surface divide-y divide-border overflow-hidden">
+        {ranked.filter((plan) => plan.id !== best?.id).map((plan) => renderPlan(plan))}
+      </div>
+      <Button
+        variant="outline"
+        className="min-h-11 w-full"
+        disabled={pendingId !== null}
+        onClick={() => setMode("custom")}
+      >
+        Build my own plan
+      </Button>
       {modeSelector}
-      <Card className="flex items-start gap-3">
-        <span className="rounded-xl bg-primary/10 p-2 text-primary">
-          <Dumbbell aria-hidden="true" />
-        </span>
-        <div>
-          <SectionTitle>
-            {mode === "generated" && recommendation ? "Your recommended plan" : "Tempo plans"}
-          </SectionTitle>
-          <p className="text-sm text-muted-foreground">
-            {mode === "generated" && recommendation
-              ? "Based on your experience, weekly schedule and available equipment."
-              : preferences
-                ? "Browse the closest matches first, then inspect every workout before choosing."
-                : "Browse the available plans and inspect every workout before choosing."}
-          </p>
-        </div>
-      </Card>
-      {visible.map((plan) => (
-        <PlanCard
-          key={plan.id}
-          plan={plan}
-          preferences={preferences}
-          current={currentPlan?.sourceTemplateId === plan.id}
-          expanded={
-            expandedId === plan.id || (mode === "generated" && plan.id === recommendation?.id)
-          }
-          onToggle={() => setExpandedId(expandedId === plan.id ? null : plan.id)}
-          onUse={() => void choose(plan)}
-          pending={pendingId === plan.id}
-        />
-      ))}
-      {mode === "generated" && recommendation ? (
-        <Button
-          variant="outline"
-          className="min-h-11 w-full"
-          onClick={() => setShowOthers((value) => !value)}
-        >
-          {showOthers ? "Show Recommendation Only" : "See Other Plans"}
-        </Button>
-      ) : null}
     </div>
   );
 }
@@ -435,95 +460,106 @@ export function TrainingPlanOverview({
   /** Preformatted "completed/target" for this week, from the shared Goal calculation. */
   weekProgress?: string | null;
 }) {
+  const [selectedDayId, setSelectedDayId] = useState<string | null>(null);
+  const day =
+    plan.days.find((item) => item.id === selectedDayId) ??
+    plan.days.find((item) => !completedDayIds?.has(item.id)) ??
+    plan.days[0];
   return (
-    <div className="space-y-3">
-      <Card>
-        <SectionTitle>My training plan</SectionTitle>
-        <h2 className="text-xl font-semibold">{plan.name}</h2>
-        {plan.trainingDaysPerWeek ? (
-          <p className="mt-1 text-sm capitalize text-muted-foreground">
-            {plan.experienceLevel} · {plan.trainingDaysPerWeek} days/week
-          </p>
-        ) : null}
-        {plan.description ? (
-          <p className="mt-3 text-sm text-muted-foreground">{plan.description}</p>
-        ) : null}
-        {weekProgress ? (
-          <p className="mt-2 text-sm">
-            <span className="num font-semibold">{weekProgress}</span>{" "}
-            <span className="text-muted-foreground">workouts this week</span>
-          </p>
-        ) : null}
-        {onEdit ? (
-          <Button variant="outline" className="mt-4 min-h-11 w-full" onClick={onEdit}>
-            Edit Plan
-          </Button>
-        ) : null}
-      </Card>
-      {plan.days.length ? (
-        plan.days.map((day) => (
-          <Card key={day.id}>
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                Day {day.order}
-              </p>
-              {completedDayIds?.has(day.id) ? (
-                <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[11px] font-medium text-primary">
-                  Done this week
-                </span>
-              ) : null}
-            </div>
-            <h3 className="mt-1 font-semibold">{day.name}</h3>
-            <ul className="mt-3 space-y-2 text-sm">
-              {day.exercises.map((exercise) => {
-                const next = progression[exercise.id];
-                const guidance = buildBulkNextSessionGuidance(next, {
-                  planExerciseId: exercise.id,
-                  exerciseId: exercise.exerciseId,
-                  executionMode: exercise.intendedUnilateralMode,
-                  isBodyweight: exercise.isBodyweight,
-                  targetSets: exercise.sets,
-                  repMin: exercise.repMin,
-                  repMax: exercise.repMax,
-                });
-                return (
-                  <li key={exercise.id}>
-                    <div className="flex justify-between gap-3">
-                      <span className="text-muted-foreground">{exercise.name}</span>
-                      <span className="shrink-0 tabular-nums">
-                        {exercise.sets} × {exercise.repMin}–{exercise.repMax}
-                      </span>
-                    </div>
-                    <p className="mt-0.5 text-xs leading-relaxed text-primary">
-                      <span className="font-medium">Next:</span> {guidance.targetText}
-                    </p>
-                  </li>
-                );
-              })}
-            </ul>
+    <div className="space-y-[14px]">
+      <p className="text-sm text-muted-foreground">
+        {plan.name}
+        {day ? ` · Day ${day.order} of ${plan.days.length}` : ""}
+      </p>
+      {weekProgress ? (
+        <p className="text-sm text-muted-foreground">
+          <span className="num text-foreground">{weekProgress}</span> workouts this week
+        </p>
+      ) : null}
+      {day ? (
+        <>
+          <div>
+            <h2 className="text-[30px] font-semibold tracking-tight">{day.name}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {day.exercises.length} exercises
+              {completedDayIds?.has(day.id) ? " · Completed this week" : ""}
+            </p>
+          </div>
+          {plan.days.length > 1 ? (
+            <label className="flex min-h-11 items-center justify-between gap-3 text-sm text-muted-foreground">
+              Workout day
+              <select
+                aria-label="Workout day"
+                value={day.id}
+                onChange={(event) => setSelectedDayId(event.target.value)}
+                className="min-h-11 min-w-0 max-w-[70%] rounded-[14px] border border-input bg-card px-3 text-base text-foreground"
+              >
+                {plan.days.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          {!workoutActive ? (
             <Button
-              className="mt-4 min-h-11 w-full"
-              disabled={startingDayId !== null || workoutActive}
+              className="h-[54px] w-full rounded-[16px]"
+              disabled={startingDayId !== null || !day.exercises.length}
               onClick={() => onStart(day.id)}
             >
               {startingDayId === day.id ? (
                 <PendingLabel>Starting workout</PendingLabel>
-              ) : workoutActive ? (
-                "Workout already in progress"
               ) : (
-                "Start Workout"
+                "Start workout"
               )}
             </Button>
-          </Card>
-        ))
+          ) : null}
+          <ol className="card-surface divide-y divide-border px-4">
+            {day.exercises.map((exercise, index) => {
+              const next = progression[exercise.id];
+              const guidance = buildBulkNextSessionGuidance(next, {
+                planExerciseId: exercise.id,
+                exerciseId: exercise.exerciseId,
+                executionMode: exercise.intendedUnilateralMode,
+                isBodyweight: exercise.isBodyweight,
+                targetSets: exercise.sets,
+                repMin: exercise.repMin,
+                repMax: exercise.repMax,
+              });
+              return (
+                <li key={exercise.id} className="flex min-h-16 items-start gap-3 py-3">
+                  <span className="num mt-1 w-5 shrink-0 text-sm text-muted-foreground">
+                    {index + 1}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[15px] font-medium">{exercise.name}</p>
+                    <p className="mt-1 text-[13px] text-muted-foreground">
+                      {exercise.sets} × {exercise.repMin}–{exercise.repMax}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">{guidance.targetText}</p>
+                    {exercise.notes ? (
+                      <p className="mt-1 text-xs text-muted-foreground">{exercise.notes}</p>
+                    ) : null}
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        </>
       ) : (
-        <Card className="text-center">
-          <h3 className="font-semibold">Your plan is ready</h3>
+        <Card>
+          <h2 className="font-semibold">Your plan is ready</h2>
           <p className="mt-1 text-sm text-muted-foreground">
             Add workout days and exercises in the plan editor next.
           </p>
         </Card>
       )}
+      {onEdit ? (
+        <Button variant="outline" className="min-h-11 w-full" onClick={onEdit}>
+          Edit plan
+        </Button>
+      ) : null}
     </div>
   );
 }

@@ -20,6 +20,16 @@ export const MUSCLE_GROUPS = [
   "lower_back",
 ] as const;
 
+// Display categories map to existing muscle metadata, never filter just a fetched page.
+export const EXERCISE_MUSCLE_CATEGORIES = {
+  Chest: ["chest"],
+  Back: ["lats", "upper_back", "traps", "lower_back"],
+  Legs: ["quads", "hamstrings", "glutes", "calves", "adductors", "abductors"],
+  Shoulders: ["front_delts", "side_delts", "rear_delts"],
+  Arms: ["biceps", "triceps", "forearms"],
+  Core: ["abs", "obliques"],
+} as const;
+
 export const EXERCISE_EQUIPMENT = [
   "barbell",
   "dumbbell",
@@ -95,6 +105,7 @@ export type LibraryExercise = {
 
 export type ExerciseLibraryFilters = {
   search?: string | undefined;
+  primaryMuscles?: readonly MuscleGroup[] | undefined;
   primaryMuscle?: MuscleGroup | undefined;
   equipment?: ExerciseEquipment | undefined;
   unilateralOnly?: boolean | undefined;

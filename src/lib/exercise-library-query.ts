@@ -37,6 +37,8 @@ export const exerciseLibraryQueryOptions = (filters: ExerciseLibraryFilters = {}
         .range(from, from + EXERCISE_LIBRARY_PAGE_SIZE);
       if (filters.search?.trim()) query = query.ilike("name", searchPattern(filters.search));
       if (filters.primaryMuscle) query = query.eq("primary_muscle", filters.primaryMuscle);
+      else if (filters.primaryMuscles?.length)
+        query = query.in("primary_muscle", [...filters.primaryMuscles]);
       if (filters.equipment) query = query.contains("equipment", [filters.equipment]);
       if (filters.unilateralOnly) query = query.eq("supports_unilateral", true);
       if (filters.origin === "system") query = query.eq("is_system", true);

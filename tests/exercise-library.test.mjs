@@ -181,7 +181,7 @@ test("library API pages server results and custom writes cannot target system ro
   assert.match(browser, /Filter by equipment/);
   assert.match(browser, /Filter by experience level/);
   assert.match(browser, /Unilateral/);
-  assert.match(browser, /Add custom exercise/);
+  assert.match(browser, /Add your own exercise/);
   assert.match(browser, /Secondary muscles \(optional\)/);
   assert.match(browser, /Saving exercise/);
   assert.match(browser, /Delete this custom exercise\?/);
@@ -227,6 +227,6 @@ test("add-to-workout results use compact accessible cards with scoped mutation f
   assert.match(browser, /legacyExerciseDefinitions:[\s\S]*\.filter/);
   assert.match(browser, /Remove \$\{item\.name\} and its entered workout data\?/);
 
-  assert.match(browser, /:\s*\(\s*<div key=\{item\.id\} className="card-surface p-3">/);
+  assert.match(browser, /:\s*\(\s*<div key=\{item\.id\} className="min-h-16 p-4">/);
   assert.match(browser, /!item\.is_system \? \([\s\S]*Deleting\.\.\./);
 });

@@ -7,7 +7,7 @@ import {
 } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Check, ChevronDown, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Check, ChevronLeft, ChevronRight, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "./ui/button";
 import {
@@ -45,6 +45,8 @@ import {
   type EditableSessionSet,
 } from "@/lib/bulk-training-sessions";
 import {
+  completedSessionVolume,
+  completedWorkingSets,
   isSessionSetComplete,
   sessionElapsedSeconds,
   sessionSetLabel,
@@ -119,20 +121,6 @@ function previousForActiveSet(
   return previousPerformanceForActiveSet(result, currentTypes, setIndex);
 }
 
-function latestDraftLabel(exercise: BulkTrainingSessionExercise, drafts: Record<string, SetDraft>) {
-  const latest = [...exercise.sets]
-    .reverse()
-    .map((set) => drafts[set.id] ?? toDraft(set))
-    .find((set) => set.bilateralReps != null || set.leftReps != null || set.rightReps != null);
-  if (!latest) return null;
-  if (exercise.executionMode === "unilateral") {
-    return `L ${latest.leftWeight ?? "BW"}×${latest.leftReps ?? "—"} · R ${latest.rightWeight ?? "BW"}×${latest.rightReps ?? "—"}`;
-  }
-  if (exercise.isBodyweight && latest.bilateralWeight == null)
-    return `BW × ${latest.bilateralReps ?? "—"}`;
-  return `${latest.bilateralWeight ?? 0} kg × ${latest.bilateralReps ?? "—"}`;
-}
-
 function draftStorageKey(session: BulkTrainingSession) {
   return `tempo:bulk-workout-draft:${session.bulkProfileId}:${session.id}`;
 }
@@ -204,7 +192,16 @@ export function BulkWorkoutSessionView({
   const [adding, setAdding] = useState(new Set<string>());
   const [removing, setRemoving] = useState(new Set<string>());
   const [openSetId, setOpenSetId] = useState<string | null>(null);
-  const [collapsedExercises, setCollapsedExercises] = useState(new Set<string>());
+  const [activeExerciseIndex, setActiveExerciseIndex] = useState(0);
+  const [selectedSetId, setSelectedSetId] = useState<string | null>(
+    () =>
+      session.exercises[0]?.sets.find((set) => !set.isComplete)?.id ??
+      session.exercises[0]?.sets[0]?.id ??
+      null,
+  );
+  const confirmingSets = useRef(new Set<string>());
+  const [restDeadline, setRestDeadline] = useState<number | null>(null);
+  const terminalPending = useRef(false);
   const addPending = useRef(new Set<string>());
   const removePending = useRef(new Set<string>());
   draftsRef.current = drafts;
@@ -299,6 +296,7 @@ export function BulkWorkoutSessionView({
   }
 
   function update(setId: string, patch: Partial<SetDraft>) {
+    if (terminalPending.current) return;
     const next = {
       ...draftsRef.current,
       [setId]: { ...draftsRef.current[setId]!, ...patch },
@@ -336,7 +334,7 @@ export function BulkWorkoutSessionView({
   }
 
   async function addSet(exerciseId: string) {
-    if (addPending.current.has(exerciseId)) return;
+    if (terminalPending.current || addPending.current.has(exerciseId)) return;
     addPending.current.add(exerciseId);
     setAdding((current) => new Set(current).add(exerciseId));
     try {
@@ -356,7 +354,7 @@ export function BulkWorkoutSessionView({
   }
 
   async function removeSet(setId: string) {
-    if (removePending.current.has(setId)) return;
+    if (terminalPending.current || removePending.current.has(setId)) return;
     removePending.current.add(setId);
     setRemoving((current) => new Set(current).add(setId));
     const wasDirty = dirty.current.has(setId);
@@ -393,6 +391,8 @@ export function BulkWorkoutSessionView({
   }
 
   async function finish(confirmIncomplete: boolean) {
+    if (terminalPending.current || addPending.current.size || removePending.current.size) return;
+    terminalPending.current = true;
     setOpenSetId(null);
     setFinishing(true);
     try {
@@ -401,20 +401,27 @@ export function BulkWorkoutSessionView({
       clearLocalDrafts(session);
       await refresh();
       toast.success("Workout completed");
-      await navigate({ to: "/bulk/training/history" });
+      setRestDeadline(null);
     } catch (error) {
       toast.error(userFacingError(error, "finish your workout", { inputPreserved: true }));
     } finally {
+      terminalPending.current = false;
       setFinishing(false);
       setFinishDialog(false);
     }
   }
 
   async function discard() {
+    if (terminalPending.current || addPending.current.size || removePending.current.size) return;
+    terminalPending.current = true;
     setOpenSetId(null);
     setDiscarding(true);
     try {
+      timers.current.forEach(clearTimeout);
+      timers.current.clear();
+      await Promise.all([...pending.current.values()]);
       await discardBulkTrainingSession(session.id);
+      dirty.current.clear();
       clearLocalDrafts(session);
       await refresh();
       toast.success("Workout draft discarded");
@@ -422,6 +429,7 @@ export function BulkWorkoutSessionView({
     } catch (error) {
       toast.error(userFacingError(error, "discard your workout", { inputPreserved: true }));
     } finally {
+      terminalPending.current = false;
       setDiscarding(false);
       setDiscardDialog(false);
     }
@@ -465,96 +473,118 @@ export function BulkWorkoutSessionView({
 
   if (session.status === "completed") return <CompletedWorkout session={session} />;
 
+  const activeIndex = Math.min(activeExerciseIndex, Math.max(0, session.exercises.length - 1));
+  const activeExercise = session.exercises[activeIndex];
+  const nextSet =
+    activeExercise?.sets.find((set) => set.id === selectedSetId) ??
+    activeExercise?.sets.find((set) => !set.isComplete) ??
+    activeExercise?.sets.at(-1);
+  const restSeconds =
+    restDeadline == null ? 0 : Math.max(0, Math.ceil((restDeadline - clock) / 1000));
+  async function confirmSet(exercise: BulkTrainingSessionExercise, set: BulkTrainingSet) {
+    if (
+      terminalPending.current ||
+      confirmingSets.current.has(set.id) ||
+      !isSessionSetComplete(draftsRef.current[set.id] ?? toDraft(set), exercise)
+    )
+      return;
+    confirmingSets.current.add(set.id);
+    try {
+      await persist(set.id);
+      if (saveErrorsRef.current[set.id] || dirty.current.has(set.id)) return;
+      setRestDeadline(Date.now() + 120_000);
+      setClock(Date.now());
+      if (
+        exercise.sets.every((item) =>
+          isSessionSetComplete(draftsRef.current[item.id] ?? toDraft(item), exercise),
+        )
+      ) {
+        setActiveExerciseIndex((index) => Math.min(session.exercises.length - 1, index + 1));
+        setSelectedSetId(null);
+      } else {
+        setSelectedSetId(
+          exercise.sets.find(
+            (item) => !isSessionSetComplete(draftsRef.current[item.id] ?? toDraft(item), exercise),
+          )?.id ?? set.id,
+        );
+      }
+    } finally {
+      confirmingSets.current.delete(set.id);
+    }
+  }
   return (
-    <div className="space-y-3 pb-8">
-      <header className="sticky top-0 z-20 -mx-4 border-b border-border bg-background/95 px-4 pb-3 pt-2 backdrop-blur">
+    <div className="space-y-[14px] pb-[calc(100px+env(safe-area-inset-bottom))]">
+      <header className="sticky top-0 z-20 -mx-5 border-b border-border bg-background/95 px-5 pb-3 pt-2 backdrop-blur">
         <div className="flex min-h-11 items-center gap-2">
           <button
             type="button"
-            aria-label="Back to Training"
-            className="grid min-h-11 min-w-11 place-items-center rounded-xl text-muted-foreground active:bg-elevated"
+            aria-label="Minimise workout, keep progress"
+            className="min-h-11 shrink-0 text-sm text-muted-foreground"
             onClick={() => void navigate({ to: "/bulk/training" })}
           >
-            <ArrowLeft className="h-5 w-5" aria-hidden="true" />
+            Minimise
           </button>
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate text-base font-semibold">{session.workoutDayName}</h1>
-            <p className="truncate text-[11px] text-muted-foreground">{session.planName}</p>
+          <div className="min-w-0 flex-1 text-center">
+            <h1 className="truncate text-sm font-medium">{session.workoutDayName}</h1>
+            <p className="num text-[13px] text-muted-foreground">
+              {formatDuration(elapsedSeconds)}
+            </p>
           </div>
           <Button
-            size="sm"
-            className="min-h-11 px-4"
+            variant="ghost"
+            className="min-h-11 shrink-0 px-2 text-primary"
             onClick={() => (incomplete ? setFinishDialog(true) : void finish(false))}
-            disabled={finishing || discarding}
+            disabled={finishing || discarding || adding.size > 0 || removing.size > 0}
           >
-            {finishing ? <PendingLabel>Finishing</PendingLabel> : "Finish"}
+            {finishing ? <PendingLabel>Finishing…</PendingLabel> : "Finish"}
           </Button>
         </div>
-        <dl className="mt-2 grid grid-cols-3 divide-x divide-border rounded-xl bg-card px-2 py-2 text-center">
-          <div>
-            <dt className="text-[10px] uppercase tracking-wider text-muted-foreground">Duration</dt>
-            <dd className="num mt-0.5 text-sm font-semibold">{formatDuration(elapsedSeconds)}</dd>
-          </div>
-          <div>
-            <dt className="text-[10px] uppercase tracking-wider text-muted-foreground">Volume</dt>
-            <dd className="num mt-0.5 text-sm font-semibold">
-              {volumeUnavailable ? "Unavailable" : `${Math.round(totalVolume).toLocaleString()} kg`}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-[10px] uppercase tracking-wider text-muted-foreground">Sets</dt>
-            <dd className="num mt-0.5 text-sm font-semibold">
-              {completedSets}/{totalSets}
-            </dd>
-          </div>
-        </dl>
+        <div
+          className="mt-3 flex flex-wrap gap-1"
+          aria-label={`${completedSets} of ${totalSets} sets entered`}
+        >
+          {session.exercises.map((exercise, index) => (
+            <button
+              key={exercise.id}
+              type="button"
+              aria-label={`Exercise ${index + 1}: ${exercise.name}`}
+              aria-current={index === activeIndex ? "step" : undefined}
+              onClick={() => setActiveExerciseIndex(index)}
+              className="flex min-h-11 min-w-11 flex-1 items-center"
+            >
+              <span
+                className={cn(
+                  "h-1 w-full rounded-full",
+                  exercise.sets.every((set) =>
+                    isSessionSetComplete(drafts[set.id] ?? toDraft(set), exercise),
+                  )
+                    ? "bg-primary"
+                    : index === activeIndex
+                      ? "bg-primary/50"
+                      : "bg-border",
+                )}
+              />
+            </button>
+          ))}
+        </div>
       </header>
-
-      {session.exercises.map((exercise) => (
-        <Card key={exercise.id} className="p-3">
-          <button
-            type="button"
-            aria-expanded={!collapsedExercises.has(exercise.id)}
-            aria-controls={`exercise-${exercise.id}`}
-            onClick={() => {
-              setOpenSetId(null);
-              setCollapsedExercises((current) => {
-                const next = new Set(current);
-                if (next.has(exercise.id)) next.delete(exercise.id);
-                else next.add(exercise.id);
-                return next;
-              });
-            }}
-            className="flex min-h-11 w-full items-start justify-between gap-3 rounded-lg text-left active:bg-elevated"
+      <fieldset disabled={finishing || discarding} className="min-w-0">
+        {session.exercises.map((exercise, exerciseIndex) => (
+          <section
+            key={exercise.id}
+            hidden={exerciseIndex !== activeIndex}
+            aria-label={exercise.name}
           >
-            <div className="min-w-0">
-              <h2 className="text-sm font-semibold">{exercise.name}</h2>
-              {collapsedExercises.has(exercise.id) ? (
-                <p className="mt-1 truncate text-xs text-muted-foreground">
-                  {
-                    exercise.sets.filter((set) =>
-                      isSessionSetComplete(drafts[set.id] ?? toDraft(set), exercise),
-                    ).length
-                  }
-                  /{exercise.sets.length} sets logged
-                  {latestDraftLabel(exercise, drafts)
-                    ? ` · ${latestDraftLabel(exercise, drafts)}`
-                    : ""}
-                </p>
-              ) : (
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {exercise.targetSets} sets · {exercise.targetRepMin}–{exercise.targetRepMax} reps
-                  · {exercise.executionMode}
-                  {exercise.isBodyweight ? " · bodyweight" : ""}
-                </p>
-              )}
-            </div>
-            <ChevronDown
-              className={`mt-0.5 h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-150 motion-reduce:transition-none ${collapsedExercises.has(exercise.id) ? "" : "rotate-180"}`}
-              aria-hidden="true"
-            />
-          </button>
-          <div id={`exercise-${exercise.id}`} hidden={collapsedExercises.has(exercise.id)}>
+            <p className="text-sm text-muted-foreground">
+              Exercise {exerciseIndex + 1} of {session.exercises.length}
+            </p>
+            <h2 className="mt-1 text-[28px] font-semibold leading-tight tracking-tight break-words">
+              {exercise.name}
+            </h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {exercise.targetSets} × {exercise.targetRepMin}–{exercise.targetRepMax} reps
+              {exercise.executionMode === "unilateral" ? " · Left / right" : ""}
+            </p>
             {(() => {
               const target = progression[exercise.sourcePlanExerciseId ?? `session:${exercise.id}`];
               const guidance = buildBulkNextSessionGuidance(target, {
@@ -567,94 +597,145 @@ export function BulkWorkoutSessionView({
                 repMax: exercise.targetRepMax,
               });
               return (
-                <div
-                  className="mt-2 rounded-lg bg-primary/10 px-2.5 py-2 text-[11px] leading-relaxed"
-                  aria-label={`Next-session guidance for ${exercise.name}`}
-                >
-                  <p className="text-primary">
-                    <span className="font-semibold">Target:</span> {guidance.targetText}
-                  </p>
-                  <p className="mt-0.5 text-muted-foreground">{guidance.reasonText}</p>
-                </div>
+                <details className="mt-2 text-sm text-muted-foreground">
+                  <summary className="flex min-h-11 cursor-pointer items-center text-primary">
+                    Next-session guidance
+                  </summary>
+                  <p>{guidance.targetText}</p>
+                  <p className="mt-1 text-xs">{guidance.reasonText}</p>
+                </details>
               );
             })()}
             {exercise.notes ? (
-              <p className="mt-2 rounded-lg bg-elevated p-2 text-xs text-muted-foreground">
+              <p className="mt-2 rounded-[14px] bg-card p-3 text-sm text-muted-foreground">
                 {exercise.notes}
               </p>
             ) : null}
             {exercise.isBodyweight ? (
-              <p className="mt-2 rounded-lg bg-elevated px-2.5 py-2 text-xs text-muted-foreground">
+              <p className="mt-2 text-sm text-muted-foreground">
                 {session.bodyweightKg == null
                   ? "BW unavailable · Extra weight is still saved · Total unavailable"
-                  : `BW ${session.bodyweightKg.toFixed(1)} kg · Extra weight is logged per set`}
+                  : `BW ${session.bodyweightKg.toFixed(1)} kg · Log extra weight per set`}
               </p>
             ) : null}
-            <div className="mt-3 overflow-x-auto pb-1">
-              <div className="min-w-[330px]">
-                <div className="grid grid-cols-[2.5rem_minmax(3.75rem,1fr)_3.25rem_3.25rem_2.75rem_2.75rem] gap-1 px-1 text-center text-[9px] font-medium uppercase tracking-wider text-muted-foreground">
-                  <span>Set</span>
-                  <span>Previous</span>
-                  <span className="col-span-2">Current</span>
-                  <span>RPE</span>
-                  <span>Done</span>
-                </div>
-                <div
-                  aria-hidden="true"
-                  className="grid grid-cols-[2.5rem_minmax(3.75rem,1fr)_3.25rem_3.25rem_2.75rem_2.75rem] gap-1 px-1 text-center text-[8px] uppercase tracking-wider text-muted-foreground/80"
-                >
-                  <span />
-                  <span />
-                  <span>{exercise.isBodyweight ? "+KG" : "KG"}</span>
-                  <span>Reps</span>
-                  <span />
-                  <span />
-                </div>
-                {exercise.sets.map((set, index) => (
-                  <WorkoutSetRow
-                    key={set.id}
-                    exercise={exercise}
-                    set={set}
-                    draft={drafts[set.id] ?? toDraft(set)}
-                    saving={saving.has(set.id)}
-                    removing={removing.has(set.id)}
-                    canRemove={exercise.sets.length > 1}
-                    swipeOpen={openSetId === set.id}
-                    previous={previousSetLabel(
-                      previousForActiveSet(
-                        progression[exercise.sourcePlanExerciseId ?? `session:${exercise.id}`],
-                        exercise,
-                        drafts,
-                        index,
-                      ),
-                      exercise,
-                    )}
-                    {...(saveErrors[set.id] ? { error: saveErrors[set.id] } : {})}
-                    onChange={(patch) => update(set.id, patch)}
-                    onRetry={() => void persist(set.id)}
-                    onDone={() => void persist(set.id)}
-                    onRemove={() => void removeSet(set.id)}
-                    onSwipeBegin={() => setOpenSetId(null)}
-                    onSwipeOpen={() => setOpenSetId(set.id)}
-                    onSwipeClose={() =>
-                      setOpenSetId((current) => (current === set.id ? null : current))
-                    }
-                  />
-                ))}
+            <div className="mt-5">
+              <div className="grid grid-cols-[40px_minmax(0,1fr)_minmax(0,1fr)_48px] gap-2 px-1 text-center text-xs text-muted-foreground">
+                <span>Set</span>
+                <span>{exercise.isBodyweight ? "+kg" : "kg"}</span>
+                <span>Reps</span>
+                <span>Done</span>
               </div>
+              {exercise.sets.map((set, index) => (
+                <WorkoutSetRow
+                  key={set.id}
+                  exercise={exercise}
+                  set={set}
+                  draft={drafts[set.id] ?? toDraft(set)}
+                  saving={saving.has(set.id)}
+                  removing={removing.has(set.id)}
+                  canRemove={exercise.sets.length > 1}
+                  swipeOpen={openSetId === set.id}
+                  previous={previousSetLabel(
+                    previousForActiveSet(
+                      progression[exercise.sourcePlanExerciseId ?? `session:${exercise.id}`],
+                      exercise,
+                      drafts,
+                      index,
+                    ),
+                    exercise,
+                  )}
+                  {...(saveErrors[set.id] ? { error: saveErrors[set.id] } : {})}
+                  onSelect={() => setSelectedSetId(set.id)}
+                  onChange={(patch) => update(set.id, patch)}
+                  onRetry={() => void persist(set.id)}
+                  onDone={() => void confirmSet(exercise, set)}
+                  onRemove={() => void removeSet(set.id)}
+                  onSwipeBegin={() => setOpenSetId(null)}
+                  onSwipeOpen={() => setOpenSetId(set.id)}
+                  onSwipeClose={() =>
+                    setOpenSetId((current) => (current === set.id ? null : current))
+                  }
+                />
+              ))}
             </div>
             <Button
               variant="outline"
-              className="mt-3 min-h-11 w-full"
+              className="mt-3 min-h-11 w-full rounded-[14px]"
               onClick={() => void addSet(exercise.id)}
               disabled={adding.has(exercise.id)}
             >
-              <Plus aria-hidden="true" /> {adding.has(exercise.id) ? "Adding..." : "Add Set"}
+              <Plus aria-hidden="true" />
+              {adding.has(exercise.id) ? "Adding…" : "Add set"}
             </Button>
+          </section>
+        ))}
+      </fieldset>
+      {restSeconds > 0 ? (
+        <div
+          className="flex items-center gap-3 rounded-[16px] border border-border bg-card p-3"
+          role="timer"
+          aria-label="Rest timer"
+        >
+          <div className="flex-1">
+            <p className="text-xs text-muted-foreground">Rest</p>
+            <p className="num text-[22px] font-semibold">{formatDuration(restSeconds)}</p>
           </div>
-        </Card>
-      ))}
-
+          <button
+            type="button"
+            className="min-h-11 px-2 text-sm text-muted-foreground"
+            onClick={() => {
+              setRestDeadline(Date.now() + 120_000);
+              setClock(Date.now());
+            }}
+          >
+            Restart
+          </button>
+          <button
+            type="button"
+            className="min-h-11 px-2 text-sm text-primary"
+            onClick={() => setRestDeadline(null)}
+          >
+            Skip
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          className="min-h-11 text-sm text-muted-foreground"
+          onClick={() => {
+            setRestDeadline(Date.now() + 120_000);
+            setClock(Date.now());
+          }}
+        >
+          Start 2:00 rest
+        </button>
+      )}
+      <div className="flex items-center justify-between gap-3">
+        <button
+          type="button"
+          disabled={activeIndex === 0}
+          onClick={() => setActiveExerciseIndex(activeIndex - 1)}
+          className="flex min-h-11 items-center gap-1 text-sm text-muted-foreground disabled:opacity-30"
+        >
+          <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+          Previous exercise
+        </button>
+        <button
+          type="button"
+          disabled={activeIndex >= session.exercises.length - 1}
+          onClick={() => setActiveExerciseIndex(activeIndex + 1)}
+          className="flex min-h-11 items-center gap-1 text-sm text-primary disabled:opacity-30"
+        >
+          Next exercise
+          <ChevronRight className="h-4 w-4" aria-hidden="true" />
+        </button>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {completedSets}/{totalSets} sets ·{" "}
+        {volumeUnavailable
+          ? "Volume unavailable"
+          : `${Math.round(totalVolume).toLocaleString()} kg volume`}
+      </p>
       <Button
         variant="ghost"
         className="min-h-11 w-full text-danger"
@@ -663,7 +744,32 @@ export function BulkWorkoutSessionView({
       >
         Discard workout
       </Button>
-
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 px-5 pt-3 pb-[calc(12px+env(safe-area-inset-bottom))] backdrop-blur">
+        <div className="mx-auto max-w-lg">
+          {activeExercise && nextSet ? (
+            <Button
+              className="h-[54px] w-full rounded-[16px]"
+              disabled={
+                finishing ||
+                discarding ||
+                saving.has(nextSet.id) ||
+                !isSessionSetComplete(drafts[nextSet.id] ?? toDraft(nextSet), activeExercise)
+              }
+              onClick={() => void confirmSet(activeExercise, nextSet)}
+            >
+              Done with set {nextSet.order}
+            </Button>
+          ) : null}
+          <button
+            type="button"
+            disabled={finishing || discarding || adding.size > 0 || removing.size > 0}
+            className="mt-1 min-h-11 w-full text-sm text-primary disabled:opacity-50"
+            onClick={() => (incomplete ? setFinishDialog(true) : void finish(false))}
+          >
+            {finishing ? "Finishing…" : "Finish workout"}
+          </button>
+        </div>
+      </div>
       <AlertDialog open={finishDialog} onOpenChange={setFinishDialog}>
         <AlertDialogContent className="max-w-[calc(100%-2rem)] rounded-2xl">
           <AlertDialogHeader>
@@ -717,6 +823,7 @@ function WorkoutSetRow({
   previous,
   error,
   onChange,
+  onSelect,
   onRetry,
   onDone,
   onRemove,
@@ -733,6 +840,7 @@ function WorkoutSetRow({
   swipeOpen: boolean;
   previous: string;
   error?: string;
+  onSelect: () => void;
   onChange: (patch: Partial<SetDraft>) => void;
   onRetry: () => void;
   onDone: () => void;
@@ -802,7 +910,7 @@ function WorkoutSetRow({
       max={1000}
       integer={integer}
       label={`${exercise.name}, set ${set.order}, ${label}`}
-      className="h-11 min-w-0 w-full rounded-lg border border-input bg-background px-1 text-center text-base outline-none focus:border-ring"
+      className="h-12 min-w-0 w-full rounded-[14px] border border-input bg-card px-1 text-center text-base outline-none focus:border-ring"
       onChange={(next) => onChange({ [key]: next ?? null })}
     />
   );
@@ -814,14 +922,7 @@ function WorkoutSetRow({
         : draft.setType === "drop"
           ? "D"
           : String(set.order);
-  const typeTone =
-    draft.setType === "warmup"
-      ? "border-warn/40 bg-warn/10 text-warn"
-      : draft.setType === "failure"
-        ? "border-danger/40 bg-danger/10 text-danger"
-        : draft.setType === "drop"
-          ? "border-chart-2/40 bg-chart-2/10 text-chart-2"
-          : "border-border bg-elevated text-foreground";
+  const typeTone = "border-border bg-elevated text-foreground";
   const context =
     exercise.executionMode === "bilateral"
       ? `${draft.bilateralWeight != null ? `${draft.bilateralWeight} kg` : exercise.isBodyweight ? "BW" : "—"} · ${draft.bilateralReps ?? "—"} reps`
@@ -830,6 +931,7 @@ function WorkoutSetRow({
     <>
       <div
         ref={rowRef}
+        onFocusCapture={onSelect}
         className="relative mt-1 overflow-hidden rounded-xl"
         data-set-swipe={set.id}
       >
@@ -852,7 +954,7 @@ function WorkoutSetRow({
           onPointerCancel={endSwipe}
           style={{ transform: `translateX(${dragOffset}px)`, touchAction: "pan-y" }}
           className={cn(
-            "grid grid-cols-[2.5rem_minmax(3.75rem,1fr)_3.25rem_3.25rem_2.75rem_2.75rem] items-center gap-1 rounded-xl px-1 py-1 transition-transform duration-150 ease-out motion-reduce:transition-none",
+            "grid grid-cols-[40px_minmax(0,1fr)_minmax(0,1fr)_48px] items-center gap-2 rounded-[14px] px-1 py-1 transition-transform duration-150 ease-out motion-reduce:transition-none",
             "relative z-10 bg-card",
             done && "ring-1 ring-inset ring-good/20",
           )}
@@ -862,15 +964,12 @@ function WorkoutSetRow({
             onClick={() => setTypeOpen(true)}
             aria-label={`Set ${set.order}, ${draft.setType} set. Change set type`}
             className={cn(
-              "grid h-11 min-w-10 place-items-center rounded-lg border text-xs font-bold",
+              "grid h-12 min-w-10 place-items-center rounded-[14px] border text-xs font-medium",
               typeTone,
             )}
           >
             {typeBadge}
           </button>
-          <span className="line-clamp-2 px-1 text-center text-[10px] leading-tight text-muted-foreground">
-            {previous}
-          </span>
           {exercise.executionMode === "bilateral" ? (
             <>
               {field(
@@ -894,22 +993,11 @@ function WorkoutSetRow({
           )}
           <button
             type="button"
-            className="grid h-11 min-w-11 place-items-center rounded-lg border border-input bg-background text-xs font-semibold"
-            aria-label={`${exercise.name}, set ${set.order}, RPE ${draft.rpe ?? "not set"}`}
-            onClick={() => {
-              setRpeDraft(draft.rpe);
-              setRpeOpen(true);
-            }}
-          >
-            {draft.rpe ?? "—"}
-          </button>
-          <button
-            type="button"
             disabled={!done || saving}
             onClick={onDone}
             aria-label={`${done ? "Save" : "Complete"} ${exercise.name} set ${set.order}`}
             className={cn(
-              "grid h-11 min-w-11 place-items-center rounded-lg border",
+              "grid h-12 min-w-12 place-items-center rounded-[14px] border",
               done ? "border-good/40 bg-good/10 text-good" : "border-border text-muted-foreground",
             )}
           >
@@ -923,7 +1011,7 @@ function WorkoutSetRow({
         {canRemove && !swipeOpen ? (
           <button
             type="button"
-            className="sr-only"
+            className="sr-only focus:not-sr-only focus:min-h-11"
             onClick={onSwipeOpen}
             aria-label={`Reveal delete action for ${exercise.name} set ${set.order}`}
           >
@@ -931,13 +1019,31 @@ function WorkoutSetRow({
           </button>
         ) : null}
       </div>
+      <div className="flex flex-wrap items-center justify-between gap-x-2 px-1 text-xs text-muted-foreground">
+        <span className="min-w-0 break-words">Previous: {previous}</span>
+        <button
+          type="button"
+          className="min-h-11 px-2 text-sm"
+          aria-label={`${exercise.name}, set ${set.order}, RPE ${draft.rpe ?? "not set"}`}
+          onClick={() => {
+            setRpeDraft(draft.rpe);
+            setRpeOpen(true);
+          }}
+        >
+          RPE {draft.rpe ?? "—"}
+        </button>
+      </div>
       <div
         className="flex min-h-5 items-center justify-end gap-2 px-1 text-[10px] text-muted-foreground"
         aria-live="polite"
       >
         {saving ? "Saving..." : error ? "Save failed" : done ? "Saved" : ""}
         {error ? (
-          <button type="button" className="font-semibold text-danger underline" onClick={onRetry}>
+          <button
+            type="button"
+            className="min-h-11 px-2 font-semibold text-danger underline"
+            onClick={onRetry}
+          >
             Retry
           </button>
         ) : null}
@@ -1027,10 +1133,10 @@ function WorkoutSetRow({
 }
 
 const SET_TYPES: Array<{ value: BulkSetType; label: string }> = [
-  { value: "warmup", label: "Warm Up Set" },
-  { value: "normal", label: "Normal Set" },
-  { value: "failure", label: "Failure Set" },
-  { value: "drop", label: "Drop Set" },
+  { value: "warmup", label: "Warm-up set" },
+  { value: "normal", label: "Normal set" },
+  { value: "failure", label: "Failure set" },
+  { value: "drop", label: "Drop set" },
 ];
 
 const RPE_VALUES = [6, 7, 7.5, 8, 8.5, 9, 9.5, 10] as const;
@@ -1057,11 +1163,47 @@ export function CompletedWorkout({
   return (
     <div className="space-y-3">
       <Card>
-        <p className="text-xs font-semibold uppercase tracking-wider text-good">
-          Completed workout
-        </p>
+        <p className="text-sm font-medium text-good">Completed workout</p>
         <h2 className="mt-1 text-xl font-semibold">{session.workoutDayName}</h2>
-        <p className="text-xs text-muted-foreground">{session.planName}</p>
+        <p className="text-sm text-muted-foreground">
+          {session.planName} · {session.workoutDate}
+        </p>
+        <dl className="mt-5 grid grid-cols-2 gap-4">
+          <div>
+            <dt className="text-xs text-muted-foreground">Duration</dt>
+            <dd className="num mt-1 text-xl font-semibold">
+              {formatDuration(
+                sessionElapsedSeconds(session.startedAt, Date.now(), session.completedAt),
+              )}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-xs text-muted-foreground">Working sets</dt>
+            <dd className="num mt-1 text-xl font-semibold">{completedWorkingSets(session)}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-muted-foreground">Exercises logged</dt>
+            <dd className="num mt-1 text-xl font-semibold">
+              {
+                session.exercises.filter((exercise) => exercise.sets.some((set) => set.isComplete))
+                  .length
+              }
+            </dd>
+          </div>
+          <div>
+            <dt className="text-xs text-muted-foreground">Volume</dt>
+            <dd className="num mt-1 text-xl font-semibold">
+              {completedSessionVolume(session) == null
+                ? "Unavailable"
+                : `${Math.round(completedSessionVolume(session)!).toLocaleString()} kg`}
+            </dd>
+          </div>
+        </dl>
+        {showBackLink ? (
+          <Button asChild className="mt-5 h-[54px] w-full rounded-[16px]">
+            <Link to="/bulk">Done</Link>
+          </Button>
+        ) : null}
       </Card>
       {session.exercises.map((exercise) => (
         <Card key={exercise.id}>

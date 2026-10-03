@@ -2,7 +2,7 @@ import { PageSkeleton } from "@/components/PageSkeleton";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { addDays, format, parseISO } from "date-fns";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { TrainingSession } from "@/components/TrainingSession";
 import { TrainingPlanOverview } from "@/components/TrainingPlanSetup";
@@ -59,6 +59,7 @@ function TrainingPage() {
   const { saveWorkout, saveTargets } = useActions();
   const today = iso(new Date());
   const [date, setDate] = useState(today);
+  const starting = useRef(false);
   const [startingDayId, setStartingDayId] = useState<string | null>(null);
   const activeSession = useActiveBulkTrainingSession(usesPlanSetup ? bulkId : null);
   const weekStart = mondayOf(today);
@@ -72,7 +73,7 @@ function TrainingPage() {
       legacyDays: data?.days ?? null,
     });
     const target = resolveWeeklyWorkoutTarget({
-      weeklyWorkoutGoal: data?.targets.weeklyWorkoutGoal ?? null,
+      weeklyWorkoutGoal: data?.targets.weeklyWorkoutGoal ?? 5,
       activePlanDaysPerWeek: activePlan.data?.trainingDaysPerWeek ?? null,
       targetDaysPerWeek: data?.targets.trainingDaysPerWeek ?? null,
     });
@@ -113,6 +114,15 @@ function TrainingPage() {
   }
 
   async function startWorkout(planDayId: string) {
+    if (starting.current || activeSession.isLoading || activeSession.error) return;
+    if (activeSession.data) {
+      await navigate({
+        to: "/bulk/workout/$sessionId",
+        params: { sessionId: activeSession.data.id },
+      });
+      return;
+    }
+    starting.current = true;
     setStartingDayId(planDayId);
     try {
       const sessionId = await startBulkTrainingSession(planDayId);
@@ -123,32 +133,47 @@ function TrainingPage() {
       const { toast } = await import("sonner");
       toast.error(message);
     } finally {
+      starting.current = false;
       setStartingDayId(null);
     }
   }
   return (
     <AppShell>
-      <PageHeader
-        title="Training"
-        backTo="/bulk"
-        backLabel="Today"
-        {...(!usesPlanSetup ? { subtitle: format(parseISO(date), "EEEE, d MMMM") } : {})}
-      />
+      {usesPlanSetup ? (
+        <Link
+          to="/bulk"
+          preload="intent"
+          className="mb-5 flex min-h-11 items-center text-sm text-muted-foreground"
+        >
+          ‹ Today
+        </Link>
+      ) : (
+        <PageHeader
+          title="Training"
+          backTo="/bulk"
+          backLabel="Today"
+          subtitle={format(parseISO(date), "EEEE, d MMMM")}
+        />
+      )}
       {usesPlanSetup && activeSession.isLoading ? (
         <div className="mb-3 h-20 motion-safe:animate-pulse rounded-2xl bg-card" />
       ) : activeSession.data ? (
         <Card className="mb-3 border-primary/40 bg-primary/5">
-          <p className="text-xs font-semibold uppercase tracking-wider text-primary">
-            Workout in progress
-          </p>
+          <p className="text-sm font-medium text-primary">Workout in progress</p>
           <p className="mt-1 font-semibold">{activeSession.data.workoutDayName}</p>
           <p className="text-xs text-muted-foreground">{activeSession.data.planName}</p>
           <Button asChild className="mt-3 min-h-11 w-full">
             <Link to="/bulk/workout/$sessionId" params={{ sessionId: activeSession.data.id }}>
-              Resume Workout
+              Resume workout
             </Link>
           </Button>
         </Card>
+      ) : null}
+      {usesPlanSetup && activeSession.error ? (
+        <DataError
+          message={userFacingError(activeSession.error, "check your active workout")}
+          onRetry={() => void activeSession.refetch()}
+        />
       ) : null}
       {!usesPlanSetup ? (
         <label className="mb-3 flex items-center justify-between gap-3 text-xs text-muted-foreground">
@@ -177,7 +202,7 @@ function TrainingPage() {
             plan={activePlan.data}
             onStart={(dayId) => void startWorkout(dayId)}
             startingDayId={startingDayId}
-            workoutActive={!!activeSession.data}
+            workoutActive={!!activeSession.data || activeSession.isLoading || !!activeSession.error}
             progression={progression.data ?? {}}
             completedDayIds={weekMetrics?.completedDayIds}
             weekProgress={weekMetrics?.progress ?? null}
@@ -237,6 +262,31 @@ function TrainingPage() {
           <PageSkeleton />
         )}
       </div>
+      {usesPlanSetup ? (
+        <div className="mt-[14px] flex flex-col">
+          <Link
+            to="/bulk/training/more"
+            preload="intent"
+            className="flex min-h-11 items-center justify-between text-sm text-primary"
+          >
+            Plan and setup <span aria-hidden="true">›</span>
+          </Link>
+          <Link
+            to="/bulk/training/history"
+            preload="intent"
+            className="flex min-h-11 items-center justify-between text-sm text-muted-foreground"
+          >
+            Past workouts <span aria-hidden="true">›</span>
+          </Link>
+          <Link
+            to="/bulk/prs"
+            preload="intent"
+            className="flex min-h-11 items-center justify-between text-sm text-muted-foreground"
+          >
+            Personal records <span aria-hidden="true">›</span>
+          </Link>
+        </div>
+      ) : null}
     </AppShell>
   );
 }

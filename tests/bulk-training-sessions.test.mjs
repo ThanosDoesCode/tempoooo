@@ -159,12 +159,14 @@ test("public workout UI resumes durable compact sessions and protects set metada
       read("supabase/migrations/20260915120000_workout_set_metadata.sql"),
       read("src/lib/query-cancellation.ts"),
     ]);
-  assert.match(overview, /Start Workout/);
-  assert.match(training, /Resume Workout/);
-  for (const label of ["Duration", "Volume", "Previous", "Reps", "RPE", "Done"])
+  assert.match(overview, /Start workout/);
+  assert.match(training, /Resume workout/);
+  for (const label of ["Duration", "Volume", "Reps", "Done"])
     assert.match(workout, new RegExp(`>${label}<`));
-  assert.match(workout, /exercise\.isBodyweight \? "\+KG" : "KG"/);
-  assert.match(workout, /Add Set/);
+  assert.match(workout, /exercise\.isBodyweight \? "\+kg" : "kg"/);
+  assert.match(workout, /Previous:/);
+  assert.match(workout, /RPE \{draft\.rpe/);
+  assert.match(workout, /Add set/);
   assert.match(workout, /SET_TYPES/);
   assert.match(workout, /RPE_VALUES/);
   assert.match(workout, /data-set-swipe=\{set\.id\}/);
@@ -179,7 +181,8 @@ test("public workout UI resumes durable compact sessions and protects set metada
   assert.match(workout, /const \[openSetId, setOpenSetId\]/);
   assert.doesNotMatch(workout, />\s*Remove Set\s*</);
   assert.match(workout, /previousPerformance/);
-  assert.match(workout, /min-w-\[330px\]/);
+  assert.doesNotMatch(workout, /min-w-\[330px\]/);
+  assert.match(workout, /grid-cols-\[40px_minmax\(0,1fr\)_minmax\(0,1fr\)_48px\]/);
   assert.match(workout, /Finish with incomplete sets/);
   assert.match(workout, /permanently discarded/);
   assert.match(workout, /Save failed/);

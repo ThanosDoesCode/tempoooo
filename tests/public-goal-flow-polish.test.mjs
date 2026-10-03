@@ -14,7 +14,7 @@ test("completed public workouts stay in Training history", async () => {
   ]);
   assert.match(
     session,
-    /Workout completed[\s\S]*navigate\(\{ to: "\/bulk\/training\/history" \}\)/,
+    /session\.status === "completed"\) return <CompletedWorkout session=\{session\}/,
   );
   assert.doesNotMatch(session, /Workout completed[\s\S]{0,200}to: "\/bulk\/history"/);
   assert.match(trainingHistory, /fetchRecentCompletedBulkTrainingSessions/);
@@ -41,7 +41,7 @@ test("training plan switching is visible, transactional and preserves completed 
   assert.match(more, /currentPlan=\{activePlan\.data\}/);
   assert.match(setup, /replacingPlan \? "Training plan changed" : "Training plan created"/);
   assert.match(setup, /Current plan/);
-  assert.match(setup, /Browse the available plans/);
+  assert.match(setup, /Explore every workout/);
   assert.doesNotMatch(setup, /availableEquipment!/);
   assert.match(query, /switch_bulk_training_plan/);
   assert.match(query, /developmentErrorDiagnostic\("active_training_plan"/);

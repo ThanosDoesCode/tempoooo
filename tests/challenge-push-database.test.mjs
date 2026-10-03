@@ -1341,6 +1341,7 @@ test("public Bulk workout sessions are snapshot-based, resumable, validated and 
         [session, set, weight, reps, type, rpe],
       ),
     );
+  await saveDetails(owner, bilateral.id, 22.5, 10, "normal", 6.5);
   await saveDetails(owner, bilateralSecond.id, 15, 12, "warmup", 7.5);
   assert.deepEqual(
     (
@@ -1404,6 +1405,7 @@ test("public Bulk workout sessions are snapshot-based, resumable, validated and 
     db.query("SELECT public.add_bulk_training_session_set($1,$2)", [session, snapshot.rows[0].id]),
   );
 
+  await saveDetails(owner, bilateral.id, 22.5, 10, "normal", 9.5);
   const changedAt = (
     await db.query("SELECT updated_at FROM public.bulk_training_plans WHERE id=$1", [mine.plan])
   ).rows[0].updated_at;
@@ -1447,6 +1449,20 @@ test("public Bulk workout sessions are snapshot-based, resumable, validated and 
       )
     ).rows[0].id,
     session,
+  );
+  assert.deepEqual(
+    (
+      await asUser(owner, () =>
+        db.query("SELECT set_type,rpe::text FROM public.bulk_training_session_sets WHERE id=$1", [
+          bilateral.id,
+        ]),
+      )
+    ).rows[0],
+    { set_type: "normal", rpe: "9.5" },
+  );
+  await assert.rejects(
+    saveDetails(owner, bilateral.id, 22.5, 10, "normal", 8),
+    /Active workout not found/,
   );
   await asUser(owner, () =>
     db.query(

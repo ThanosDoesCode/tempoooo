@@ -44,7 +44,7 @@ function TrainingMorePage() {
 
   return (
     <AppShell>
-      <PageHeader title="Training tools" subtitle="Manage your plan and exercise library." />
+      <PageHeader title="Your plan" backTo="/bulk/training" backLabel="Training" />
 
       {usesPlanSetup && activePlan.isLoading ? (
         <div className="h-48 animate-pulse rounded-2xl bg-card" />
@@ -100,6 +100,7 @@ function TrainingMorePage() {
               <Button
                 variant="ghost"
                 className="mt-2 min-h-11 w-full"
+                disabled={activeSession.isLoading || !!activeSession.error}
                 onClick={() => {
                   if (activeSession.data) {
                     toast.error("Finish or discard your current workout before changing plans.");
@@ -110,6 +111,31 @@ function TrainingMorePage() {
               >
                 Change plan
               </Button>
+            </Card>
+            {activeSession.error ? (
+              <DataError
+                message={userFacingError(activeSession.error, "check your active workout")}
+                onRetry={() => void activeSession.refetch()}
+              />
+            ) : null}
+            <Card className="divide-y divide-border">
+              {activePlan.data.days.map((day) => (
+                <div key={day.id} className="py-3 first:pt-0 last:pb-0">
+                  <h3 className="font-medium">
+                    Day {day.order} · {day.name}
+                  </h3>
+                  <ol className="mt-2 space-y-2 text-sm text-muted-foreground">
+                    {day.exercises.map((exercise) => (
+                      <li key={exercise.id} className="flex justify-between gap-3">
+                        <span className="min-w-0">{exercise.name}</span>
+                        <span className="num shrink-0">
+                          {exercise.sets} × {exercise.repMin}–{exercise.repMax}
+                        </span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              ))}
             </Card>
             <BulkMuscleCoverage
               result={coverage.data}

@@ -407,7 +407,10 @@ test("Phase 4 Today renders persisted habits and invitation, then skeleton/error
         },
         "@/lib/bulk-progress-query": { useBulkWeights: () => weight },
         "@/lib/bulk-nutrition-query": { useBulkNutritionDay: () => dailyNutrition },
-        "@/lib/bulk-training-sessions": { useCompletedSessionDates: () => q([]) },
+        "@/lib/bulk-training-sessions": {
+          useCompletedSessionDates: () => q([]),
+          useActiveBulkTrainingSession: () => q(null),
+        },
         "@/lib/training-plans-query": {
           useActiveTrainingPlan: () => q({ name: "My actual plan", trainingDaysPerWeek: 3 }),
         },
