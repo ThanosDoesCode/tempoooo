@@ -35,7 +35,7 @@ export function LogSheet({
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange} shouldScaleBackground={false}>
-      <DrawerContent className="mt-24 gap-3.5 rounded-t-[28px] border-0 bg-card px-5 pb-[max(2.25rem,env(safe-area-inset-bottom))] pt-3 [&>div:first-child]:bg-[oklch(38%_.01_260)]">
+      <DrawerContent className="mt-24 gap-3.5 rounded-t-[28px] border-0 bg-card px-5 pb-[max(2.25rem,env(safe-area-inset-bottom))] pt-3 [&>div:first-child]:mt-0 [&>div:first-child]:h-[5px] [&>div:first-child]:w-10 [&>div:first-child]:bg-[oklch(38%_.01_260)]">
         <div className="flex items-center justify-between">
           <DrawerTitle className="text-[22px] font-semibold tracking-tight">
             What do you want to log?
@@ -80,7 +80,7 @@ export function LogSheet({
                 key={action.key}
                 type="button"
                 onClick={() => go(action)}
-                className="flex min-h-[60px] w-full items-center gap-3.5 border-t border-border text-left first:border-t-0 active:opacity-80"
+                className="flex min-h-[56px] w-full items-center gap-3.5 border-t border-border py-2 text-left first:border-t-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring active:opacity-80"
               >
                 <span className="grid h-9 w-9 flex-none place-items-center rounded-[11px] bg-muted">
                   <Icon className="h-5 w-5" strokeWidth={1.8} aria-hidden="true" />

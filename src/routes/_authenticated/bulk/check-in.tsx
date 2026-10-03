@@ -167,13 +167,13 @@ function CheckInPage() {
           </div>
 
           <div className={`card-surface fade-up mb-4 p-4 text-center ${toneBg(tone)}`}>
-            <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+            <p className="text-[11px] tracking-[0.18em] text-muted-foreground">
               Weekly weight change
             </p>
             <p className={`num mt-1 text-5xl font-semibold ${toneText(tone)}`}>
               {signed(s.change, 2)}
             </p>
-            <p className={`mt-1 text-sm font-semibold tracking-wide ${toneText(tone)}`}>
+            <p className={`mt-1 text-sm font-semibold ${toneText(tone)}`}>
               {displayedStatus.label}
             </p>
           </div>
@@ -204,9 +204,7 @@ function CheckInPage() {
                   </p>
                   {s.focus.length ? (
                     <>
-                      <p className="mt-3 text-[10px] uppercase tracking-wider text-muted-foreground">
-                        Focus next week
-                      </p>
+                      <p className="mt-3 text-[10px] text-muted-foreground">Focus next week</p>
                       <ul className="mt-1 space-y-0.5 text-sm">
                         {s.focus.map((f) => (
                           <li key={f}>· {f}</li>
@@ -412,7 +410,7 @@ function ShareWrap({
     <div className="min-h-screen bg-background px-4 py-6">
       <div className="mx-auto w-full max-w-lg">
         <div className="card-surface fade-up p-5">
-          <h1 className="text-center text-[17px] font-semibold uppercase tracking-[0.2em] text-primary">
+          <h1 className="text-center text-[17px] font-semibold tracking-[0.2em] text-primary">
             {title}
           </h1>
           <p className="mt-1 text-center text-sm text-muted-foreground">{subtitle}</p>
@@ -431,9 +429,7 @@ function ShareWrap({
 
 function ShareHead({ children }: { children: React.ReactNode }) {
   return (
-    <p className="pt-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
-      {children}
-    </p>
+    <p className="pt-1 text-[11px] font-semibold tracking-[0.18em] text-primary">{children}</p>
   );
 }
 

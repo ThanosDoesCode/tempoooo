@@ -10,9 +10,7 @@ export function Card({ children, className }: { children: ReactNode; className?:
 export function SectionTitle({ children, right }: { children: ReactNode; right?: ReactNode }) {
   return (
     <div className="mb-3 flex items-center justify-between gap-3">
-      <h2 className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-        {children}
-      </h2>
+      <h2 className="text-[13px] font-medium text-muted-foreground">{children}</h2>
       {right}
     </div>
   );
@@ -40,9 +38,7 @@ export function Stat({
   }[tone];
   return (
     <div className={cn("card-surface fade-up p-3", className)}>
-      <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-        {label}
-      </p>
+      <p className="text-[13px] font-medium text-muted-foreground">{label}</p>
       <p className={cn("num mt-1 text-2xl font-semibold", toneClass)}>{value}</p>
       {hint ? <p className="mt-0.5 text-[11px] text-muted-foreground">{hint}</p> : null}
     </div>

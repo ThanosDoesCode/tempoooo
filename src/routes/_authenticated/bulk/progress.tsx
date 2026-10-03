@@ -285,15 +285,7 @@ function LegacyProgressPage({ data }: { data: AppData }) {
           <SectionTitle
             right={
               <span
-                className={`num text-xs font-semibold ${
-                  waist4w == null
-                    ? "text-muted-foreground"
-                    : waist4w > 1.5
-                      ? "text-danger"
-                      : waist4w > 0.8
-                        ? "text-warn"
-                        : "text-good"
-                }`}
+                className={`num text-xs font-semibold ${waist4w == null ? "text-muted-foreground" : waist4w > 1.5 ? "text-danger" : waist4w > 0.8 ? "text-warn" : "text-good"}`}
               >
                 {signed(waist4w, 1, " cm / 4 weeks")}
               </span>
@@ -418,7 +410,7 @@ function StrengthTrend({ data }: { data: AppData }) {
           if (!tracked.length) return null;
           return (
             <section key={split} aria-label={`${splitLabel(split)} strength trends`}>
-              <h3 className="mb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              <h3 className="mb-1 text-[10px] font-semibold tracking-[0.14em] text-muted-foreground">
                 {splitLabel(split)}
               </h3>
               <div className="divide-y divide-border">
@@ -728,11 +720,7 @@ function PhotosSection({ data }: { data: AppData }) {
                       if (confirmDelete === p.id) void removeSet(p.id);
                       else setConfirmDelete(p.id);
                     }}
-                    className={`min-h-11 rounded-lg px-2 py-1 text-[11px] font-medium ${
-                      confirmDelete === p.id
-                        ? "bg-danger text-primary-foreground"
-                        : "text-danger hover:bg-danger/10"
-                    }`}
+                    className={`min-h-11 rounded-lg px-2 py-1 text-[11px] font-medium ${confirmDelete === p.id ? "bg-danger text-primary-foreground" : "text-danger hover:bg-danger/10"}`}
                   >
                     {confirmDelete === p.id ? "Confirm delete" : "Delete"}
                   </button>

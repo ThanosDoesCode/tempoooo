@@ -115,7 +115,7 @@ export const LOG_ACTIONS: readonly LogAction[] = [
   {
     key: "weigh-in",
     label: "Weigh-in & sleep",
-    description: "Morning check-in",
+    description: "Morning check-in, 30 seconds",
     to: "/bulk",
     group: "day",
   },

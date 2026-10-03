@@ -185,7 +185,7 @@ function TodayPage() {
       <div className="card-surface fade-up mb-2 p-4">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+            <p className="text-[11px] font-medium tracking-[0.16em] text-muted-foreground">
               Goal status
             </p>
             <p className={`mt-1 text-2xl font-semibold ${toneClass}`}>{status.label}</p>
@@ -311,9 +311,7 @@ function TodayPage() {
                   <p className="text-sm font-semibold">{plan.name}</p>
                   {plan.base.length ? (
                     <>
-                      <p className="mt-2 text-[10px] uppercase tracking-wider text-muted-foreground">
-                        Daily base
-                      </p>
+                      <p className="mt-2 text-[10px] text-muted-foreground">Daily base</p>
                       <ul className="mt-0.5 space-y-0.5 text-muted-foreground">
                         {plan.base.map((b) => (
                           <li key={b}>· {b}</li>
@@ -321,9 +319,7 @@ function TodayPage() {
                       </ul>
                     </>
                   ) : null}
-                  <p className="mt-2 text-[10px] uppercase tracking-wider text-muted-foreground">
-                    Main meals
-                  </p>
+                  <p className="mt-2 text-[10px] text-muted-foreground">Main meals</p>
                   <ul className="mt-0.5 space-y-0.5 text-muted-foreground">
                     {plan.meals.map((b) => (
                       <li key={b}>· {b}</li>
@@ -331,9 +327,7 @@ function TodayPage() {
                   </ul>
                   {plan.extras.length ? (
                     <>
-                      <p className="mt-2 text-[10px] uppercase tracking-wider text-muted-foreground">
-                        Extra
-                      </p>
+                      <p className="mt-2 text-[10px] text-muted-foreground">Extra</p>
                       <ul className="mt-0.5 space-y-0.5 text-muted-foreground">
                         {plan.extras.map((item) => (
                           <li key={item}>· {item}</li>
@@ -550,11 +544,7 @@ function TodayPage() {
                 type="button"
                 aria-pressed={day?.restDay === true}
                 onClick={() => set({ restDay: !(day?.restDay === true) })}
-                className={`mb-3 flex min-h-11 w-full items-center justify-between rounded-xl border px-3 text-sm font-medium transition-colors ${
-                  day?.restDay === true
-                    ? "border-primary/40 bg-primary/10 text-primary"
-                    : "border-input text-foreground active:bg-elevated"
-                }`}
+                className={`mb-3 flex min-h-11 w-full items-center justify-between rounded-xl border px-3 text-sm font-medium transition-colors ${day?.restDay === true ? "border-primary/40 bg-primary/10 text-primary" : "border-input text-foreground active:bg-elevated"}`}
               >
                 <span>Rest day</span>
                 <span className="text-xs text-muted-foreground">

@@ -233,7 +233,7 @@ function ChallengeHome() {
   return (
     <AppShell>
       <header className="fade-up mb-4">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">
+        <p className="text-[11px] font-semibold tracking-[0.16em] text-primary">
           {challenge.duration_weeks}-week challenge
         </p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">{challenge.name}</h1>
@@ -262,7 +262,7 @@ function ChallengeHome() {
 
       <Card className="p-0">
         <div className="flex items-center justify-between px-3.5 pb-2 pt-3">
-          <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          <h2 className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground">
             This week
           </h2>
           <span className="text-[10px] text-muted-foreground">Ends Sun · {challenge.timezone}</span>
@@ -325,11 +325,7 @@ function ChallengeHome() {
                   <div className="px-3 py-2.5">
                     <div className="flex items-start gap-2.5">
                       <span
-                        className={`mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg ${
-                          activity.activity_type === "run"
-                            ? "bg-primary/15 text-primary"
-                            : "bg-chart-2/15 text-chart-2"
-                        }`}
+                        className={`mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg ${activity.activity_type === "run" ? "bg-primary/15 text-primary" : "bg-chart-2/15 text-chart-2"}`}
                       >
                         {activity.activity_type === "run" ? (
                           <Footprints className="h-3.5 w-3.5" aria-hidden="true" />
@@ -550,11 +546,7 @@ function ChallengeHome() {
               void doLeave();
             }}
             disabled={leaving}
-            className={`mt-3 w-full rounded-xl py-2.5 text-sm font-semibold disabled:opacity-60 ${
-              leaveArmed
-                ? "bg-danger text-primary-foreground"
-                : "border border-danger/40 text-danger"
-            }`}
+            className={`mt-3 w-full rounded-xl py-2.5 text-sm font-semibold disabled:opacity-60 ${leaveArmed ? "bg-danger text-primary-foreground" : "border border-danger/40 text-danger"}`}
           >
             {leaving ? (
               <PendingLabel>Leaving challenge…</PendingLabel>

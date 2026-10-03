@@ -247,7 +247,7 @@ function ProfilePage() {
               <div className="flex items-center gap-2">
                 <SectionTitle>Fitness tools</SectionTitle>
                 {goalDiscovery.isSuccess && goalDiscovery.data?.goal_seen_at == null ? (
-                  <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold uppercase text-primary">
+                  <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold text-primary">
                     New
                   </span>
                 ) : null}

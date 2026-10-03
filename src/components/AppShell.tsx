@@ -157,7 +157,7 @@ function TabLink({
       onPointerDown={onIntent}
       onPointerEnter={onIntent}
       onFocus={onIntent}
-      className={`relative flex min-h-11 min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 py-1 transition-[color,transform,opacity] duration-150 ease-out active:scale-95 active:opacity-80 ${active ? "text-primary" : "text-muted-foreground"}`}
+      className={`relative flex min-h-11 min-w-0 flex-col items-center justify-center gap-1 px-1 py-1 transition-[color,transform,opacity] duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring active:scale-95 active:opacity-80 ${active ? "text-primary" : "text-muted-foreground"}`}
     >
       <Icon className="h-6 w-6" strokeWidth={1.8} aria-hidden="true" />
       <span className="max-w-full truncate text-[10px] font-medium">{item.label}</span>

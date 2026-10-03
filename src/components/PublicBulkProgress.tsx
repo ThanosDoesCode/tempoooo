@@ -472,7 +472,7 @@ export function PublicBulkProgress({
 function Metric({ label, value, hint }: { label: string; value: string; hint: string }) {
   return (
     <div className="rounded-xl bg-elevated p-3">
-      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="text-[11px] text-muted-foreground">{label}</p>
       <p className="num mt-1 font-semibold">{value}</p>
       <p className="mt-0.5 text-[11px] text-muted-foreground">{hint}</p>
     </div>

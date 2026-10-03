@@ -333,14 +333,14 @@ function Payments() {
       {challenge.penalty_mode === "money" ? (
         <div className="grid grid-cols-2 gap-3">
           <Card>
-            <p className="text-[11px] uppercase tracking-wider text-muted-foreground">I owe</p>
+            <p className="text-[11px] text-muted-foreground">I owe</p>
             <p className="mt-1 text-xl font-semibold text-warn">
               {owedText(iOwe, legacyPhotoOwed)}
             </p>
             <p className="text-[11px] text-muted-foreground">Open penalties</p>
           </Card>
           <Card>
-            <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Owed to me</p>
+            <p className="text-[11px] text-muted-foreground">Owed to me</p>
             <p className="mt-1 text-xl font-semibold text-good">
               {owedText(owedToMe, legacyPhotoOwed)}
             </p>
@@ -386,9 +386,7 @@ function Payments() {
               }
               void settleUp();
             }}
-            className={`mt-3 w-full rounded-xl py-2.5 text-sm font-semibold disabled:opacity-60 ${
-              settleArmed ? "bg-good text-background" : "bg-primary text-primary-foreground"
-            }`}
+            className={`mt-3 w-full rounded-xl py-2.5 text-sm font-semibold disabled:opacity-60 ${settleArmed ? "bg-good text-background" : "bg-primary text-primary-foreground"}`}
           >
             {pending?.id === "settle" ? (
               <PendingLabel>Settling payments…</PendingLabel>
@@ -601,7 +599,7 @@ function Payments() {
               <>
                 <div className="grid grid-cols-2 gap-2">
                   <label className="min-w-0">
-                    <span className="mb-1 block text-[11px] uppercase tracking-wider text-muted-foreground">
+                    <span className="mb-1 block text-[11px] text-muted-foreground">
                       Challenge week
                     </span>
                     <select
@@ -624,9 +622,7 @@ function Payments() {
                     </select>
                   </label>
                   <label className="min-w-0">
-                    <span className="mb-1 block text-[11px] uppercase tracking-wider text-muted-foreground">
-                      Country
-                    </span>
+                    <span className="mb-1 block text-[11px] text-muted-foreground">Country</span>
                     <select
                       value={pauseCountry}
                       disabled={travelPending !== null}
@@ -704,11 +700,7 @@ function Payments() {
                           }
                           void cancelTravelPause(pause.id);
                         }}
-                        className={`min-h-11 rounded-lg px-3 py-2 text-xs font-semibold disabled:opacity-60 ${
-                          pauseRemoveArmed === pause.id
-                            ? "bg-danger text-primary-foreground"
-                            : "border border-border"
-                        }`}
+                        className={`min-h-11 rounded-lg px-3 py-2 text-xs font-semibold disabled:opacity-60 ${pauseRemoveArmed === pause.id ? "bg-danger text-primary-foreground" : "border border-border"}`}
                       >
                         {travelPending === pause.id ? (
                           <PendingLabel>Removing…</PendingLabel>
