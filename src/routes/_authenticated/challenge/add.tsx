@@ -74,12 +74,17 @@ function AddActivity() {
   const [validationError, setValidationError] = useState<string | null>(null);
   const [requestError, setRequestError] = useState<string | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
-  const [draftReady, setDraftReady] = useState(false);
-  const prefilled = useRef(false);
+  const [draftReady, setDraftReady] = useState<string | null>(null);
+  const hydratedContext = useRef<string | null>(null);
+  const draftClosed = useRef(false);
+  const hydratedDraftKey = useRef<string | null>(null);
   const busy = pending !== null;
-  // Drafts protect new entries only; an edit prefills from the stored activity instead.
+  // An edit has its own owner/challenge/activity key; it never reads the generic new draft.
   const draftKey =
-    !editing && challenge && user ? `challenge-activity-draft:${user.id}:${challenge.id}` : null;
+    challenge && user
+      ? `challenge-activity-draft:${user.id}:${challenge.id}${editing ? `:edit:${editId}` : ""}`
+      : null;
+  const draftContext = draftKey ? `${draftKey}:${searchType ?? ""}` : null;
 
   useEffect(() => {
     if (files.length === 0) {
@@ -91,24 +96,25 @@ function AddActivity() {
     return () => urls.forEach((u) => URL.revokeObjectURL(u));
   }, [files]);
 
-  // Prefill the form from the activity being edited, once it loads.
   useEffect(() => {
-    if (!editing || prefilled.current) return;
-    const activity = editQuery.data;
-    if (!activity) return;
-    setType(activity.activity_type);
-    setDistance(String(Number(activity.distance_km)));
-    setDuration(activity.duration_seconds ? formatClock(activity.duration_seconds) : "");
-    setDate(activity.activity_date);
-    setUrl(activity.external_activity_url ?? "");
-    setNote(activity.note ?? "");
-    setMoreOpen(!!(activity.external_activity_url || activity.note));
-    prefilled.current = true;
-  }, [editing, editQuery.data]);
-
-  useEffect(() => {
-    if (!draftKey) return;
-    setDraftReady(false);
+    const activity = editing ? editQuery.data : null;
+    if (!draftKey || !draftContext || (editing && !activity)) return;
+    if (hydratedContext.current === draftContext) return;
+    hydratedContext.current = draftContext;
+    draftClosed.current = false;
+    setDraftReady(null);
+    // Reset fields before restoring this context. A type-only sheet choice keeps selected files.
+    setType(activity?.activity_type ?? searchType ?? "run");
+    setDistance(activity ? String(Number(activity.distance_km)) : "");
+    setDuration(activity?.duration_seconds ? formatClock(activity.duration_seconds) : "");
+    setDate(activity?.activity_date ?? today);
+    setUrl(activity?.external_activity_url ?? "");
+    setNote(activity?.note ?? "");
+    if (hydratedDraftKey.current !== draftKey) setFiles([]);
+    hydratedDraftKey.current = draftKey;
+    setValidationError(null);
+    setRequestError(null);
+    setMoreOpen(!!(activity?.external_activity_url || activity?.note));
     try {
       const raw = sessionStorage.getItem(draftKey);
       if (raw) {
@@ -121,7 +127,7 @@ function AddActivity() {
           note?: string;
           moreOpen?: boolean;
         };
-        // An explicit ?type= from the Log sheet / direct URL wins over a saved draft type.
+        // Explicit new-activity sheet selection wins, including same-route Run -> Ride navigation.
         if (!searchType && (draft.type === "run" || draft.type === "cycle")) setType(draft.type);
         if (typeof draft.distance === "string") setDistance(draft.distance);
         if (typeof draft.date === "string" && draft.date <= today) setDate(draft.date);
@@ -134,14 +140,43 @@ function AddActivity() {
       try {
         sessionStorage.removeItem(draftKey);
       } catch {
-        // Storage can be unavailable in restrictive browser modes; keep the in-memory form usable.
+        // Storage failure must not break the in-memory form.
       }
     }
-    setDraftReady(true);
-  }, [draftKey, today, searchType]);
+    setDraftReady(draftContext);
+  }, [draftKey, draftContext, today, searchType, editing, editQuery.data]);
+
+  const clearDraft = () => {
+    // Close persistence synchronously before state updates/navigation can run another effect.
+    draftClosed.current = true;
+    setDraftReady(null);
+    if (draftKey) {
+      try {
+        sessionStorage.removeItem(draftKey);
+      } catch {
+        // A confirmed save remains successful when browser storage is unavailable.
+      }
+    }
+    setDistance("");
+    setDuration("");
+    setDate(today);
+    setUrl("");
+    setNote("");
+    setFiles([]);
+    setPreviews([]);
+    setMoreOpen(false);
+    setValidationError(null);
+    setRequestError(null);
+  };
 
   useEffect(() => {
-    if (!draftKey || !draftReady) return;
+    if (
+      !draftKey ||
+      draftReady !== draftContext ||
+      hydratedContext.current !== draftContext ||
+      draftClosed.current
+    )
+      return;
     try {
       sessionStorage.setItem(
         draftKey,
@@ -150,7 +185,7 @@ function AddActivity() {
     } catch {
       // Draft persistence is a safeguard; storage failure must not break activity entry.
     }
-  }, [date, distance, draftKey, draftReady, duration, moreOpen, note, type, url]);
+  }, [date, distance, draftKey, draftContext, draftReady, duration, moreOpen, note, type, url]);
 
   const parsedDistance = parseDecimal(distance);
   const dist = parsedDistance.kind === "value" ? parsedDistance.value : NaN;
@@ -241,6 +276,7 @@ function AddActivity() {
           .update({ ...fields, ...evidence })
           .eq("id", editId!);
         if (error) throw error;
+        clearDraft();
         if (replacingEvidence) {
           const oldPaths = [
             editQuery.data?.evidence_path,
@@ -270,13 +306,7 @@ function AddActivity() {
         verification_source: "manual_strava_screenshot",
       });
       if (error) throw error;
-      if (draftKey) {
-        try {
-          sessionStorage.removeItem(draftKey);
-        } catch {
-          // The confirmed database write remains successful even if local cleanup is unavailable.
-        }
-      }
+      clearDraft();
       void qc.invalidateQueries({ queryKey: ["challenge-activities"] });
       toast.success("Activity saved.");
       void navigate({ to: "/challenge" });
@@ -660,6 +690,23 @@ function AddActivity() {
           ) : (
             `Save ${noun}`
           )}
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => {
+            if (!window.confirm("Discard your unsaved activity changes?")) return;
+            clearDraft();
+            if (editing)
+              void navigate({
+                to: "/challenge/activity/$activityId",
+                params: { activityId: editId! },
+              });
+            else void navigate({ to: "/challenge" });
+          }}
+          className="min-h-11 w-full rounded-xl px-3 text-sm text-muted-foreground disabled:opacity-60"
+        >
+          {editing ? "Cancel edit" : "Discard draft"}
         </button>
         <Note>
           Activities can only be logged or edited inside the current, open week. A run counts 1:1
