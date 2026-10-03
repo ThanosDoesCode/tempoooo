@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { addDays, format, parseISO, startOfWeek } from "date-fns";
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft } from "lucide-react";
@@ -42,6 +43,7 @@ function NewChallenge() {
   const { step = 1 } = Route.useSearch();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const myProfile = useAccountProfile(user?.id);
 
   const nextMonday = format(addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), 7), "yyyy-MM-dd");
@@ -168,6 +170,12 @@ function NewChallenge() {
       if (challengeId !== request.requestId) {
         throw new Error("Challenge creation returned an unexpected result");
       }
+      // The user had no challenge, so ["challenge"] and friends are cached empty/stale. Invalidate
+      // them before navigating so /challenge resolves the new pending challenge (creator membership,
+      // outgoing invitation) and renders Waiting immediately — no page refresh.
+      await qc.invalidateQueries({
+        predicate: (query) => String(query.queryKey[0]).startsWith("challenge"),
+      });
       void navigate({ to: "/challenge" });
     } catch (e) {
       setError(challengeUsernameError(e, username));

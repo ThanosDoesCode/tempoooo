@@ -91,7 +91,7 @@ export function ChallengeWaiting({
         <button
           type="button"
           onClick={() => void share()}
-          className="flex h-[52px] items-center justify-center rounded-[16px] bg-primary text-base font-semibold text-primary-foreground active:scale-[0.99]"
+          className="flex h-[52px] w-full items-center justify-center rounded-[16px] bg-primary text-base font-semibold text-primary-foreground active:scale-[0.99]"
         >
           Share invite link
         </button>

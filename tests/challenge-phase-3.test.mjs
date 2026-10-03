@@ -212,6 +212,7 @@ test("Waiting replaces Week 0 and offers share + creator-only cancel", async () 
     read("src/routes/_authenticated/challenge/index.tsx"),
   ]);
   assert.match(waiting, /Waiting for \{atUser\}/);
+  assert.match(waiting, /h-\[52px\] w-full/); // Share is a full-width primary button
   assert.match(waiting, /navigator\.share/);
   assert.match(waiting, /navigator\.clipboard\.writeText/);
   assert.match(waiting, /name === "AbortError"/); // cancelled native share is not an error
@@ -226,6 +227,52 @@ test("Waiting replaces Week 0 and offers share + creator-only cancel", async () 
     /<ChallengeWaiting challenge=\{challenge\} invitation=\{outgoingQuery\.data\}/,
   );
   assert.match(index, /preStart = !!week && week\.n < 1/);
+});
+
+// --- Post-create cache flow (the "lands on empty state" bug) -------------------------------------
+test("successful create invalidates challenge caches before navigating to Waiting", async () => {
+  const create = await read("src/routes/_authenticated/challenge/new.tsx");
+  const block = create.match(/const create = async \(\) => \{[\s\S]*?\n {2}\};/)?.[0] ?? "";
+  assert.ok(block, "create() block found");
+  // It must invalidate all challenge-* queries (stale empty ["challenge"] was the root cause)…
+  assert.match(
+    block,
+    /qc\.invalidateQueries\(\{\s*predicate: \(query\) => String\(query\.queryKey\[0\]\)\.startsWith\("challenge"\)/,
+  );
+  // …and do so BEFORE navigating, with no setTimeout hack.
+  const invalidateAt = block.indexOf("invalidateQueries");
+  const navigateAt = block.indexOf('navigate({ to: "/challenge" })');
+  assert.ok(invalidateAt > 0 && navigateAt > invalidateAt, "invalidate precedes navigate");
+  assert.doesNotMatch(block, /setTimeout/);
+  assert.match(create, /const qc = useQueryClient\(\)/);
+});
+
+test("useOutgoingInvitation reads the creator's own pending invitation, not the receiver list", async () => {
+  const lib = await read("src/lib/challenge.ts");
+  const fn = lib.match(/export function useOutgoingInvitation[\s\S]*?\n\}/)?.[0] ?? "";
+  assert.ok(fn, "useOutgoingInvitation found");
+  // A direct, RLS-scoped read of the challenge's own invitation rows (creator can read these).
+  assert.match(fn, /\.from\("challenge_invitations"\)/);
+  assert.match(fn, /\.eq\("challenge_id", challengeId!\)/);
+  assert.match(fn, /\.is\("accepted_at", null\)/);
+  assert.match(fn, /\.is\("revoked_at", null\)/);
+  assert.match(fn, /\.gt\("expires_at"/);
+  assert.match(fn, /invited_username_snapshot/);
+  // It must NOT reuse the incoming/receiver invitation RPC.
+  assert.doesNotMatch(fn, /list_my_challenge_invitations|listMyChallengeInvitations/);
+});
+
+test("a loaded pending challenge resolves to Waiting and never the empty Create state", async () => {
+  const index = await read("src/routes/_authenticated/challenge/index.tsx");
+  // The empty "Create a challenge" CTA only renders when there is genuinely no challenge…
+  const emptyGuard = index.match(/if \(!challenge\) \{[\s\S]*?Create a challenge/)?.[0] ?? "";
+  assert.ok(emptyGuard, "empty state is guarded by !challenge");
+  // …and the Waiting / pre-start branches run only after that guard, on a loaded challenge.
+  const emptyAt = index.indexOf("Create a challenge");
+  const waitingAt = index.indexOf("needsOpponent && isCreator && outgoingQuery.data");
+  assert.ok(waitingAt > emptyAt, "Waiting branch is evaluated on a loaded challenge");
+  // Receiver incoming-invite behaviour is unchanged (still the list RPC).
+  assert.match(await read("src/lib/challenge-invitations.ts"), /listMyChallengeInvitations\(\)/);
 });
 
 // --- Invite (receiver) + Accept/Decline ----------------------------------------------------------
