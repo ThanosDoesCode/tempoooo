@@ -30,6 +30,8 @@ export const getRouter = () => {
     defaultPreloadStaleTime: 30_000,
   });
 
-  trackInAppHistory(router.history);
+  // TanStack Start attaches request-specific memory history after this factory
+  // returns on the server. Only browser routers have history at construction.
+  if (!router.isServer) trackInAppHistory(router.history);
   return router;
 };
