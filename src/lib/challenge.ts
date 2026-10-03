@@ -173,6 +173,46 @@ export function penaltyTextFor(equivalentKm: number, terms?: Partial<ChallengeTe
   );
 }
 
+/**
+ * The live week penalty line for the Challenge card. Reuses the authoritative penalty bands
+ * and amounts via penaltyFor — it never re-derives the penalty formula. Money mode returns the
+ * amount owed now plus the distance to the next lower band; custom mode names the consequence.
+ */
+export function weekPenaltyMessage(
+  equivalentKm: number,
+  targetKm: number,
+  terms?: Partial<ChallengeTerms> | null,
+): { atRisk: boolean; line: string } {
+  const configured = challengeTerms(terms);
+  if (targetKm <= 0 || equivalentKm >= targetKm) {
+    return { atRisk: false, line: "On target. No penalty if the week ended now." };
+  }
+  if (configured.penalty_mode !== "money") {
+    return {
+      atRisk: true,
+      line: `If the week ended now: ${penaltyTextFor(equivalentKm, configured)}.`,
+    };
+  }
+  const penalties = {
+    high: configured.penalty_high_eur,
+    medium: configured.penalty_medium_eur,
+    low: configured.penalty_low_eur,
+  };
+  const current = penaltyFor(equivalentKm, targetKm, penalties);
+  if (current === 0) {
+    return { atRisk: false, line: "On target. No penalty if the week ended now." };
+  }
+  const nextBoundary = [targetKm / 3, (targetKm * 2) / 3, targetKm].find((b) => b > equivalentKm)!;
+  const nextPenalty = penaltyFor(nextBoundary, targetKm, penalties);
+  const nextOwed = nextPenalty === 0 ? eur(0) : owedText(nextPenalty, configured.legacy_photo_owed);
+  return {
+    atRisk: true,
+    line: `You'd pay ${owedText(current, configured.legacy_photo_owed)} if the week ended now. ${km(
+      Math.max(0, nextBoundary - equivalentKm),
+    )} more brings it to ${nextOwed}.`,
+  };
+}
+
 export function activityMetrics(activity: {
   activity_type: "run" | "cycle";
   distance_km: number;
@@ -243,6 +283,18 @@ export function resolvedTargetForWeek(
   return weekPaused(pauses, userId, weekNumber)
     ? 0
     : targetOverrideForWeek(challenge, overrides, weekNumber);
+}
+
+/** Owner can edit/delete only inside the current open week, mirroring finalization locking. */
+export function isActivityEditable(
+  challenge: Challenge,
+  activity: Pick<Activity, "user_id" | "activity_date">,
+  userId: string | undefined,
+) {
+  if (!userId || activity.user_id !== userId) return false;
+  const n = weekNumberOf(challenge, todayIn(challenge.timezone));
+  const { start, end } = weekBounds(challenge, n);
+  return activity.activity_date >= start && activity.activity_date <= end;
 }
 
 export function hoursLeft(challenge: Challenge, weekNumber: number) {
@@ -349,6 +401,29 @@ export async function fetchActivityPage(
   const { data, error } = await query;
   if (error) throw error;
   return activityPage((data ?? []) as unknown as Activity[], pageSize);
+}
+
+export const activityQueryOptions = (activityId: string) =>
+  queryOptions({
+    queryKey: ["challenge-activity", activityId],
+    staleTime: 30_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("challenge_activities")
+        .select(ACTIVITY_FIELDS)
+        .eq("id", activityId)
+        .maybeSingle();
+      if (error) throw error;
+      return (data as unknown as Activity | null) ?? null;
+    },
+  });
+
+/** A single activity by id for the detail screen. RLS still scopes it to challenge members. */
+export function useActivity(activityId: string | undefined) {
+  return useQuery({
+    ...activityQueryOptions(activityId ?? ""),
+    enabled: !!activityId,
+  });
 }
 
 export function useActivities(challengeId: string | undefined, range?: ActivityDateRange) {

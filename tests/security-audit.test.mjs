@@ -27,7 +27,7 @@ test("auth destinations, peer profiles and rendered activity links minimize sens
   const [auth, challenge, activity, serverRpc] = await Promise.all([
     read("src/routes/auth.tsx"),
     read("src/lib/challenge.ts"),
-    read("src/routes/_authenticated/challenge/index.tsx"),
+    read("src/routes/_authenticated/challenge/activity.$activityId.tsx"),
     read("src/lib/privileged-rpcs.server.ts"),
   ]);
   assert.doesNotMatch(auth, /post-auth-path/);

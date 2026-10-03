@@ -4,9 +4,10 @@ import { readFile } from "node:fs/promises";
 import vm from "node:vm";
 import ts from "typescript";
 import * as numeric from "../src/lib/numeric.ts";
+import * as durationLib from "../src/lib/duration.ts";
 const compiled = ts.transpileModule(
   await readFile(
-    new URL("../src/routes/_authenticated/challenge/log.tsx", import.meta.url),
+    new URL("../src/routes/_authenticated/challenge/add.tsx", import.meta.url),
     "utf8",
   ),
   {
@@ -62,6 +63,7 @@ function fixture(distance, duration = "", type = "run", storageThrows = false) {
             return [values[i], (value) => updates.push([i, value])];
           },
           useEffect: () => {},
+          useRef: (value) => ({ current: value }),
         };
       if (name === "react/jsx-runtime")
         return {
@@ -69,10 +71,14 @@ function fixture(distance, duration = "", type = "run", storageThrows = false) {
           jsxs: (type, props) => ({ type, props }),
         };
       if (name === "@tanstack/react-router")
-        return { createFileRoute: () => (v) => v, useNavigate: () => () => {} };
+        return {
+          createFileRoute: () => (v) => ({ ...v, useSearch: () => ({}), useParams: () => ({}) }),
+          useNavigate: () => () => {},
+        };
       if (name === "@tanstack/react-query")
         return { useQueryClient: () => ({ invalidateQueries: async () => {} }) };
       if (name === "@/lib/numeric") return numeric;
+      if (name === "@/lib/duration") return durationLib;
       if (name === "@/lib/challenge-evidence")
         return { optimizeEvidenceImage: async (file) => file };
       if (name === "@/lib/private-image-upload")
@@ -86,6 +92,8 @@ function fixture(distance, duration = "", type = "run", storageThrows = false) {
       if (name === "@/lib/challenge")
         return {
           useMyChallenge: () => ({ data: challenge }),
+          useActivity: () => ({ data: null, isLoading: false }),
+          isActivityEditable: () => true,
           todayIn: () => "2026-08-31",
           DEFAULT_TARGET_KM: 15,
           activityMetrics: ({ activity_type, distance_km, duration_seconds }) => {
@@ -141,7 +149,12 @@ function fixture(distance, duration = "", type = "run", storageThrows = false) {
     },
     async submit() {
       nodes
-        .find((n) => n.type === "button" && n.props["aria-label"] === "Save activity")
+        .find(
+          (n) =>
+            n.type === "button" &&
+            typeof n.props["aria-label"] === "string" &&
+            /^Save (run|ride|activity)$/.test(n.props["aria-label"]),
+        )
         .props.onClick();
       await new Promise((resolve) => setImmediate(resolve));
     },
@@ -155,6 +168,21 @@ for (const type of ["run", "cycle"])
     assert.equal(f.rows[0].duration_seconds, 3690);
     assert.equal(f.rows[0].activity_type, type);
   });
+test("Challenge form saves an mm:ss time as the matching duration_seconds", async () => {
+  const f = fixture("4.0", "22:20", "run");
+  await f.submit();
+  assert.equal(f.rows.length, 1);
+  assert.equal(f.rows[0].duration_seconds, 1340); // 22*60 + 20
+});
+
+test("Challenge form rejects an invalid mm:ss time before uploading evidence", async () => {
+  const f = fixture("4.0", "22:75"); // seconds field out of range
+  await f.submit();
+  assert.equal(f.rows.length, 0);
+  assert.equal(f.uploads, 0);
+  assert.ok(f.updates.some(([i, value]) => i === 9 && /mm:ss|duration/i.test(value)));
+});
+
 test("Challenge form rejects a missing duration before uploading evidence", async () => {
   const f = fixture("7.25");
   await f.submit();

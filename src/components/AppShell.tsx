@@ -171,18 +171,22 @@ export function PageHeader({
   subtitle,
   backTo,
   backLabel = "Back",
+  backParams,
 }: {
   title: string;
   subtitle?: string;
   /** Parent route for the shared "‹ Parent" back link. Its label should name that parent. */
   backTo?: string;
   backLabel?: string;
+  /** Path params when backTo is a parameterised route (e.g. /challenge/activity/$activityId). */
+  backParams?: Record<string, string>;
 }) {
   return (
     <header className="fade-up mb-5">
       {backTo ? (
         <Link
           to={backTo}
+          {...(backParams ? { params: backParams } : {})}
           className="mb-2 inline-flex min-h-11 items-center gap-2 rounded-xl pr-3 text-sm font-semibold text-muted-foreground active:bg-elevated"
         >
           <ArrowLeft className="h-4 w-4" aria-hidden="true" /> {backLabel}

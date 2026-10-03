@@ -15,22 +15,30 @@ test("Meals destinations stay route-backed and old More bookmarks recover to Pre
   );
 });
 
-test("Challenge Rules and Targets have independent route-backed destinations", async () => {
+test("Challenge rules and targets consolidate into one Terms screen", async () => {
   const challengeIndex = await read("src/routes/_authenticated/challenge/index.tsx");
-  // Reached from in-page rows (Challenge tab) now, not from a top dropdown.
-  assert.match(challengeIndex, /to: "\/challenge\/rules"/);
-  assert.match(challengeIndex, /to: "\/challenge\/history"/);
+  // The week screen links to the single Terms screen and History (in-page rows, no dropdown).
+  assert.match(challengeIndex, /to="\/challenge\/terms"/);
+  assert.match(challengeIndex, /to="\/challenge\/history"/);
   for (const path of [
-    "/challenge/rules",
-    "/challenge/targets",
+    "/challenge/terms",
+    "/challenge/terms/override",
     "/challenge/history/week/4",
-    "/challenge/payments",
+    "/challenge/money",
   ])
     assert.equal(productAreaForPath(path), "challenge", path);
-  const rules = await read("src/routes/_authenticated/challenge/rules.tsx");
-  assert.match(rules, /useMyChallenge/);
-  assert.match(rules, /RulesCard terms=\{query.data\}/);
-  assert.doesNotMatch(await read("src/routes/_authenticated/challenge/payments.tsx"), /<RulesCard/);
+  // Legacy rules/targets routes redirect into Terms and its override, not duplicate screens.
+  assert.match(
+    await read("src/routes/_authenticated/challenge/rules.tsx"),
+    /redirect\(\{ to: "\/challenge\/terms", replace: true \}\)/,
+  );
+  assert.match(
+    await read("src/routes/_authenticated/challenge/targets.tsx"),
+    /redirect\(\{ to: "\/challenge\/terms\/override", replace: true \}\)/,
+  );
+  const terms = await read("src/routes/_authenticated/challenge/terms.tsx");
+  assert.match(terms, /useMyChallenge/);
+  assert.match(terms, /If you fall short/);
 });
 
 test("diagnostics belongs to You/Profile and retains both admin boundaries", async () => {

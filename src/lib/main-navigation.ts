@@ -89,27 +89,30 @@ export type LogAction = {
   label: string;
   description: string;
   to: string;
+  /** Search params to carry into the destination, e.g. preselecting Run vs Ride on Add activity. */
+  search?: { type: "run" | "cycle" };
   group: "challenge" | "day";
 };
 
 /**
- * The shared Log sheet actions. Targets are the existing functional routes (Phase 1 reuses
- * them as-is): Run/Ride -> Challenge activity logging, the rest -> the current day flows.
- * Run/Ride both open the existing activity form; its Run/Ride redesign is Phase 2.
+ * The shared Log sheet actions. Targets are the existing functional routes: Run/Ride -> the
+ * Challenge "Add run or ride" screen (/challenge/add), the rest -> the current day flows.
  */
 export const LOG_ACTIONS: readonly LogAction[] = [
   {
     key: "run",
     label: "Run",
     description: "1 km = 1 km",
-    to: "/challenge/log",
+    to: "/challenge/add",
+    search: { type: "run" },
     group: "challenge",
   },
   {
     key: "ride",
     label: "Ride",
     description: "3 km = 1 km",
-    to: "/challenge/log",
+    to: "/challenge/add",
+    search: { type: "cycle" },
     group: "challenge",
   },
   {

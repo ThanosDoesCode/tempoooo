@@ -6,6 +6,8 @@ import { Dumbbell, Lock, LogOut, Mail, Trash2, UserRound } from "lucide-react";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { Card, SectionTitle } from "@/components/ui-kit";
 import { ChallengeInvitations } from "@/components/ChallengeInvitations";
+import { ChallengeNotifications } from "@/components/ChallengeNotifications";
+import { ChallengeDataExport } from "@/components/ChallengeDataExport";
 import { clearDeletedAccountSession, useAuth, signOut } from "@/lib/auth";
 import { preferredBulkMembership, useBulkAdmin, useMemberships } from "@/lib/bulk-access";
 import { useAcknowledgeGoal, useGoalDiscovery } from "@/lib/goal-discovery";
@@ -115,6 +117,15 @@ function ProfilePage() {
       </Card>
 
       <ChallengeInvitations />
+
+      {user ? (
+        <div className="mt-3">
+          <SectionTitle>Notifications</SectionTitle>
+          <ChallengeNotifications userId={user.id} />
+        </div>
+      ) : null}
+
+      <ChallengeDataExport />
 
       <Card className="mt-3">
         <SectionTitle>Username</SectionTitle>

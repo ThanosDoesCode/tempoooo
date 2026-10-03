@@ -143,7 +143,7 @@ test("the shared Log sheet replaces the dropdown as the add surface", async () =
   assert.match(sheet, /Your day/);
   const labels = [...nav.matchAll(/label: "([^"]+)",\n/g)].map((m) => m[1]);
   assert.deepEqual(labels, ["Run", "Ride", "Weigh-in & sleep", "Meal", "Workout"]);
-  assert.match(nav, /to: "\/challenge\/log"/); // Run + Ride -> existing activity flow
+  assert.match(nav, /to: "\/challenge\/add"/); // Run + Ride -> Add run or ride
   assert.match(nav, /to: "\/bulk\/meals"/); // Meal -> existing Meals flow
   assert.match(nav, /to: "\/bulk\/training"/); // Workout -> existing Training flow
 });

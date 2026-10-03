@@ -30,7 +30,7 @@ export function LogSheet({
 
   const go = (action: LogAction) => {
     onOpenChange(false);
-    void navigate({ to: action.to });
+    void navigate(action.search ? { to: action.to, search: action.search } : { to: action.to });
   };
 
   return (
@@ -58,6 +58,7 @@ export function LogSheet({
               <Link
                 key={action.key}
                 to={action.to}
+                {...(action.search ? { search: action.search } : {})}
                 onClick={() => onOpenChange(false)}
                 className="flex h-[118px] flex-col justify-between rounded-[18px] bg-primary p-4 text-primary-foreground active:opacity-90"
               >

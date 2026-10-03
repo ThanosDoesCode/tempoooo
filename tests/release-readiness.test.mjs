@@ -89,7 +89,7 @@ test("production headers add conservative hardening without an untested CSP", as
 test("release validation bounds modified-client Challenge text and evidence input", async () => {
   const [migration, activity] = await Promise.all([
     read("supabase/migrations/20260906235900_release_validation_hardening.sql"),
-    read("src/routes/_authenticated/challenge/log.tsx"),
+    read("src/routes/_authenticated/challenge/add.tsx"),
   ]);
   assert.match(migration, /char_length\(note\) <= 500/);
   assert.match(migration, /cardinality\(extra_evidence_paths\) <= 3/);

@@ -10,7 +10,16 @@ const HISTORY_MARKER = "__tempoChallengeEvidenceViewer";
 type ViewerState = { status: "idle" | "loading" } | EvidenceResolution;
 
 /** Evidence screenshots are visible to both challenge members so neither can cheat. */
-export function ChallengeEvidenceViewer({ paths, expired }: { paths: string[]; expired: boolean }) {
+export function ChallengeEvidenceViewer({
+  paths,
+  expired,
+  variant = "inline",
+}: {
+  paths: string[];
+  expired: boolean;
+  /** "inline" is a compact row button; "panel" is the large tappable screenshot area. */
+  variant?: "inline" | "panel";
+}) {
   const viewerId = useId();
   const requestId = useRef(0);
   const [open, setOpen] = useState(false);
@@ -104,20 +113,47 @@ export function ChallengeEvidenceViewer({ paths, expired }: { paths: string[]; e
 
   return (
     <>
-      <button
-        type="button"
-        onClick={show}
-        aria-label={
-          expired
-            ? "View expired evidence status"
-            : `View ${paths.length} evidence screenshot${paths.length > 1 ? "s" : ""}`
-        }
-        className="inline-flex min-h-11 items-center gap-1 rounded-lg px-2 py-2 font-medium text-muted-foreground hover:bg-elevated"
-      >
-        <ImageIcon className="h-3 w-3" aria-hidden="true" />
-        {expired ? "Evidence expired after finalization" : "Evidence available"}
-        {!expired && paths.length > 1 ? ` ${paths.length}` : ""}
-      </button>
+      {variant === "panel" ? (
+        expired ? (
+          <div
+            role="img"
+            aria-label="Evidence expired after finalization"
+            className="flex h-[300px] w-full flex-col items-center justify-center gap-2 rounded-[20px] border border-border bg-card text-muted-foreground"
+          >
+            <ImageIcon className="h-8 w-8" aria-hidden="true" />
+            <span className="text-sm">Evidence expired after finalization</span>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={show}
+            aria-label={`View ${paths.length} evidence screenshot${paths.length > 1 ? "s" : ""}`}
+            className="flex h-[300px] w-full flex-col items-center justify-center gap-2 rounded-[20px] border border-border bg-card text-muted-foreground hover:bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <ImageIcon className="h-8 w-8" aria-hidden="true" />
+            <span className="text-sm">
+              {paths.length > 1
+                ? `${paths.length} screenshots · tap to enlarge`
+                : "Strava screenshot · tap to enlarge"}
+            </span>
+          </button>
+        )
+      ) : (
+        <button
+          type="button"
+          onClick={show}
+          aria-label={
+            expired
+              ? "View expired evidence status"
+              : `View ${paths.length} evidence screenshot${paths.length > 1 ? "s" : ""}`
+          }
+          className="inline-flex min-h-11 items-center gap-1 rounded-lg px-2 py-2 font-medium text-muted-foreground hover:bg-elevated"
+        >
+          <ImageIcon className="h-3 w-3" aria-hidden="true" />
+          {expired ? "Evidence expired after finalization" : "Evidence available"}
+          {!expired && paths.length > 1 ? ` ${paths.length}` : ""}
+        </button>
+      )}
 
       {open && typeof document !== "undefined"
         ? createPortal(

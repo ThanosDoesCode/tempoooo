@@ -4,39 +4,41 @@ import { readFile } from "node:fs/promises";
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
-test("first-use Challenge primer covers the complete scoring path without an open rule wall", async () => {
-  const rules = await read("src/components/challenge-rules.tsx");
-  assert.match(
-    rules,
-    /Reach \$\{formatKm\(configured\.weekly_target_km\)\} challenge km each week/,
-  );
-  assert.match(rules, /Equivalent km are your converted progress/);
-  assert.match(rules, /runs count 1:1 below 7:00 min\/km/);
-  assert.match(rules, /rides\s+count 3:1 from 18 km\/h/);
-  assert.match(rules, /duration and a screenshot/);
-  assert.match(rules, /applies the agreed consequence/);
-  assert.match(rules, /Outside \$\{countryListLabel/);
-  assert.match(rules, /Travel pauses are disabled/);
-  assert.match(rules, /<details/);
-  assert.match(await read("src/routes/_authenticated/challenge/new.tsx"), /ChallengePrimer/);
+test("Terms is the one canonical rules screen and rule copy is gone elsewhere", async () => {
+  const terms = await read("src/routes/_authenticated/challenge/terms.tsx");
+  // The scoring path lives on Terms: weekly target, what counts, penalties, travel pause.
+  assert.match(terms, /Every week/);
+  assert.match(terms, /Monday to Sunday/);
+  assert.match(terms, /1 km = 1 km, under 7:00 \/km/);
+  assert.match(terms, /3 km = 1 km, over 18 km\/h/);
+  assert.match(terms, /If you fall short/);
+  assert.match(terms, /\/challenge\/terms\/override/);
+  assert.match(terms, /\/challenge\/terms\/pause/);
+  // Duplicate rule copy removed from the create screen and the week screen (Phase 2 item I).
+  assert.doesNotMatch(await read("src/routes/_authenticated/challenge/new.tsx"), /ChallengePrimer/);
+  const week = await read("src/routes/_authenticated/challenge/index.tsx");
+  assert.doesNotMatch(week, /ChallengePrimer/);
+  assert.doesNotMatch(week, /How Tempo works/);
 });
 
 test("Challenge empty and failed-load states explain recovery", async () => {
   const week = await read("src/routes/_authenticated/challenge/index.tsx");
   const history = await read("src/routes/_authenticated/challenge/history.tsx");
-  const money = await read("src/routes/_authenticated/challenge/payments.tsx");
+  const money = await read("src/routes/_authenticated/challenge/money.tsx");
+  const pause = await read("src/routes/_authenticated/challenge/terms.pause.tsx");
   assert.match(week, /Your opponent has not joined yet/);
-  assert.match(week, /No activity yet/);
+  assert.match(week, /No runs or rides yet this week/);
   assert.match(week, /Some challenge data did not load/);
   assert.match(history, /No finalized weeks yet/);
   assert.match(history, /DataError/);
-  assert.match(money, /No penalties are outstanding/);
-  assert.match(money, /No travel pauses are scheduled/);
+  assert.match(money, /You’re all square/);
   assert.match(money, /DataError/);
+  assert.match(pause, /no upcoming weeks left to pause/);
+  assert.match(pause, /DataError/);
 });
 
 test("activity failures retain a session draft and distinguish validation from server errors", async () => {
-  const log = await read("src/routes/_authenticated/challenge/log.tsx");
+  const log = await read("src/routes/_authenticated/challenge/add.tsx");
   assert.match(log, /challenge-activity-draft:/);
   assert.match(log, /sessionStorage\.setItem/);
   assert.match(log, /Check your activity/);

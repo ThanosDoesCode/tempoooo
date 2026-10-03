@@ -173,26 +173,38 @@ test("malformed cursors cannot inject filters; overview uses server totals, paym
     new URL("../src/routes/_authenticated/challenge/index.tsx", import.meta.url),
     "utf8",
   );
-  const payments = await readFile(
-    new URL("../src/routes/_authenticated/challenge/payments.tsx", import.meta.url),
+  const money = await readFile(
+    new URL("../src/routes/_authenticated/challenge/money.tsx", import.meta.url),
     "utf8",
   );
-  const log = await readFile(
-    new URL("../src/routes/_authenticated/challenge/log.tsx", import.meta.url),
+  const history = await readFile(
+    new URL("../src/routes/_authenticated/challenge/history.tsx", import.meta.url),
+    "utf8",
+  );
+  const exportCard = await readFile(
+    new URL("../src/components/ChallengeDataExport.tsx", import.meta.url),
+    "utf8",
+  );
+  const add = await readFile(
+    new URL("../src/routes/_authenticated/challenge/add.tsx", import.meta.url),
+    "utf8",
+  );
+  const detail = await readFile(
+    new URL("../src/routes/_authenticated/challenge/activity.$activityId.tsx", import.meta.url),
     "utf8",
   );
   assert.match(home, /useActivitySummary/);
   assert.doesNotMatch(home, /sumWeek\(/);
-  assert.match(
-    home,
-    /row.userId === opponent.userId\) \?\? \{\s*running: 0,\s*cycling: 0,\s*equivalent: 0/,
-  );
+  // Opponent totals default to a zeroed object from server totals, never a client-side sum.
+  assert.match(home, /const zero = \{ running: 0, cycling: 0, equivalent: 0 \}/);
+  assert.match(home, /row\.userId === opponent\.userId\) \?\? zero/);
   assert.match(home, /fetchNextPage/);
-  assert.match(payments, /useActivitySummary/);
-  assert.match(payments, /await fetchActivitiesForExport/);
-  assert.doesNotMatch(payments, /useActivities\(/);
-  assert.match(home, /invalidateQueries\(\{ queryKey: \["challenge-activities"\]/);
-  assert.match(log, /invalidateQueries\(\{ queryKey: \["challenge-activities"\]/);
+  // Overview still uses server totals; the CSV export reads full history only on demand.
+  assert.match(history, /useActivitySummary/);
+  assert.match(exportCard, /await fetchActivitiesForExport/);
+  assert.doesNotMatch(money, /useActivities\(/);
+  assert.match(add, /invalidateQueries\(\{ queryKey: \["challenge-activities"\]/);
+  assert.match(detail, /invalidateQueries\(\{ queryKey: \["challenge-activities"\]/);
 });
 
 test("dashboard initially fetches 5 plus sentinel, then 10 plus sentinel without skipping records", async () => {

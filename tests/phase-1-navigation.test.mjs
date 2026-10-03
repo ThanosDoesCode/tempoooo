@@ -48,8 +48,8 @@ test("the Log sheet shows Run, Ride, Weigh-in & sleep, Meal, Workout", async () 
 
 test("each Log action routes to the correct current functional destination", () => {
   const by = Object.fromEntries(LOG_ACTIONS.map((a) => [a.key, a.to]));
-  assert.equal(by.run, "/challenge/log");
-  assert.equal(by.ride, "/challenge/log");
+  assert.equal(by.run, "/challenge/add");
+  assert.equal(by.ride, "/challenge/add");
   assert.equal(by["weigh-in"], "/bulk"); // existing daily check-in
   assert.equal(by.meal, "/bulk/meals"); // existing Meals flow
   assert.equal(by.workout, "/bulk/training"); // existing Training flow
@@ -99,7 +99,8 @@ test("legacy and new canonical routes both resolve (aliases redirect, old routes
     ["src/routes/_authenticated/today.tsx", "/bulk"],
     ["src/routes/_authenticated/progress.tsx", "/bulk/progress"],
     ["src/routes/_authenticated/you.tsx", "/profile"],
-    ["src/routes/_authenticated/challenge/money.tsx", "/challenge/payments"],
+    // Phase 2 made Money canonical at /challenge/money; /challenge/payments now redirects to it.
+    ["src/routes/_authenticated/challenge/payments.tsx", "/challenge/money"],
   ]) {
     assert.ok(exists(file), file);
     assert.match(await read(file), new RegExp(`redirect\\(\\{ to: "${target}"`));
@@ -124,10 +125,10 @@ test("pre-setup Goal/fitness destinations highlight You, never another tab", () 
 });
 
 test("Phase 1 renames are reflected in canonical labels and page titles", async () => {
-  const [checkIn, payments] = await Promise.all([
+  const [checkIn, money] = await Promise.all([
     read("src/routes/_authenticated/bulk/check-in.tsx"),
-    read("src/routes/_authenticated/challenge/payments.tsx"),
+    read("src/routes/_authenticated/challenge/money.tsx"),
   ]);
   assert.match(checkIn, /title="Weekly review"/);
-  assert.match(payments, /title="Money"/);
+  assert.match(money, /title="Money"/);
 });

@@ -229,7 +229,7 @@ test("private image validation enforces byte limits and path-specific formats", 
 
 test("private upload paths validate content and clean partial Challenge evidence", async () => {
   const [challengeLog, publicProgress, progressQuery, legacyStore, migration] = await Promise.all([
-    read("src/routes/_authenticated/challenge/log.tsx"),
+    read("src/routes/_authenticated/challenge/add.tsx"),
     read("src/components/PublicBulkProgress.tsx"),
     read("src/lib/bulk-progress-query.ts"),
     read("src/lib/store.ts"),
@@ -517,12 +517,12 @@ test("aborted evidence requests are recognized without suppressing unexpected fa
 });
 
 test("Challenge evidence uses a local lightbox with safe close and browser Back behavior", async () => {
-  const [week, viewer] = await Promise.all([
-    read("src/routes/_authenticated/challenge/index.tsx"),
+  const [detail, viewer] = await Promise.all([
+    read("src/routes/_authenticated/challenge/activity.$activityId.tsx"),
     read("src/components/ChallengeEvidenceViewer.tsx"),
   ]);
-  assert.match(week, /ChallengeEvidenceViewer/);
-  assert.doesNotMatch(week, /function EvidenceViewer/);
+  assert.match(detail, /ChallengeEvidenceViewer/);
+  assert.doesNotMatch(detail, /function EvidenceViewer/);
   assert.match(viewer, /createPortal/);
   assert.match(viewer, /role="dialog"/);
   assert.match(viewer, /aria-modal="true"/);

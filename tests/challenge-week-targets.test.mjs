@@ -6,16 +6,16 @@ const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
 test("future weekly targets cross the authenticated server boundary without a browser RPC", async () => {
   const [route, functions, server, migration] = await Promise.all([
-    read("src/routes/_authenticated/challenge/targets.tsx"),
+    read("src/routes/_authenticated/challenge/terms.override.tsx"),
     read("src/lib/privileged-rpcs.functions.ts"),
     read("src/lib/privileged-rpcs.server.ts"),
     read("supabase/migrations/20260907120000_secure_future_challenge_targets.sql"),
   ]);
 
-  assert.match(route, /setChallengeWeekTarget\(\{ data:/);
+  assert.match(route, /setChallengeWeekTarget\(\{\s*data:/);
   assert.doesNotMatch(route, /supabase\.rpc\(/);
   assert.match(route, /firstFuture = Math\.max\(1, currentWeek \+ 1\)/);
-  assert.match(route, /Only the Challenge creator can change them/);
+  assert.match(route, /Only the challenge creator can change a week/);
   assert.match(functions, /setChallengeWeekTarget = createServerFn/);
   assert.match(functions, /middleware\(\[requireSupabaseAuth\]\)/);
   assert.match(functions, /setChallengeWeekTargetFor\(context\.userId, data\)/);
@@ -41,7 +41,7 @@ test("resolved targets consistently prioritize pause, override and base terms", 
     read("supabase/migrations/20260907120000_secure_future_challenge_targets.sql"),
     read("src/lib/challenge.ts"),
     read("src/routes/_authenticated/challenge/index.tsx"),
-    read("src/routes/_authenticated/challenge/payments.tsx"),
+    read("src/components/ChallengeDataExport.tsx"),
     read("src/lib/challenge-export.ts"),
   ]);
 

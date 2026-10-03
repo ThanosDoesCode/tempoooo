@@ -89,10 +89,10 @@ test("Challenge is a bottom tab and its sub-screens are reached in page, not via
   assert.doesNotMatch(shell, /CHALLENGE_NAV|TRAINING_NAV|MEALS_NAV|GOAL_NAV/);
   // Challenge is one of the four bottom tabs.
   assert.match(shell, /MAIN_TABS/);
-  // Challenge sub-screens are reached from in-page rows.
-  assert.match(challengeIndex, /NavRows/);
-  assert.match(challengeIndex, /to: "\/challenge\/history"/);
-  assert.match(challengeIndex, /to: "\/challenge\/money"/);
+  // Challenge sub-screens are reached from in-page rows (DestinationRow), not a dropdown.
+  assert.match(challengeIndex, /DestinationRow/);
+  assert.match(challengeIndex, /to="\/challenge\/history"/);
+  assert.match(challengeIndex, /to="\/challenge\/money"/);
 });
 
 test("Goal Today and Progress share structured weights and refresh active bodyweight", async () => {
