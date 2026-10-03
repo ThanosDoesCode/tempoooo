@@ -6,14 +6,16 @@ const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
 test("Terms is the one canonical rules screen and rule copy is gone elsewhere", async () => {
   const terms = await read("src/routes/_authenticated/challenge/terms.tsx");
-  // The scoring path lives on Terms: weekly target, what counts, penalties, travel pause.
-  assert.match(terms, /Every week/);
-  assert.match(terms, /Monday to Sunday/);
-  assert.match(terms, /1 km = 1 km, under 7:00 \/km/);
-  assert.match(terms, /3 km = 1 km, over 18 km\/h/);
-  assert.match(terms, /If you fall short/);
-  assert.match(terms, /\/challenge\/terms\/override/);
-  assert.match(terms, /\/challenge\/terms\/pause/);
+  const view = await read("src/components/challenge-terms-view.tsx");
+  // The scoring path lives on the shared Terms cards (reused for the read-only pending view).
+  assert.match(terms, /TermsCards/);
+  assert.match(view, /Every week/);
+  assert.match(view, /Monday to Sunday/);
+  assert.match(view, /1 km = 1 km, under 7:00 \/km/);
+  assert.match(view, /3 km = 1 km, over 18 km\/h/);
+  assert.match(view, /If you fall short/);
+  assert.match(view, /\/challenge\/terms\/override/);
+  assert.match(view, /\/challenge\/terms\/pause/);
   // Duplicate rule copy removed from the create screen and the week screen (Phase 2 item I).
   assert.doesNotMatch(await read("src/routes/_authenticated/challenge/new.tsx"), /ChallengePrimer/);
   const week = await read("src/routes/_authenticated/challenge/index.tsx");

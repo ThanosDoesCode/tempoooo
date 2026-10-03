@@ -129,6 +129,14 @@ export const declineChallengeInvitation = createServerFn({ method: "POST" })
     return declineChallengeInvitationFor(context.userId, data.invitationId);
   });
 
+export const cancelPendingChallenge = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data) => z.object({ challenge: z.string().uuid() }).parse(data))
+  .handler(async ({ data, context }) => {
+    const { cancelPendingChallengeFor } = await import("./privileged-rpcs.server");
+    return cancelPendingChallengeFor(context.userId, data.challenge);
+  });
+
 export const deleteTempoAccount = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data) => z.object({ confirmation: z.literal("Delete my account") }).parse(data))
@@ -143,7 +151,7 @@ const createChallengeInput = z.object({
   name: z.string().min(1).max(120),
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   timezone: z.string().min(1).max(100),
-  durationWeeks: z.number().int().min(52).max(520),
+  durationWeeks: z.union([z.literal(4), z.literal(12), z.literal(52)]),
   invitedUsername: usernameInput,
   tokenHash: z.string().regex(/^[0-9a-f]{64}$/),
   weeklyTargetKm: z.number().min(1).max(500),

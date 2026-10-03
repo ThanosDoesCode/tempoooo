@@ -234,6 +234,19 @@ export type PendingChallengeInvitation = {
   inviter_username: string;
   weekly_target_km: number;
   expires_at: string;
+  duration_weeks: number;
+  start_date: string;
+  timezone: string;
+  penalty_mode: "money" | "custom";
+  penalty_high_eur: number;
+  penalty_medium_eur: number;
+  penalty_low_eur: number;
+  penalty_high_custom: string | null;
+  penalty_medium_custom: string | null;
+  penalty_low_custom: string | null;
+  legacy_photo_owed: boolean;
+  travel_pause_enabled: boolean;
+  travel_pause_home_countries: string[];
 };
 
 export const listMyChallengeInvitationsFor = (caller: string) =>
@@ -249,6 +262,12 @@ export const declineChallengeInvitationFor = (caller: string, invitationId: stri
   rpc<boolean>("decline_challenge_invitation", {
     _caller: caller,
     _invitation: invitationId,
+  });
+
+export const cancelPendingChallengeFor = (caller: string, challengeId: string) =>
+  rpc<boolean>("cancel_pending_challenge", {
+    _caller: caller,
+    _challenge: challengeId,
   });
 
 export async function deleteTempoAccountFor(caller: string) {

@@ -8,9 +8,12 @@ test("Challenge creation uses the authenticated server function and no browser R
   const source = await read("src/routes/_authenticated/challenge/new.tsx");
   const createBlock = source.match(/const create = async \(\) => \{[\s\S]*?\n  \};/)?.[0];
   assert.ok(createBlock);
-  assert.match(source, /import \{ createChallenge \} from "@\/lib\/privileged-rpcs\.functions"/);
+  assert.match(
+    source,
+    /import \{[^}]*\bcreateChallenge\b[^}]*\} from "@\/lib\/privileged-rpcs\.functions"/,
+  );
   assert.match(createBlock, /await createChallenge\(\{\s*data:/);
-  assert.match(createBlock, /invitedUsername: normalizeUsername\(username\)/);
+  assert.match(createBlock, /invitedUsername: normalized/);
   assert.doesNotMatch(createBlock, /invitedEmail|Opponent email|type="email"/);
   assert.doesNotMatch(createBlock, /supabase\.rpc\(\s*"create_challenge_atomic"/);
   assert.doesNotMatch(
@@ -20,8 +23,11 @@ test("Challenge creation uses the authenticated server function and no browser R
   assert.doesNotMatch(createBlock, /created_by|user_id/);
   assert.match(createBlock, /creation\.current/);
   assert.match(createBlock, /challengeId !== request\.requestId/);
-  assert.match(createBlock, /setCreated\(true\)/);
-  assert.doesNotMatch(source, /Copy link|One-time invitation link|navigator\.clipboard/);
+  // Only the final "Send invite" creates the challenge, then routes to the Waiting state.
+  assert.match(createBlock, /navigate\(\{ to: "\/challenge" \}\)/);
+  // Phase 3: the length comes from the 4/12/52 selector, never defaulted or forced to 52.
+  assert.match(createBlock, /durationWeeks: length/);
+  assert.doesNotMatch(source, /Math\.max\(52/);
   for (const field of [
     "weeklyTargetKm",
     "penaltyMode",
@@ -73,15 +79,18 @@ test("creator configures terms and invitee reviews them before explicit acceptan
     read("src/routes/_authenticated/invite.challenge.$token.tsx"),
     read("src/components/challenge-rules.tsx"),
   ]);
-  assert.match(create, /Weekly target \(challenge km\)/);
-  assert.match(create, /Penalty mode/);
-  assert.match(create, /Travel pause/);
+  // Phase 3 three-step create flow: who, stakes, then travel + review.
+  assert.match(create, /Who are you taking on\?/);
+  assert.match(create, /How long\?/);
+  assert.match(create, /LENGTHS = \[4, 12, 52\]/);
+  assert.match(create, /\{weeks\} weeks/);
+  assert.match(create, /Weekly target/);
+  assert.match(create, /What’s at stake\?/);
+  assert.match(create, /Something else/);
+  assert.match(create, /If you finish the week with/);
   assert.match(create, /home countr/i);
-  assert.match(create, /<select/);
-  assert.match(create, /Weekly money penalties/);
-  assert.match(create, /Custom consequences/);
-  assert.match(create, /High shortfall/);
-  assert.match(create, /Live penalty summary/);
+  assert.match(create, /Send invite to/);
+  assert.match(create, /These terms lock once/);
   assert.match(invitation, /previewChallengeInvitation/);
   assert.match(invitation, /Review the Challenge terms before accepting/);
   assert.match(invitation, /Travel pause/);
@@ -98,11 +107,16 @@ test("creator configures terms and invitee reviews them before explicit acceptan
   assert.doesNotMatch(create, /penaltyMode.*photo|value="photo"/i);
 });
 
-test("mobile date inputs shrink inside the Challenge creation card without replacing the native picker", async () => {
+test("Create challenge is a focus-screen 3-step flow with an accessible progress indicator", async () => {
   const create = await read("src/routes/_authenticated/challenge/new.tsx");
-  assert.match(create, /block min-w-0 w-full max-w-full/);
-  assert.match(create, /type="date"[\s\S]*?className=\{inputCls\}/);
-  assert.doesNotMatch(create, /appearance-none|overflow-hidden/);
+  // Step lives in the route search param (back/refresh safe), 1..3, defaulting to 1.
+  assert.match(create, /validateSearch/);
+  assert.match(create, /Route\.useSearch\(\)/);
+  assert.match(create, /Step \{step\} of 3/);
+  // The start date is derived (next Monday), not a raw user-entered field.
+  assert.doesNotMatch(create, /type="date"/);
+  assert.doesNotMatch(create, /type="email"/);
+  assert.match(create, /startOfWeek\(new Date\(\), \{ weekStartsOn: 1 \}\)/);
 });
 
 test("legacy photo-owed display is preserved without becoming a penalty mode", async () => {

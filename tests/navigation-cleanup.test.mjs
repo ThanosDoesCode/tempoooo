@@ -38,7 +38,8 @@ test("Challenge rules and targets consolidate into one Terms screen", async () =
   );
   const terms = await read("src/routes/_authenticated/challenge/terms.tsx");
   assert.match(terms, /useMyChallenge/);
-  assert.match(terms, /If you fall short/);
+  assert.match(terms, /TermsCards/);
+  assert.match(await read("src/components/challenge-terms-view.tsx"), /If you fall short/);
 });
 
 test("diagnostics belongs to You/Profile and retains both admin boundaries", async () => {

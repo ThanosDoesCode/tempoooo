@@ -23,6 +23,7 @@ import {
   useActivities,
   useChallengeMembers,
   useMyChallenge,
+  useOutgoingInvitation,
   usePayments,
   useTravelPauses,
   useWeekTargets,
@@ -36,6 +37,7 @@ import {
   type Activity,
 } from "@/lib/challenge";
 import { ChallengeInviteCard } from "@/components/ChallengeInvite";
+import { ChallengeWaiting } from "@/components/ChallengeWaiting";
 
 export const Route = createFileRoute("/_authenticated/challenge/")({
   head: () => ({
@@ -94,6 +96,8 @@ function ChallengeHome() {
     const n = weekNumberOf(challenge, todayIn(challenge.timezone));
     return { n, ...weekBounds(challenge, n), hours: hoursLeft(challenge, n) };
   }, [challenge]);
+
+  const outgoingQuery = useOutgoingInvitation(challenge?.id);
 
   const range = week ? { start: week.start, end: week.end } : { start: "", end: "" };
   const summaryQuery = useActivitySummary(challenge?.id, range);
@@ -191,6 +195,49 @@ function ChallengeHome() {
       : owedToMe > 0
         ? `You’re owed ${owedText(owedToMe, challenge.legacy_photo_owed)}`
         : "All square";
+
+  const isCreator = challenge.created_by === user?.id;
+  const preStart = !!week && week.n < 1;
+
+  // Creator is still waiting for the opponent to accept: the pending/Waiting screen (no "Week 0").
+  if (needsOpponent && isCreator && outgoingQuery.data) {
+    return (
+      <AppShell>
+        <ChallengeWaiting challenge={challenge} invitation={outgoingQuery.data} />
+      </AppShell>
+    );
+  }
+
+  // Both accepted but the first Monday has not arrived yet: a pre-start card, never "Week 0".
+  if (preStart) {
+    return (
+      <AppShell>
+        <header className="fade-up mb-3">
+          <p className="text-sm text-muted-foreground">
+            {opponent ? `With ${opponent.name} · ` : ""}
+            {challenge.duration_weeks}-week challenge
+          </p>
+          <h1 className="mt-1 text-3xl font-semibold tracking-tight">Starts soon</h1>
+        </header>
+        <Card className="space-y-1 p-5">
+          <p className="text-base font-medium">
+            Starts {format(parseISO(challenge.start_date), "EEEE d MMM")}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Your first week runs Monday to Sunday in {challenge.timezone} time. Log runs and rides
+            once it begins.
+          </p>
+        </Card>
+        <div className="mt-3.5 rounded-[20px] bg-card px-4">
+          <DestinationRow
+            to="/challenge/terms"
+            label="See the terms"
+            hint={`${new Intl.NumberFormat("en", { maximumFractionDigits: 1 }).format(commonTarget)} km a week`}
+          />
+        </div>
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell>

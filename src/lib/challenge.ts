@@ -521,6 +521,41 @@ export type TravelPause = {
   updated_at: string;
 };
 
+export type OutgoingInvitation = { id: string; invited_username: string; expires_at: string };
+
+/** The creator's own still-pending invitation for a challenge (for the Waiting screen). */
+export function useOutgoingInvitation(challengeId: string | undefined, enabled = true) {
+  return useQuery({
+    enabled: !!challengeId && enabled,
+    queryKey: ["challenge-outgoing-invitation", challengeId],
+    staleTime: 30_000,
+    queryFn: async (): Promise<OutgoingInvitation | null> => {
+      const { data, error } = await supabase
+        .from("challenge_invitations")
+        .select("id, invited_username_snapshot, expires_at")
+        .eq("challenge_id", challengeId!)
+        .is("accepted_at", null)
+        .is("revoked_at", null)
+        .gt("expires_at", new Date().toISOString())
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) return null;
+      const row = data as unknown as {
+        id: string;
+        invited_username_snapshot: string | null;
+        expires_at: string;
+      };
+      return {
+        id: row.id,
+        invited_username: row.invited_username_snapshot ?? "your opponent",
+        expires_at: row.expires_at,
+      };
+    },
+  });
+}
+
 export function useTravelPauses(challengeId: string | undefined) {
   return useQuery({
     enabled: !!challengeId,

@@ -52,14 +52,13 @@ test("username invitations let both creator and recipient open the Challenge", a
   ]);
 
   // The creator identifies the recipient by username and creates the invitation atomically.
-  assert.match(createRoute, /placeholder="Search username"/);
-  assert.match(createRoute, /invitedUsername: normalizeUsername\(username\)/);
+  assert.match(createRoute, /aria-label="Opponent username"/);
+  assert.match(createRoute, /invitedUsername: normalized/);
   assert.match(createRoute, /const challengeId = await createChallenge\(/);
   assert.doesNotMatch(createRoute, /Copy link|navigator\.clipboard|setLink\(/);
 
-  // The creator can open the newly created Challenge.
-  assert.match(createRoute, /Go to challenge/);
-  assert.match(createRoute, /onClick=\{\(\) => void navigate\(\{ to: "\/challenge" \}\)\}/);
+  // After sending the invite the creator lands on the Challenge (Waiting) screen.
+  assert.match(createRoute, /void navigate\(\{ to: "\/challenge" \}\)/);
 
   // The recipient sees their pending invitation and accepts it through the authenticated boundary.
   assert.match(invitationQuery, /listMyChallengeInvitations\(\)/);

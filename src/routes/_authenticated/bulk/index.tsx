@@ -20,6 +20,7 @@ import {
 import { useBulkNutritionDay } from "@/lib/bulk-nutrition-query";
 import { useCompletedSessionDates } from "@/lib/bulk-training-sessions";
 import { Check, X } from "lucide-react";
+import { ChallengeInviteReceiver } from "@/components/ChallengeInviteReceiver";
 
 export const Route = createFileRoute("/_authenticated/bulk/")({
   head: () => ({
@@ -180,6 +181,7 @@ function TodayPage() {
 
   return (
     <AppShell>
+      <ChallengeInviteReceiver />
       <PageHeader title="Today" subtitle={format(new Date(), "EEEE, d MMMM")} />
 
       <div className="card-surface fade-up mb-2 p-4">

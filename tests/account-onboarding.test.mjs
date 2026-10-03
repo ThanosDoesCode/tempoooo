@@ -113,8 +113,8 @@ test("new Challenge invitations use private username search and immutable UUID r
     read("supabase/migrations/20260909120000_account_onboarding_usernames.sql"),
     read("supabase/migrations/20260919120000_account_deletion_and_in_app_challenge_invites.sql"),
   ]);
-  assert.match(create, /invitedUsername: normalizeUsername\(username\)/);
-  assert.match(create, /placeholder="Search username"/);
+  assert.match(create, /invitedUsername: normalized/);
+  assert.match(create, /aria-label="Opponent username"/);
   assert.doesNotMatch(create, /Opponent email|invitedEmail|type="email"/);
   assert.match(invite, /searchChallengeInviteUsers/);
   assert.match(invite, /sendChallengeUsernameInvitation/);

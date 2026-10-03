@@ -212,9 +212,9 @@ test("Money shows open/settled and has no export, comparison or travel form", as
 });
 
 test("Terms is the rules home and links to override and pause", async () => {
-  const terms = await read("src/routes/_authenticated/challenge/terms.tsx");
-  assert.match(terms, /\/challenge\/terms\/override/);
-  assert.match(terms, /\/challenge\/terms\/pause/);
+  const view = await read("src/components/challenge-terms-view.tsx");
+  assert.match(view, /\/challenge\/terms\/override/);
+  assert.match(view, /\/challenge\/terms\/pause/);
   // Travel pause business logic lives on its own screen now, not on Money.
   const pause = await read("src/routes/_authenticated/challenge/terms_.pause.tsx");
   assert.match(pause, /setTravelPause/);
