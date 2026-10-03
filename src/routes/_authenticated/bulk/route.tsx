@@ -5,6 +5,7 @@ import {
   redirect,
   useNavigate,
   useRouter,
+  useLocation,
   type ErrorComponentProps,
 } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
@@ -17,10 +18,11 @@ import { isExpectedQueryCancellation } from "@/lib/query-cancellation";
 import { QueryCancellationRecovery } from "@/components/QueryCancellationRecovery";
 
 export const Route = createFileRoute("/_authenticated/bulk")({
-  beforeLoad: async ({ context }) => {
+  beforeLoad: async ({ context, location }) => {
     const preferred = preferredBulkMembership(
       await context.queryClient.ensureQueryData(bulkOwnerQueryOptions()),
     );
+    if (!preferred && location.pathname === "/bulk") return;
     if (!preferred) throw redirect({ to: "/bulk-onboarding", replace: true });
     await prefetchBulk(preferred.bulk_profile_id);
   },
@@ -58,6 +60,7 @@ function BulkRouteError({ error, reset }: ErrorComponentProps) {
 }
 
 function BulkLayout() {
+  const { pathname } = useLocation();
   const navigate = useNavigate();
   const { data: memberships, isLoading } = useMemberships();
   const { bulkId } = useBulkMeta();
@@ -68,7 +71,7 @@ function BulkLayout() {
     const preferred = preferredBulkMembership(memberships);
     if (!preferred) {
       clearBulk();
-      void navigate({ to: "/bulk-onboarding", replace: true });
+      if (pathname !== "/bulk") void navigate({ to: "/bulk-onboarding", replace: true });
       return;
     }
     if (preferred.bulk_profile_id !== bulkId) {
@@ -77,7 +80,7 @@ function BulkLayout() {
         setError(userFacingError(e, "load your plan"));
       });
     }
-  }, [memberships, bulkId, navigate]);
+  }, [memberships, bulkId, navigate, pathname]);
 
   if (error) {
     return (
@@ -99,7 +102,7 @@ function BulkLayout() {
     );
   }
   const preferred = preferredBulkMembership(memberships);
-  if (memberships && !preferred) return null;
+  if (memberships && !preferred) return pathname === "/bulk" ? <Outlet /> : null;
   if (
     isLoading ||
     (!memberships && !error) ||

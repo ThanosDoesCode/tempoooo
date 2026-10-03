@@ -10,9 +10,9 @@ import {
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
-test("Today and Check-In use the same Goal status calculation and weight source", async () => {
+test("Compatibility daily log and weekly Check-In preserve the Goal status calculation and weight source", async () => {
   const [today, checkIn] = await Promise.all([
-    read("src/routes/_authenticated/bulk/index.tsx"),
+    read("src/routes/_authenticated/bulk/daily-log.tsx"),
     read("src/routes/_authenticated/bulk/check-in.tsx"),
   ]);
   for (const src of [today, checkIn]) {

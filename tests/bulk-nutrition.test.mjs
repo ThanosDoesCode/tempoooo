@@ -124,7 +124,7 @@ test("nutrition UI keeps daily logging and route-backed preset management distin
   assert.match(component, /Next day/);
   assert.match(component, /\n\s*Today\n/);
   assert.match(component, /Future days are view-only\. Come back on this date to log meals\./);
-  assert.match(component, /if \(pending \|\| isFuture\) return/);
+  assert.match(component, /if \(mutationBusy\.current \|\| isFuture\) return/);
   assert.match(component, /isFuture \? null : editor/);
   assert.match(component, /No meal presets yet/);
   assert.match(component, /Create meal preset/);
@@ -132,7 +132,7 @@ test("nutrition UI keeps daily logging and route-backed preset management distin
   assert.match(component, /Retry same log/);
   assert.match(component, /failedPreset\.requestId/);
   assert.match(component, /Discard the unsaved nutrition entry/);
-  assert.match(component, /Add Custom Entry/);
+  assert.match(component, /to="\/bulk\/meals\/add"/);
   assert.match(component, /Saved meal snapshot/);
   assert.match(component, /Nothing logged for this day/);
   assert.match(query, /bulkNutritionDayQueryKey\(bulkProfileId, logDate\)/);

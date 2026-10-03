@@ -55,6 +55,8 @@ export function mainTabForPath(pathname: string): MainTab | null {
   if (
     pathname === "/today" ||
     pathname === "/bulk" ||
+    pathname === "/bulk/morning" ||
+    pathname === "/bulk/daily-log" ||
     pathname.startsWith("/bulk/training") ||
     pathname.startsWith("/bulk/meals") ||
     pathname.startsWith("/bulk/exercises") ||
@@ -119,14 +121,14 @@ export const LOG_ACTIONS: readonly LogAction[] = [
     key: "weigh-in",
     label: "Weigh-in & sleep",
     description: "Morning check-in, 30 seconds",
-    to: "/bulk",
+    to: "/bulk/morning",
     group: "day",
   },
   {
     key: "meal",
     label: "Meal",
     description: "From saved meals or a one-off",
-    to: "/bulk/meals",
+    to: "/bulk/meals/add",
     group: "day",
   },
   {

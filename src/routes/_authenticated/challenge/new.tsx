@@ -7,6 +7,7 @@ import { AppShell } from "@/components/AppShell";
 import { PendingLabel } from "@/components/ui-kit";
 import { randomToken, sha256Hex, useAuth } from "@/lib/auth";
 import { penaltyBands, type PenaltyMode } from "@/lib/challenge";
+import { weeklyTargetHelper } from "@/lib/challenge-target-copy";
 import { COUNTRIES, countryListLabel, countryName } from "@/lib/countries";
 import { createChallenge, checkUsernameAvailability } from "@/lib/privileged-rpcs.functions";
 import {
@@ -428,7 +429,7 @@ function StepOne({
           </button>
         </div>
         <span className="text-[13px] text-muted-foreground">
-          About 3 easy runs a week. Rides count at a third.
+          {targetValid ? weeklyTargetHelper(targetKm) : "Rides count at a third."}
         </span>
       </div>
     </>

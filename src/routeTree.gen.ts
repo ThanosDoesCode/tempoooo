@@ -22,11 +22,13 @@ import { Route as AuthenticatedTodayRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedYouRouteImport } from './routes/_authenticated/you'
 import { Route as AuthenticatedBulkIndexRouteImport } from './routes/_authenticated/bulk/index'
 import { Route as AuthenticatedBulkCheckInRouteImport } from './routes/_authenticated/bulk/check-in'
+import { Route as AuthenticatedBulkDailyLogRouteImport } from './routes/_authenticated/bulk/daily-log'
 import { Route as AuthenticatedBulkDiagnosticsRouteImport } from './routes/_authenticated/bulk/diagnostics'
 import { Route as AuthenticatedBulkExercisesRouteImport } from './routes/_authenticated/bulk/exercises'
 import { Route as AuthenticatedBulkHistoryRouteImport } from './routes/_authenticated/bulk/history'
 import { Route as AuthenticatedBulkMealsRouteImport } from './routes/_authenticated/bulk/meals'
 import { Route as AuthenticatedBulkMoreRouteImport } from './routes/_authenticated/bulk/more'
+import { Route as AuthenticatedBulkMorningRouteImport } from './routes/_authenticated/bulk/morning'
 import { Route as AuthenticatedBulkProgressRouteImport } from './routes/_authenticated/bulk/progress'
 import { Route as AuthenticatedBulkPrsRouteImport } from './routes/_authenticated/bulk/prs'
 import { Route as AuthenticatedBulkTrainingRouteImport } from './routes/_authenticated/bulk/training'
@@ -40,6 +42,7 @@ import { Route as AuthenticatedChallengePaymentsRouteImport } from './routes/_au
 import { Route as AuthenticatedChallengeRulesRouteImport } from './routes/_authenticated/challenge/rules'
 import { Route as AuthenticatedChallengeTargetsRouteImport } from './routes/_authenticated/challenge/targets'
 import { Route as AuthenticatedChallengeTermsRouteImport } from './routes/_authenticated/challenge/terms'
+import { Route as AuthenticatedBulkMealsAddRouteImport } from './routes/_authenticated/bulk/meals_.add'
 import { Route as AuthenticatedBulkMealsHistoryRouteImport } from './routes/_authenticated/bulk/meals_.history'
 import { Route as AuthenticatedBulkMealsMoreRouteImport } from './routes/_authenticated/bulk/meals_.more'
 import { Route as AuthenticatedBulkMealsPresetsRouteImport } from './routes/_authenticated/bulk/meals_.presets'
@@ -119,6 +122,12 @@ const AuthenticatedBulkCheckInRoute =
     path: '/check-in',
     getParentRoute: () => AuthenticatedBulkRouteRoute,
   } as any)
+const AuthenticatedBulkDailyLogRoute =
+  AuthenticatedBulkDailyLogRouteImport.update({
+    id: '/daily-log',
+    path: '/daily-log',
+    getParentRoute: () => AuthenticatedBulkRouteRoute,
+  } as any)
 const AuthenticatedBulkDiagnosticsRoute =
   AuthenticatedBulkDiagnosticsRouteImport.update({
     id: '/diagnostics',
@@ -147,6 +156,12 @@ const AuthenticatedBulkMoreRoute = AuthenticatedBulkMoreRouteImport.update({
   path: '/more',
   getParentRoute: () => AuthenticatedBulkRouteRoute,
 } as any)
+const AuthenticatedBulkMorningRoute =
+  AuthenticatedBulkMorningRouteImport.update({
+    id: '/morning',
+    path: '/morning',
+    getParentRoute: () => AuthenticatedBulkRouteRoute,
+  } as any)
 const AuthenticatedBulkProgressRoute =
   AuthenticatedBulkProgressRouteImport.update({
     id: '/progress',
@@ -223,6 +238,12 @@ const AuthenticatedChallengeTermsRoute =
     id: '/challenge/terms',
     path: '/challenge/terms',
     getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedBulkMealsAddRoute =
+  AuthenticatedBulkMealsAddRouteImport.update({
+    id: '/meals_/add',
+    path: '/meals/add',
+    getParentRoute: () => AuthenticatedBulkRouteRoute,
   } as any)
 const AuthenticatedBulkMealsHistoryRoute =
   AuthenticatedBulkMealsHistoryRouteImport.update({
@@ -303,11 +324,13 @@ export interface FileRoutesByFullPath {
   '/today': typeof AuthenticatedTodayRoute
   '/you': typeof AuthenticatedYouRoute
   '/bulk/check-in': typeof AuthenticatedBulkCheckInRoute
+  '/bulk/daily-log': typeof AuthenticatedBulkDailyLogRoute
   '/bulk/diagnostics': typeof AuthenticatedBulkDiagnosticsRoute
   '/bulk/exercises': typeof AuthenticatedBulkExercisesRoute
   '/bulk/history': typeof AuthenticatedBulkHistoryRoute
   '/bulk/meals': typeof AuthenticatedBulkMealsRoute
   '/bulk/more': typeof AuthenticatedBulkMoreRoute
+  '/bulk/morning': typeof AuthenticatedBulkMorningRoute
   '/bulk/progress': typeof AuthenticatedBulkProgressRoute
   '/bulk/prs': typeof AuthenticatedBulkPrsRoute
   '/bulk/training': typeof AuthenticatedBulkTrainingRoute
@@ -322,6 +345,7 @@ export interface FileRoutesByFullPath {
   '/challenge/terms': typeof AuthenticatedChallengeTermsRoute
   '/bulk/': typeof AuthenticatedBulkIndexRoute
   '/challenge/': typeof AuthenticatedChallengeIndexRoute
+  '/bulk/meals/add': typeof AuthenticatedBulkMealsAddRoute
   '/bulk/meals/history': typeof AuthenticatedBulkMealsHistoryRoute
   '/bulk/meals/more': typeof AuthenticatedBulkMealsMoreRoute
   '/bulk/meals/presets': typeof AuthenticatedBulkMealsPresetsRoute
@@ -345,11 +369,13 @@ export interface FileRoutesByTo {
   '/today': typeof AuthenticatedTodayRoute
   '/you': typeof AuthenticatedYouRoute
   '/bulk/check-in': typeof AuthenticatedBulkCheckInRoute
+  '/bulk/daily-log': typeof AuthenticatedBulkDailyLogRoute
   '/bulk/diagnostics': typeof AuthenticatedBulkDiagnosticsRoute
   '/bulk/exercises': typeof AuthenticatedBulkExercisesRoute
   '/bulk/history': typeof AuthenticatedBulkHistoryRoute
   '/bulk/meals': typeof AuthenticatedBulkMealsRoute
   '/bulk/more': typeof AuthenticatedBulkMoreRoute
+  '/bulk/morning': typeof AuthenticatedBulkMorningRoute
   '/bulk/progress': typeof AuthenticatedBulkProgressRoute
   '/bulk/prs': typeof AuthenticatedBulkPrsRoute
   '/bulk/training': typeof AuthenticatedBulkTrainingRoute
@@ -364,6 +390,7 @@ export interface FileRoutesByTo {
   '/challenge/terms': typeof AuthenticatedChallengeTermsRoute
   '/bulk': typeof AuthenticatedBulkIndexRoute
   '/challenge': typeof AuthenticatedChallengeIndexRoute
+  '/bulk/meals/add': typeof AuthenticatedBulkMealsAddRoute
   '/bulk/meals/history': typeof AuthenticatedBulkMealsHistoryRoute
   '/bulk/meals/more': typeof AuthenticatedBulkMealsMoreRoute
   '/bulk/meals/presets': typeof AuthenticatedBulkMealsPresetsRoute
@@ -390,11 +417,13 @@ export interface FileRoutesById {
   '/_authenticated/today': typeof AuthenticatedTodayRoute
   '/_authenticated/you': typeof AuthenticatedYouRoute
   '/_authenticated/bulk/check-in': typeof AuthenticatedBulkCheckInRoute
+  '/_authenticated/bulk/daily-log': typeof AuthenticatedBulkDailyLogRoute
   '/_authenticated/bulk/diagnostics': typeof AuthenticatedBulkDiagnosticsRoute
   '/_authenticated/bulk/exercises': typeof AuthenticatedBulkExercisesRoute
   '/_authenticated/bulk/history': typeof AuthenticatedBulkHistoryRoute
   '/_authenticated/bulk/meals': typeof AuthenticatedBulkMealsRoute
   '/_authenticated/bulk/more': typeof AuthenticatedBulkMoreRoute
+  '/_authenticated/bulk/morning': typeof AuthenticatedBulkMorningRoute
   '/_authenticated/bulk/progress': typeof AuthenticatedBulkProgressRoute
   '/_authenticated/bulk/prs': typeof AuthenticatedBulkPrsRoute
   '/_authenticated/bulk/training': typeof AuthenticatedBulkTrainingRoute
@@ -409,6 +438,7 @@ export interface FileRoutesById {
   '/_authenticated/challenge/terms': typeof AuthenticatedChallengeTermsRoute
   '/_authenticated/bulk/': typeof AuthenticatedBulkIndexRoute
   '/_authenticated/challenge/': typeof AuthenticatedChallengeIndexRoute
+  '/_authenticated/bulk/meals_/add': typeof AuthenticatedBulkMealsAddRoute
   '/_authenticated/bulk/meals_/history': typeof AuthenticatedBulkMealsHistoryRoute
   '/_authenticated/bulk/meals_/more': typeof AuthenticatedBulkMealsMoreRoute
   '/_authenticated/bulk/meals_/presets': typeof AuthenticatedBulkMealsPresetsRoute
@@ -435,11 +465,13 @@ export interface FileRouteTypes {
     | '/today'
     | '/you'
     | '/bulk/check-in'
+    | '/bulk/daily-log'
     | '/bulk/diagnostics'
     | '/bulk/exercises'
     | '/bulk/history'
     | '/bulk/meals'
     | '/bulk/more'
+    | '/bulk/morning'
     | '/bulk/progress'
     | '/bulk/prs'
     | '/bulk/training'
@@ -454,6 +486,7 @@ export interface FileRouteTypes {
     | '/challenge/terms'
     | '/bulk/'
     | '/challenge/'
+    | '/bulk/meals/add'
     | '/bulk/meals/history'
     | '/bulk/meals/more'
     | '/bulk/meals/presets'
@@ -477,11 +510,13 @@ export interface FileRouteTypes {
     | '/today'
     | '/you'
     | '/bulk/check-in'
+    | '/bulk/daily-log'
     | '/bulk/diagnostics'
     | '/bulk/exercises'
     | '/bulk/history'
     | '/bulk/meals'
     | '/bulk/more'
+    | '/bulk/morning'
     | '/bulk/progress'
     | '/bulk/prs'
     | '/bulk/training'
@@ -496,6 +531,7 @@ export interface FileRouteTypes {
     | '/challenge/terms'
     | '/bulk'
     | '/challenge'
+    | '/bulk/meals/add'
     | '/bulk/meals/history'
     | '/bulk/meals/more'
     | '/bulk/meals/presets'
@@ -521,11 +557,13 @@ export interface FileRouteTypes {
     | '/_authenticated/today'
     | '/_authenticated/you'
     | '/_authenticated/bulk/check-in'
+    | '/_authenticated/bulk/daily-log'
     | '/_authenticated/bulk/diagnostics'
     | '/_authenticated/bulk/exercises'
     | '/_authenticated/bulk/history'
     | '/_authenticated/bulk/meals'
     | '/_authenticated/bulk/more'
+    | '/_authenticated/bulk/morning'
     | '/_authenticated/bulk/progress'
     | '/_authenticated/bulk/prs'
     | '/_authenticated/bulk/training'
@@ -540,6 +578,7 @@ export interface FileRouteTypes {
     | '/_authenticated/challenge/terms'
     | '/_authenticated/bulk/'
     | '/_authenticated/challenge/'
+    | '/_authenticated/bulk/meals_/add'
     | '/_authenticated/bulk/meals_/history'
     | '/_authenticated/bulk/meals_/more'
     | '/_authenticated/bulk/meals_/presets'
@@ -652,6 +691,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedBulkCheckInRouteImport
       parentRoute: typeof AuthenticatedBulkRouteRoute
     }
+    '/_authenticated/bulk/daily-log': {
+      id: '/_authenticated/bulk/daily-log'
+      path: '/daily-log'
+      fullPath: '/bulk/daily-log'
+      preLoaderRoute: typeof AuthenticatedBulkDailyLogRouteImport
+      parentRoute: typeof AuthenticatedBulkRouteRoute
+    }
     '/_authenticated/bulk/diagnostics': {
       id: '/_authenticated/bulk/diagnostics'
       path: '/diagnostics'
@@ -685,6 +731,13 @@ declare module '@tanstack/react-router' {
       path: '/more'
       fullPath: '/bulk/more'
       preLoaderRoute: typeof AuthenticatedBulkMoreRouteImport
+      parentRoute: typeof AuthenticatedBulkRouteRoute
+    }
+    '/_authenticated/bulk/morning': {
+      id: '/_authenticated/bulk/morning'
+      path: '/morning'
+      fullPath: '/bulk/morning'
+      preLoaderRoute: typeof AuthenticatedBulkMorningRouteImport
       parentRoute: typeof AuthenticatedBulkRouteRoute
     }
     '/_authenticated/bulk/progress': {
@@ -778,6 +831,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedChallengeTermsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/bulk/meals_/add': {
+      id: '/_authenticated/bulk/meals_/add'
+      path: '/meals/add'
+      fullPath: '/bulk/meals/add'
+      preLoaderRoute: typeof AuthenticatedBulkMealsAddRouteImport
+      parentRoute: typeof AuthenticatedBulkRouteRoute
+    }
     '/_authenticated/bulk/meals_/history': {
       id: '/_authenticated/bulk/meals_/history'
       path: '/meals/history'
@@ -860,15 +920,18 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedBulkRouteRouteChildren {
   AuthenticatedBulkCheckInRoute: typeof AuthenticatedBulkCheckInRoute
+  AuthenticatedBulkDailyLogRoute: typeof AuthenticatedBulkDailyLogRoute
   AuthenticatedBulkDiagnosticsRoute: typeof AuthenticatedBulkDiagnosticsRoute
   AuthenticatedBulkExercisesRoute: typeof AuthenticatedBulkExercisesRoute
   AuthenticatedBulkHistoryRoute: typeof AuthenticatedBulkHistoryRoute
   AuthenticatedBulkMealsRoute: typeof AuthenticatedBulkMealsRoute
   AuthenticatedBulkMoreRoute: typeof AuthenticatedBulkMoreRoute
+  AuthenticatedBulkMorningRoute: typeof AuthenticatedBulkMorningRoute
   AuthenticatedBulkProgressRoute: typeof AuthenticatedBulkProgressRoute
   AuthenticatedBulkPrsRoute: typeof AuthenticatedBulkPrsRoute
   AuthenticatedBulkTrainingRoute: typeof AuthenticatedBulkTrainingRoute
   AuthenticatedBulkIndexRoute: typeof AuthenticatedBulkIndexRoute
+  AuthenticatedBulkMealsAddRoute: typeof AuthenticatedBulkMealsAddRoute
   AuthenticatedBulkMealsHistoryRoute: typeof AuthenticatedBulkMealsHistoryRoute
   AuthenticatedBulkMealsMoreRoute: typeof AuthenticatedBulkMealsMoreRoute
   AuthenticatedBulkMealsPresetsRoute: typeof AuthenticatedBulkMealsPresetsRoute
@@ -880,15 +943,18 @@ interface AuthenticatedBulkRouteRouteChildren {
 const AuthenticatedBulkRouteRouteChildren: AuthenticatedBulkRouteRouteChildren =
   {
     AuthenticatedBulkCheckInRoute: AuthenticatedBulkCheckInRoute,
+    AuthenticatedBulkDailyLogRoute: AuthenticatedBulkDailyLogRoute,
     AuthenticatedBulkDiagnosticsRoute: AuthenticatedBulkDiagnosticsRoute,
     AuthenticatedBulkExercisesRoute: AuthenticatedBulkExercisesRoute,
     AuthenticatedBulkHistoryRoute: AuthenticatedBulkHistoryRoute,
     AuthenticatedBulkMealsRoute: AuthenticatedBulkMealsRoute,
     AuthenticatedBulkMoreRoute: AuthenticatedBulkMoreRoute,
+    AuthenticatedBulkMorningRoute: AuthenticatedBulkMorningRoute,
     AuthenticatedBulkProgressRoute: AuthenticatedBulkProgressRoute,
     AuthenticatedBulkPrsRoute: AuthenticatedBulkPrsRoute,
     AuthenticatedBulkTrainingRoute: AuthenticatedBulkTrainingRoute,
     AuthenticatedBulkIndexRoute: AuthenticatedBulkIndexRoute,
+    AuthenticatedBulkMealsAddRoute: AuthenticatedBulkMealsAddRoute,
     AuthenticatedBulkMealsHistoryRoute: AuthenticatedBulkMealsHistoryRoute,
     AuthenticatedBulkMealsMoreRoute: AuthenticatedBulkMealsMoreRoute,
     AuthenticatedBulkMealsPresetsRoute: AuthenticatedBulkMealsPresetsRoute,

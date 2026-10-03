@@ -101,8 +101,9 @@ test("Goal Today and Progress share structured weights and refresh active bodywe
     read("src/lib/bulk-progress-query.ts"),
   ]);
   assert.match(today, /useBulkWeights/);
-  assert.match(today, /saveBulkWeight/);
-  assert.match(today, /bulkWeightQueryKey/);
+  const morning = await read("src/components/DailyCheckIn.tsx");
+  assert.match(morning, /saveBulkWeight/);
+  assert.match(morning, /bulkWeightQueryKey/);
   assert.match(progressQuery, /onConflict: "bulk_profile_id,log_date"/);
   assert.match(progressQuery, /refreshActiveBulkTrainingBodyweight/);
 });

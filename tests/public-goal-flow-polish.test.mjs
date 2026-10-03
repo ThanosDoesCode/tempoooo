@@ -145,9 +145,9 @@ test("public Meals never falls back to legacy presets and future dates are read-
   assert.match(mealsRoute, /publicNutrition = planMode === "public"/);
   assert.doesNotMatch(mealsRoute, /publicNutrition = !!data\?\.targets\.trainingSetupPreference/);
   assert.match(mealsRoute, /publicNutrition \? \([\s\S]*<BulkNutritionLog/);
-  assert.match(goalToday, /const isPublicGoal = planMode === "public"/);
-  assert.match(goalToday, /const plan = isPublicGoal \? undefined : mealPlan/);
-  assert.match(goalToday, /isPublicGoal \? null : \([\s\S]*MEAL_PLANS\.map/);
+  assert.match(goalToday, /publicGoal = owner\?\.is_public === true/);
+  assert.match(goalToday, /useBulkNutritionDay\(publicGoal \? id : null, today\)/);
+  assert.doesNotMatch(goalToday, /MEAL_PLANS|mealPlan\(/);
   assert.match(today, /const isFuture = selectedDate > today/);
   assert.match(today, /Future days are view-only\. Come back on this date to log meals\./);
   assert.match(today, /isFuture \? null : editor/);

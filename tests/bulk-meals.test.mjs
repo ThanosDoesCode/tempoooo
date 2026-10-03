@@ -114,9 +114,9 @@ test("Bulk History treats saved preset macros as authoritative full-day totals",
   assert.match(history, /nutrition\.extras/);
 });
 
-test("Today, logging and export consume the canonical Salmon snapshot", async () => {
+test("Compatibility daily logging and export consume the canonical Salmon snapshot", async () => {
   const [today, progress] = await Promise.all([
-    readFile(new URL("../src/routes/_authenticated/bulk/index.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/routes/_authenticated/bulk/daily-log.tsx", import.meta.url), "utf8"),
     readFile(new URL("../src/routes/_authenticated/bulk/progress.tsx", import.meta.url), "utf8"),
   ]);
   assert.match(today, /mealPlan\(id\)/);

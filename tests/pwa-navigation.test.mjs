@@ -359,8 +359,8 @@ test("product areas expose distinct contextual destinations and preserve legacy/
   assert.doesNotMatch(shell, /hash: "(?:plan|presets)"/);
 
   // Today is logging only: the public Training card lives in the Training area.
-  assert.doesNotMatch(today, /Choose training plan|Open Meals Today/);
-  assert.match(today, /isPublicGoal[\s\S]*WORKOUT_TYPES\.map/);
+  assert.match(today, /plan\.data\?\.name/);
+  assert.doesNotMatch(today, /WORKOUT_TYPES\.map|MEAL_PLANS/);
 
   assert.match(shell, /hasFitnessTools/);
   assert.doesNotMatch(shell, /PUBLIC_BULK_NAV|LEGACY_BULK_NAV/);

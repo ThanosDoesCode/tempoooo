@@ -50,8 +50,8 @@ test("each Log action routes to the correct current functional destination", () 
   const by = Object.fromEntries(LOG_ACTIONS.map((a) => [a.key, a.to]));
   assert.equal(by.run, "/challenge/add");
   assert.equal(by.ride, "/challenge/add");
-  assert.equal(by["weigh-in"], "/bulk"); // existing daily check-in
-  assert.equal(by.meal, "/bulk/meals"); // existing Meals flow
+  assert.equal(by["weigh-in"], "/bulk/morning"); // existing daily check-in
+  assert.equal(by.meal, "/bulk/meals/add"); // existing Meals flow
   assert.equal(by.workout, "/bulk/training"); // existing Training flow
 });
 
