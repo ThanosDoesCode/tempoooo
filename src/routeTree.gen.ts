@@ -47,8 +47,8 @@ import { Route as AuthenticatedBulkTrainingHistoryRouteImport } from './routes/_
 import { Route as AuthenticatedBulkTrainingMoreRouteImport } from './routes/_authenticated/bulk/training_.more'
 import { Route as AuthenticatedBulkWorkoutSessionIdRouteImport } from './routes/_authenticated/bulk/workout.$sessionId'
 import { Route as AuthenticatedChallengeActivityActivityIdRouteImport } from './routes/_authenticated/challenge/activity.$activityId'
-import { Route as AuthenticatedChallengeTermsOverrideRouteImport } from './routes/_authenticated/challenge/terms.override'
-import { Route as AuthenticatedChallengeTermsPauseRouteImport } from './routes/_authenticated/challenge/terms.pause'
+import { Route as AuthenticatedChallengeTermsOverrideRouteImport } from './routes/_authenticated/challenge/terms_.override'
+import { Route as AuthenticatedChallengeTermsPauseRouteImport } from './routes/_authenticated/challenge/terms_.pause'
 import { Route as AuthenticatedInviteChallengeTokenRouteImport } from './routes/_authenticated/invite.challenge.$token'
 import { Route as AuthenticatedChallengeHistoryWeekWeekNumberRouteImport } from './routes/_authenticated/challenge/history_.week.$weekNumber'
 
@@ -268,15 +268,15 @@ const AuthenticatedChallengeActivityActivityIdRoute =
   } as any)
 const AuthenticatedChallengeTermsOverrideRoute =
   AuthenticatedChallengeTermsOverrideRouteImport.update({
-    id: '/override',
-    path: '/override',
-    getParentRoute: () => AuthenticatedChallengeTermsRoute,
+    id: '/challenge/terms_/override',
+    path: '/challenge/terms/override',
+    getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedChallengeTermsPauseRoute =
   AuthenticatedChallengeTermsPauseRouteImport.update({
-    id: '/pause',
-    path: '/pause',
-    getParentRoute: () => AuthenticatedChallengeTermsRoute,
+    id: '/challenge/terms_/pause',
+    path: '/challenge/terms/pause',
+    getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedInviteChallengeTokenRoute =
   AuthenticatedInviteChallengeTokenRouteImport.update({
@@ -319,7 +319,7 @@ export interface FileRoutesByFullPath {
   '/challenge/payments': typeof AuthenticatedChallengePaymentsRoute
   '/challenge/rules': typeof AuthenticatedChallengeRulesRoute
   '/challenge/targets': typeof AuthenticatedChallengeTargetsRoute
-  '/challenge/terms': typeof AuthenticatedChallengeTermsRouteWithChildren
+  '/challenge/terms': typeof AuthenticatedChallengeTermsRoute
   '/bulk/': typeof AuthenticatedBulkIndexRoute
   '/challenge/': typeof AuthenticatedChallengeIndexRoute
   '/bulk/meals/history': typeof AuthenticatedBulkMealsHistoryRoute
@@ -361,7 +361,7 @@ export interface FileRoutesByTo {
   '/challenge/payments': typeof AuthenticatedChallengePaymentsRoute
   '/challenge/rules': typeof AuthenticatedChallengeRulesRoute
   '/challenge/targets': typeof AuthenticatedChallengeTargetsRoute
-  '/challenge/terms': typeof AuthenticatedChallengeTermsRouteWithChildren
+  '/challenge/terms': typeof AuthenticatedChallengeTermsRoute
   '/bulk': typeof AuthenticatedBulkIndexRoute
   '/challenge': typeof AuthenticatedChallengeIndexRoute
   '/bulk/meals/history': typeof AuthenticatedBulkMealsHistoryRoute
@@ -406,7 +406,7 @@ export interface FileRoutesById {
   '/_authenticated/challenge/payments': typeof AuthenticatedChallengePaymentsRoute
   '/_authenticated/challenge/rules': typeof AuthenticatedChallengeRulesRoute
   '/_authenticated/challenge/targets': typeof AuthenticatedChallengeTargetsRoute
-  '/_authenticated/challenge/terms': typeof AuthenticatedChallengeTermsRouteWithChildren
+  '/_authenticated/challenge/terms': typeof AuthenticatedChallengeTermsRoute
   '/_authenticated/bulk/': typeof AuthenticatedBulkIndexRoute
   '/_authenticated/challenge/': typeof AuthenticatedChallengeIndexRoute
   '/_authenticated/bulk/meals_/history': typeof AuthenticatedBulkMealsHistoryRoute
@@ -416,8 +416,8 @@ export interface FileRoutesById {
   '/_authenticated/bulk/training_/more': typeof AuthenticatedBulkTrainingMoreRoute
   '/_authenticated/bulk/workout/$sessionId': typeof AuthenticatedBulkWorkoutSessionIdRoute
   '/_authenticated/challenge/activity/$activityId': typeof AuthenticatedChallengeActivityActivityIdRoute
-  '/_authenticated/challenge/terms/override': typeof AuthenticatedChallengeTermsOverrideRoute
-  '/_authenticated/challenge/terms/pause': typeof AuthenticatedChallengeTermsPauseRoute
+  '/_authenticated/challenge/terms_/override': typeof AuthenticatedChallengeTermsOverrideRoute
+  '/_authenticated/challenge/terms_/pause': typeof AuthenticatedChallengeTermsPauseRoute
   '/_authenticated/invite/challenge/$token': typeof AuthenticatedInviteChallengeTokenRoute
   '/_authenticated/challenge/history_/week/$weekNumber': typeof AuthenticatedChallengeHistoryWeekWeekNumberRoute
 }
@@ -547,8 +547,8 @@ export interface FileRouteTypes {
     | '/_authenticated/bulk/training_/more'
     | '/_authenticated/bulk/workout/$sessionId'
     | '/_authenticated/challenge/activity/$activityId'
-    | '/_authenticated/challenge/terms/override'
-    | '/_authenticated/challenge/terms/pause'
+    | '/_authenticated/challenge/terms_/override'
+    | '/_authenticated/challenge/terms_/pause'
     | '/_authenticated/invite/challenge/$token'
     | '/_authenticated/challenge/history_/week/$weekNumber'
   fileRoutesById: FileRoutesById
@@ -827,19 +827,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedChallengeActivityActivityIdRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/challenge/terms/override': {
-      id: '/_authenticated/challenge/terms/override'
-      path: '/override'
+    '/_authenticated/challenge/terms_/override': {
+      id: '/_authenticated/challenge/terms_/override'
+      path: '/challenge/terms/override'
       fullPath: '/challenge/terms/override'
       preLoaderRoute: typeof AuthenticatedChallengeTermsOverrideRouteImport
-      parentRoute: typeof AuthenticatedChallengeTermsRoute
+      parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/challenge/terms/pause': {
-      id: '/_authenticated/challenge/terms/pause'
-      path: '/pause'
+    '/_authenticated/challenge/terms_/pause': {
+      id: '/_authenticated/challenge/terms_/pause'
+      path: '/challenge/terms/pause'
       fullPath: '/challenge/terms/pause'
       preLoaderRoute: typeof AuthenticatedChallengeTermsPauseRouteImport
-      parentRoute: typeof AuthenticatedChallengeTermsRoute
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/invite/challenge/$token': {
       id: '/_authenticated/invite/challenge/$token'
@@ -904,24 +904,6 @@ const AuthenticatedBulkRouteRouteWithChildren =
     AuthenticatedBulkRouteRouteChildren,
   )
 
-interface AuthenticatedChallengeTermsRouteChildren {
-  AuthenticatedChallengeTermsOverrideRoute: typeof AuthenticatedChallengeTermsOverrideRoute
-  AuthenticatedChallengeTermsPauseRoute: typeof AuthenticatedChallengeTermsPauseRoute
-}
-
-const AuthenticatedChallengeTermsRouteChildren: AuthenticatedChallengeTermsRouteChildren =
-  {
-    AuthenticatedChallengeTermsOverrideRoute:
-      AuthenticatedChallengeTermsOverrideRoute,
-    AuthenticatedChallengeTermsPauseRoute:
-      AuthenticatedChallengeTermsPauseRoute,
-  }
-
-const AuthenticatedChallengeTermsRouteWithChildren =
-  AuthenticatedChallengeTermsRoute._addFileChildren(
-    AuthenticatedChallengeTermsRouteChildren,
-  )
-
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedBulkRouteRoute: typeof AuthenticatedBulkRouteRouteWithChildren
   AuthenticatedBulkAccessDeniedRoute: typeof AuthenticatedBulkAccessDeniedRoute
@@ -939,9 +921,11 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedChallengePaymentsRoute: typeof AuthenticatedChallengePaymentsRoute
   AuthenticatedChallengeRulesRoute: typeof AuthenticatedChallengeRulesRoute
   AuthenticatedChallengeTargetsRoute: typeof AuthenticatedChallengeTargetsRoute
-  AuthenticatedChallengeTermsRoute: typeof AuthenticatedChallengeTermsRouteWithChildren
+  AuthenticatedChallengeTermsRoute: typeof AuthenticatedChallengeTermsRoute
   AuthenticatedChallengeIndexRoute: typeof AuthenticatedChallengeIndexRoute
   AuthenticatedChallengeActivityActivityIdRoute: typeof AuthenticatedChallengeActivityActivityIdRoute
+  AuthenticatedChallengeTermsOverrideRoute: typeof AuthenticatedChallengeTermsOverrideRoute
+  AuthenticatedChallengeTermsPauseRoute: typeof AuthenticatedChallengeTermsPauseRoute
   AuthenticatedInviteChallengeTokenRoute: typeof AuthenticatedInviteChallengeTokenRoute
   AuthenticatedChallengeHistoryWeekWeekNumberRoute: typeof AuthenticatedChallengeHistoryWeekWeekNumberRoute
 }
@@ -963,11 +947,13 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedChallengePaymentsRoute: AuthenticatedChallengePaymentsRoute,
   AuthenticatedChallengeRulesRoute: AuthenticatedChallengeRulesRoute,
   AuthenticatedChallengeTargetsRoute: AuthenticatedChallengeTargetsRoute,
-  AuthenticatedChallengeTermsRoute:
-    AuthenticatedChallengeTermsRouteWithChildren,
+  AuthenticatedChallengeTermsRoute: AuthenticatedChallengeTermsRoute,
   AuthenticatedChallengeIndexRoute: AuthenticatedChallengeIndexRoute,
   AuthenticatedChallengeActivityActivityIdRoute:
     AuthenticatedChallengeActivityActivityIdRoute,
+  AuthenticatedChallengeTermsOverrideRoute:
+    AuthenticatedChallengeTermsOverrideRoute,
+  AuthenticatedChallengeTermsPauseRoute: AuthenticatedChallengeTermsPauseRoute,
   AuthenticatedInviteChallengeTokenRoute:
     AuthenticatedInviteChallengeTokenRoute,
   AuthenticatedChallengeHistoryWeekWeekNumberRoute:

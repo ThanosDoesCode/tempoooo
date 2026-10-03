@@ -6,7 +6,7 @@ const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
 test("future weekly targets cross the authenticated server boundary without a browser RPC", async () => {
   const [route, functions, server, migration] = await Promise.all([
-    read("src/routes/_authenticated/challenge/terms.override.tsx"),
+    read("src/routes/_authenticated/challenge/terms_.override.tsx"),
     read("src/lib/privileged-rpcs.functions.ts"),
     read("src/lib/privileged-rpcs.server.ts"),
     read("supabase/migrations/20260907120000_secure_future_challenge_targets.sql"),

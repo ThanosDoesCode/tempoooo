@@ -22,7 +22,7 @@ import {
 
 const INITIAL_VISIBLE = 6;
 
-export const Route = createFileRoute("/_authenticated/challenge/terms/override")({
+export const Route = createFileRoute("/_authenticated/challenge/terms_/override")({
   head: () => ({ meta: [{ title: "Tempo" }] }),
   component: TargetOverride,
 });

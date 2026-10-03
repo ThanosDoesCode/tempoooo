@@ -19,7 +19,7 @@ import {
   type Challenge,
 } from "@/lib/challenge";
 
-export const Route = createFileRoute("/_authenticated/challenge/terms/pause")({
+export const Route = createFileRoute("/_authenticated/challenge/terms_/pause")({
   head: () => ({ meta: [{ title: "Tempo" }] }),
   component: PauseWeek,
 });

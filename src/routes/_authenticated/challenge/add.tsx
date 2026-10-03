@@ -10,6 +10,7 @@ import { useAuth } from "@/lib/auth";
 import { normalizeDecimal, parseDecimal } from "@/lib/numeric";
 import { canonicalDuration, formatClock, parseDurationToSeconds } from "@/lib/duration";
 import { userFacingError } from "@/lib/network-errors";
+import { reportLovableError } from "@/lib/lovable-error-reporting";
 import { safeStravaUrl } from "@/lib/safe-url";
 import { optimizeEvidenceImage } from "@/lib/challenge-evidence";
 import {
@@ -120,7 +121,8 @@ function AddActivity() {
           note?: string;
           moreOpen?: boolean;
         };
-        if (draft.type === "run" || draft.type === "cycle") setType(draft.type);
+        // An explicit ?type= from the Log sheet / direct URL wins over a saved draft type.
+        if (!searchType && (draft.type === "run" || draft.type === "cycle")) setType(draft.type);
         if (typeof draft.distance === "string") setDistance(draft.distance);
         if (typeof draft.date === "string" && draft.date <= today) setDate(draft.date);
         if (typeof draft.duration === "string") setDuration(draft.duration);
@@ -136,7 +138,7 @@ function AddActivity() {
       }
     }
     setDraftReady(true);
-  }, [draftKey, today]);
+  }, [draftKey, today, searchType]);
 
   useEffect(() => {
     if (!draftKey || !draftReady) return;
@@ -292,6 +294,13 @@ function AddActivity() {
           "Choose valid JPG, PNG, WebP, GIF, HEIC or HEIF images up to 15 MB each.",
         );
       } else {
+        // Surface the real Supabase/PostgREST/storage error to the preview/editor telemetry so the
+        // exact failing operation is diagnosable, while the user-facing message stays generic.
+        reportLovableError(e, {
+          boundary: "challenge_activity_save",
+          phase: editing ? "update" : "insert",
+          hadEvidenceUpload: replacingEvidence,
+        });
         setRequestError(
           userFacingError(e, editing ? "update the activity" : "save the activity", {
             inputPreserved: true,
@@ -422,7 +431,7 @@ function AddActivity() {
                 inputMode="numeric"
                 value={duration}
                 disabled={busy}
-                placeholder="mm:ss"
+                placeholder="e.g. 22:20"
                 onChange={(e) => setDuration(e.target.value)}
                 onBlur={() => setDuration(canonicalDuration(duration))}
                 className="num min-w-0 flex-1 bg-transparent text-xl font-semibold outline-none placeholder:font-normal placeholder:text-muted-foreground/50"

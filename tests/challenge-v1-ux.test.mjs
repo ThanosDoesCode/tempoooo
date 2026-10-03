@@ -25,7 +25,7 @@ test("Challenge empty and failed-load states explain recovery", async () => {
   const week = await read("src/routes/_authenticated/challenge/index.tsx");
   const history = await read("src/routes/_authenticated/challenge/history.tsx");
   const money = await read("src/routes/_authenticated/challenge/money.tsx");
-  const pause = await read("src/routes/_authenticated/challenge/terms.pause.tsx");
+  const pause = await read("src/routes/_authenticated/challenge/terms_.pause.tsx");
   assert.match(week, /Your opponent has not joined yet/);
   assert.match(week, /No runs or rides yet this week/);
   assert.match(week, /Some challenge data did not load/);

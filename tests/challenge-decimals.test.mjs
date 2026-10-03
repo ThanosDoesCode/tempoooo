@@ -161,11 +161,11 @@ function fixture(distance, duration = "", type = "run", storageThrows = false) {
   };
 }
 for (const type of ["run", "cycle"])
-  test(`${type} Challenge form submits comma distance and decimal duration as numeric values`, async () => {
-    const f = fixture("7,25", " 61,5 ", type);
+  test(`${type} Challenge form submits comma distance and clock duration as numeric values`, async () => {
+    const f = fixture("7,25", "61:30", type); // distance keeps comma-decimal; time is mm:ss
     await f.submit();
     assert.equal(f.rows[0].distance_km, 7.25);
-    assert.equal(f.rows[0].duration_seconds, 3690);
+    assert.equal(f.rows[0].duration_seconds, 3690); // 61*60 + 30
     assert.equal(f.rows[0].activity_type, type);
   });
 test("Challenge form saves an mm:ss time as the matching duration_seconds", async () => {

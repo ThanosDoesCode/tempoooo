@@ -24,16 +24,94 @@ const context = {
 vm.runInNewContext(compiled, context);
 const C = context.exports;
 
-test("mm:ss time parses and formats round-trip; decimal minutes still accepted", () => {
-  assert.equal(parseDurationToSeconds("22:20"), 1340); // 22*60 + 20
-  assert.equal(parseDurationToSeconds("1:05:00"), 3900); // h:mm:ss
-  assert.equal(parseDurationToSeconds("40"), 2400); // plain minutes fallback
-  assert.equal(parseDurationToSeconds("61,5"), 3690); // comma-decimal minutes fallback
-  assert.equal(formatClock(1340), "22:20");
-  assert.equal(formatClock(3900), "1:05:00");
-  for (const bad of ["22:75", "ab", "", ":30", "1:2:3:4", "-5"]) {
+test("duration grammar: plain numbers are minutes, not decimal minutes", () => {
+  for (const [input, seconds] of [
+    ["5", 300],
+    ["15", 900],
+    ["60", 3600],
+    ["65", 3900],
+    ["90", 5400],
+  ]) {
+    assert.equal(parseDurationToSeconds(input), seconds, input);
+  }
+});
+
+test("duration grammar: clock input (colon and dot) parses to the same seconds", () => {
+  for (const [input, seconds] of [
+    ["15:50", 950],
+    ["15.50", 950], // the reported bug: 15.50 is 15m50s, NOT 15.5 decimal minutes
+    ["22:20", 1340],
+    ["22.20", 1340],
+    ["1:05:30", 3930],
+    ["1.05.30", 3930],
+  ]) {
+    assert.equal(parseDurationToSeconds(input), seconds, input);
+  }
+});
+
+test("duration grammar: unit input with natural carry", () => {
+  for (const [input, seconds] of [
+    ["30s", 30],
+    ["45 sec", 45],
+    ["90s", 90],
+    ["120s", 120],
+    ["15m", 900],
+    ["15 min", 900],
+    ["60m", 3600],
+    ["75m", 4500],
+    ["1h", 3600],
+    ["2 hours", 7200],
+    ["1h 15m", 4500],
+    ["1 hour 15 minutes", 4500],
+    ["1h 5m 30s", 3930],
+    ["1h 90m", 9000],
+  ]) {
+    assert.equal(parseDurationToSeconds(input), seconds, input);
+  }
+});
+
+test("duration grammar: invalid input is rejected", () => {
+  for (const bad of [
+    "15:75",
+    "15.75",
+    "1:75:00",
+    "1:05:75",
+    "1:05.30", // mixed separators
+    "-5",
+    "",
+    "   ",
+    "abc",
+    "15 foo",
+    "0",
+    ":30",
+    "1:2:3:4",
+  ]) {
     assert.equal(parseDurationToSeconds(bad), null, bad);
   }
+});
+
+test("formatClock normalises seconds to canonical display", () => {
+  for (const [seconds, display] of [
+    [30, "0:30"],
+    [300, "5:00"],
+    [900, "15:00"],
+    [950, "15:50"],
+    [3600, "1:00:00"],
+    [3900, "1:05:00"],
+    [3930, "1:05:30"],
+    [5400, "1:30:00"],
+  ]) {
+    assert.equal(formatClock(seconds), display, String(seconds));
+  }
+});
+
+test("all equivalent duration spellings store the same duration_seconds", () => {
+  const forms = ["15.50", "15:50", "15m 50s"];
+  const seconds = forms.map((f) => parseDurationToSeconds(f));
+  assert.deepEqual(seconds, [950, 950, 950]);
+  // Edit prefill is the inverse: 950 -> "15:50", round-tripping to the same seconds.
+  assert.equal(formatClock(950), "15:50");
+  assert.equal(parseDurationToSeconds(formatClock(950)), 950);
 });
 
 test("live preview uses exactly the parsed mm:ss duration, at the qualifying boundary", () => {
@@ -138,9 +216,72 @@ test("Terms is the rules home and links to override and pause", async () => {
   assert.match(terms, /\/challenge\/terms\/override/);
   assert.match(terms, /\/challenge\/terms\/pause/);
   // Travel pause business logic lives on its own screen now, not on Money.
-  const pause = await read("src/routes/_authenticated/challenge/terms.pause.tsx");
+  const pause = await read("src/routes/_authenticated/challenge/terms_.pause.tsx");
   assert.match(pause, /setTravelPause/);
   assert.match(pause, /removeTravelPause/);
+});
+
+test("Terms, Pause and Override are independent routes (no parent swallowing the child)", async () => {
+  const tree = await read("src/routeTree.gen.ts");
+  // Child screens use the trailing-underscore files so they do not nest inside /challenge/terms.
+  assert.ok(tree.includes("challenge/terms_.pause"), "terms_.pause file registered");
+  assert.ok(tree.includes("challenge/terms_.override"), "terms_.override file registered");
+  // Each path still resolves to its own route.
+  assert.match(tree, /path: '\/challenge\/terms'/);
+  assert.match(tree, /path: '\/challenge\/terms\/pause'/);
+  assert.match(tree, /path: '\/challenge\/terms\/override'/);
+  // Terms is a leaf route: it is not wrapped with children, so it cannot render the child screens.
+  assert.doesNotMatch(tree, /AuthenticatedChallengeTermsRouteWithChildren/);
+  // Each route file points at a distinct component.
+  const terms = await read("src/routes/_authenticated/challenge/terms.tsx");
+  const pause = await read("src/routes/_authenticated/challenge/terms_.pause.tsx");
+  const override = await read("src/routes/_authenticated/challenge/terms_.override.tsx");
+  assert.match(terms, /component: Terms\b/);
+  assert.doesNotMatch(terms, /<Outlet/); // Terms renders its own content, not a child outlet
+  assert.match(pause, /component: PauseWeek\b/);
+  assert.match(pause, /Which week\?/); // the week chooser actually renders here
+  assert.match(override, /component: TargetOverride\b/);
+  assert.match(override, /New target for week/);
+});
+
+test("valid run insert payload is complete and omits DB-generated columns", async () => {
+  // Mirror the UI's insert payload shape and prove it carries only writable columns.
+  const payload = {
+    challenge_id: "c1",
+    user_id: "u1",
+    activity_type: "run",
+    distance_km: 4,
+    activity_date: "2026-10-08",
+    duration_seconds: parseDurationToSeconds("22:20"),
+    external_activity_url: null,
+    note: null,
+    evidence_path: "c1/u1/shot.webp",
+    extra_evidence_paths: [],
+    verification_source: "manual_strava_screenshot",
+  };
+  assert.equal(payload.duration_seconds, 1340);
+  // Generated columns must never be written on insert/update.
+  for (const generated of [
+    "equivalent_km",
+    "qualifying_equivalent_km",
+    "is_qualified",
+    "average_speed_kmh",
+    "average_pace_seconds_per_km",
+  ]) {
+    assert.ok(!(generated in payload), generated);
+  }
+  const add = await read("src/routes/_authenticated/challenge/add.tsx");
+  for (const generated of [
+    "equivalent_km:",
+    "qualifying_equivalent_km:",
+    "is_qualified:",
+    "average_speed_kmh:",
+    "average_pace_seconds_per_km:",
+  ]) {
+    assert.ok(!add.includes(generated), `add.tsx must not write ${generated}`);
+  }
+  // Save failures are reported to editor/preview telemetry for diagnosis, UI stays generic.
+  assert.match(add, /reportLovableError\(e, \{/);
 });
 
 test("Add Activity preview reuses activityMetrics (one calculation)", async () => {
@@ -172,7 +313,15 @@ test("Log sheet preselects Run and Ride on Add Activity", async () => {
   assert.match(sheet, /to: action\.to, search: action\.search/);
   const add = await read("src/routes/_authenticated/challenge/add.tsx");
   assert.match(add, /validateSearch/);
-  assert.match(add, /searchType \?\? "run"/); // initial toggle honours the param
+  // Deterministic: initial toggle state comes straight from the route search param…
+  assert.match(add, /useState<"run" \| "cycle">\(searchType \?\? "run"\)/);
+  // …and a restored draft must NOT override an explicit ?type= preselection.
+  assert.match(add, /!searchType && \(draft\.type === "run" \|\| draft\.type === "cycle"\)/);
+  // validateSearch maps ?type=run and ?type=cycle for direct URLs.
+  assert.match(
+    add,
+    /search\["type"\] === "cycle" \? "cycle" : search\["type"\] === "run" \? "run"/,
+  );
 });
 
 test("Activity edit updates in place (owner + open week), and never inserts on edit", async () => {
@@ -200,6 +349,18 @@ test("Activity detail shows the large evidence panel via the shared signed-URL l
   assert.match(viewer, /Evidence expired after finalization/);
   assert.match(viewer, /createSignedUrls/);
   assert.doesNotMatch(viewer, /getPublicUrl|public = true/);
+});
+
+test("Profile loads the moved Phase 2 components without a blocking data dependency", async () => {
+  const profile = await read("src/routes/_authenticated/profile.tsx");
+  // The CSV export and notifications moved here; both are present and self-contained.
+  assert.match(profile, /import \{ ChallengeDataExport \}/);
+  assert.match(profile, /<ChallengeDataExport \/>/);
+  assert.match(profile, /<ChallengeNotifications userId=\{user\.id\}/);
+  const exportCard = await read("src/components/ChallengeDataExport.tsx");
+  // No challenge → render nothing (never blocks Profile), and the heavy history read is on demand.
+  assert.match(exportCard, /if \(!challenge\) return null/);
+  assert.match(exportCard, /await fetchActivitiesForExport/);
 });
 
 test("legacy Challenge deep links redirect to the new canonical routes", async () => {
