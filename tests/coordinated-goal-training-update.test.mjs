@@ -79,11 +79,20 @@ test("eight-week check-in consistency does not mark pre-goal or current weeks mi
   assert.ok(weeks.some((week) => week.status === "not-started"));
 });
 
-test("Challenge uses the shared route-backed secondary navigation", async () => {
-  const shell = await read("src/components/AppShell.tsx");
-  assert.match(shell, /area === "challenge"\s*\? CHALLENGE_NAV/);
-  assert.match(shell, /\{nav \? \([\s\S]*<SecondaryNavigation/);
-  assert.doesNotMatch(shell, /aria-label="challenge sections" className="mb-4 overflow-x-auto"/);
+test("Challenge is a bottom tab and its sub-screens are reached in page, not via a dropdown", async () => {
+  const [shell, challengeIndex] = await Promise.all([
+    read("src/components/AppShell.tsx"),
+    read("src/routes/_authenticated/challenge/index.tsx"),
+  ]);
+  // No top dropdown / secondary navigation anymore.
+  assert.doesNotMatch(shell, /SecondaryNavigation/);
+  assert.doesNotMatch(shell, /CHALLENGE_NAV|TRAINING_NAV|MEALS_NAV|GOAL_NAV/);
+  // Challenge is one of the four bottom tabs.
+  assert.match(shell, /MAIN_TABS/);
+  // Challenge sub-screens are reached from in-page rows.
+  assert.match(challengeIndex, /NavRows/);
+  assert.match(challengeIndex, /to: "\/challenge\/history"/);
+  assert.match(challengeIndex, /to: "\/challenge\/money"/);
 });
 
 test("Goal Today and Progress share structured weights and refresh active bodyweight", async () => {

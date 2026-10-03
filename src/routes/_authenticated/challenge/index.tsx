@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { PageSkeleton, ActivityFeedSkeleton } from "@/components/PageSkeleton";
 import { AppShell, PageHeader } from "@/components/AppShell";
+import { NavRows } from "@/components/NavRows";
 import { ChallengeTermsSummary } from "@/components/challenge-rules";
 import { Card, DataError, Note, PendingLabel, SectionTitle } from "@/components/ui-kit";
 import { supabase } from "@/integrations/supabase/client";
@@ -167,7 +168,7 @@ function ChallengeHome() {
   if (challengeError && !challenge) {
     return (
       <AppShell>
-        <PageHeader title="Tempo Challenge" subtitle="Your weekly challenge." />
+        <PageHeader title="Challenge" subtitle="Your weekly challenge." />
         <DataError
           message="Check your connection and try loading your challenge again."
           onRetry={() => void challengeQuery.refetch()}
@@ -503,6 +504,20 @@ function ChallengeHome() {
           {user ? <ChallengeNotifications userId={user.id} /> : null}
         </div>
       </section>
+
+      <div className="mt-5">
+        <NavRows
+          rows={[
+            { to: "/challenge/history", label: "History", hint: "Finished weeks and outcomes" },
+            {
+              to: "/challenge/rules",
+              label: "Challenge rules",
+              hint: "Weekly target, penalties, travel pause",
+            },
+            { to: "/challenge/money", label: "Money", hint: "What you owe and are owed" },
+          ]}
+        />
+      </div>
 
       {needsOpponent ? (
         <section className="mt-5">

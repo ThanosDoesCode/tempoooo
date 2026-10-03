@@ -259,7 +259,12 @@ function Payments() {
   if (initialLoading) {
     return (
       <AppShell>
-        <PageHeader title="Money" subtitle="Loading penalties and travel settings…" />
+        <PageHeader
+          title="Money"
+          subtitle="Loading penalties and travel settings…"
+          backTo="/challenge"
+          backLabel="Challenge"
+        />
         <div className="grid grid-cols-2 gap-3" aria-label="Loading money data">
           <div className="h-24 animate-pulse rounded-2xl bg-card" />
           <div className="h-24 animate-pulse rounded-2xl bg-card" />
@@ -272,7 +277,12 @@ function Payments() {
   if (loadError) {
     return (
       <AppShell>
-        <PageHeader title="Money" subtitle="Penalties, payments, and travel pauses." />
+        <PageHeader
+          title="Money"
+          subtitle="Penalties, payments, and travel pauses."
+          backTo="/challenge"
+          backLabel="Challenge"
+        />
         <DataError
           message="No payment or travel data was changed. Check your connection and try again."
           onRetry={() => {

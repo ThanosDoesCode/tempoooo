@@ -42,6 +42,8 @@ function MealsHistoryPage() {
       <PageHeader
         title="Nutrition history"
         subtitle={format(parseISO(date), "EEEE, d MMMM yyyy")}
+        backTo="/bulk/progress"
+        backLabel="Progress"
       />
       <div className="mb-4 grid grid-cols-[44px_1fr_44px] items-center gap-2" data-no-pull>
         <button

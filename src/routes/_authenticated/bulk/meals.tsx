@@ -29,6 +29,8 @@ function BulkMealsPage() {
     <AppShell>
       <PageHeader
         title="Meals"
+        backTo="/bulk"
+        backLabel="Today"
         subtitle={
           publicNutrition
             ? "Today's nutrition, remaining targets and logged meals."

@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { PRODUCT_LANDING_ROUTES, productAreaForPath } from "../src/lib/product-navigation.ts";
+import { mainTabForPath } from "../src/lib/main-navigation.ts";
 import { accountProductMode, preferredBulkMembership } from "../src/lib/bulk-mode.ts";
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
@@ -41,14 +42,14 @@ test("persistent products navigate to their real landing routes", () => {
   });
 });
 
-test("primary and in-page navigation derive from the rendered route", async () => {
+test("primary navigation derives the active tab from the rendered route", async () => {
   const shell = await read("src/components/AppShell.tsx");
-  assert.match(shell, /const area = productAreaForPath\(pathname\)/);
-  assert.match(shell, /area === "challenge"[\s\S]*CHALLENGE_NAV/);
-  assert.match(shell, /area === "training"[\s\S]*TRAINING_NAV/);
-  assert.match(shell, /area === "meals"[\s\S]*MEALS_NAV/);
+  assert.match(shell, /mainTabForPath\(pathname\)/);
+  assert.match(shell, /MAIN_TABS/);
+  // The old per-area dropdown is gone.
+  assert.doesNotMatch(shell, /SecondaryNavigation|CHALLENGE_NAV|TRAINING_NAV|MEALS_NAV|GOAL_NAV/);
   assert.doesNotMatch(shell, /pendingTo|setPendingTo|selectedArea|activeSection|activeProduct/);
-  assert.doesNotMatch(shell, /window\.location|location\.reload|replace:\s*true/);
+  assert.doesNotMatch(shell, /window\.location|location\.reload/);
 });
 
 test("deep routes select the correct parent product", () => {
@@ -84,71 +85,67 @@ test("deep routes select the correct parent product", () => {
     assert.equal(productAreaForPath(path), null, path);
 });
 
-test("bottom links preserve browser history and activation visibility rules", async () => {
-  const shell = await read("src/components/AppShell.tsx");
-  for (const area of ["challenge", "training", "meals", "goal"])
-    assert.match(shell, new RegExp(`PRODUCT_LANDING_ROUTES\\.${area}`));
-  assert.match(shell, /to: PRODUCT_LANDING_ROUTES\.profile/);
-  assert.match(shell, /const PRIMARY_NAV = \[/);
-  assert.match(shell, /label: "Challenge"[\s\S]*label: "Profile"/);
-  assert.match(
-    shell,
-    /item\.area === "challenge" \|\|[\s\S]*item\.area === "goal" \|\|[\s\S]*item\.area === "profile" \|\|[\s\S]*hasFitnessTools/,
+test("bottom bar is Today, Challenge, +, Progress, You and preserves browser history", async () => {
+  const [shell, nav] = await Promise.all([
+    read("src/components/AppShell.tsx"),
+    read("src/lib/main-navigation.ts"),
+  ]);
+  assert.deepEqual(
+    [...nav.matchAll(/label: "([^"]+)", to:/g)].map((m) => m[1]),
+    ["Today", "Challenge", "Progress", "You"],
   );
+  // Training, Meals and Goal are no longer bottom tabs.
+  assert.doesNotMatch(nav, /label: "(Training|Meals|Goal)"/);
+  assert.match(shell, /aria-label="Log"/); // the center "+" action
   assert.match(shell, /<Link[\s\S]*to=\{item\.to\}/);
   assert.doesNotMatch(shell, /to=\{item\.to\}[\s\S]{0,200}replace/);
   assert.match(shell, /aria-label="Primary"[\s\S]*fixed inset-x-0 bottom-0/);
-  assert.match(shell, /const label = item\.label/);
   assert.doesNotMatch(shell, /My Bulk/);
   assert.doesNotMatch(shell, /sticky top-0/);
 });
 
-test("Profile is selected explicitly and has no contextual product navigation", async () => {
+test("You is selected explicitly and there is no contextual product dropdown", async () => {
   const shell = await read("src/components/AppShell.tsx");
-  assert.equal(productAreaForPath("/profile"), "profile");
-  assert.equal(productAreaForPath("/profile/preferences"), "profile");
-  assert.notEqual(productAreaForPath("/profile"), "challenge");
-  assert.match(shell, /const selected = area === item\.area/);
-  assert.match(shell, /area === "goal"[\s\S]*\? GOAL_NAV[\s\S]*: null/);
-  assert.match(shell, /<SecondaryNavigation[\s\S]*label=\{`\$\{area\} sections`\}/);
-  assert.equal(productAreaForPath("/challenge"), "challenge");
+  // The You tab owns the profile, goal settings, fitness setup and diagnostics.
+  for (const path of ["/profile", "/profile/security", "/bulk/more", "/bulk-onboarding"])
+    assert.equal(mainTabForPath(path), "you", path);
+  assert.equal(mainTabForPath("/challenge"), "challenge");
+  assert.equal(mainTabForPath("/bulk"), "today");
+  assert.equal(mainTabForPath("/bulk/progress"), "progress");
+  assert.match(shell, /active \? "page" : undefined/);
+  assert.doesNotMatch(shell, /SecondaryNavigation/);
 });
 
-test("only one persistent bar exists and secondary navigation stays in page flow", async () => {
-  const [shell, secondary] = await Promise.all([
-    read("src/components/AppShell.tsx"),
-    read("src/components/SecondaryNavigation.tsx"),
-  ]);
+test("only one persistent bar exists and the top dropdown is gone", async () => {
+  const shell = await read("src/components/AppShell.tsx");
   assert.equal((shell.match(/fixed inset-x-0 bottom-0/g) ?? []).length, 1);
   assert.match(shell, /aria-label="Primary"/);
-  assert.match(shell, /<SecondaryNavigation/);
-  assert.match(secondary, /className="relative z-30 mb-4 flex h-11 justify-center"/);
-  assert.doesNotMatch(secondary, /w-full max-w-\[22rem\][^\n]*bg-card/);
+  // The top dropdown / secondary navigation component is removed entirely.
+  assert.doesNotMatch(shell, /SecondaryNavigation/);
   assert.doesNotMatch(shell, /sticky top-0/);
-  assert.doesNotMatch(secondary, /fixed/);
+  const { existsSync } = await import("node:fs");
+  assert.equal(
+    existsSync(new URL("../src/components/SecondaryNavigation.tsx", import.meta.url)),
+    false,
+  );
 });
 
-test("shared secondary navigation uses a compact route-synchronized menu", async () => {
-  const source = await read("src/components/SecondaryNavigation.tsx");
-  assert.match(source, /const activeItem = items\[activeIndex\]/);
-  assert.match(source, /max-w-\[calc\(100vw-2rem\)\]/);
-  assert.match(source, /w-\[min\(20rem,calc\(100vw-2rem\)\)\]/);
-  assert.match(source, /grid-cols-2/);
-  assert.match(source, /aria-expanded=\{expanded\}/);
-  assert.match(source, /aria-haspopup="menu"/);
-  assert.match(source, /<ChevronDown/);
-  assert.match(source, /role="menu"/);
-  assert.match(source, /role="menuitem"/);
-  assert.match(source, /bg-primary\/10 text-primary/);
-  assert.match(source, /if \(!root\.current\?\.contains/);
-  assert.match(source, /event\.key !== "Escape"/);
-  assert.match(source, /trigger\.current\?\.focus/);
-  assert.match(source, /motion-reduce:transition-none/);
-  assert.match(source, /motion-safe:animate-in/);
-  assert.match(source, /preload="intent"/);
-  assert.match(source, /onClick=\{\(\) => setExpanded\(false\)\}/);
-  assert.match(source, /setExpanded\(false\)/);
-  assert.doesNotMatch(source, /secondaryNavigationSlot|translateX\(calc\(-50% \+/);
+test("the shared Log sheet replaces the dropdown as the add surface", async () => {
+  const [shell, sheet, nav] = await Promise.all([
+    read("src/components/AppShell.tsx"),
+    read("src/components/LogSheet.tsx"),
+    read("src/lib/main-navigation.ts"),
+  ]);
+  assert.match(shell, /<LogSheet open=\{logOpen\} onOpenChange=\{setLogOpen\}/);
+  assert.match(shell, /aria-label="Log"/);
+  // Two groups in the sheet, and the five actions each routing to an existing functional flow.
+  assert.match(sheet, /Counts toward your challenge/);
+  assert.match(sheet, /Your day/);
+  const labels = [...nav.matchAll(/label: "([^"]+)",\n/g)].map((m) => m[1]);
+  assert.deepEqual(labels, ["Run", "Ride", "Weigh-in & sleep", "Meal", "Workout"]);
+  assert.match(nav, /to: "\/challenge\/log"/); // Run + Ride -> existing activity flow
+  assert.match(nav, /to: "\/bulk\/meals"/); // Meal -> existing Meals flow
+  assert.match(nav, /to: "\/bulk\/training"/); // Workout -> existing Training flow
 });
 
 test("authenticated sibling routes share one persistent shell and transition only route content", async () => {
@@ -172,18 +169,14 @@ test("authenticated sibling routes share one persistent shell and transition onl
   );
 });
 
-test("primary and secondary navigation provide bounded immediate press feedback", async () => {
-  const [shell, secondary] = await Promise.all([
-    read("src/components/AppShell.tsx"),
-    read("src/components/SecondaryNavigation.tsx"),
-  ]);
-  assert.match(secondary, /duration-150 ease-out/);
-  assert.match(secondary, /active:scale-\[0\.98\]/);
-  assert.match(shell, /active:scale-95[^`]*active:opacity-80/);
-  assert.match(secondary, /preload="intent"/);
-  assert.match(shell, /onPointerDown=\{\(\) => prefetchDestination/);
-  assert.match(shell, /onPointerEnter=\{\(\) => prefetchDestination/);
-  assert.match(shell, /onFocus=\{\(\) => prefetchDestination/);
+test("primary navigation provides bounded immediate press feedback", async () => {
+  const shell = await read("src/components/AppShell.tsx");
+  assert.match(shell, /duration-150 ease-out/);
+  assert.match(shell, /active:scale-95/);
+  assert.match(shell, /preload="intent"/);
+  assert.match(shell, /onPointerDown=\{onIntent\}/);
+  assert.match(shell, /onPointerEnter=\{onIntent\}/);
+  assert.match(shell, /onFocus=\{onIntent\}/);
 });
 
 test("route mapping cannot mutate legacy My Bulk fixtures", () => {
@@ -249,31 +242,21 @@ test("contextual navigation uses distinct route-backed tasks", async () => {
     read("src/routes/_authenticated/bulk/meals_.history.tsx"),
   ]);
 
-  const routes = (constant) => {
-    const source = shell.match(new RegExp(`const ${constant} = \\[([\\s\\S]*?)\\] as const;`))?.[1];
-    assert.ok(source, `${constant} missing`);
-    return [...source.matchAll(/to: "([^"]+)"/g)].map((match) => match[1]);
-  };
-  assert.deepEqual(routes("TRAINING_NAV"), [
-    "/bulk/training",
-    "/bulk/prs",
-    "/bulk/training/history",
-    "/bulk/training/more",
-  ]);
-  assert.deepEqual(routes("MEALS_NAV"), [
-    "/bulk/meals",
-    "/bulk/meals/presets",
-    "/bulk/meals/history",
-  ]);
-  assert.equal(new Set(routes("TRAINING_NAV")).size, 4);
-  assert.equal(new Set(routes("MEALS_NAV")).size, 3);
+  // Training and Meals history now live under Progress, reached from in-page rows;
+  // Training and Meals open from the Log sheet. The active tab is centralized.
+  const navModule = await read("src/lib/main-navigation.ts");
+  for (const [path, tab] of [
+    ["/bulk/training", "today"],
+    ["/bulk/meals", "today"],
+    ["/bulk/workout/session-a", "today"],
+    ["/bulk/training/history", "progress"],
+    ["/bulk/meals/history", "progress"],
+    ["/bulk/prs", "progress"],
+  ])
+    assert.equal(mainTabForPath(path), tab, path);
   assert.doesNotMatch(shell, /hash: "(?:plan|presets)"/);
-  assert.match(
-    await read("src/components/SecondaryNavigation.tsx"),
-    /activePrefixes\?\.some\(\(prefix\) => pathname\.startsWith\(prefix\)\)/,
-  );
-  for (const nested of ["/bulk/workout/", "/bulk/exercises"])
-    assert.match(shell, new RegExp(nested.replaceAll("/", "\\/")));
+  for (const nested of ["/bulk/workout", "/bulk/exercises"])
+    assert.match(navModule, new RegExp(nested.replaceAll("/", "\\/")));
 
   assert.match(trainingToday, /TrainingPlanOverview/);
   assert.doesNotMatch(trainingToday, /TrainingPlanEditor|<TrainingPlanSetup/);
@@ -311,7 +294,9 @@ test("every Meals tab remains in the unified Goal meal experience", async () => 
     assert.equal(productAreaForPath(path), "meals", path);
   assert.equal(productAreaForPath("/bulk"), "goal");
 
-  assert.match(shell, /to: "\/bulk\/meals\/presets", label: "Presets"/);
+  // Meals remains one unified experience reached from the Log sheet / Today; presets are
+  // still a route-backed destination (reached in-page and via deep links).
+  assert.match(shell, /<LogSheet/);
   assert.match(presets, /<BulkMealPresets bulkProfileId=\{bulkId\}/);
   assert.doesNotMatch(presets, /LegacyMealPresets|MEAL_PLANS/);
   assert.doesNotMatch(presets, /Navigate|to="\/bulk"|replace/);

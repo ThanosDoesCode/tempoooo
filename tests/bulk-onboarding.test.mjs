@@ -272,10 +272,9 @@ test("the five-step UI submits one atomic RPC while optional Goal remains discov
   assert.match(onboarding, /bulkOwnerQueryOptions/);
   assert.match(profile, /Set up fitness tools/);
   assert.match(guard, /redirect\(\{ to: "\/bulk-onboarding", replace: true \}\)/);
-  assert.match(
-    shell,
-    /item\.area === "challenge" \|\|[\s\S]*item\.area === "goal" \|\|[\s\S]*item\.area === "profile" \|\|[\s\S]*hasFitnessTools/,
-  );
-  assert.match(shell, /to: PRODUCT_LANDING_ROUTES\.goal/);
+  // Optional fitness tools stay discoverable through the "You" tab badge, not a filtered bar.
+  assert.match(shell, /New Fitness tools/);
+  assert.match(shell, /goal_seen_at == null/);
+  assert.match(shell, /MAIN_TABS/); // Today (the daily/goal screen) is a bottom tab
   assert.doesNotMatch(shell, /label: "Bulk"/);
 });

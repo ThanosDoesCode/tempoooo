@@ -161,7 +161,12 @@ function TrainingHistoryPage() {
 
   return (
     <AppShell>
-      <PageHeader title="Training history" subtitle="Completed workouts, newest first." />
+      <PageHeader
+        title="Training history"
+        subtitle="Completed workouts, newest first."
+        backTo="/bulk/progress"
+        backLabel="Progress"
+      />
       {planMode === "none" || sessions.isLoading ? (
         <div className="h-40 animate-pulse rounded-2xl bg-card" />
       ) : sessions.error ? (

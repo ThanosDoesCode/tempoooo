@@ -131,7 +131,12 @@ function CheckInPage() {
 
   return (
     <AppShell>
-      <PageHeader title="Check-In" subtitle={mode === "weekly" ? s.label : "Monthly summary"} />
+      <PageHeader
+        title="Weekly review"
+        subtitle={mode === "weekly" ? s.label : "Monthly summary"}
+        backTo="/bulk/progress"
+        backLabel="Progress"
+      />
 
       <div className="mb-4 flex gap-1.5">
         <Chip active={mode === "weekly"} onClick={() => setMode("weekly")}>

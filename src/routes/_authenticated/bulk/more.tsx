@@ -53,7 +53,12 @@ function BulkMorePage() {
 
   return (
     <AppShell>
-      <PageHeader title="Goal settings" subtitle="Configure your Goal and daily targets." />
+      <PageHeader
+        title="Goal settings"
+        subtitle="Configure your Goal and daily targets."
+        backTo="/profile"
+        backLabel="You"
+      />
       <div className="space-y-3">
         {planMode === "public" ? (
           <Card>

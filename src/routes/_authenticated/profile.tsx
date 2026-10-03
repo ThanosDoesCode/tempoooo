@@ -104,7 +104,7 @@ function ProfilePage() {
 
   return (
     <AppShell>
-      <PageHeader title="Profile" subtitle="Your account, Challenge identity and optional tools" />
+      <PageHeader title="You" subtitle="Your account, Challenge identity and optional tools" />
 
       <Card>
         <SectionTitle>Signed in as</SectionTitle>
@@ -229,6 +229,13 @@ function ProfilePage() {
           >
             Open Goal
           </button>
+          <Link
+            to="/bulk/more"
+            preload="intent"
+            className="mt-2 flex min-h-11 w-full items-center justify-center rounded-xl border border-border px-4 text-sm font-semibold text-foreground active:bg-elevated"
+          >
+            Goal settings
+          </Link>
         </Card>
       ) : (
         <Card className="mt-3 border-dashed">

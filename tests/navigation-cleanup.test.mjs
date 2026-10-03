@@ -4,24 +4,11 @@ import { readFile } from "node:fs/promises";
 import { productAreaForPath } from "../src/lib/product-navigation.ts";
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
-const navigationItems = (source, name) => {
-  const literal = source.match(new RegExp(`const ${name} = (\\[[\\s\\S]*?\\]) as const;`))?.[1];
-  assert.ok(literal);
-  return Function(`return (${literal})`)();
-};
 
-test("Meals exposes three real destinations and old More bookmarks recover to Presets", async () => {
-  const shell = await read("src/components/AppShell.tsx");
-  const meals = navigationItems(shell, "MEALS_NAV");
-  assert.deepEqual(
-    meals.map(({ label }) => label),
-    ["Today", "Presets", "History"],
-  );
-  assert.deepEqual(
-    meals.map(({ to }) => to),
-    ["/bulk/meals", "/bulk/meals/presets", "/bulk/meals/history"],
-  );
-  for (const path of meals.map(({ to }) => to)) assert.equal(productAreaForPath(path), "meals");
+test("Meals destinations stay route-backed and old More bookmarks recover to Presets", async () => {
+  // Meals is no longer a bottom tab, but its routes still resolve and belong to the meals area.
+  for (const to of ["/bulk/meals", "/bulk/meals/presets", "/bulk/meals/history"])
+    assert.equal(productAreaForPath(to), "meals");
   assert.match(
     await read("src/routes/_authenticated/bulk/meals_.more.tsx"),
     /redirect\(\{ to: "\/bulk\/meals\/presets", replace: true \}\)/,
@@ -29,44 +16,30 @@ test("Meals exposes three real destinations and old More bookmarks recover to Pr
 });
 
 test("Challenge Rules and Targets have independent route-backed destinations", async () => {
-  const shell = await read("src/components/AppShell.tsx");
-  const items = navigationItems(shell, "CHALLENGE_NAV");
-  assert.deepEqual(
-    items.map(({ label }) => label),
-    ["Week", "Add", "Rules", "Targets", "History", "Payments"],
-  );
-  for (const [path, label] of [
-    ["/challenge/rules", "Rules"],
-    ["/challenge/targets", "Targets"],
-    ["/challenge/history/week/4", "History"],
-    ["/challenge/payments", "Payments"],
-  ]) {
-    const selected = items.find((item) =>
-      item.exact ? path === item.to : path.startsWith(item.to),
-    );
-    assert.equal(selected?.label, label);
-    assert.equal(productAreaForPath(path), "challenge");
-  }
+  const challengeIndex = await read("src/routes/_authenticated/challenge/index.tsx");
+  // Reached from in-page rows (Challenge tab) now, not from a top dropdown.
+  assert.match(challengeIndex, /to: "\/challenge\/rules"/);
+  assert.match(challengeIndex, /to: "\/challenge\/history"/);
+  for (const path of [
+    "/challenge/rules",
+    "/challenge/targets",
+    "/challenge/history/week/4",
+    "/challenge/payments",
+  ])
+    assert.equal(productAreaForPath(path), "challenge", path);
   const rules = await read("src/routes/_authenticated/challenge/rules.tsx");
   assert.match(rules, /useMyChallenge/);
   assert.match(rules, /RulesCard terms=\{query.data\}/);
   assert.doesNotMatch(await read("src/routes/_authenticated/challenge/payments.tsx"), /<RulesCard/);
 });
 
-test("diagnostics belongs to Profile and retains both admin boundaries", async () => {
-  const [shell, profile, progress, route, server] = await Promise.all([
-    read("src/components/AppShell.tsx"),
+test("diagnostics belongs to You/Profile and retains both admin boundaries", async () => {
+  const [profile, progress, route, server] = await Promise.all([
     read("src/routes/_authenticated/profile.tsx"),
     read("src/routes/_authenticated/bulk/progress.tsx"),
     read("src/routes/_authenticated/bulk/diagnostics.tsx"),
     read("src/lib/privileged-rpcs.server.ts"),
   ]);
-  assert.doesNotMatch(
-    navigationItems(shell, "GOAL_NAV")
-      .map((item) => JSON.stringify(item))
-      .join(),
-    /diagnostics/,
-  );
   assert.doesNotMatch(progress, /Production diagnostics|\/bulk\/diagnostics/);
   assert.match(profile, /\{isAdmin \? \([\s\S]*to="\/bulk\/diagnostics"/);
   assert.equal(productAreaForPath("/bulk/diagnostics"), "profile");

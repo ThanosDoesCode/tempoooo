@@ -180,10 +180,7 @@ function TodayPage() {
 
   return (
     <AppShell>
-      <PageHeader
-        title={format(new Date(), "EEEE, d MMMM")}
-        subtitle="Log the day in under a minute."
-      />
+      <PageHeader title="Today" subtitle={format(new Date(), "EEEE, d MMMM")} />
 
       <div className="card-surface fade-up mb-2 p-4">
         <div className="flex items-center justify-between gap-3">

@@ -17,6 +17,7 @@ import {
 } from "recharts";
 
 import { AppShell, PageHeader } from "@/components/AppShell";
+import { NavRows } from "@/components/NavRows";
 import { TrainingSummary } from "@/components/TrainingSummary";
 import { Card, Chip, Note, PendingLabel, SectionTitle, Stat } from "@/components/ui-kit";
 import {
@@ -89,11 +90,32 @@ function ProgressPage() {
           subtitle="Weekly trends across weight, training and nutrition."
         />
         <PublicBulkProgress bulkProfileId={bulkId} targets={data.targets} />
+        <div className="mt-5">
+          <ProgressSectionLinks />
+        </div>
       </AppShell>
     );
   }
 
   return <LegacyProgressPage data={data} />;
+}
+
+function ProgressSectionLinks() {
+  return (
+    <NavRows
+      title="More in Progress"
+      rows={[
+        {
+          to: "/bulk/check-in",
+          label: "Weekly review",
+          hint: "Recommendation and weekly numbers",
+        },
+        { to: "/bulk/prs", label: "Personal records", hint: "Your strongest performances" },
+        { to: "/bulk/training/history", label: "Training history" },
+        { to: "/bulk/meals/history", label: "Nutrition history" },
+      ]}
+    />
+  );
 }
 
 function LegacyProgressPage({ data }: { data: AppData }) {
@@ -360,6 +382,7 @@ function LegacyProgressPage({ data }: { data: AppData }) {
 
         <TrainingSummary data={data} />
         <PhotosSection data={data} />
+        <ProgressSectionLinks />
       </div>
     </AppShell>
   );

@@ -295,19 +295,19 @@ test("Tempo navigation exposes optional fitness areas only after persisted activ
   assert.match(index, /if \(data\.session\) throw redirect\(\{ to: "\/challenge" \}\)/);
   assert.match(index, /component: WelcomePage/);
   assert.doesNotMatch(index, /window\.location/);
-  const shell = await read("src/components/AppShell.tsx");
-  for (const label of ["Challenge", "Training", "Meals", "Goal", "Profile"])
-    assert.match(shell, new RegExp(`label: "${label}"`));
-  assert.match(
-    shell,
-    /item\.area === "challenge" \|\|[\s\S]*item\.area === "goal" \|\|[\s\S]*item\.area === "profile" \|\|[\s\S]*hasFitnessTools/,
+  const [shell, nav] = await Promise.all([
+    read("src/components/AppShell.tsx"),
+    read("src/lib/main-navigation.ts"),
+  ]);
+  assert.deepEqual(
+    [...nav.matchAll(/label: "([^"]+)", to:/g)].map((m) => m[1]),
+    ["Today", "Challenge", "Progress", "You"],
   );
-  assert.match(shell, /aria-label=\{label\}/);
+  assert.match(shell, /aria-label=\{item\.label\}/);
   assert.match(shell, /min-h-11/);
   assert.doesNotMatch(shell, /label: "Bulk"/);
-  assert.doesNotMatch(shell, /disabled[\s\S]{0,120}>\s*Bulk\s*</);
-  assert.match(shell, /const area = productAreaForPath\(pathname\)/);
-  assert.match(shell, /const selected = area === item\.area/);
+  assert.match(shell, /mainTabForPath\(pathname\)/);
+  assert.match(shell, /active=\{activeTab === item\.tab\}/);
   assert.equal((shell.match(/fixed inset-x-0 bottom-0/g) ?? []).length, 1);
   assert.doesNotMatch(shell, /sticky top-0/);
   assert.doesNotMatch(shell, /pendingTo|setPendingTo|selectedArea|activeProduct/);
@@ -330,35 +330,30 @@ test("Tempo navigation exposes optional fitness areas only after persisted activ
 });
 
 test("product areas expose distinct contextual destinations and preserve legacy/public data paths", async () => {
-  const [shell, more, today, productNavigation] = await Promise.all([
+  const [shell, nav, more, today, productNavigation, progress, profile] = await Promise.all([
     read("src/components/AppShell.tsx"),
+    read("src/lib/main-navigation.ts"),
     read("src/routes/_authenticated/bulk/more.tsx"),
     read("src/routes/_authenticated/bulk/index.tsx"),
     read("src/lib/product-navigation.ts"),
+    read("src/routes/_authenticated/bulk/progress.tsx"),
+    read("src/routes/_authenticated/profile.tsx"),
   ]);
-  const labels = (constant) => {
-    const source = shell.match(new RegExp(`const ${constant} = \\[([\\s\\S]*?)\\] as const;`))?.[1];
-    assert.ok(source, `${constant} missing`);
-    return [...source.matchAll(/label: "([^"]+)"/g)].map((match) => match[1]);
-  };
-  assert.deepEqual(labels("CHALLENGE_NAV"), [
-    "Week",
-    "Add",
-    "Rules",
-    "Targets",
-    "History",
-    "Payments",
-  ]);
-  assert.deepEqual(labels("TRAINING_NAV"), ["Today", "PRs", "History", "More"]);
-  assert.deepEqual(labels("MEALS_NAV"), ["Today", "Presets", "History"]);
-  assert.deepEqual(labels("GOAL_NAV"), ["Today", "Progress", "Check-In", "Settings"]);
+  // The four bottom tabs; Training/Meals/Goal/Check-In/Payments are no longer tabs.
+  assert.deepEqual(
+    [...nav.matchAll(/label: "([^"]+)", to:/g)].map((m) => m[1]),
+    ["Today", "Challenge", "Progress", "You"],
+  );
+  assert.doesNotMatch(nav, /label: "(Training|Meals|Goal|Check-In|Payments)"/);
   assert.doesNotMatch(more, /to="\/bulk\/(?:progress|check-in)"/);
   assert.match(more, /NutritionTargetsEditor/);
   assert.doesNotMatch(more, /Weekly check-ins|LineChart/);
   assert.doesNotMatch(more, /Progress history/);
   assert.doesNotMatch(more, /to: "\/bulk\/(?:history|training\/history)"/);
-  for (const destination of ["/bulk/progress", "/bulk/check-in", "/bulk/more"])
-    assert.match(shell, new RegExp(destination.replace("/", "\\/")));
+  // Progress is a bottom tab; its sub-screens are reached from Progress's in-page rows.
+  assert.match(nav, /to: "\/bulk\/progress"/);
+  assert.match(progress, /to: "\/bulk\/check-in"/);
+  assert.match(profile, /to="\/bulk\/more"/);
   assert.match(productNavigation, /pathname\.startsWith\("\/bulk\/prs"\)/);
   assert.doesNotMatch(shell, /location\.reload/);
   assert.doesNotMatch(shell, /hash: "(?:plan|presets)"/);

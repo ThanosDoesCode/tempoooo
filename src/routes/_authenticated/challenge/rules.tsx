@@ -13,7 +13,7 @@ function ChallengeRulesPage() {
   const query = useMyChallenge();
   return (
     <AppShell>
-      <PageHeader title="Challenge rules" />
+      <PageHeader title="Challenge rules" backTo="/challenge" backLabel="Challenge" />
       {query.isLoading ? (
         <div className="h-40 animate-pulse rounded-2xl bg-card" aria-label="Loading rules" />
       ) : query.error ? (

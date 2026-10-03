@@ -90,7 +90,7 @@ test("public Goal migration defaults existing public plans while leaving legacy 
   assert.match(migration, /_goal text/);
   assert.match(migration, /auth\.uid\(\)/);
   assert.match(migration, /payload->>'goal' IN \('gain', 'cut', 'maintain'\)/);
-  assert.match(shell, /to: PRODUCT_LANDING_ROUTES\.goal/);
+  assert.match(shell, /MAIN_TABS/); // Today (the daily/goal screen) is a bottom tab
   assert.doesNotMatch(shell, /label: "Bulk"/);
   assert.match(profile, /ownedPlan \? \(/);
   assert.doesNotMatch(profile, /productMode === "public"|productMode === "legacy"/);

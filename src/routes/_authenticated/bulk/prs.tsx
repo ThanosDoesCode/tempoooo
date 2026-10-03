@@ -60,7 +60,12 @@ function PersonalRecordsPage() {
         />
       ) : (
         <>
-          <PageHeader title="Personal Records" subtitle="Your strongest completed performances." />
+          <PageHeader
+            title="Personal records"
+            subtitle="Your strongest completed performances."
+            backTo="/bulk/progress"
+            backLabel="Progress"
+          />
           {sessions.error && isPublic ? (
             <DataError
               message={userFacingError(sessions.error, "load your personal records")}

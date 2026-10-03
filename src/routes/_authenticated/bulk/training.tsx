@@ -130,6 +130,8 @@ function TrainingPage() {
     <AppShell>
       <PageHeader
         title="Training"
+        backTo="/bulk"
+        backLabel="Today"
         {...(!usesPlanSetup ? { subtitle: format(parseISO(date), "EEEE, d MMMM") } : {})}
       />
       {usesPlanSetup && activeSession.isLoading ? (

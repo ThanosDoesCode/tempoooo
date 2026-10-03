@@ -120,8 +120,10 @@ test("Sharing is absent while personal Bulk activation guards remain", async () 
     "supabase/migrations/20260905150000_complete_bulk_onboarding.sql",
   );
   assert.doesNotMatch(shell, /Sharing|\/bulk\/sharing|\/bulk\/invite/);
-  assert.match(shell, /to: "\/bulk\/training\/history"[\s\S]{0,100}label: "History"/);
-  assert.match(shell, /to: "\/bulk\/meals\/history"[\s\S]{0,100}label: "History"/);
+  // Training and nutrition history now live under Progress, reached from its in-page rows.
+  const progress = await read("src/routes/_authenticated/bulk/progress.tsx");
+  assert.match(progress, /to: "\/bulk\/training\/history", label: "Training history"/);
+  assert.match(progress, /to: "\/bulk\/meals\/history", label: "Nutrition history"/);
   assert.match(guard, /bulkOwnerQueryOptions/);
   assert.match(guard, /bulk-onboarding/);
   assert.match(profile, /<SectionTitle>Fitness tools<\/SectionTitle>/);

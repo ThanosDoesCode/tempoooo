@@ -43,7 +43,12 @@ function History() {
 
   return (
     <AppShell>
-      <PageHeader title="History" subtitle="Finalized weeks are locked and cannot be edited." />
+      <PageHeader
+        title="History"
+        subtitle="Finalized weeks are locked and cannot be edited."
+        backTo="/challenge"
+        backLabel="Challenge"
+      />
       {challengeLoading || (challenge && weeksLoading) ? (
         <div className="space-y-3" aria-label="Loading weekly history">
           <div className="h-28 animate-pulse rounded-2xl bg-card" />
