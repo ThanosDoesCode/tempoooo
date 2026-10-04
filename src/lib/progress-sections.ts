@@ -19,20 +19,11 @@ export function hasBodyFoodData(data: AppData): boolean {
   );
 }
 
-/**
- * The Progress sections a user actually has usable data for — not merely what the onboarding guard
- * allows. The caller computes the three flags from whichever data source the user's mode uses
- * (legacy logs or normalized Supabase rows), so availability is identical across modes. Overview
- * always shows and adapts to the rest. Order matches the handoff.
- */
-export function availableProgressSections(flags: {
-  hasChallenge: boolean;
-  hasStrength: boolean;
-  hasBodyFood: boolean;
+/** Product availability controls navigation; missing measurements only affect tile content. */
+export function availableProgressSections(features: {
+  hasFitnessTools: boolean;
 }): ProgressSection[] {
-  const sections: ProgressSection[] = ["overview"];
-  if (flags.hasChallenge) sections.push("endurance");
-  if (flags.hasStrength) sections.push("strength");
-  if (flags.hasBodyFood) sections.push("body");
-  return sections;
+  return features.hasFitnessTools
+    ? ["overview", "endurance", "strength", "body"]
+    : ["overview", "endurance"];
 }

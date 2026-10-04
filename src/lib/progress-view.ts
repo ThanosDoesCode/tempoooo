@@ -1,47 +1,19 @@
-import { subDays } from "date-fns";
 import { useState } from "react";
 
-import { useBulkProgressPhotos, useBulkWeights } from "./bulk-progress-query.ts";
-import { useCompletedSessionDates } from "./bulk-training-sessions.ts";
-import { iso } from "./calc.ts";
 import { useMyChallenge } from "./challenge.ts";
-import {
-  availableProgressSections,
-  hasBodyFoodData,
-  hasStrengthData,
-  type ProgressSection,
-} from "./progress-sections.ts";
+import { availableProgressSections, type ProgressSection } from "./progress-sections.ts";
 import { useProgressMode } from "./progress-model.ts";
 import { defaultTrackedLifts } from "./strength-estimates.ts";
-import { useAppData } from "./store.ts";
 import type { AppData } from "./types.ts";
 
 export type { ProgressSection } from "./progress-sections.ts";
 
-/**
- * Which Progress sections the signed-in user has usable data for. Works in both modes: legacy uses
- * the store's logs; public/normalized uses the Supabase-backed weight/session/photo rows. Delegates
- * to the pure `availableProgressSections`, so an empty product area is never shown.
- */
+/** Stable product sections in both fitness modes, independent of analytics history. */
 export function useProgressSections(): { sections: ProgressSection[]; hasChallenge: boolean } {
-  const data = useAppData();
-  const { mode, publicId } = useProgressMode();
+  const { mode } = useProgressMode();
   const hasChallenge = !!useMyChallenge().data;
-  const weights = useBulkWeights(publicId, iso(subDays(new Date(), 400)));
-  const sessionDates = useCompletedSessionDates(publicId, "2000-01-01", iso(new Date()));
-  const photos = useBulkProgressPhotos(publicId);
-
-  const legacyStrength = !!data && hasStrengthData(data);
-  const legacyBodyFood = !!data && hasBodyFoodData(data);
-  const hasStrength =
-    mode === "public" ? (sessionDates.data?.length ?? 0) > 0 || legacyStrength : legacyStrength;
-  const hasBodyFood =
-    mode === "public"
-      ? (weights.data?.length ?? 0) > 0 || (photos.data?.length ?? 0) > 0 || legacyBodyFood
-      : legacyBodyFood;
-
   return {
-    sections: availableProgressSections({ hasChallenge, hasStrength, hasBodyFood }),
+    sections: availableProgressSections({ hasFitnessTools: mode !== "none" }),
     hasChallenge,
   };
 }

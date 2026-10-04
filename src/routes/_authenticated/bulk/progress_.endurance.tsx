@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 
 import { AppShell } from "@/components/AppShell";
 import { Card } from "@/components/ui-kit";
@@ -47,12 +47,21 @@ function EndurancePage() {
       </div>
       <ProgressNav active="endurance" />
 
-      {!challenge.data ? (
+      {challenge.isLoading ? (
+        <div className="h-48 animate-pulse rounded-[20px] bg-card" aria-label="Loading endurance" />
+      ) : !challenge.data ? (
         <Card className="p-[18px]">
           <p className="text-[15px] font-medium">No challenge yet</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Start or join a challenge to see your running and cycling progress here.
+            Start a challenge to unlock endurance trends.
           </p>
+          <Link
+            to="/challenge"
+            preload="intent"
+            className="mt-3 inline-flex min-h-11 items-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground"
+          >
+            Start a challenge
+          </Link>
         </Card>
       ) : !user || !weekRows.data ? (
         <div className="h-48 animate-pulse rounded-[20px] bg-card" aria-label="Loading endurance" />

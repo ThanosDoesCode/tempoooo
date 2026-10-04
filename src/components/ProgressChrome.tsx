@@ -11,7 +11,7 @@ const NAV: Record<ProgressSection, { label: string; to: string }> = {
   body: { label: "Body & food", to: "/bulk/progress/body" },
 };
 
-/** The segmented Progress links. Only renders sections the user has data for. */
+/** The segmented Progress links. Keeps enabled areas visible before analytics exist. */
 export function ProgressNav({ active }: { active: ProgressSection }) {
   const { sections } = useProgressSections();
   return (
@@ -25,7 +25,7 @@ export function ProgressNav({ active }: { active: ProgressSection }) {
             to={to}
             preload="intent"
             aria-current={on ? "page" : undefined}
-            className={`flex h-[38px] flex-1 items-center justify-center whitespace-nowrap rounded-[10px] text-[13px] ${
+            className={`flex min-h-11 min-w-0 flex-1 items-center justify-center whitespace-nowrap rounded-[10px] text-[11px] min-[360px]:text-[13px] ${
               on ? "bg-elevated font-semibold text-foreground" : "font-medium text-muted-foreground"
             }`}
           >

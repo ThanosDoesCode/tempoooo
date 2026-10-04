@@ -35,7 +35,7 @@ function StrengthPage() {
 
 function StrengthBody({ data }: { data: AppData }) {
   const today = iso(new Date());
-  const { records, workoutRecords } = useStrengthModel();
+  const { records, workoutRecords, loading } = useStrengthModel();
   const [trackedNames, setTrackedNames] = useTrackedLifts(data);
   const [editing, setEditing] = useState(false);
 
@@ -74,10 +74,14 @@ function StrengthBody({ data }: { data: AppData }) {
       <Card className="grid grid-cols-2 gap-3 px-[18px] py-4">
         <div>
           <div className="num text-[26px] font-semibold">
-            {up} of {measured.length}
+            {measured.length ? `${up} of ${measured.length}` : "—"}
           </div>
           <div className="text-[13px] text-muted-foreground">
-            main lifts up since {format(parseISO(BULK_START), "d MMM")}
+            {measured.length
+              ? `main lifts up since ${format(parseISO(BULK_START), "d MMM")}`
+              : loading
+                ? "Loading strength…"
+                : "Not enough data yet"}
           </div>
         </div>
         <div>
@@ -181,7 +185,8 @@ function StrengthBody({ data }: { data: AppData }) {
               ))
             ) : (
               <p className="py-4 text-sm text-muted-foreground">
-                No tracked lifts yet. Finish a workout with weights, or tap Edit to choose lifts.
+                No tracked lifts yet. Complete a workout with weights to start tracking, or tap Edit
+                to choose lifts.
               </p>
             )}
           </div>
@@ -192,25 +197,39 @@ function StrengthBody({ data }: { data: AppData }) {
         </>
       )}
 
-      <div className="rounded-[20px] bg-card px-4">
+      {records.length || workoutRecords.length ? (
+        <div className="rounded-[20px] bg-card px-4">
+          {records.length ? (
+            <Link
+              to="/bulk/prs"
+              preload="intent"
+              className="flex min-h-[62px] items-center gap-3 border-t border-border first:border-t-0 active:opacity-80"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="text-[15px] font-medium">Records this month</p>
+                {latestRecord?.bestWeight ? (
+                  <p className="num text-[13px] text-muted-foreground">
+                    Latest: {exerciseLabel(latestRecord.name)}{" "}
+                    {fmt(latestRecord.bestWeight.load, 1)} kg × {latestRecord.bestWeight.reps}
+                  </p>
+                ) : null}
+              </div>
+              <span className="num text-[15px] font-semibold">{recordsThisMonth}</span>
+            </Link>
+          ) : null}
+          {workoutRecords.length ? (
+            <ProgressRow to="/bulk/training/history" label="Workout history" />
+          ) : null}
+        </div>
+      ) : (
         <Link
-          to="/bulk/prs"
+          to="/bulk/training"
           preload="intent"
-          className="flex min-h-[62px] items-center gap-3 border-t border-border first:border-t-0 active:opacity-80"
+          className="inline-flex min-h-11 items-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground"
         >
-          <div className="min-w-0 flex-1">
-            <p className="text-[15px] font-medium">Records this month</p>
-            {latestRecord?.bestWeight ? (
-              <p className="num text-[13px] text-muted-foreground">
-                Latest: {exerciseLabel(latestRecord.name)} {fmt(latestRecord.bestWeight.load, 1)} kg
-                × {latestRecord.bestWeight.reps}
-              </p>
-            ) : null}
-          </div>
-          <span className="num text-[15px] font-semibold">{recordsThisMonth}</span>
+          Open Training
         </Link>
-        <ProgressRow to="/bulk/training/history" label="Workout history" />
-      </div>
+      )}
     </div>
   );
 }

@@ -1,6 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { createRequire } from "node:module";
+import vm from "node:vm";
+import ts from "typescript";
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import * as calc from "../src/lib/calc.ts";
+import * as types from "../src/lib/types.ts";
 
 import { mainTabForPath } from "../src/lib/main-navigation.ts";
 import {
@@ -167,18 +174,18 @@ test("pace trend uses the dominant qualifying activity type", () => {
 
 // --------------------------------------------------------------- Overview
 
-test("Progress Overview shows availability-aware tiles and a deterministic insight, Progress tab stays active", async () => {
+test("Progress Overview shows enabled areas and a deterministic insight, Progress tab stays active", async () => {
   const [overview, chrome, view] = await Promise.all([
     read("src/routes/_authenticated/bulk/progress.tsx"),
     read("src/components/ProgressChrome.tsx"),
     read("src/lib/progress-view.ts"),
   ]);
-  // Four-section nav; endurance only appears when the user has a challenge.
+  // Product availability keeps the four sections stable, regardless of analytics history.
   assert.match(chrome, /Overview/);
   assert.match(chrome, /Endurance/);
   assert.match(chrome, /Strength/);
   assert.match(chrome, /Body & food/);
-  assert.match(view, /availableProgressSections\(\{ hasChallenge, hasStrength, hasBodyFood \}\)/);
+  assert.match(view, /availableProgressSections\(\{ hasFitnessTools: mode !== "none" \}\)/);
   // One shared Overview for public and legacy (only "none" is gated); a plain-language insight.
   assert.match(overview, /bulkPlanModeFor\(memberships\.data, bulkId\)/);
   assert.match(overview, /planMode === "none"/);
@@ -199,12 +206,14 @@ test("Progress Overview shows availability-aware tiles and a deterministic insig
     assert.equal(mainTabForPath(path), "progress");
 });
 
-test("Overview avoids false zero/loading states and never fabricates empty product areas", async () => {
+test("Overview keeps honest empty states instead of hiding product areas", async () => {
   const overview = await read("src/routes/_authenticated/bulk/progress.tsx");
   assert.match(overview, /planMode === "none"/);
   assert.match(overview, /animate-pulse/);
-  // Strength/Food tiles only render with real data behind them.
-  assert.match(overview, /sections\.includes\("strength"\) && strengthTile\.total > 0/);
+  assert.match(overview, /sections\.includes\("strength"\) \?/);
+  assert.match(overview, /Not enough data yet/);
+  assert.match(overview, /Log your first weight/);
+  assert.match(overview, /Start logging meals/);
   assert.match(overview, /food\.loggedDays > 0/);
 });
 
@@ -325,7 +334,7 @@ const loggedWorkout = {
   },
 };
 
-test("Progress availability is data-driven, not mere onboarding enrolment", () => {
+test("Progress data predicates remain unchanged; navigation availability is feature-driven", () => {
   // The legacy data predicates (also used for the legacy mode's flags).
   assert.equal(hasStrengthData(appData({ workouts: loggedWorkout })), true);
   assert.equal(hasStrengthData(appData()), false);
@@ -333,15 +342,16 @@ test("Progress availability is data-driven, not mere onboarding enrolment", () =
   assert.equal(hasBodyFoodData(appData({ photos: [{ id: "p", date: "d" }] })), true);
   assert.equal(hasBodyFoodData(appData()), false);
 
-  // The pure section combiner, from flags the caller computes per mode.
-  const sections = (hasChallenge, hasStrength, hasBodyFood) =>
-    availableProgressSections({ hasChallenge, hasStrength, hasBodyFood });
-  assert.deepEqual(sections(true, false, false), ["overview", "endurance"]); // challenge-only
-  assert.deepEqual(sections(false, true, false), ["overview", "strength"]); // strength-only
-  assert.deepEqual(sections(false, false, true), ["overview", "body"]); // body/food-only
-  assert.deepEqual(sections(false, true, true), ["overview", "strength", "body"]); // strength + body
-  assert.deepEqual(sections(true, true, true), ["overview", "endurance", "strength", "body"]); // all
-  assert.deepEqual(sections(false, false, false), ["overview"]); // deep link, no data
+  assert.deepEqual(availableProgressSections({ hasFitnessTools: true }), [
+    "overview",
+    "endurance",
+    "strength",
+    "body",
+  ]);
+  assert.deepEqual(availableProgressSections({ hasFitnessTools: false }), [
+    "overview",
+    "endurance",
+  ]);
 });
 
 test("every Progress sub-route renders a safe empty state on a direct deep link", async () => {
@@ -520,8 +530,8 @@ test("normalized/public users get the new Overview IA, never the old PublicBulkP
   assert.match(model, /mode === "public"/);
   // Nutrition adherence in public mode uses each day's own stored target snapshot.
   assert.match(model, /target: day\.targetCalories/);
-  // Availability is computed per mode (normalized rows gate the sections for public users).
-  assert.match(view, /mode === "public"/);
+  // Both authorized fitness modes expose the same areas, even with no normalized rows yet.
+  assert.match(view, /hasFitnessTools: mode !== "none"/);
 });
 
 test("Progress photos are mode-aware: public uses the private normalized photo store", async () => {
@@ -591,4 +601,239 @@ test("weightTrend builds a chronological trailing window ending today (not the f
   const trend = weightTrend({ "2026-10-03": 64, "2026-10-04": 66 }, 28, "2026-10-04");
   assert.equal(trend.avgKg, 65);
   assert.equal(trend.latest.date, "2026-10-04");
+});
+
+// Execute the actual route/components and availability hook with empty or measured query results.
+// The adapters remain mocked at their boundary; existing pure-math tests cover their calculations.
+async function progressFixture(options = {}) {
+  const require = createRequire(import.meta.url);
+  const mode = options.mode ?? "public";
+  const q = (data) => ({ data, isLoading: false, error: null });
+  const weight = options.weight ?? {
+    latestKg: null,
+    hasData: false,
+    loading: false,
+    series: [],
+    goal: { remainingKg: null },
+  };
+  const food = options.food ?? {
+    loggedDays: 0,
+    onTargetDays: 0,
+    loading: false,
+    week7: [],
+    avgKcal: null,
+    target: 2500,
+  };
+  const strength = options.strength ?? { records: [], workoutRecords: [], loading: false };
+  const data = appData({ targets: { calories: 2500, weeklyWorkoutGoal: 4 } });
+  const modules = {
+    react: React,
+    "react/jsx-runtime": require("react/jsx-runtime"),
+    "@tanstack/react-router": {
+      Link: ({ to, preload, params, ...props }) => React.createElement("a", { ...props, href: to }),
+      createFileRoute: () => (config) => config,
+    },
+    "@/components/AppShell": {
+      AppShell: ({ children }) => React.createElement("main", {}, children),
+      PageHeader: ({ title }) => React.createElement("h1", {}, title),
+    },
+    "@/components/ui-kit": {
+      Card: ({ children, className }) => React.createElement("div", { className }, children),
+    },
+    "@/lib/store": { useAppData: () => data, useBulkMeta: () => ({ bulkId: "owner" }) },
+    "@/lib/bulk-access": { useMemberships: () => q([]), bulkPlanModeFor: () => mode },
+    "@/lib/auth": { useAuth: () => ({ user: { id: "me" } }) },
+    "@/lib/challenge": {
+      useMyChallenge: () => q(options.challenge ?? null),
+      useWeeks: () => q(options.weeks ?? []),
+      useChallengeMembers: () => q([]),
+      usePayments: () => q([]),
+      useEnduranceActivities: () => q([]),
+      ...calc,
+      formatPace: () => "",
+      eur: () => "",
+    },
+    "@/lib/progress-model": {
+      useProgressMode: () => ({ mode, publicId: mode === "public" ? "owner" : null }),
+      useWeightModel: () => weight,
+      useFoodModel: () => food,
+      useStrengthModel: () => strength,
+    },
+    "@/lib/calc": calc,
+    "@/lib/strength-estimates": { epleyEstimatedMax, liftEstimate, defaultTrackedLifts },
+    "@/lib/types": types,
+    "@/lib/goal-metrics": require("../src/lib/goal-metrics.ts"),
+    "@/lib/progress-sections": { availableProgressSections },
+    "@/lib/endurance-progress": { enduranceSummary, paceTrend, periodRange, rivalComparison },
+  };
+  const cache = {};
+  async function prepare(file) {
+    if (cache[file]) return;
+    const source = await read(file);
+    for (const target of ["src/components/ProgressChrome.tsx", "src/lib/progress-view.ts"])
+      if (target !== file && !cache[target] && !file.endsWith("progress-view.ts"))
+        await prepare(target);
+    const context = {
+      exports: {},
+      require(name) {
+        if (modules[name]) return modules[name];
+        if (name === "./challenge.ts") return modules["@/lib/challenge"];
+        if (name === "./progress-model.ts") return modules["@/lib/progress-model"];
+        if (name === "./progress-sections.ts") return modules["@/lib/progress-sections"];
+        if (name === "./strength-estimates.ts") return modules["@/lib/strength-estimates"];
+        if (name === "@/lib/progress-view") return cache["src/lib/progress-view.ts"];
+        if (name === "@/components/ProgressChrome")
+          return cache["src/components/ProgressChrome.tsx"];
+        if (name === "date-fns" || name === "lucide-react") return require(name);
+        throw new Error(`Unexpected import ${name} in ${file}`);
+      },
+    };
+    vm.runInNewContext(
+      ts.transpileModule(source, {
+        compilerOptions: {
+          module: ts.ModuleKind.CommonJS,
+          target: ts.ScriptTarget.ES2022,
+          jsx: ts.JsxEmit.ReactJSX,
+        },
+      }).outputText,
+      context,
+    );
+    cache[file] = context.exports;
+  }
+  // Prepare view first; Chrome reads this hook rather than a duplicated availability mock.
+  await prepare("src/lib/progress-view.ts");
+  await prepare("src/components/ProgressChrome.tsx");
+  return {
+    async render(file) {
+      await prepare(file);
+      return renderToStaticMarkup(React.createElement(cache[file].Route.component));
+    },
+    nav(active) {
+      return renderToStaticMarkup(
+        React.createElement(cache["src/components/ProgressChrome.tsx"].ProgressNav, { active }),
+      );
+    },
+  };
+}
+const overviewPath = "src/routes/_authenticated/bulk/progress.tsx";
+const tileMarkup = (html) =>
+  [...html.matchAll(/<a\b[^>]*class="[^"]*min-h-\[150px\][^"]*"[^>]*>[\s\S]*?<\/a>/g)].map(
+    (m) => m[0],
+  );
+
+test("empty enabled public and legacy Overview renders four honest tiles and stable segmented navigation", async () => {
+  for (const mode of ["public", "legacy"]) {
+    const fixture = await progressFixture({ mode });
+    const html = await fixture.render(overviewPath);
+    const tiles = tileMarkup(html);
+    assert.equal(tiles.length, 4);
+    for (const [index, label] of ["Endurance", "Strength", "Body", "Food"].entries())
+      assert.match(tiles[index], new RegExp(label));
+    assert.match(tiles[0], /Start a challenge/);
+    assert.match(tiles[1], /Not enough data yet.*Complete a workout to start tracking/s);
+    assert.match(tiles[2], /Log your first weight/);
+    assert.match(tiles[3], /Start logging meals/);
+    for (const tile of tiles)
+      assert.doesNotMatch(tile, /\b\d+(?:\.\d+)? (?:km|kg)|\d+ of \d+|<svg|↑/);
+    assert.doesNotMatch(html, /bg-primary\/10/); // No claims when no data exists.
+    for (const active of ["overview", "endurance", "strength", "body"]) {
+      const nav = fixture.nav(active);
+      assert.equal((nav.match(/<a\b/g) ?? []).length, 4);
+      assert.equal((nav.match(/aria-current="page"/g) ?? []).length, 1);
+    }
+  }
+});
+
+test("Body/Food retain real values and insight without inventing missing Strength/Endurance", async () => {
+  for (const weight of [
+    { latestKg: 70, hasData: true, loading: false, series: [], goal: { remainingKg: 5 } },
+    { latestKg: null, hasData: false, loading: false, series: [], goal: { remainingKg: 5 } },
+  ]) {
+    const fixture = await progressFixture({
+      weight,
+      food: { loggedDays: 7, onTargetDays: 5, loading: false },
+    });
+    const html = await fixture.render(overviewPath);
+    const tiles = tileMarkup(html);
+    assert.equal(tiles.length, 4);
+    assert.match(tiles[0], /Start a challenge/);
+    assert.match(tiles[1], /Not enough data yet/);
+    assert.match(tiles[2], weight.latestKg != null ? /70.0 kg/ : /Log your first weight/);
+    assert.match(tiles[3], /5 of 7/);
+    const insight = html.match(/<p class="[^"]*bg-primary\/10[^"]*">([\s\S]*?)<\/p>/)?.[1];
+    assert.ok(insight);
+    assert.doesNotMatch(insight, /main lifts|endurance/);
+    assert.match(
+      insight,
+      weight.latestKg != null ? /5.0 kg from your goal/ : /calorie target on 5 of 7/,
+    );
+  }
+});
+
+test("one measurable workout calibrates Strength rather than claiming a fake improvement", async () => {
+  const fixture = await progressFixture({
+    strength: {
+      records: [
+        {
+          name: "Incline Dumbbell Press",
+          performances: [{ date: "2026-09-01", load: 24, reps: 10 }],
+        },
+      ],
+      workoutRecords: [],
+      loading: false,
+    },
+  });
+  const html = await fixture.render(overviewPath);
+  assert.match(tileMarkup(html)[1], /Not enough data yet.*Complete another workout/s);
+  assert.doesNotMatch(tileMarkup(html)[1], /main lifts up|↑/);
+});
+
+test("empty direct Strength and Endurance routes render actionable states without records/history dead ends", async () => {
+  const fixture = await progressFixture();
+  const strength = await fixture.render("src/routes/_authenticated/bulk/progress_.strength.tsx");
+  assert.match(strength, /No tracked lifts yet.*Complete a workout/s);
+  assert.match(strength, /href="\/bulk\/training"/);
+  assert.doesNotMatch(strength, /0 of 0|href="\/bulk\/prs"|href="\/bulk\/training\/history"/);
+  const endurance = await fixture.render("src/routes/_authenticated/bulk/progress_.endurance.tsx");
+  assert.match(endurance, /Start a challenge to unlock endurance trends/);
+  assert.match(endurance, /href="\/challenge"/);
+  assert.doesNotMatch(endurance, /<polyline|a week, on average/);
+});
+
+test("measured Endurance and Strength still use real summaries, trends and supported insight", async () => {
+  const fixture = await progressFixture({
+    challenge: { id: "challenge" },
+    weeks: [
+      {
+        user_id: "me",
+        week_number: 1,
+        equivalent_km: 16,
+        target_km: 15,
+        paused: false,
+        running_km: 16,
+        cycling_km: 0,
+      },
+    ],
+    strength: {
+      records: [
+        {
+          name: "Incline Dumbbell Press",
+          performances: [
+            { date: "2026-09-01", load: 24, reps: 10 },
+            { date: "2026-09-08", load: 26, reps: 10 },
+          ],
+        },
+      ],
+      workoutRecords: [],
+      loading: false,
+    },
+  });
+  const html = await fixture.render(overviewPath);
+  const tiles = tileMarkup(html);
+  assert.equal(tiles.length, 4);
+  assert.match(tiles[0], /16.0 km.*a week · target 15/s);
+  assert.match(tiles[1], /1 of 1.*main lifts up/s);
+  const insight = html.match(/<p class="[^"]*bg-primary\/10[^"]*">([\s\S]*?)<\/p>/)?.[1];
+  assert.match(insight, /endurance target in 1 of 1 active week/);
+  assert.match(insight, /1 of 1 main lifts are up/);
 });

@@ -73,7 +73,13 @@ function OwnProgress({ data }: { data: AppData }) {
     hasChallenge && user && weekRows.data ? enduranceSummary(weekRows.data, user.id, weeks) : null;
 
   const toGoal = weight.goal.remainingKg;
-  const insight = buildInsight({ strengthTile, toGoal, endurance, food, hasChallenge });
+  const insight = buildInsight({
+    strengthTile,
+    toGoal: weight.latestKg != null ? toGoal : null,
+    endurance,
+    food,
+    hasChallenge,
+  });
 
   return (
     <AppShell>
@@ -90,55 +96,104 @@ function OwnProgress({ data }: { data: AppData }) {
       ) : null}
 
       <div className="mt-3 grid grid-cols-2 gap-3">
-        {endurance && endurance.avgKmPerActiveWeek != null ? (
-          <Tile
-            to="/bulk/progress/endurance"
-            label="Endurance"
-            up={
-              endurance.targetKm != null && endurance.avgKmPerActiveWeek >= endurance.targetKm * 0.9
-            }
-            big={`${fmt(endurance.avgKmPerActiveWeek, 1)} km`}
-            sub={
-              endurance.targetKm != null ? `a week · target ${fmt0(endurance.targetKm)}` : "a week"
-            }
-            spark={endurance.bars.map((b) => b.equivalentKm)}
-          />
-        ) : null}
+        <Tile
+          to="/bulk/progress/endurance"
+          label="Endurance"
+          up={
+            endurance?.avgKmPerActiveWeek != null &&
+            endurance.targetKm != null &&
+            endurance.avgKmPerActiveWeek >= endurance.targetKm * 0.9
+          }
+          big={
+            endurance?.avgKmPerActiveWeek != null
+              ? `${fmt(endurance.avgKmPerActiveWeek, 1)} km`
+              : challenge.isLoading
+                ? "Loading progress…"
+                : hasChallenge
+                  ? "Not enough data yet"
+                  : "Start a challenge"
+          }
+          sub={
+            endurance?.avgKmPerActiveWeek != null
+              ? endurance.targetKm != null
+                ? `a week · target ${fmt0(endurance.targetKm)}`
+                : "a week"
+              : hasChallenge
+                ? "Log runs and rides to build your trends"
+                : "Unlock your endurance trends"
+          }
+          empty={endurance?.avgKmPerActiveWeek == null}
+          spark={
+            endurance?.avgKmPerActiveWeek != null ? endurance.bars.map((b) => b.equivalentKm) : []
+          }
+        />
 
-        {sections.includes("strength") && strengthTile.total > 0 ? (
+        {sections.includes("strength") ? (
           <Tile
             to="/bulk/progress/strength"
             label="Strength"
             up={strengthTile.up > 0}
-            big={`${strengthTile.up} of ${strengthTile.total}`}
-            sub="main lifts up"
+            big={
+              strengthTile.total > 0
+                ? `${strengthTile.up} of ${strengthTile.total}`
+                : strength.loading
+                  ? "Loading progress…"
+                  : "Not enough data yet"
+            }
+            sub={
+              strengthTile.total > 0
+                ? "main lifts up"
+                : strength.records.length
+                  ? "Complete another workout to see trends"
+                  : "Complete a workout to start tracking"
+            }
+            empty={strengthTile.total === 0}
             spark={[]}
           />
         ) : null}
 
         {sections.includes("body") ? (
-          <Tile
-            to="/bulk/progress/body"
-            label="Body"
-            up={toGoal != null && Math.abs(toGoal) > 0}
-            big={weight.latestKg != null ? `${fmt(weight.latestKg, 1)} kg` : "—"}
-            sub={
-              toGoal != null
-                ? `${fmt(Math.abs(toGoal), 1)} kg ${toGoal >= 0 ? "to goal" : "over goal"}`
-                : "log a weigh-in"
-            }
-            spark={weight.series.map((p) => p.avg).filter((v): v is number => v != null)}
-          />
-        ) : null}
-
-        {food.loggedDays > 0 ? (
-          <Tile
-            to="/bulk/progress/body/food"
-            label="Food"
-            big={`${food.onTargetDays} of ${food.loggedDays}`}
-            sub="days on calorie target"
-            spark={[]}
-          />
+          <>
+            <Tile
+              to="/bulk/progress/body"
+              label="Body"
+              up={weight.latestKg != null && toGoal != null && Math.abs(toGoal) > 0}
+              big={
+                weight.latestKg != null
+                  ? `${fmt(weight.latestKg, 1)} kg`
+                  : weight.loading
+                    ? "Loading progress…"
+                    : "Log your first weight"
+              }
+              sub={
+                weight.latestKg != null && toGoal != null
+                  ? `${fmt(Math.abs(toGoal), 1)} kg ${toGoal >= 0 ? "to goal" : "over goal"}`
+                  : "See your weight progress over time"
+              }
+              empty={weight.latestKg == null}
+              spark={
+                weight.latestKg != null
+                  ? weight.series.map((p) => p.avg).filter((v): v is number => v != null)
+                  : []
+              }
+            />
+            <Tile
+              to="/bulk/progress/body/food"
+              label="Food"
+              big={
+                food.loggedDays > 0
+                  ? `${food.onTargetDays} of ${food.loggedDays}`
+                  : food.loading
+                    ? "Loading progress…"
+                    : "Start logging meals"
+              }
+              sub={
+                food.loggedDays > 0 ? "days on calorie target" : "See how meals match your targets"
+              }
+              empty={food.loggedDays === 0}
+              spark={[]}
+            />
+          </>
         ) : null}
       </div>
 
@@ -160,6 +215,7 @@ function Tile({
   sub,
   up,
   spark,
+  empty = false,
 }: {
   to: string;
   label: string;
@@ -167,20 +223,29 @@ function Tile({
   sub: string;
   up?: boolean;
   spark: number[];
+  empty?: boolean;
 }) {
   return (
     <Link
       to={to}
       preload="intent"
-      className="flex min-h-[150px] flex-col gap-1.5 rounded-[20px] bg-card p-4 active:opacity-80"
+      className="flex min-h-[150px] min-w-0 flex-col gap-1.5 rounded-[20px] bg-card p-4 active:opacity-80"
     >
       <span className="flex items-center justify-between text-[13px] text-muted-foreground">
         {label}
         {up ? <span className="text-[13px] font-semibold text-primary">↑</span> : null}
       </span>
-      <span className="num text-[26px] font-semibold tracking-tight">{big}</span>
+      <span
+        className={
+          empty
+            ? "text-[17px] font-medium leading-snug"
+            : "num text-[26px] font-semibold tracking-tight"
+        }
+      >
+        {big}
+      </span>
       <span className="text-[13px] text-muted-foreground">{sub}</span>
-      <span className="mt-auto">
+      <span className="mt-auto [&>svg]:max-w-full">
         <Sparkline points={spark} />
       </span>
     </Link>
