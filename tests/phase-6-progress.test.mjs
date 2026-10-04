@@ -178,11 +178,12 @@ test("Progress Overview shows availability-aware tiles and a deterministic insig
   assert.match(chrome, /Endurance/);
   assert.match(chrome, /Strength/);
   assert.match(chrome, /Body & food/);
-  assert.match(view, /availableProgressSections\(data, hasChallenge\)/);
-  // Overview keeps the public/own split and a plain-language insight, not a chart wall.
+  assert.match(view, /availableProgressSections\(\{ hasChallenge, hasStrength, hasBodyFood \}\)/);
+  // One shared Overview for public and legacy (only "none" is gated); a plain-language insight.
   assert.match(overview, /bulkPlanModeFor\(memberships\.data, bulkId\)/);
-  assert.match(overview, /planMode === "public"/);
+  assert.match(overview, /planMode === "none"/);
   assert.match(overview, /OwnProgress/);
+  assert.doesNotMatch(overview, /<PublicBulkProgress/);
   assert.match(overview, /buildInsight/);
   assert.match(overview, /to="\/bulk\/check-in"/); // Weekly review row, not an embedded form
   // Every Progress descendant lights the Progress tab.
@@ -203,8 +204,8 @@ test("Overview avoids false zero/loading states and never fabricates empty produ
   assert.match(overview, /planMode === "none"/);
   assert.match(overview, /animate-pulse/);
   // Strength/Food tiles only render with real data behind them.
-  assert.match(overview, /hasWorkouts && strength\.total > 0/);
-  assert.match(overview, /foodDays\.logged > 0/);
+  assert.match(overview, /sections\.includes\("strength"\) && strengthTile\.total > 0/);
+  assert.match(overview, /food\.loggedDays > 0/);
 });
 
 // --------------------------------------------------------------- Endurance
@@ -251,12 +252,17 @@ test("Lift detail charts per-session estimated max, marks the record, and reuses
 
 // --------------------------------------------------------------- Body & food
 
-test("Body & food reuses the 7-day average and goal math and links to food/review/photos", async () => {
-  const body = await read("src/routes/_authenticated/bulk/progress_.body.tsx");
-  assert.match(body, /avg7\(data, latest\.date\)/);
-  assert.match(body, /avg7\(data, iso\(subDays\(parseISO\(latest\.date\), 7\)\)\)/);
-  assert.match(body, /avgPoints >= 2 \?/); // chart guard
-  assert.match(body, /Goal \{fmt\(target, 1\)\}/);
+test("Body & food reuses the shared 7-day-average model and goal math and links to food/review/photos", async () => {
+  const [body, core] = await Promise.all([
+    read("src/routes/_authenticated/bulk/progress_.body.tsx"),
+    read("src/lib/progress-model-core.ts"),
+  ]);
+  // The weight model drives it; the authoritative 7-day average is one shared trailing computation.
+  assert.match(body, /useWeightModel\(weeks \* 7\)/);
+  assert.match(core, /export function trailingAvg/);
+  assert.match(core, /export function weightTrend/);
+  assert.match(body, /weight\.points >= 2 \?/); // chart guard
+  assert.match(body, /Goal \{fmt\(weight\.goal\.target, 1\)\}/);
   assert.match(body, /to="\/bulk\/progress\/body\/food"/);
   assert.match(body, /to="\/bulk\/check-in"/);
   assert.match(body, /to="\/bulk\/progress\/photos"/);
@@ -265,8 +271,10 @@ test("Body & food reuses the 7-day average and goal math and links to food/revie
 test("Food details summarises the week against the target and shows past days as totals only", async () => {
   const food = await read("src/routes/_authenticated/bulk/progress_.body_.food.tsx");
   assert.match(food, /backTo="\/bulk\/progress\/body" backLabel="Body & food"/);
-  assert.match(food, /on target \$\{onTarget\} of \$\{loggedDays\}/);
-  assert.match(food, /loggedDays \?/); // bars only when a day is logged
+  assert.match(food, /useFoodModel\(7\)/);
+  assert.match(food, /on target \$\{food\.onTargetDays\} of \$\{food\.loggedDays\}/);
+  assert.match(food, /food\.loggedDays \?/); // bars only when a day is logged
+  assert.match(food, /food\.past\.map/); // past days as plain totals
   assert.match(food, /to="\/bulk\/meals\/history"/);
 });
 
@@ -318,29 +326,22 @@ const loggedWorkout = {
 };
 
 test("Progress availability is data-driven, not mere onboarding enrolment", () => {
+  // The legacy data predicates (also used for the legacy mode's flags).
   assert.equal(hasStrengthData(appData({ workouts: loggedWorkout })), true);
   assert.equal(hasStrengthData(appData()), false);
   assert.equal(hasBodyFoodData(appData({ days: { d: { date: "d", weight: 70 } } })), true);
   assert.equal(hasBodyFoodData(appData({ photos: [{ id: "p", date: "d" }] })), true);
   assert.equal(hasBodyFoodData(appData()), false);
 
-  const onlyWorkout = appData({ workouts: loggedWorkout });
-  const onlyBody = appData({ days: { d: { date: "d", weight: 70 } } });
-  const both = appData({ workouts: loggedWorkout, days: { d: { date: "d", weight: 70 } } });
-
-  // Combinations the handoff calls out.
-  assert.deepEqual(availableProgressSections(appData(), true), ["overview", "endurance"]);
-  assert.deepEqual(availableProgressSections(onlyWorkout, false), ["overview", "strength"]);
-  assert.deepEqual(availableProgressSections(onlyBody, false), ["overview", "body"]);
-  assert.deepEqual(availableProgressSections(both, false), ["overview", "strength", "body"]);
-  assert.deepEqual(availableProgressSections(both, true), [
-    "overview",
-    "endurance",
-    "strength",
-    "body",
-  ]);
-  // A deep link with no data at all still yields a valid (overview-only) set.
-  assert.deepEqual(availableProgressSections(null, false), ["overview"]);
+  // The pure section combiner, from flags the caller computes per mode.
+  const sections = (hasChallenge, hasStrength, hasBodyFood) =>
+    availableProgressSections({ hasChallenge, hasStrength, hasBodyFood });
+  assert.deepEqual(sections(true, false, false), ["overview", "endurance"]); // challenge-only
+  assert.deepEqual(sections(false, true, false), ["overview", "strength"]); // strength-only
+  assert.deepEqual(sections(false, false, true), ["overview", "body"]); // body/food-only
+  assert.deepEqual(sections(false, true, true), ["overview", "strength", "body"]); // strength + body
+  assert.deepEqual(sections(true, true, true), ["overview", "endurance", "strength", "body"]); // all
+  assert.deepEqual(sections(false, false, false), ["overview"]); // deep link, no data
 });
 
 test("every Progress sub-route renders a safe empty state on a direct deep link", async () => {
@@ -497,4 +498,64 @@ test("the Endurance query pages the shared fetch within the selected range", asy
   assert.match(challenge, /collectActivityPages\(\(cursor\) =>/);
   assert.match(challenge, /fetchActivityPage\(challengeId, cursor, range, pageSize\)/);
   assert.match(challenge, /pageSize = ACTIVITY_PAGE_SIZE/); // sensible fixed page size, range-bounded
+});
+
+// ------------------------------------------- public-mode primary (round 4)
+
+test("normalized/public users get the new Overview IA, never the old PublicBulkProgress dashboard", async () => {
+  const [overview, model, view] = await Promise.all([
+    read("src/routes/_authenticated/bulk/progress.tsx"),
+    read("src/lib/progress-model.ts"),
+    read("src/lib/progress-view.ts"),
+  ]);
+  // The route renders OwnProgress for public and legacy alike — the old dashboard is gone from it.
+  assert.doesNotMatch(overview, /PublicBulkProgress/);
+  assert.doesNotMatch(overview, /Weekly trends across weight, training and nutrition/);
+  assert.match(overview, /return <OwnProgress data=\{data\} \/>/);
+  // Public mode reads normalized Supabase data; legacy reads the store — one shared view-model.
+  assert.match(model, /useBulkWeights/);
+  assert.match(model, /useBulkProgressNutrition/);
+  assert.match(model, /useCompletedBulkTrainingSessions/);
+  assert.match(model, /derivePublicPersonalRecords/);
+  assert.match(model, /mode === "public"/);
+  // Nutrition adherence in public mode uses each day's own stored target snapshot.
+  assert.match(model, /target: day\.targetCalories/);
+  // Availability is computed per mode (normalized rows gate the sections for public users).
+  assert.match(view, /mode === "public"/);
+});
+
+test("Progress photos are mode-aware: public uses the private normalized photo store", async () => {
+  const photos = await read("src/routes/_authenticated/bulk/progress_.photos.tsx");
+  assert.match(photos, /mode === "public"/);
+  assert.match(photos, /useBulkProgressPhotos/);
+  assert.match(photos, /uploadBulkProgressPhoto/);
+  assert.match(photos, /deleteBulkProgressPhoto/);
+  // Still private: signed URLs only, owner-only delete, no public URLs.
+  assert.match(photos, /photo\.signedUrl/);
+  assert.doesNotMatch(photos, /getPublicUrl|public = true/);
+});
+
+// ------------------------------------------- mode-aware photo count (round 5)
+
+test("Body & food photo count is mode-aware (normalized for public, legacy otherwise)", async () => {
+  const { resolvePhotoCount } = await import("../src/lib/progress-model-core.ts");
+  // Public user with normalized photos shows the normalized count, not the (empty) legacy count.
+  assert.equal(resolvePhotoCount("public", 3, 0), 3);
+  // Legacy user shows the legacy count.
+  assert.equal(resolvePhotoCount("legacy", 0, 2), 2);
+  // Zero-photo state still works in both modes.
+  assert.equal(resolvePhotoCount("public", 0, 0), 0);
+  assert.equal(resolvePhotoCount("legacy", 0, 0), 0);
+
+  const [body, model] = await Promise.all([
+    read("src/routes/_authenticated/bulk/progress_.body.tsx"),
+    read("src/lib/progress-model.ts"),
+  ]);
+  assert.match(body, /const photoCount = usePhotoCount\(\)/);
+  // The hook draws on the same authoritative sources as the Photos screen, signed/private.
+  assert.match(model, /useBulkProgressPhotos\(publicId\)/);
+  assert.match(
+    model,
+    /resolvePhotoCount\(mode, photos\.data\?\.length \?\? 0, data\?\.photos\.length \?\? 0\)/,
+  );
 });

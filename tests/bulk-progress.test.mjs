@@ -139,8 +139,12 @@ test("public progress remains separate from legacy progress and clears private q
     ),
   ]);
   assert.match(route, /bulkPlanModeFor\(memberships\.data, bulkId\)/);
-  assert.match(route, /planMode === "public"/);
+  // Public and legacy now share one Progress experience: only "none" is gated out, and the old
+  // PublicBulkProgress dashboard is no longer rendered from the route.
+  assert.match(route, /planMode === "none"/);
   assert.match(route, /OwnProgress/);
+  assert.doesNotMatch(route, /<PublicBulkProgress/);
+  // PublicBulkProgress is retained as a compatibility component (its weekly review powers Check-In).
   assert.match(component, /current week is still in progress/);
   assert.match(component, /Photo unavailable/);
   assert.match(query, /createSignedUrls\(paths, 15 \* 60\)/);

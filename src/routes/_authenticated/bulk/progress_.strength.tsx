@@ -6,11 +6,10 @@ import { AppShell } from "@/components/AppShell";
 import { Card } from "@/components/ui-kit";
 import { ProgressNav, ProgressRow, Sparkline } from "@/components/ProgressChrome";
 import { useTrackedLifts } from "@/lib/progress-view";
+import { useStrengthModel } from "@/lib/progress-model";
 import { BULK_START, fmt, iso } from "@/lib/calc";
-import { useAppData, useBulkMeta } from "@/lib/store";
-import { useCompletedSessionDates } from "@/lib/bulk-training-sessions";
-import { collectCompletedWorkouts, countWorkoutsInRange } from "@/lib/goal-metrics";
-import { deriveLegacyPersonalRecords } from "@/lib/personal-records";
+import { useAppData } from "@/lib/store";
+import { countWorkoutsInRange } from "@/lib/goal-metrics";
 import { liftEstimate } from "@/lib/strength-estimates";
 import { ALL_EXERCISES, exerciseLabel, type AppData } from "@/lib/types";
 
@@ -35,13 +34,11 @@ function StrengthPage() {
 }
 
 function StrengthBody({ data }: { data: AppData }) {
-  const { bulkId } = useBulkMeta();
   const today = iso(new Date());
-  const sessions = useCompletedSessionDates(bulkId ?? null, "2000-01-01", today);
+  const { records, workoutRecords } = useStrengthModel();
   const [trackedNames, setTrackedNames] = useTrackedLifts(data);
   const [editing, setEditing] = useState(false);
 
-  const records = useMemo(() => deriveLegacyPersonalRecords(data), [data]);
   const estimates = useMemo(
     () =>
       trackedNames.flatMap((name) => {
@@ -55,16 +52,7 @@ function StrengthBody({ data }: { data: AppData }) {
 
   // Planned workouts: a fixed four-week window (plan-start comparisons stay period-independent).
   const monthAgo = iso(subDays(parseISO(today), 27));
-  const completedRecords = useMemo(
-    () =>
-      collectCompletedWorkouts({
-        sessions: sessions.data ?? [],
-        legacyWorkouts: data.workouts,
-        legacyDays: data.days,
-      }),
-    [sessions.data, data.workouts, data.days],
-  );
-  const workoutsDone = countWorkoutsInRange(completedRecords, monthAgo, today);
+  const workoutsDone = countWorkoutsInRange(workoutRecords, monthAgo, today);
   const workoutTarget = (data.targets.weeklyWorkoutGoal ?? 0) * 4;
 
   const recordsThisMonth = useMemo(

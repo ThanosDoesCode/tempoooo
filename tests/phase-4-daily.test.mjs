@@ -561,7 +561,7 @@ test("Phase 4.1 weekly goal stays independent of plan frequency and inside Worko
   legacy.data.days[legacy.today].calories = 2500;
   assert.match(
     texts(workoutGroup(legacy.render())),
-    /Workout completed · 1 of 6 workouts this week/,
+    /Workout completed\s+1 of 6 workouts this week/,
   );
   assert.match(texts(legacy.render()), /4\s+of 4 done/);
 });
@@ -573,7 +573,7 @@ test("Phase 4.1 rest day and Undo retain existing persisted field and completion
   restButton(f.render()).props.onClick();
   await settle();
   assert.deepEqual(f.writes, [[f.today, { restDay: true }]]);
-  assert.match(texts(workoutGroup(f.render())), /Rest day · 0 of 6 workouts this week/);
+  assert.match(texts(workoutGroup(f.render())), /Rest day\s+0 of 6 workouts this week/);
   assert.equal(texts(restButton(f.render())), "Undo");
   assert.doesNotMatch(texts(workoutGroup(f.render())), /Start/);
   assert.match(texts(f.render()), /3\s+of 4 done/);
@@ -609,7 +609,7 @@ test("Phase 4.1 active workout shows actual name and Resume even with persisted 
   for (const restDay of [false, true]) {
     const f = todayFixture({ restDay, active: { id: "session", workoutDayName: "Chest & Back" } });
     const group = workoutGroup(f.render());
-    assert.match(texts(group), /Chest & Back · In progress · 0 of 6 workouts this week/);
+    assert.match(texts(group), /Chest & Back · In progress\s+0 of 6 workouts this week/);
     assert.match(texts(group), /Resume/);
     assert.equal(nodes(group, (n) => n.type === "Link")[0].props.to, "/bulk/training");
     assert.equal(

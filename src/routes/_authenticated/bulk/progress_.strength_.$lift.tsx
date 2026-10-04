@@ -16,7 +16,7 @@ import { Card } from "@/components/ui-kit";
 import { chartAxis, chartTooltip } from "@/lib/progress-view";
 import { BULK_START, fmt, progressionFor, signed } from "@/lib/calc";
 import { useAppData } from "@/lib/store";
-import { deriveLegacyPersonalRecords } from "@/lib/personal-records";
+import { useStrengthModel } from "@/lib/progress-model";
 import { liftEstimate } from "@/lib/strength-estimates";
 import { exerciseDef, exerciseLabel, type AppData } from "@/lib/types";
 
@@ -45,10 +45,8 @@ function LiftDetailPage() {
 }
 
 function LiftBody({ data, name }: { data: AppData; name: string }) {
-  const record = useMemo(
-    () => deriveLegacyPersonalRecords(data).find((r) => r.name === name),
-    [data, name],
-  );
+  const { records } = useStrengthModel();
+  const record = useMemo(() => records.find((r) => r.name === name), [records, name]);
   const estimate = record ? liftEstimate(record, BULK_START) : null;
   const nextSuggestion = useMemo(() => nextSessionSuggestion(data, name), [data, name]);
 

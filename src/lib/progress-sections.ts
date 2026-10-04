@@ -21,17 +21,18 @@ export function hasBodyFoodData(data: AppData): boolean {
 
 /**
  * The Progress sections a user actually has usable data for — not merely what the onboarding guard
- * allows. Endurance needs challenge context; Strength needs logged training; Body & food needs a
- * weight, a logged day or a photo. Overview always shows and adapts to the rest. Order matches the
- * handoff (Overview · Endurance · Strength · Body & food).
+ * allows. The caller computes the three flags from whichever data source the user's mode uses
+ * (legacy logs or normalized Supabase rows), so availability is identical across modes. Overview
+ * always shows and adapts to the rest. Order matches the handoff.
  */
-export function availableProgressSections(
-  data: AppData | null,
-  hasChallenge: boolean,
-): ProgressSection[] {
+export function availableProgressSections(flags: {
+  hasChallenge: boolean;
+  hasStrength: boolean;
+  hasBodyFood: boolean;
+}): ProgressSection[] {
   const sections: ProgressSection[] = ["overview"];
-  if (hasChallenge) sections.push("endurance");
-  if (data && hasStrengthData(data)) sections.push("strength");
-  if (data && hasBodyFoodData(data)) sections.push("body");
+  if (flags.hasChallenge) sections.push("endurance");
+  if (flags.hasStrength) sections.push("strength");
+  if (flags.hasBodyFood) sections.push("body");
   return sections;
 }

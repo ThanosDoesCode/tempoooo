@@ -1,10 +1,24 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
 import { useMemo, useRef, useState } from "react";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { Card, Chip, Note, PendingLabel } from "@/components/ui-kit";
 import { fmt, iso, latestWeight } from "@/lib/calc";
 import { useActions, useAppData, useBulkMeta } from "@/lib/store";
+import { useProgressMode } from "@/lib/progress-model";
+import {
+  bulkPhotoQueryKey,
+  deleteBulkProgressPhoto,
+  uploadBulkProgressPhoto,
+  useBulkProgressPhotos,
+} from "@/lib/bulk-progress-query";
+import type { BulkProgressPhoto } from "@/lib/bulk-progress";
+import {
+  inspectPrivateImage,
+  isPrivateImageValidationError,
+  STANDARD_PRIVATE_IMAGE_MIME_TYPES,
+} from "@/lib/private-image-upload";
 import { optimizeBulkPhoto } from "@/lib/challenge-evidence";
 import { type AppData, type PhotoSet } from "@/lib/types";
 
@@ -18,6 +32,7 @@ export const Route = createFileRoute("/_authenticated/bulk/progress_/photos")({
 
 function PhotosPage() {
   const data = useAppData();
+  const { mode, publicId } = useProgressMode();
   return (
     <AppShell>
       <PageHeader
@@ -26,12 +41,171 @@ function PhotosPage() {
         backTo="/bulk/progress/body"
         backLabel="Body & food"
       />
-      {data ? (
+      {mode === "public" && publicId ? (
+        <PublicPhotosSection profileId={publicId} />
+      ) : data ? (
         <PhotosSection data={data} />
       ) : (
         <div className="h-40 animate-pulse rounded-2xl bg-card" aria-label="Loading photos" />
       )}
     </AppShell>
+  );
+}
+
+/** Normalized/public progress photos: private bucket, signed URLs, owner-only delete, angle-first. */
+function PublicPhotosSection({ profileId }: { profileId: string }) {
+  const { role } = useBulkMeta();
+  const owner = role === "owner";
+  const client = useQueryClient();
+  const photosQuery = useBulkProgressPhotos(profileId);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [angle, setAngle] = useState<Angle>("front");
+  const [phase, setPhase] = useState<"optimizing" | "uploading" | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+
+  const photos = useMemo(
+    () =>
+      (photosQuery.data ?? [])
+        .filter((photo) => photo.viewType === angle)
+        .sort((a, b) => b.logDate.localeCompare(a.logDate)),
+    [photosQuery.data, angle],
+  );
+
+  const onFile = async (file: File) => {
+    if (phase) return;
+    setError(null);
+    setPhase("optimizing");
+    try {
+      await inspectPrivateImage(file, STANDARD_PRIVATE_IMAGE_MIME_TYPES);
+      const optimized = await optimizeBulkPhoto(file);
+      setPhase("uploading");
+      await uploadBulkProgressPhoto(profileId, {
+        file: optimized,
+        logDate: iso(new Date()),
+        viewType: angle,
+        note: null,
+      });
+      await client.invalidateQueries({ queryKey: bulkPhotoQueryKey(profileId) });
+    } catch (cause) {
+      setError(
+        isPrivateImageValidationError(cause)
+          ? "Choose a valid JPG, PNG or WebP image up to 15 MB."
+          : "Photo was not uploaded. Try again when ready.",
+      );
+    } finally {
+      setPhase(null);
+    }
+  };
+
+  const removePhoto = async (photo: BulkProgressPhoto) => {
+    setConfirmDelete(null);
+    await deleteBulkProgressPhoto(photo);
+    await client.invalidateQueries({ queryKey: bulkPhotoQueryKey(profileId) });
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex gap-1 rounded-[13px] bg-card p-1" role="tablist" aria-label="Angle">
+        {ANGLES.map((option) => (
+          <button
+            key={option}
+            role="tab"
+            aria-selected={angle === option}
+            onClick={() => setAngle(option)}
+            className={`h-10 flex-1 rounded-[10px] text-sm capitalize ${
+              angle === option
+                ? "bg-elevated font-semibold text-foreground"
+                : "font-medium text-muted-foreground"
+            }`}
+          >
+            {option}
+          </button>
+        ))}
+      </div>
+
+      {phase ? (
+        <p role="status" className="text-xs text-primary">
+          <PendingLabel>
+            {phase === "optimizing" ? "Optimizing photo…" : "Uploading photo…"}
+          </PendingLabel>
+        </p>
+      ) : null}
+      {error ? (
+        <div role="alert" className="rounded-xl border border-danger/30 bg-danger/5 p-3">
+          <p className="text-xs text-danger">{error}</p>
+        </div>
+      ) : null}
+
+      {photosQuery.isLoading ? (
+        <div className="h-40 animate-pulse rounded-2xl bg-card" aria-label="Loading photos" />
+      ) : photos.length === 0 ? (
+        <Card>
+          <p className="text-sm text-muted-foreground">
+            No {angle} photos yet. Add one, taken in the same light and pose each time.
+          </p>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-2 gap-2.5">
+          {photos.map((photo) => (
+            <div key={photo.id}>
+              <div className="aspect-[3/4] w-full overflow-hidden rounded-[18px] border border-border bg-card">
+                {photo.signedUrl ? (
+                  <img
+                    src={photo.signedUrl}
+                    alt={`${photo.viewType} progress, ${format(parseISO(photo.logDate), "d MMM yyyy")}`}
+                    loading="lazy"
+                    decoding="async"
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <span className="grid h-full place-items-center text-[13px] text-muted-foreground">
+                    Photo unavailable
+                  </span>
+                )}
+              </div>
+              <div className="mt-1.5 flex items-center justify-between text-[13px]">
+                <span>{format(parseISO(photo.logDate), "d MMM")}</span>
+                {owner ? (
+                  <button
+                    onClick={() => {
+                      if (confirmDelete === photo.id) void removePhoto(photo);
+                      else setConfirmDelete(photo.id);
+                    }}
+                    className={`min-h-11 rounded-lg px-1.5 text-[11px] font-medium ${
+                      confirmDelete === photo.id
+                        ? "bg-danger text-primary-foreground"
+                        : "text-danger hover:bg-danger/10"
+                    }`}
+                  >
+                    {confirmDelete === photo.id ? "Confirm delete" : "Delete"}
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <button
+        onClick={() => fileRef.current?.click()}
+        disabled={phase !== null}
+        className="flex min-h-[54px] w-full items-center justify-center gap-2 rounded-2xl bg-primary text-base font-semibold text-primary-foreground active:opacity-90 disabled:opacity-60"
+      >
+        Add photo
+      </button>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) void onFile(f);
+          e.target.value = "";
+        }}
+      />
+    </div>
   );
 }
 

@@ -352,7 +352,7 @@ test("product areas expose distinct contextual destinations and preserve legacy/
   assert.doesNotMatch(more, /to: "\/bulk\/(?:history|training\/history)"/);
   // Progress is a bottom tab; its sub-screens are reached from Progress's in-page rows.
   assert.match(nav, /to: "\/bulk\/progress"/);
-  assert.match(progress, /to: "\/bulk\/check-in"/);
+  assert.match(progress, /to="\/bulk\/check-in"/);
   assert.match(profile, /to="\/bulk\/more"/);
   assert.match(productNavigation, /pathname\.startsWith\("\/bulk\/prs"\)/);
   assert.doesNotMatch(shell, /location\.reload/);

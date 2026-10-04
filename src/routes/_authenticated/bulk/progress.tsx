@@ -1,20 +1,17 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { parseISO, subDays } from "date-fns";
 import { useMemo } from "react";
 
-import { AppShell, PageHeader } from "@/components/AppShell";
-import { NavRows } from "@/components/NavRows";
+import { AppShell } from "@/components/AppShell";
 import { PeriodPicker, ProgressNav, ProgressRow, Sparkline } from "@/components/ProgressChrome";
-import { usePeriodWeeks, useProgressSections, useTrackedLifts } from "@/lib/progress-view";
-import { avg7, calorieAdvice, fmt, fmt0, iso, latestWeight } from "@/lib/calc";
+import { fmt, fmt0 } from "@/lib/calc";
 import { useAppData, useBulkMeta } from "@/lib/store";
 import { bulkPlanModeFor, useMemberships } from "@/lib/bulk-access";
 import { useAuth } from "@/lib/auth";
 import { useMyChallenge, useWeeks } from "@/lib/challenge";
 import { enduranceSummary } from "@/lib/endurance-progress";
-import { deriveLegacyPersonalRecords } from "@/lib/personal-records";
+import { usePeriodWeeks, useProgressSections, useTrackedLifts } from "@/lib/progress-view";
+import { useFoodModel, useStrengthModel, useWeightModel } from "@/lib/progress-model";
 import { liftEstimate } from "@/lib/strength-estimates";
-import { PublicBulkProgress } from "@/components/PublicBulkProgress";
 import type { AppData } from "@/lib/types";
 
 export const Route = createFileRoute("/_authenticated/bulk/progress")({
@@ -36,6 +33,7 @@ function ProgressPage() {
   const data = useAppData();
   const { bulkId } = useBulkMeta();
   const memberships = useMemberships();
+  // Public and legacy modes share one Progress experience; only "none" (no bulk plan) is gated out.
   const planMode = bulkPlanModeFor(memberships.data, bulkId);
 
   if (!data || planMode === "none") {
@@ -43,29 +41,6 @@ function ProgressPage() {
       <AppShell>
         <h1 className="fade-up mb-3 text-3xl font-semibold tracking-tight">Progress</h1>
         <div className="h-48 animate-pulse rounded-[20px] bg-card" aria-label="Loading progress" />
-      </AppShell>
-    );
-  }
-
-  if (planMode === "public" && bulkId) {
-    return (
-      <AppShell>
-        <PageHeader
-          title="Progress"
-          subtitle="Weekly trends across weight, training and nutrition."
-        />
-        <PublicBulkProgress bulkProfileId={bulkId} targets={data.targets} />
-        <div className="mt-5">
-          <NavRows
-            title="More in Progress"
-            rows={[
-              { to: "/bulk/check-in", label: "Weekly review", hint: "Recommendation and numbers" },
-              { to: "/bulk/prs", label: "Personal records", hint: "Your strongest performances" },
-              { to: "/bulk/training/history", label: "Training history" },
-              { to: "/bulk/meals/history", label: "Nutrition history" },
-            ]}
-          />
-        </div>
       </AppShell>
     );
   }
@@ -80,53 +55,25 @@ function OwnProgress({ data }: { data: AppData }) {
   const challenge = useMyChallenge();
   const weekRows = useWeeks(challenge.data?.id);
 
-  // ---- Body ----
-  const latest = latestWeight(data);
-  const rolling = latest ? avg7(data, latest.date) : null;
-  const toGoal = latest ? data.targets.targetWeight - latest.weight : null;
-  const bodySpark = useMemo(() => {
-    const today = iso(new Date());
-    return Array.from({ length: 6 }, (_, i) =>
-      avg7(data, iso(subDays(parseISO(today), (5 - i) * 7))),
-    ).filter((v): v is number => v != null);
-  }, [data]);
-
-  // ---- Food ----
-  const foodDays = useMemo(() => {
-    const today = parseISO(iso(new Date()));
-    const target = data.targets.calories;
-    let logged = 0;
-    let onTarget = 0;
-    for (let i = 0; i < weeks * 7; i++) {
-      const cals = data.days[iso(subDays(today, i))]?.calories;
-      if (cals == null) continue;
-      logged += 1;
-      if (Math.abs(cals - target) <= target * 0.1) onTarget += 1;
-    }
-    return { logged, onTarget };
-  }, [data, weeks]);
-
-  // ---- Strength ----
+  const weight = useWeightModel(weeks * 7);
+  const food = useFoodModel(weeks * 7);
+  const strength = useStrengthModel();
   const [trackedNames] = useTrackedLifts(data);
-  const strength = useMemo(() => {
-    const records = deriveLegacyPersonalRecords(data);
+
+  const strengthTile = useMemo(() => {
     const estimates = trackedNames.flatMap((name) => {
-      const record = records.find((r) => r.name === name);
+      const record = strength.records.find((r) => r.name === name);
       return record ? [liftEstimate(record)] : [];
     });
     const measured = estimates.filter((e) => e.trend !== "insufficient");
     return { up: measured.filter((e) => e.trend === "up").length, total: measured.length };
-  }, [data, trackedNames]);
-  const hasWorkouts = useMemo(
-    () => Object.values(data.workouts).some((w) => w.status === "completed"),
-    [data.workouts],
-  );
+  }, [strength.records, trackedNames]);
 
-  // ---- Endurance ----
   const endurance =
     hasChallenge && user && weekRows.data ? enduranceSummary(weekRows.data, user.id, weeks) : null;
 
-  const insight = buildInsight({ strength, toGoal, endurance, foodDays, hasChallenge });
+  const toGoal = weight.goal.remainingKg;
+  const insight = buildInsight({ strengthTile, toGoal, endurance, food, hasChallenge });
 
   return (
     <AppShell>
@@ -158,12 +105,12 @@ function OwnProgress({ data }: { data: AppData }) {
           />
         ) : null}
 
-        {hasWorkouts && strength.total > 0 ? (
+        {sections.includes("strength") && strengthTile.total > 0 ? (
           <Tile
             to="/bulk/progress/strength"
             label="Strength"
-            up={strength.up > 0}
-            big={`${strength.up} of ${strength.total}`}
+            up={strengthTile.up > 0}
+            big={`${strengthTile.up} of ${strengthTile.total}`}
             sub="main lifts up"
             spark={[]}
           />
@@ -174,21 +121,21 @@ function OwnProgress({ data }: { data: AppData }) {
             to="/bulk/progress/body"
             label="Body"
             up={toGoal != null && Math.abs(toGoal) > 0}
-            big={latest ? `${fmt(latest.weight, 1)} kg` : "—"}
+            big={weight.latestKg != null ? `${fmt(weight.latestKg, 1)} kg` : "—"}
             sub={
               toGoal != null
                 ? `${fmt(Math.abs(toGoal), 1)} kg ${toGoal >= 0 ? "to goal" : "over goal"}`
                 : "log a weigh-in"
             }
-            spark={bodySpark}
+            spark={weight.series.map((p) => p.avg).filter((v): v is number => v != null)}
           />
         ) : null}
 
-        {foodDays.logged > 0 ? (
+        {food.loggedDays > 0 ? (
           <Tile
             to="/bulk/progress/body/food"
             label="Food"
-            big={`${foodDays.onTarget} of ${foodDays.logged}`}
+            big={`${food.onTargetDays} of ${food.loggedDays}`}
             sub="days on calorie target"
             spark={[]}
           />
@@ -199,7 +146,7 @@ function OwnProgress({ data }: { data: AppData }) {
         <ProgressRow
           to="/bulk/check-in"
           label="Weekly review"
-          hint={calorieAdvice(data).decision.startsWith("Keep") ? "On track" : "Review suggested"}
+          hint={`${fmt0(data.targets.calories)} kcal`}
         />
       </div>
     </AppShell>
@@ -241,16 +188,16 @@ function Tile({
 }
 
 function buildInsight({
-  strength,
+  strengthTile,
   toGoal,
   endurance,
-  foodDays,
+  food,
   hasChallenge,
 }: {
-  strength: { up: number; total: number };
+  strengthTile: { up: number; total: number };
   toGoal: number | null;
   endurance: ReturnType<typeof enduranceSummary> | null;
-  foodDays: { logged: number; onTarget: number };
+  food: { loggedDays: number; onTargetDays: number };
   hasChallenge: boolean;
 }): string | null {
   const parts: string[] = [];
@@ -261,15 +208,15 @@ function buildInsight({
       }`,
     );
   }
-  if (strength.total > 0 && strength.up > 0) {
-    parts.push(`${strength.up} of ${strength.total} main lifts are up`);
+  if (strengthTile.total > 0 && strengthTile.up > 0) {
+    parts.push(`${strengthTile.up} of ${strengthTile.total} main lifts are up`);
   }
   if (!parts.length && toGoal != null && Math.abs(toGoal) > 0) {
     parts.push(`you're ${fmt(Math.abs(toGoal), 1)} kg from your goal weight`);
   }
-  if (!parts.length && foodDays.logged > 0) {
+  if (!parts.length && food.loggedDays > 0) {
     parts.push(
-      `you hit your calorie target on ${foodDays.onTarget} of ${foodDays.logged} logged days`,
+      `you hit your calorie target on ${food.onTargetDays} of ${food.loggedDays} logged days`,
     );
   }
   if (!parts.length) return null;
