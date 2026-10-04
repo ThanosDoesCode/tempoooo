@@ -23,7 +23,8 @@ import {
   resolveWeeklyWorkoutTarget,
 } from "@/lib/goal-metrics";
 import { useLocalDay } from "@/lib/use-local-day";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useChallengeInvitations } from "@/lib/challenge-invitations";
 
 export const Route = createFileRoute("/_authenticated/bulk/")({
   head: () => ({ meta: [{ title: "Tempo" }] }),
@@ -32,6 +33,7 @@ export const Route = createFileRoute("/_authenticated/bulk/")({
 function TodayPage() {
   const today = useLocalDay();
   const memberships = useMemberships();
+  const invitations = useChallengeInvitations();
   const owner = preferredBulkMembership(memberships.data);
   const data = useAppData();
   const { bulkId } = useBulkMeta();
@@ -44,6 +46,7 @@ function TodayPage() {
   const activeSession = useActiveBulkTrainingSession(publicGoal ? id : null);
   const plan = useActiveTrainingPlan(publicGoal ? id : null);
   const { saveDay } = useActions();
+  const restSaving = useRef(false);
   const [restPending, setRestPending] = useState(false);
   const [restError, setRestError] = useState(false);
   const day = owner ? data?.days[today] : undefined;
@@ -84,6 +87,26 @@ function TodayPage() {
     targetDaysPerWeek: data?.targets.trainingDaysPerWeek ?? null,
     activePlanDaysPerWeek: plan.data?.trainingDaysPerWeek ?? null,
   });
+  const weeklyCount = countWorkoutsInRange(completed, from, today);
+  const weeklyContext =
+    target == null
+      ? `${weeklyCount} workouts this week`
+      : `${weeklyCount} of ${target} workouts this week`;
+  const workoutSubtitle = `${activeSession.data ? `${activeSession.data.workoutDayName} · In progress` : workoutDone ? "Workout completed" : rest ? "Rest day" : (plan.data?.name ?? "Choose a training plan")} · ${weeklyContext}`;
+  async function toggleRestDay() {
+    if (restSaving.current) return;
+    restSaving.current = true;
+    setRestPending(true);
+    setRestError(false);
+    try {
+      await saveDay(today, { restDay: !rest });
+    } catch {
+      setRestError(true);
+    } finally {
+      restSaving.current = false;
+      setRestPending(false);
+    }
+  }
   const habit = (label: string, subtitle: string, done: boolean, to: string) => (
     <Link
       key={label}
@@ -105,13 +128,7 @@ function TodayPage() {
         <span className="block text-[15px] font-medium">{label}</span>
         <span className="num block text-[13px] text-muted-foreground">{subtitle}</span>
       </span>
-      {label === "Workout" && !done ? (
-        <span className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground">
-          {activeSession.data ? "Resume" : plan.data ? "Start" : "Choose plan"}
-        </span>
-      ) : (
-        <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-      )}
+      <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
     </Link>
   );
   return (
@@ -122,11 +139,10 @@ function TodayPage() {
           <h1 className="mt-1 text-[30px] font-semibold tracking-tight">Today</h1>
         </header>
         <ChallengeInviteReceiver />
-        <TodayChallenge />
         {memberships.isLoading ? (
           <PageSkeleton />
         ) : !owner ? (
-          <div className="card-surface space-y-[14px] p-5">
+          <div className="card-surface rounded-[20px] space-y-[14px] p-5">
             <h2 className="text-[17px] font-medium">Track more, if you want</h2>
             <p className="text-sm text-muted-foreground">
               Weight, workouts and meals, all optional.
@@ -151,7 +167,7 @@ function TodayPage() {
               <span>Today's habits</span>
               <span>{habits.filter(Boolean).length} of 4 done</span>
             </div>
-            <div className="card-surface px-4 py-0.5">
+            <div className="card-surface rounded-[20px] px-4 py-0.5">
               {habit(
                 "Weigh-in",
                 weight == null ? "Add today's weight" : `${weight} kg`,
@@ -166,18 +182,39 @@ function TodayPage() {
                 habits[1]!,
                 "/bulk/morning",
               )}
-              {habit(
-                "Workout",
-                workoutDone
-                  ? "Workout completed"
-                  : rest
-                    ? "Rest day"
-                    : (activeSession.data?.workoutDayName ??
-                      plan.data?.name ??
-                      "Choose a training plan"),
-                habits[2]!,
-                "/bulk/training",
-              )}
+              <div className="border-t border-border py-2" role="group" aria-label="Workout">
+                {habit("Workout", workoutSubtitle, habits[2]!, "/bulk/training")}
+                {!workoutDone || activeSession.data ? (
+                  <div className="flex flex-wrap items-center justify-end gap-2 pl-10">
+                    {!habits[2] || activeSession.data ? (
+                      <Link
+                        to="/bulk/training"
+                        preload="intent"
+                        className="inline-flex min-h-11 items-center rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground active:opacity-80"
+                      >
+                        {activeSession.data ? "Resume" : plan.data ? "Start" : "Choose plan"}
+                      </Link>
+                    ) : null}
+                    {!workoutDone ? (
+                      <button
+                        type="button"
+                        disabled={restPending}
+                        aria-pressed={rest}
+                        aria-busy={restPending}
+                        className="min-h-11 rounded-xl px-3 text-[13px] font-medium text-primary disabled:opacity-60 active:bg-elevated"
+                        onClick={() => void toggleRestDay()}
+                      >
+                        {restPending ? "Saving rest day…" : rest ? "Undo" : "Rest day"}
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+                {restError ? (
+                  <p role="alert" className="pl-10 text-[13px] text-danger">
+                    Could not save rest day. Try again.
+                  </p>
+                ) : null}
+              </div>
               {habit(
                 "Meals",
                 `${totals.calories} of ${nutrition.data?.day?.targets.calories ?? data?.targets.calories ?? 0} kcal`,
@@ -185,47 +222,9 @@ function TodayPage() {
                 "/bulk/meals",
               )}
             </div>
-            <p className="px-1 text-[13px] text-muted-foreground">
-              {countWorkoutsInRange(completed, from, today)}
-              {target == null ? " workouts this week" : ` of ${target} workouts this week`}
-              {day?.steps != null ? ` · ${day.steps.toLocaleString()} steps today` : ""}
-            </p>
-            {!workoutDone ? (
-              <button
-                disabled={restPending}
-                aria-pressed={rest}
-                className="min-h-11 text-sm text-primary"
-                onClick={async () => {
-                  if (restPending) return;
-                  setRestPending(true);
-                  setRestError(false);
-                  try {
-                    await saveDay(today, { restDay: !rest });
-                  } catch {
-                    setRestError(true);
-                  } finally {
-                    setRestPending(false);
-                  }
-                }}
-              >
-                {restPending ? "Saving rest day…" : rest ? "Undo rest day" : "Mark rest day"}
-              </button>
-            ) : null}
-            {restError ? (
-              <p role="alert" className="text-sm text-danger">
-                Could not save rest day. Try again.
-              </p>
-            ) : null}
-            {day?.mealPlan || !publicGoal ? (
-              <Link
-                to="/bulk/daily-log"
-                className="inline-flex min-h-11 items-center text-sm text-muted-foreground"
-              >
-                Daily log & legacy nutrition
-              </Link>
-            ) : null}
           </>
         )}
+        <TodayChallenge hideDiscovery={invitations.isLoading || !!invitations.data?.length} />
       </div>
     </AppShell>
   );

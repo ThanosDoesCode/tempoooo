@@ -6,12 +6,15 @@ import vm from "node:vm";
 import ts from "typescript";
 import { checkInDraft, validateCheckIn } from "../src/lib/daily-check-in.ts";
 import * as nutrition from "../src/lib/bulk-nutrition.ts";
+import * as goalMetrics from "../src/lib/goal-metrics.ts";
 import { mainTabForPath, LOG_ACTIONS, isFocusScreen } from "../src/lib/main-navigation.ts";
 
 const read = (p) => readFile(new URL(`../${p}`, import.meta.url), "utf8");
 const require = createRequire(import.meta.url);
 const checkSource = await read("src/components/DailyCheckIn.tsx");
 const mealSource = await read("src/components/BulkNutritionLog.tsx");
+const todaySource = await read("src/routes/_authenticated/bulk/index.tsx");
+const challengeSource = await read("src/components/TodayChallenge.tsx");
 const iso = (d) => require("date-fns").format(d, "yyyy-MM-dd");
 const jsx = (type, props) => ({ type, props });
 function nodes(tree, predicate) {
@@ -71,6 +74,9 @@ function fixture(source, exportName, props, options = {}) {
       createFileRoute: () => (config) => config,
     },
     sonner: { toast: { success: (m) => calls.push(["success", m]) } },
+    "@/lib/challenge-invitations": {
+      useChallengeInvitations: () => ({ data: [], isLoading: false }),
+    },
     "@/lib/daily-check-in": { checkInDraft, validateCheckIn },
     "@/lib/calc": { iso },
     "@/lib/store": { useActions: () => ({ saveDay: (...a) => record("saveDay", ...a) }) },
@@ -451,4 +457,246 @@ test("Phase 4 legacy check-in retains separate JSON weight path without normaliz
   assert.equal(day[2].weight, 77.5);
   assert.equal(day[2].sleepHours, 8);
   assert.equal(day[2].sleepQuality, 5);
+});
+
+function todayFixture({
+  publicGoal = true,
+  restDay = false,
+  active = null,
+  sessions = [],
+  save,
+  invites = [],
+} = {}) {
+  const today = iso(new Date());
+  const q = (data) => ({ data, isLoading: false, error: null });
+  const data = {
+    days: { [today]: { weight: 81.6, sleepHours: 8, sleepQuality: 4, restDay } },
+    workouts: {},
+    targets: { ...mealProps.currentTargets, weeklyWorkoutGoal: 6, trainingDaysPerWeek: 3 },
+  };
+  const writes = [];
+  const f = fixture(
+    todaySource,
+    "Route",
+    {},
+    {
+      modules: {
+        "@/components/AppShell": { AppShell: "AppShell" },
+        "@/components/PageSkeleton": { PageSkeleton: "PageSkeleton" },
+        "@/components/TodayChallenge": { TodayChallenge: "TodayChallenge" },
+        "@/components/ChallengeInviteReceiver": {
+          ChallengeInviteReceiver: "ChallengeInviteReceiver",
+        },
+        "@/lib/challenge-invitations": { useChallengeInvitations: () => q(invites) },
+        "@/lib/use-local-day": { useLocalDay: () => today },
+        "@/lib/bulk-access": {
+          preferredBulkMembership: () => ({ is_public: publicGoal }),
+          useMemberships: () => q([]),
+        },
+        "@/lib/store": {
+          useAppData: () => data,
+          useBulkMeta: () => ({ bulkId: "owner" }),
+          useActions: () => ({
+            saveDay: async (date, patch) => {
+              writes.push([date, { ...patch }]);
+              await save?.(date, patch);
+              Object.assign(data.days[date], patch);
+            },
+          }),
+        },
+        "@/lib/bulk-progress-query": {
+          useBulkWeights: () => q([{ logDate: today, weightKg: 81.6 }]),
+        },
+        "@/lib/bulk-nutrition-query": { useBulkNutritionDay: () => q({ day: null, entries: [] }) },
+        "@/lib/bulk-training-sessions": {
+          useCompletedSessionDates: () => q(sessions.map((s) => ({ workoutDate: today, ...s }))),
+          useActiveBulkTrainingSession: () => q(publicGoal ? active : null),
+        },
+        "@/lib/training-plans-query": {
+          useActiveTrainingPlan: () =>
+            q(publicGoal ? { name: "Original Tempo program", trainingDaysPerWeek: 3 } : null),
+        },
+        "@/lib/goal-metrics": goalMetrics,
+      },
+    },
+  );
+  return { ...f, writes, data, today };
+}
+const workoutGroup = (tree) =>
+  nodes(tree, (n) => n.props?.role === "group" && n.props["aria-label"] === "Workout")[0];
+const restButton = (tree) => nodes(workoutGroup(tree), (n) => n.type === "button")[0];
+const settle = () => new Promise((r) => setImmediate(r));
+
+test("Phase 4.1 invitation precedes habits; compact Challenge follows, with no duplicate discovery", () => {
+  for (const invites of [[], [{ id: "pending" }]]) {
+    const f = todayFixture({ invites });
+    const tree = f.render();
+    const receiver = find(tree, "ChallengeInviteReceiver");
+    const summary = find(tree, "TodayChallenge");
+    const ordered = nodes(tree, () => true);
+    assert.ok(ordered.indexOf(receiver) < ordered.indexOf(workoutGroup(tree)));
+    assert.ok(ordered.indexOf(workoutGroup(tree)) < ordered.indexOf(summary));
+    assert.equal(summary.props.hideDiscovery, invites.length > 0);
+    assert.doesNotMatch(texts(tree), /Daily log & legacy nutrition|Mark rest day/);
+  }
+});
+
+test("Phase 4.1 weekly goal stays independent of plan frequency and inside Workout", () => {
+  const f = todayFixture({
+    sessions: [
+      { id: "one", status: "completed" },
+      { id: "two", status: "completed" },
+      { id: "draft", status: "in_progress" },
+    ],
+  });
+  const tree = f.render();
+  assert.match(texts(workoutGroup(tree)), /2 of 6 workouts this week/);
+  assert.equal((texts(tree).match(/2 of 6 workouts this week/g) ?? []).length, 1);
+  assert.equal(nodes(tree, (n) => n.props?.["aria-label"] === "Complete").length, 3);
+  assert.match(texts(tree), /3\s+of 4 done/);
+  assert.equal(restButton(tree), undefined); // Actual completed workout takes precedence over rest controls.
+  const legacy = todayFixture({ publicGoal: false });
+  legacy.data.workouts[legacy.today] = { date: legacy.today, status: "completed" };
+  legacy.data.days[legacy.today].calories = 2200;
+  assert.match(
+    texts(workoutGroup(legacy.render())),
+    /Workout completed · 1 of 6 workouts this week/,
+  );
+  assert.match(texts(legacy.render()), /4\s+of 4 done/);
+});
+
+test("Phase 4.1 rest day and Undo retain existing persisted field and completion semantics", async () => {
+  const f = todayFixture();
+  assert.match(texts(f.render()), /2\s+of 4 done/);
+  assert.match(texts(workoutGroup(f.render())), /Start/);
+  restButton(f.render()).props.onClick();
+  await settle();
+  assert.deepEqual(f.writes, [[f.today, { restDay: true }]]);
+  assert.match(texts(workoutGroup(f.render())), /Rest day · 0 of 6 workouts this week/);
+  assert.equal(texts(restButton(f.render())), "Undo");
+  assert.doesNotMatch(texts(workoutGroup(f.render())), /Start/);
+  assert.match(texts(f.render()), /3\s+of 4 done/);
+  restButton(f.render()).props.onClick();
+  await settle();
+  assert.deepEqual(f.writes[1], [f.today, { restDay: false }]);
+  assert.match(texts(f.render()), /2\s+of 4 done/);
+});
+
+test("Phase 4.1 rest writes block duplicate taps, show pending and preserve state after failure", async () => {
+  let reject;
+  const f = todayFixture({
+    save: () =>
+      new Promise((_, fail) => {
+        reject = fail;
+      }),
+  });
+  const tap = restButton(f.render()).props.onClick;
+  tap();
+  tap();
+  assert.equal(f.writes.length, 1);
+  assert.equal(restButton(f.render()).props.disabled, true);
+  assert.equal(texts(restButton(f.render())), "Saving rest day…");
+  assert.match(texts(f.render()), /2\s+of 4 done/);
+  reject(new Error("offline"));
+  await settle();
+  assert.equal(f.data.days[f.today].restDay, false);
+  assert.equal(restButton(f.render()).props.disabled, false);
+  assert.match(texts(workoutGroup(f.render())), /Could not save rest day/);
+});
+
+test("Phase 4.1 active workout shows actual name and Resume even with persisted rest state", () => {
+  for (const restDay of [false, true]) {
+    const f = todayFixture({ restDay, active: { id: "session", workoutDayName: "Chest & Back" } });
+    const group = workoutGroup(f.render());
+    assert.match(texts(group), /Chest & Back · In progress · 0 of 6 workouts this week/);
+    assert.match(texts(group), /Resume/);
+    assert.equal(nodes(group, (n) => n.type === "Link")[0].props.to, "/bulk/training");
+    assert.equal(
+      nodes(f.render(), (n) => n.props?.["aria-label"] === "Complete").length,
+      restDay ? 3 : 2,
+    );
+  }
+});
+
+function challengeFixture({
+  challenge = { id: "challenge", timezone: "Europe/Stockholm", duration_weeks: 52 },
+  hideDiscovery = false,
+  target = 15,
+  loading = false,
+  error = null,
+} = {}) {
+  const q = (data) => ({ data, isLoading: false, error: null });
+  return fixture(
+    challengeSource,
+    "TodayChallenge",
+    { hideDiscovery },
+    {
+      modules: {
+        "@/lib/auth": { useAuth: () => ({ user: { id: "me" } }) },
+        "@/lib/challenge": {
+          useMyChallenge: () => ({ ...q(challenge), isLoading: loading, error }),
+          useChallengeMembers: () =>
+            q([
+              { userId: "me", name: "Me" },
+              { userId: "opponent", name: "Alex" },
+            ]),
+          useActivitySummary: () => q([{ userId: "me", equivalent: 12.4 }]),
+          useWeekTargets: () => q([]),
+          useTravelPauses: () => q([]),
+          weekNumberOf: () => 1,
+          todayIn: () => "2026-10-03",
+          weekBounds: () => ({ start: "2026-09-28", end: "2026-10-05" }),
+          resolvedTargetForWeek: () => target,
+          hoursLeft: () => 70,
+          weekPenaltyMessage: () => ({ atRisk: true, line: "At risk: €5" }),
+        },
+      },
+    },
+  );
+}
+
+test("Phase 4.1 active Challenge is compact, uses real progress and routes to Challenge", () => {
+  const tree = challengeFixture().render();
+  assert.equal(tree.type, "Link");
+  assert.equal(tree.props.to, "/challenge");
+  assert.match(texts(tree), /Challenge with Alex/);
+  assert.match(texts(tree), /12.4\s+\/\s+15\s+km.*3\s*d left/);
+  const progress = nodes(tree, (n) => n.props?.role === "progressbar")[0];
+  assert.equal(progress.props["aria-valuenow"], 12.4);
+  assert.equal(progress.props["aria-valuemax"], 15);
+  assert.equal(progress.props.children.props.style.width, `${(12.4 / 15) * 100}%`);
+  assert.doesNotMatch(challengeSource, /text-\[52px\]|PageSkeleton|opponentKm/);
+  const paused = challengeFixture({ target: 0 }).render();
+  assert.match(texts(paused), /Week paused · no penalty/);
+  assert.equal(
+    nodes(paused, (n) => n.props?.role === "progressbar")[0].props.children.props.style.width,
+    "0%",
+  );
+});
+
+test("Phase 4.1 no-Challenge discovery is one persistent row; pending invitations suppress only discovery", () => {
+  const tree = challengeFixture({ challenge: null }).render();
+  assert.equal(tree.type, "Link");
+  assert.equal(tree.props.to, "/challenge");
+  assert.equal(texts(tree), "Challenge Start one with a friend ");
+  assert.equal(challengeFixture({ challenge: null, hideDiscovery: true }).render(), null);
+  assert.equal(challengeFixture({ hideDiscovery: true }).render().type, "Link");
+  assert.equal(
+    find(challengeFixture({ error: new Error("network") }).render(), "DataError").props.message,
+    "Could not load your challenge.",
+  );
+  assert.equal(challengeFixture({ loading: true }).render().type.name, "SummarySkeleton");
+});
+
+test("Phase 4.1 legacy Daily Log remains accessible from owner Profile, not Today", async () => {
+  const profile = await read("src/routes/_authenticated/profile.tsx");
+  const route = await read("src/routes/_authenticated/bulk/daily-log.tsx");
+  const shell = await read("src/components/AppShell.tsx");
+  assert.doesNotMatch(todaySource, /Daily log|\/bulk\/daily-log/);
+  assert.match(
+    profile,
+    /ownedPlan \? \([\s\S]*title="Compatibility tools"[\s\S]*to: "\/bulk\/daily-log"/,
+  );
+  assert.match(route, /createFileRoute\("\/_authenticated\/bulk\/daily-log"\)/);
+  assert.match(shell, /pathname === "\/bulk"[\s\S]*max-w-2xl/);
 });

@@ -45,7 +45,8 @@ function AppChrome({ children }: { children: ReactNode }) {
   const owner = preferredBulkMembership(memberships);
   const hasFitnessTools = owner !== null;
   const activeTab = mainTabForPath(pathname);
-  const trainingWidth =
+  const widerDailyLayout =
+    pathname === "/bulk" ||
     pathname.startsWith("/bulk/training") ||
     pathname.startsWith("/bulk/workout/") ||
     pathname.startsWith("/bulk/exercises");
@@ -57,7 +58,7 @@ function AppChrome({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-background">
       <PullToRefresh>
         <main
-          className={`mx-auto w-full ${trainingWidth ? "max-w-2xl" : "max-w-lg"} px-5 ${isAccountOnboarding ? "pb-6 pt-0" : `${focusScreen ? "pb-10" : "pb-28"} ${isChallenge ? "pt-4" : "pt-6"}`}`}
+          className={`mx-auto w-full ${widerDailyLayout ? "max-w-2xl" : "max-w-lg"} px-5 ${isAccountOnboarding ? "pb-6 pt-0" : `${focusScreen ? "pb-10" : "pb-28"} ${isChallenge ? "pt-4" : "pt-6"}`}`}
         >
           <div key={pathname} className="tempo-route-content">
             {children}

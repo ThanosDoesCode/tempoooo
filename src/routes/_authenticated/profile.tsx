@@ -3,6 +3,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Dumbbell, Lock, LogOut, Mail, Trash2, UserRound } from "lucide-react";
+import { NavRows } from "@/components/NavRows";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { Card, SectionTitle } from "@/components/ui-kit";
 import { ChallengeInvitations } from "@/components/ChallengeInvitations";
@@ -277,6 +278,21 @@ function ProfilePage() {
           </button>
         </Card>
       )}
+
+      {ownedPlan ? (
+        <div className="mt-[14px]">
+          <NavRows
+            title="Compatibility tools"
+            rows={[
+              {
+                to: "/bulk/daily-log",
+                label: "Daily log",
+                hint: "Legacy nutrition and daily records",
+              },
+            ]}
+          />
+        </div>
+      ) : null}
 
       {isAdmin ? (
         <Card className="mt-3">

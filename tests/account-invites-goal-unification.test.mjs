@@ -95,7 +95,7 @@ test("focused workout exercises stay mounted without removing draft state", asyn
   assert.match(source, /activeExerciseIndex/);
   assert.match(source, /hidden=\{exerciseIndex !== activeIndex\}/);
   assert.match(source, /Next exercise/);
-  assert.match(source, /Previous exercise/);
+  assert.match(source, /\bPrevious\s*<\/button>/);
   assert.match(source, /readLocalDrafts/);
   assert.match(source, /motion-reduce:transition-none/);
 });
