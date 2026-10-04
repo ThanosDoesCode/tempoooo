@@ -710,45 +710,71 @@ export function BulkWorkoutSessionView({
           Start 2:00 rest
         </button>
       )}
-      <div className="flex items-center justify-between gap-3">
+      <div className="grid grid-cols-2 gap-2">
         <button
           type="button"
           disabled={activeIndex === 0}
           onClick={() => setActiveExerciseIndex(activeIndex - 1)}
-          className="flex min-h-11 items-center gap-1 text-sm text-muted-foreground disabled:opacity-30"
+          className="flex min-h-12 items-center justify-center gap-1 rounded-2xl border border-border bg-card text-sm font-medium text-foreground disabled:opacity-30"
         >
           <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-          Previous exercise
+          Previous
         </button>
         <button
           type="button"
           disabled={activeIndex >= session.exercises.length - 1}
           onClick={() => setActiveExerciseIndex(activeIndex + 1)}
-          className="flex min-h-11 items-center gap-1 text-sm text-primary disabled:opacity-30"
+          className="flex min-h-12 items-center justify-center gap-1 rounded-2xl border border-border bg-card text-sm font-medium text-primary disabled:opacity-30"
         >
           Next exercise
           <ChevronRight className="h-4 w-4" aria-hidden="true" />
         </button>
       </div>
-      <p className="text-xs text-muted-foreground">
-        {completedSets}/{totalSets} sets ·{" "}
-        {volumeUnavailable
-          ? "Volume unavailable"
-          : `${Math.round(totalVolume).toLocaleString()} kg volume`}
-      </p>
-      <Button
-        variant="ghost"
-        className="min-h-11 w-full text-danger"
-        onClick={() => setDiscardDialog(true)}
-        disabled={finishing || discarding}
-      >
-        Discard workout
-      </Button>
+      <div className="rounded-2xl bg-card p-4">
+        <div className="flex items-baseline justify-between text-xs text-muted-foreground">
+          <span>
+            <span className="num text-sm font-semibold text-foreground">
+              {completedSets}/{totalSets}
+            </span>{" "}
+            sets
+          </span>
+          <span className="num">
+            {volumeUnavailable
+              ? "Volume unavailable"
+              : `${Math.round(totalVolume).toLocaleString()} kg volume`}
+          </span>
+        </div>
+        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-elevated">
+          <div
+            className="h-full rounded-full bg-primary transition-all"
+            style={{ width: `${totalSets ? (completedSets / totalSets) * 100 : 0}%` }}
+          />
+        </div>
+      </div>
+      <div className="pb-36 pt-2 text-center">
+        <button
+          type="button"
+          className="min-h-11 px-4 text-xs font-medium text-danger/80 disabled:opacity-50"
+          onClick={() => setDiscardDialog(true)}
+          disabled={finishing || discarding}
+        >
+          Discard workout
+        </button>
+      </div>
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 px-5 pt-3 pb-[calc(12px+env(safe-area-inset-bottom))] backdrop-blur">
-        <div className="mx-auto max-w-2xl">
+        <div className="mx-auto flex max-w-2xl gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={finishing || discarding || adding.size > 0 || removing.size > 0}
+            className={`h-[54px] rounded-[16px] ${activeExercise && nextSet ? "shrink-0 px-4" : "w-full"}`}
+            onClick={() => (incomplete ? setFinishDialog(true) : void finish(false))}
+          >
+            {finishing ? "Finishing…" : "Finish workout"}
+          </Button>
           {activeExercise && nextSet ? (
             <Button
-              className="h-[54px] w-full rounded-[16px]"
+              className="h-[54px] flex-1 rounded-[16px]"
               disabled={
                 finishing ||
                 discarding ||
@@ -760,14 +786,6 @@ export function BulkWorkoutSessionView({
               Done with set {nextSet.order}
             </Button>
           ) : null}
-          <button
-            type="button"
-            disabled={finishing || discarding || adding.size > 0 || removing.size > 0}
-            className="mt-1 min-h-11 w-full text-sm text-muted-foreground disabled:opacity-50"
-            onClick={() => (incomplete ? setFinishDialog(true) : void finish(false))}
-          >
-            {finishing ? "Finishing…" : "Finish workout"}
-          </button>
         </div>
       </div>
       <AlertDialog open={finishDialog} onOpenChange={setFinishDialog}>
