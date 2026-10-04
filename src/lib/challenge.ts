@@ -8,6 +8,7 @@ import {
   RECENT_ACTIVITY_OLDER_PAGE_SIZE,
   activityCursorFilter,
   activityPage,
+  collectActivityPages,
   uniqueActivityPages,
   type ActivityCursor,
   type ActivityDateRange,
@@ -453,6 +454,38 @@ export function useActivities(challengeId: string | undefined, range?: ActivityD
     getNextPageParam: (page) => page.next ?? undefined,
   });
   return { ...query, activities: uniqueActivityPages(query.data?.pages ?? []) };
+}
+
+/**
+ * Every activity inside a date range, for period-scoped endurance analytics (longest run, pace and
+ * speed trends over the selected Progress period). Pages the shared cursor fetch to exhaustion
+ * within the range — so it is complete, not capped at one page — while still bounded to the period
+ * (never the whole history). Reuses the shared fetch/qualification fields and dedupe; it never
+ * re-derives qualification or conversion.
+ */
+export async function fetchActivitiesInRange(
+  challengeId: string,
+  range: ActivityDateRange,
+  pageSize = ACTIVITY_PAGE_SIZE,
+) {
+  return collectActivityPages((cursor) => fetchActivityPage(challengeId, cursor, range, pageSize));
+}
+
+export const enduranceActivitiesQueryOptions = (challengeId: string, range: ActivityDateRange) =>
+  queryOptions({
+    queryKey: ["challenge-activities", challengeId, "endurance", range.start, range.end],
+    staleTime: 60_000,
+    queryFn: () => fetchActivitiesInRange(challengeId, range),
+  });
+
+export function useEnduranceActivities(
+  challengeId: string | undefined,
+  range: ActivityDateRange | null,
+) {
+  return useQuery({
+    ...enduranceActivitiesQueryOptions(challengeId ?? "", range ?? { start: "", end: "" }),
+    enabled: !!challengeId && !!range,
+  });
 }
 
 /** Full history is read only after an explicit export request, never on route entry. */

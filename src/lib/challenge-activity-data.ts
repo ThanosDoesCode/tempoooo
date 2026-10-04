@@ -43,3 +43,22 @@ export function uniqueActivityPages(pages: ActivityPage[]): Activity[] {
     }),
   );
 }
+
+/**
+ * Exhaustively drains a cursor-paged activity source, following each page's `next` cursor until a
+ * page reports none (which `activityPage` does once fewer than a full page remains). Deduplicates by
+ * id via `uniqueActivityPages`, so an unexpected overlap at a page boundary never double-counts.
+ * Pure: the caller injects the page fetcher, which keeps whatever range/filter it was built with.
+ */
+export async function collectActivityPages(
+  fetchPage: (cursor: ActivityCursor | null) => Promise<ActivityPage>,
+): Promise<Activity[]> {
+  const pages: ActivityPage[] = [];
+  let cursor: ActivityCursor | null = null;
+  do {
+    const page = await fetchPage(cursor);
+    pages.push(page);
+    cursor = page.next;
+  } while (cursor);
+  return uniqueActivityPages(pages);
+}

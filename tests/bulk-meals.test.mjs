@@ -117,7 +117,10 @@ test("Bulk History treats saved preset macros as authoritative full-day totals",
 test("Compatibility daily logging and export consume the canonical Salmon snapshot", async () => {
   const [today, progress] = await Promise.all([
     readFile(new URL("../src/routes/_authenticated/bulk/daily-log.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../src/routes/_authenticated/bulk/progress.tsx", import.meta.url), "utf8"),
+    readFile(
+      new URL("../src/routes/_authenticated/bulk/progress_.photos.tsx", import.meta.url),
+      "utf8",
+    ),
   ]);
   assert.match(today, /mealPlan\(id\)/);
   assert.match(today, /mealPlanSnapshot\(plan\)/);

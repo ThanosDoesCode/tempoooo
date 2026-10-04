@@ -571,7 +571,7 @@ test("Challenge cleanup is structurally unable to delete permanent Bulk photos",
     read("supabase/functions/challenge-evidence-cleanup/index.ts"),
     read("supabase/migrations/20260903170000_challenge_evidence_lifecycle.sql"),
     read("src/lib/store.ts"),
-    read("src/routes/_authenticated/bulk/progress.tsx"),
+    read("src/routes/_authenticated/bulk/progress_.photos.tsx"),
   ]);
   assert.match(worker, /storage\.from\("challenge-evidence"\)/);
   assert.doesNotMatch(worker, /bulk-progress-photos/);

@@ -140,7 +140,7 @@ test("public progress remains separate from legacy progress and clears private q
   ]);
   assert.match(route, /bulkPlanModeFor\(memberships\.data, bulkId\)/);
   assert.match(route, /planMode === "public"/);
-  assert.match(route, /LegacyProgressPage/);
+  assert.match(route, /OwnProgress/);
   assert.match(component, /current week is still in progress/);
   assert.match(component, /Photo unavailable/);
   assert.match(query, /createSignedUrls\(paths, 15 \* 60\)/);

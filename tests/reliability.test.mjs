@@ -232,7 +232,7 @@ test("admin diagnostics are server-authorized and return no private notification
 });
 
 test("Bulk personal backup remains exact stored JSON and carries Tempo branding", async () => {
-  const progress = await read("src/routes/_authenticated/bulk/progress.tsx");
+  const progress = await read("src/routes/_authenticated/bulk/progress_.photos.tsx");
   assert.match(progress, /JSON\.stringify\(data\)/);
   assert.match(progress, /tempo-bulk-backup-/);
   assert.match(progress, /Restore backup/);

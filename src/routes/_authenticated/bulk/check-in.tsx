@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { addDays, endOfMonth, format, parseISO, startOfMonth } from "date-fns";
 import { useMemo, useState } from "react";
 import { AppShell, PageHeader } from "@/components/AppShell";
-import { Card, Chip, SectionTitle, Stat } from "@/components/ui-kit";
+import { Card, Chip, SectionTitle } from "@/components/ui-kit";
 import { ALL_EXERCISES } from "@/lib/types";
 import {
   bulkStatus,
@@ -61,6 +61,7 @@ function CheckInPage() {
   const [weekOffset, setWeekOffset] = useState(0);
   const [mode, setMode] = useState<"weekly" | "monthly">("weekly");
   const [share, setShare] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const weekStart = useMemo(() => addDays(weekStartOf(new Date()), weekOffset * 7), [weekOffset]);
   const { bulkId } = useBulkMeta();
@@ -113,10 +114,8 @@ function CheckInPage() {
     }),
   };
 
-  if (share) {
-    return mode === "weekly" ? (
-      <ShareWeek data={data} s={s} onClose={() => setShare(false)} />
-    ) : (
+  if (share && mode === "monthly") {
+    return (
       <ShareMonth
         data={data}
         records={workoutRecords}
@@ -127,7 +126,31 @@ function CheckInPage() {
   }
 
   const displayedStatus = s.goalStatus;
-  const tone = displayedStatus.tone === "muted" ? "muted" : displayedStatus.tone;
+  const calibrating = displayedStatus.basis === "insufficient";
+  // Same 3-weigh-ins-per-week rule the recommendation engine uses (goalWeightStatus).
+  const weighInsThisWeek = statusWeights.filter(
+    (w) => w.logDate >= iso(weekStart) && w.logDate <= iso(addDays(weekStart, 6)),
+  ).length;
+  const weighInsNeeded = Math.max(1, 3 - weighInsThisWeek);
+  const recommendation = data.targets.goal
+    ? {
+        headline:
+          displayedStatus.label === "ON TRACK" || displayedStatus.label === "ON PACE"
+            ? "Keep going"
+            : `Adjust: ${displayedStatus.label.toLowerCase()}`,
+        detail: displayedStatus.detail,
+      }
+    : { headline: s.advice.decision, detail: s.advice.detail };
+
+  const copySummary = async () => {
+    try {
+      await navigator.clipboard.writeText(weeklySummaryText(data, s));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  };
 
   return (
     <AppShell>
@@ -150,136 +173,85 @@ function CheckInPage() {
       {mode === "weekly" ? (
         <>
           <div className="mb-3 flex items-center justify-between">
-            <button
-              onClick={() => setWeekOffset((w) => w - 1)}
-              className="min-h-11 rounded-lg px-2 text-sm text-primary active:bg-elevated"
-            >
-              ← Prev
-            </button>
             <span className="text-xs text-muted-foreground">{s.label}</span>
-            <button
-              onClick={() => setWeekOffset((w) => Math.min(0, w + 1))}
-              className="min-h-11 rounded-lg px-2 text-sm text-primary active:bg-elevated disabled:opacity-30"
-              disabled={weekOffset >= 0}
-            >
-              Next →
-            </button>
+            <span className="flex gap-1">
+              <button
+                onClick={() => setWeekOffset((w) => w - 1)}
+                aria-label="Previous week"
+                className="grid min-h-11 min-w-11 place-items-center rounded-lg text-primary active:bg-elevated"
+              >
+                ‹
+              </button>
+              <button
+                onClick={() => setWeekOffset((w) => Math.min(0, w + 1))}
+                aria-label="Next week"
+                className="grid min-h-11 min-w-11 place-items-center rounded-lg text-primary active:bg-elevated disabled:opacity-30"
+                disabled={weekOffset >= 0}
+              >
+                ›
+              </button>
+            </span>
           </div>
 
-          <div className={`card-surface fade-up mb-4 p-4 text-center ${toneBg(tone)}`}>
-            <p className="text-[11px] tracking-[0.18em] text-muted-foreground">
-              Weekly weight change
-            </p>
-            <p className={`num mt-1 text-5xl font-semibold ${toneText(tone)}`}>
-              {signed(s.change, 2)}
-            </p>
-            <p className={`mt-1 text-sm font-semibold ${toneText(tone)}`}>
-              {displayedStatus.label}
-            </p>
-          </div>
+          {calibrating ? (
+            <div className="rounded-[20px] bg-primary/10 p-[18px]">
+              <div className="text-[13px] font-semibold text-primary">Weekly review</div>
+              <div className="mt-1.5 text-[18px] font-semibold">
+                {weighInsNeeded} more weigh-in{weighInsNeeded === 1 ? "" : "s"} to unlock your
+                weekly review
+              </div>
+              <div className="mt-1.5 text-sm text-muted-foreground">{displayedStatus.detail}</div>
+            </div>
+          ) : (
+            <div className="rounded-[20px] bg-primary/10 p-[18px]">
+              <div className="text-[13px] font-semibold text-primary">What to do next week</div>
+              <div className="mt-1.5 text-[22px] font-semibold">{recommendation.headline}</div>
+              <div className="mt-1.5 text-sm leading-relaxed">{recommendation.detail}</div>
+            </div>
+          )}
 
-          <div className="mb-4">
-            <Card>
-              <SectionTitle>{data.targets.goal ? "Goal phase" : "Decision"}</SectionTitle>
-              {data.targets.goal ? (
-                <>
-                  <p className={`text-base font-semibold ${toneText(displayedStatus.tone)}`}>
-                    {data.targets.goal === "cut"
-                      ? "Lose fat"
-                      : data.targets.goal === "maintain"
-                        ? "Recomp / maintain"
-                        : "Gain muscle"}
-                  </p>
-                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                    {displayedStatus.detail}
-                  </p>
-                </>
-              ) : (
-                <>
-                  <p className={`text-base font-semibold ${toneText(s.advice.tone)}`}>
-                    {s.advice.decision}
-                  </p>
-                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                    {s.advice.detail}
-                  </p>
-                  {s.focus.length ? (
-                    <>
-                      <p className="mt-3 text-[10px] text-muted-foreground">Focus next week</p>
-                      <ul className="mt-1 space-y-0.5 text-sm">
-                        {s.focus.map((f) => (
-                          <li key={f}>· {f}</li>
-                        ))}
-                      </ul>
-                    </>
-                  ) : null}
-                </>
-              )}
-            </Card>
-          </div>
-
-          <Card>
-            <SectionTitle>Body</SectionTitle>
-            <Rows
-              rows={[
-                ["Start weight", fmt(s.startWeight, 1, " kg")],
-                ["End weight", fmt(s.endWeight, 1, " kg")],
-                ["7-day average", fmt(s.currentAvg, 2, " kg")],
-                ["Previous 7-day avg", fmt(s.prevAvg, 2, " kg")],
-                ["Weekly change", signed(s.change, 2, " kg")],
-                ["Waist", fmt(s.waist, 1, " cm")],
-                ["Waist change", signed(s.waistChange, 1, " cm")],
+          <div className="mt-3 space-y-3">
+            <ThreeUp
+              title="Body"
+              items={[
+                [fmt(s.currentAvg, 1, " kg"), "Average"],
+                [signed(s.change, 1, " kg"), "Change"],
+                [fmt(s.waist, 0, " cm"), "Waist"],
               ]}
             />
-          </Card>
-
-          <div className="mt-4 grid grid-cols-2 gap-2">
-            <Stat label="Avg calories" value={fmt0(s.avgCalories)} hint="kcal/day" />
-            <Stat label="Avg protein" value={fmt0(s.avgProtein, " g")} hint="per day" />
-            <Stat label="Avg carbs" value={fmt0(s.avgCarbs, " g")} hint="per day" />
-            <Stat label="Avg fat" value={fmt0(s.avgFat, " g")} hint="per day" />
-          </div>
-          <div className="mt-2">
-            <Stat label="Days calorie target hit" value={`${s.daysOnTarget}/7`} hint="±150 kcal" />
-          </div>
-
-          <div className="mt-4">
-            <Card>
-              <SectionTitle>Training</SectionTitle>
-              <Rows
-                rows={[
-                  ["Gym sessions", formatWorkoutProgress(s.gymSessions, s.gymTarget)],
-                  ["Progressed", String(s.progressed)],
-                  ["Stayed the same", String(s.same)],
-                  ["Regressed", String(s.regressed)],
-                  ["New PRs", s.prs.length ? s.prs.join(", ") : "None"],
-                ]}
-              />
-            </Card>
-          </div>
-
-          <div className="mt-4">
-            <Card>
-              <SectionTitle>Activity & recovery</SectionTitle>
-              <Rows
-                rows={[
-                  ["Avg steps/day", fmt0(s.avgSteps)],
-                  ["Cycling", `${s.cyclingKm.toFixed(1)} km`],
-                  ["Running", `${s.runningKm.toFixed(1)} km`],
-                  ["Cardio sessions", String(s.cardioSessions)],
-                  ["Avg sleep", fmt(s.avgSleep, 1, " h")],
-                  ["Avg sleep score", fmt(s.avgSleepQuality, 1, " / 5")],
-                ]}
-              />
-            </Card>
+            <ThreeUp
+              title="Food"
+              items={[
+                [fmt0(s.avgCalories), "kcal a day"],
+                [`${s.daysOnTarget} of 7`, "Days on target"],
+                [fmt0(s.avgProtein, " g"), "Protein a day"],
+              ]}
+            />
+            <ThreeUp
+              title="Training"
+              items={[
+                [formatWorkoutProgress(s.gymSessions, s.gymTarget), "Workouts"],
+                [String(s.prs.length), "New records"],
+                [String(s.regressed), "Went down"],
+              ]}
+            />
+            <ThreeUp
+              title="Activity and sleep"
+              items={[
+                [fmt0(s.avgSteps), "Steps a day"],
+                [`${s.runningKm.toFixed(0)} km`, `Run · ${s.cyclingKm.toFixed(0)} km ride`],
+                [fmt(s.avgSleep, 1, " h"), `Sleep · ${fmt0(s.avgSleepQuality)} of 5`],
+              ]}
+            />
           </div>
 
           {publicId && weekOffset === 0 ? (
-            <div className="mt-4">
+            <div className="mt-3">
               <PublicWeeklyReview bulkProfileId={publicId} targets={data.targets} />
             </div>
           ) : null}
 
-          <div className="mt-4">
+          <div className="mt-3">
             <Card>
               <SectionTitle>Notes</SectionTitle>
               <WeekNoteInput
@@ -289,23 +261,67 @@ function CheckInPage() {
               />
             </Card>
           </div>
+
+          <button
+            onClick={() => void copySummary()}
+            className="mt-4 flex min-h-12 w-full items-center justify-center rounded-[14px] bg-elevated text-[15px] font-semibold text-foreground active:opacity-90"
+          >
+            {copied ? "Copied" : "Copy summary for ChatGPT"}
+          </button>
         </>
       ) : (
-        <MonthlyPreview
-          data={data}
-          records={workoutRecords}
-          goalStatus={statusAt(endOfMonth(new Date()))}
-        />
+        <>
+          <MonthlyPreview
+            data={data}
+            records={workoutRecords}
+            goalStatus={statusAt(endOfMonth(new Date()))}
+          />
+          <button
+            onClick={() => setShare(true)}
+            className="mt-5 w-full rounded-xl bg-primary py-3.5 text-base font-semibold text-primary-foreground transition-transform active:scale-[0.98]"
+          >
+            Generate ChatGPT Monthly Summary
+          </button>
+        </>
       )}
-
-      <button
-        onClick={() => setShare(true)}
-        className="mt-5 w-full rounded-xl bg-primary py-3.5 text-base font-semibold text-primary-foreground transition-transform active:scale-[0.98]"
-      >
-        Generate ChatGPT {mode === "weekly" ? "Check-In" : "Monthly Summary"}
-      </button>
     </AppShell>
   );
+}
+
+function ThreeUp({ title, items }: { title: string; items: [string, string][] }) {
+  return (
+    <Card>
+      <h2 className="mb-2 text-[13px] font-medium text-muted-foreground">{title}</h2>
+      <div className="num grid grid-cols-3 gap-2">
+        {items.map(([value, label]) => (
+          <div key={label}>
+            <div className="text-[19px] font-semibold">{value}</div>
+            <div className="mt-0.5 text-[12px] text-muted-foreground">{label}</div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+/** Plain-text weekly summary for the clipboard ("Copy summary for ChatGPT"). */
+function weeklySummaryText(
+  data: AppData,
+  s: ReturnType<typeof buildWeekSummary> & { gymTarget: number | null; goalStatus: GoalStatus },
+): string {
+  const recommendation = data.targets.goal ? s.goalStatus.detail : s.advice.decision;
+  return [
+    `Tempo weekly review · ${s.label}`,
+    `Recommendation: ${recommendation}`,
+    "",
+    `Body: avg ${fmt(s.currentAvg, 1, " kg")}, change ${signed(s.change, 1, " kg")}, waist ${fmt(s.waist, 0, " cm")}`,
+    `Food: ${fmt0(s.avgCalories)} kcal/day, ${s.daysOnTarget} of 7 days on target, protein ${fmt0(s.avgProtein, " g")}`,
+    `Training: ${formatWorkoutProgress(s.gymSessions, s.gymTarget)} workouts, ${s.prs.length} new records, ${s.regressed} went down`,
+    `Activity and sleep: ${fmt0(s.avgSteps)} steps/day, run ${s.runningKm.toFixed(0)} km, ride ${s.cyclingKm.toFixed(0)} km, sleep ${fmt(s.avgSleep, 1, " h")} (${fmt0(s.avgSleepQuality)} of 5)`,
+    s.note ? `\nNotes: ${s.note}` : "",
+  ]
+    .join("\n")
+    .trim();
 }
 
 function WeekNoteInput({
@@ -368,8 +384,6 @@ function Rows({ rows }: { rows: [string, string][] }) {
   );
 }
 
-const toneBg = (t: string) =>
-  t === "good" ? "bg-good/10" : t === "warn" ? "bg-warn/10" : t === "danger" ? "bg-danger/10" : "";
 const toneText = (t: string) =>
   t === "good"
     ? "text-good"
@@ -378,9 +392,6 @@ const toneText = (t: string) =>
       : t === "danger"
         ? "text-danger"
         : "text-foreground";
-
-const trend = (v: number | null, good: (n: number) => boolean) =>
-  v == null ? "•" : good(v) ? "▲" : v < 0 ? "▼" : "▲";
 
 /* ---------------- Share modes ---------------- */
 
@@ -430,116 +441,6 @@ function ShareWrap({
 function ShareHead({ children }: { children: React.ReactNode }) {
   return (
     <p className="pt-1 text-[11px] font-semibold tracking-[0.18em] text-primary">{children}</p>
-  );
-}
-
-function ShareWeek({
-  data,
-  s,
-  onClose,
-}: {
-  data: AppData;
-  s: ReturnType<typeof buildWeekSummary> & { gymTarget: number | null; goalStatus: GoalStatus };
-  onClose: () => void;
-}) {
-  const latest = sortedDays(data)
-    .filter((d) => d.weight != null)
-    .pop();
-  const displayedStatus = s.goalStatus;
-  const targetChange = data.targets.targetWeeklyGainKg ?? 0.25;
-  const onGoal = (change: number) =>
-    data.targets.goal === "cut"
-      ? change >= -targetChange - 0.15 && change <= -targetChange + 0.15
-      : data.targets.goal === "maintain"
-        ? Math.abs(change) <= 0.15
-        : change >= 0.2 && change <= 0.3;
-  return (
-    <ShareWrap
-      title={data.targets.goal ? "Tempo Goal Check-In" : "Tempo Bulk Check-In"}
-      subtitle={s.label}
-      onClose={onClose}
-    >
-      <div className="pb-2">
-        <ShareHead>Weight</ShareHead>
-        <ShareLine
-          label="Weekly change"
-          value={signed(s.change, 2, " kg/week")}
-          mark={trend(s.change, onGoal)}
-        />
-        <ShareLine label="7-day avg" value={fmt(s.currentAvg, 2, " kg")} />
-        <ShareLine label="Current weight" value={fmt(latest?.weight, 1, " kg")} />
-        <ShareLine label="Waist (4 weeks)" value={signed(s.waist4w, 1, " cm")} />
-        <p className={`mt-1 text-[15px] font-semibold ${toneText(displayedStatus.tone)}`}>
-          {displayedStatus.label}
-        </p>
-      </div>
-      <div className="py-2">
-        <ShareHead>Nutrition</ShareHead>
-        <ShareLine label="Average" value={fmt0(s.avgCalories, " kcal")} />
-        <ShareLine label="Days within target" value={`${s.daysOnTarget}/7`} />
-        <ShareLine
-          label="Protein / carbs / fat"
-          value={`${fmt0(s.avgProtein)} / ${fmt0(s.avgCarbs)} / ${fmt0(s.avgFat)} g`}
-        />
-      </div>
-      <div className="py-2">
-        <ShareHead>Training</ShareHead>
-        <ShareLine label="Sessions" value={formatWorkoutProgress(s.gymSessions, s.gymTarget)} />
-        <ShareLine label="Progressed" value={String(s.progressed)} />
-        <ShareLine label="Unchanged" value={String(s.same)} />
-        <ShareLine label="Regressed" value={String(s.regressed)} />
-        <ShareLine label="PRs" value={s.prs.length ? String(s.prs.length) : "0"} />
-      </div>
-      <div className="py-2">
-        <ShareHead>Recovery</ShareHead>
-        <ShareLine label="Average sleep" value={fmt(s.avgSleep, 1, " hours")} />
-        <ShareLine label="Steps/day" value={fmt0(s.avgSteps)} />
-        <ShareLine label="Resting HR" value={fmt0(s.avgRestingHr, " bpm")} />
-        <ShareLine
-          label="Cycling / running"
-          value={`${s.cyclingKm.toFixed(1)} / ${s.runningKm.toFixed(1)} km`}
-        />
-      </div>
-      {data.targets.goal ? (
-        <div className="py-2">
-          <ShareHead>Goal phase</ShareHead>
-          <p className={`mt-1 text-[17px] font-semibold ${toneText(displayedStatus.tone)}`}>
-            {data.targets.goal === "cut"
-              ? "Lose fat"
-              : data.targets.goal === "maintain"
-                ? "Recomp / maintain"
-                : "Gain muscle"}
-          </p>
-          <p className="mt-1 text-[13px] leading-snug text-muted-foreground">
-            Use the completed-week recommendation in Progress for goal-aware calorie guidance.
-          </p>
-        </div>
-      ) : (
-        <>
-          <div className="py-2">
-            <ShareHead>Decision</ShareHead>
-            <p className={`mt-1 text-[17px] font-semibold ${toneText(s.advice.tone)}`}>
-              {s.advice.decision}
-            </p>
-            <p className="mt-1 text-[13px] leading-snug text-muted-foreground">{s.advice.detail}</p>
-          </div>
-          <div className="py-2">
-            <ShareHead>Focus next week</ShareHead>
-            <ul className="mt-1 space-y-0.5 text-[15px]">
-              {(s.focus.length ? s.focus : ["Keep logging and repeat the plan"]).map((f) => (
-                <li key={f}>· {f}</li>
-              ))}
-            </ul>
-          </div>
-        </>
-      )}
-      {s.note ? (
-        <div className="py-2">
-          <ShareHead>Notes</ShareHead>
-          <p className="mt-1 text-[15px] leading-snug">{s.note}</p>
-        </div>
-      ) : null}
-    </ShareWrap>
   );
 }
 

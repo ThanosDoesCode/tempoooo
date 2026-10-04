@@ -69,7 +69,7 @@ test("authentication fields are labelled and use iOS-safe text sizing", async ()
 test("legacy Bulk date, photo and backup actions meet the mobile touch target", async () => {
   const [checkIn, progress] = await Promise.all([
     read("src/routes/_authenticated/bulk/check-in.tsx"),
-    read("src/routes/_authenticated/bulk/progress.tsx"),
+    read("src/routes/_authenticated/bulk/progress_.photos.tsx"),
   ]);
   assert.match(checkIn, /setWeekOffset\(\(w\) => w - 1\)[\s\S]*min-h-11/);
   assert.match(checkIn, /Math\.min\(0, w \+ 1\)[\s\S]*min-h-11/);

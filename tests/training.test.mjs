@@ -431,15 +431,14 @@ test("strength trend keeps the existing volume calculation and formats change di
   );
 });
 
-test("Strength Trend groups tracked lifts first and collapses missing data", async () => {
-  const progress = await read("src/routes/_authenticated/bulk/progress.tsx");
-  assert.match(progress, /Strength trend/);
-  assert.match(progress, /EXERCISES/);
-  assert.match(progress, /splitLabel/);
-  assert.match(progress, /Not enough data yet/);
-  assert.match(progress, /<details/);
-  assert.match(progress, /trend\.pct >= 0 \? "\+" : ""/);
-  assert.match(progress, /trend\.latest/);
+test("Progress Strength lists tracked lifts by estimated max with sign formatting and an insufficient-data state", async () => {
+  const strength = await read("src/routes/_authenticated/bulk/progress_.strength.tsx");
+  assert.match(strength, /liftEstimate\(record, BULK_START\)/);
+  assert.match(strength, /useTrackedLifts\(data\)/);
+  assert.match(strength, /Not enough data yet/);
+  assert.match(strength, /estimate\.changePct >= 0 \? "\+" : ""/);
+  // An Edit control lets the user choose which lifts to track (default: first lift of each day).
+  assert.match(strength, /editing \? "Done" : "Edit"/);
 });
 test("best recent set favors comparable reps and actual load, excluding drafts and old sessions", () => {
   const d = data([
