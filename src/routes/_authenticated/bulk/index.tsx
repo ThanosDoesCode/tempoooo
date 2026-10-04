@@ -182,35 +182,77 @@ function TodayPage() {
                 habits[1]!,
                 "/bulk/morning",
               )}
-              <div className="border-t border-border py-2" role="group" aria-label="Workout">
-                {habit("Workout", workoutSubtitle, habits[2]!, "/bulk/training")}
-                {!workoutDone || activeSession.data ? (
-                  <div className="flex flex-wrap items-center justify-end gap-2 pl-10">
-                    {!habits[2] || activeSession.data ? (
-                      <Link
-                        to="/bulk/training"
-                        preload="intent"
-                        className="inline-flex min-h-11 items-center rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground active:opacity-80"
-                      >
-                        {activeSession.data ? "Resume" : plan.data ? "Start" : "Choose plan"}
-                      </Link>
-                    ) : null}
-                    {!workoutDone ? (
-                      <button
-                        type="button"
-                        disabled={restPending}
-                        aria-pressed={rest}
-                        aria-busy={restPending}
-                        className="min-h-11 rounded-xl px-3 text-[13px] font-medium text-primary disabled:opacity-60 active:bg-elevated"
-                        onClick={() => void toggleRestDay()}
-                      >
-                        {restPending ? "Saving rest day…" : rest ? "Undo" : "Rest day"}
-                      </button>
-                    ) : null}
-                  </div>
+              <div className="border-t border-border" role="group" aria-label="Workout">
+                <div className="flex min-h-[62px] items-center gap-[14px] py-2">
+                  <Link
+                    to="/bulk/training"
+                    preload="intent"
+                    className="flex min-w-0 flex-1 items-center gap-[14px]"
+                  >
+                    <span
+                      aria-label={habits[2] ? "Complete" : "Not complete"}
+                      className={
+                        habits[2]
+                          ? "grid h-6 w-6 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground"
+                          : "h-6 w-6 shrink-0 rounded-full border-2 border-muted-foreground/40"
+                      }
+                    >
+                      {habits[2] ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : null}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[15px] font-medium">Workout</span>
+                      <span className="num block truncate text-[13px] text-muted-foreground">
+                        {activeSession.data
+                          ? `${activeSession.data.workoutDayName} · In progress`
+                          : workoutDone
+                            ? "Workout completed"
+                            : rest
+                              ? "Rest day"
+                              : (plan.data?.name ?? "Choose a training plan")}
+                      </span>
+                      <span className="num block text-[12px] text-muted-foreground/80">
+                        {weeklyContext}
+                      </span>
+                    </span>
+                  </Link>
+                  {!habits[2] || activeSession.data ? (
+                    <Link
+                      to="/bulk/training"
+                      preload="intent"
+                      className="inline-flex h-9 shrink-0 items-center rounded-full bg-primary px-4 text-[13px] font-semibold text-primary-foreground active:opacity-80"
+                    >
+                      {activeSession.data ? "Resume" : plan.data ? "Start" : "Choose plan"}
+                    </Link>
+                  ) : workoutDone ? (
+                    <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                  ) : null}
+                  {!workoutDone && rest ? (
+                    <button
+                      type="button"
+                      disabled={restPending}
+                      aria-pressed={rest}
+                      aria-busy={restPending}
+                      className="inline-flex h-9 shrink-0 items-center rounded-full bg-secondary px-4 text-[13px] font-medium disabled:opacity-60"
+                      onClick={() => void toggleRestDay()}
+                    >
+                      {restPending ? "Saving…" : "Undo"}
+                    </button>
+                  ) : null}
+                </div>
+                {!workoutDone && !rest && !activeSession.data ? (
+                  <button
+                    type="button"
+                    disabled={restPending}
+                    aria-pressed={rest}
+                    aria-busy={restPending}
+                    className="-mt-1 mb-2 ml-[38px] text-[12px] font-medium text-muted-foreground underline-offset-2 hover:underline disabled:opacity-60"
+                    onClick={() => void toggleRestDay()}
+                  >
+                    {restPending ? "Saving rest day…" : "Taking a rest day?"}
+                  </button>
                 ) : null}
                 {restError ? (
-                  <p role="alert" className="pl-10 text-[13px] text-danger">
+                  <p role="alert" className="pb-2 pl-[38px] text-[13px] text-danger">
                     Could not save rest day. Try again.
                   </p>
                 ) : null}
