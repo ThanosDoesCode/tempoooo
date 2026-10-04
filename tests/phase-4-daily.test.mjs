@@ -557,7 +557,8 @@ test("Phase 4.1 weekly goal stays independent of plan frequency and inside Worko
   assert.equal(restButton(tree), undefined); // Actual completed workout takes precedence over rest controls.
   const legacy = todayFixture({ publicGoal: false });
   legacy.data.workouts[legacy.today] = { date: legacy.today, status: "completed" };
-  legacy.data.days[legacy.today].calories = 2200;
+  // Reaching the 2,500 kcal target is what completes the Meals habit (logging alone is not enough).
+  legacy.data.days[legacy.today].calories = 2500;
   assert.match(
     texts(workoutGroup(legacy.render())),
     /Workout completed · 1 of 6 workouts this week/,

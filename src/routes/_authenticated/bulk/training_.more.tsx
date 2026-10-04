@@ -31,6 +31,7 @@ function TrainingMorePage() {
   const activeSession = useActiveBulkTrainingSession(usesPlanSetup ? bulkId : null);
   const coverage = useBulkMuscleCoverage(usesPlanSetup ? (activePlan.data ?? null) : null);
   const [editing, setEditing] = useState(false);
+  const [coverageOpen, setCoverageOpen] = useState(false);
 
   if (planMode === "none") {
     return (
@@ -107,9 +108,19 @@ function TrainingMorePage() {
                   </div>
                 ))}
               </details>
-              <details className="mt-3 border-t border-border pt-2">
-                <summary className="flex min-h-11 cursor-pointer items-center font-medium">
+              <details
+                className="mt-3 border-t border-border pt-2"
+                onToggle={(event) => setCoverageOpen(event.currentTarget.open)}
+              >
+                <summary
+                  aria-expanded={coverageOpen}
+                  className="flex min-h-11 cursor-pointer items-center justify-between font-medium [&::-webkit-details-marker]:hidden"
+                >
                   Muscle coverage
+                  <ChevronRight
+                    className={`h-5 w-5 transition-transform ${coverageOpen ? "rotate-90" : ""}`}
+                    aria-hidden="true"
+                  />
                 </summary>
                 <BulkMuscleCoverage
                   result={coverage.data}

@@ -11,7 +11,7 @@ import { useAppData, useActions, useBulkMeta } from "@/lib/store";
 import { preferredBulkMembership, useMemberships } from "@/lib/bulk-access";
 import { useBulkWeights } from "@/lib/bulk-progress-query";
 import { useBulkNutritionDay } from "@/lib/bulk-nutrition-query";
-import { totalNutrition } from "@/lib/bulk-nutrition";
+import { nutritionMacroStatus, totalNutrition } from "@/lib/bulk-nutrition";
 import {
   useActiveBulkTrainingSession,
   useCompletedSessionDates,
@@ -76,11 +76,17 @@ function TodayPage() {
   });
   const workoutDone = completed.some((w) => w.workoutDate === today);
   const rest = day?.restDay === true;
+  // Today's Meals row shows complete only once the day's calorie target is reached — meal logging
+  // on its own is not completion. The deeper Goal day-completion requirement (goal-metrics
+  // `dayCompletionRequirements`, "Meal logged") is intentionally "any meal logged" and is unchanged.
+  const mealTarget = nutrition.data?.day?.targets.calories ?? data?.targets.calories ?? 0;
+  const mealsComplete =
+    mealTarget > 0 && nutritionMacroStatus(totals.calories, mealTarget).status !== "under";
   const habits = [
     weight != null,
     day?.sleepHours != null && day.sleepQuality != null,
     workoutDone || rest,
-    (nutrition.data?.entries.length ?? 0) > 0 || day?.calories != null,
+    mealsComplete,
   ];
   const target = resolveWeeklyWorkoutTarget({
     weeklyWorkoutGoal: data?.targets.weeklyWorkoutGoal ?? 5,
@@ -259,7 +265,7 @@ function TodayPage() {
               </div>
               {habit(
                 "Meals",
-                `${totals.calories} of ${nutrition.data?.day?.targets.calories ?? data?.targets.calories ?? 0} kcal`,
+                `${totals.calories} of ${mealTarget} kcal`,
                 habits[3]!,
                 "/bulk/meals",
               )}
