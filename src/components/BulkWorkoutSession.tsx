@@ -751,7 +751,7 @@ export function BulkWorkoutSessionView({
           />
         </div>
       </div>
-      <div className="pb-36 pt-2 text-center">
+      <div className="pt-1 text-center">
         <button
           type="button"
           className="min-h-11 px-4 text-xs font-medium text-danger/80 disabled:opacity-50"
