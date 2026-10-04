@@ -323,10 +323,10 @@ export function TrainingPlanEditor({
                         {exerciseIndex + 1}
                       </span>
                       <div className="min-w-0">
-                      <p className="font-semibold leading-snug">{exercise.name}</p>
-                      {exercise.exerciseId ? null : (
-                        <p className="text-xs text-danger">Exercise unavailable</p>
-                      )}
+                        <p className="font-semibold leading-snug">{exercise.name}</p>
+                        {exercise.exerciseId ? null : (
+                          <p className="text-xs text-danger">Exercise unavailable</p>
+                        )}
                       </div>
                     </div>
                     <div className="flex">
