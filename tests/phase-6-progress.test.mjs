@@ -559,3 +559,36 @@ test("Body & food photo count is mode-aware (normalized for public, legacy other
     /resolvePhotoCount\(mode, photos\.data\?\.length \?\? 0, data\?\.photos\.length \?\? 0\)/,
   );
 });
+
+// ------------------------------------------- date-range fix (round 6)
+
+test("weightTrend builds a chronological trailing window ending today (not the future)", async () => {
+  const { weightTrend } = await import("../src/lib/progress-model-core.ts");
+
+  // Oct 4, trailing 4 weeks (28 days): starts 27 days earlier, ends today, oldest-first.
+  const oct = weightTrend({}, 28, "2026-10-04");
+  assert.equal(oct.series.length, 28);
+  assert.equal(oct.series[0].date, "2026-09-07");
+  assert.equal(oct.series[27].date, "2026-10-04");
+  assert.ok(oct.series.every((p) => p.date <= "2026-10-04")); // never a future date
+  assert.ok(oct.series[0].date < oct.series[27].date); // chronological
+
+  // Month boundary.
+  const mar = weightTrend({}, 28, "2026-03-01");
+  assert.equal(mar.series[0].date, "2026-02-02");
+  assert.equal(mar.series[27].date, "2026-03-01");
+
+  // Year boundary.
+  const jan = weightTrend({}, 28, "2026-01-10");
+  assert.equal(jan.series[0].date, "2025-12-14");
+  assert.equal(jan.series[27].date, "2026-01-10");
+
+  // Leap vs non-leap: Mar 1 2024 (leap) reaches back one day further into Feb than 2026 does.
+  assert.equal(weightTrend({}, 28, "2024-03-01").series[0].date, "2024-02-03");
+  assert.equal(weightTrend({}, 28, "2026-03-01").series[0].date, "2026-02-02");
+
+  // The 7-day average is a real trailing average over the day→weight map.
+  const trend = weightTrend({ "2026-10-03": 64, "2026-10-04": 66 }, 28, "2026-10-04");
+  assert.equal(trend.avgKg, 65);
+  assert.equal(trend.latest.date, "2026-10-04");
+});

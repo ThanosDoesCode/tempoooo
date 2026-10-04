@@ -43,7 +43,7 @@ function BodyPage() {
         />
       ) : (
         <div className="space-y-3">
-          <Card className="p-[18px]">
+          <Card className="px-[18px] py-4">
             <h2 className="text-[13px] font-medium text-muted-foreground">
               Weight · 7-day average
             </h2>
@@ -125,7 +125,7 @@ function BodyPage() {
             )}
           </Card>
 
-          <Card className="p-[18px]">
+          <Card className="px-[18px] py-4">
             <h2 className="text-[13px] font-medium text-muted-foreground">
               Food · last {weeks} weeks
             </h2>

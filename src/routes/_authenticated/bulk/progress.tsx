@@ -84,7 +84,7 @@ function OwnProgress({ data }: { data: AppData }) {
       <ProgressNav active="overview" />
 
       {insight ? (
-        <p className="rounded-[20px] bg-primary/10 px-[18px] py-4 text-[15px] leading-relaxed">
+        <p className="rounded-[20px] bg-primary/10 px-[18px] py-4 text-[15px] leading-[1.45]">
           {insight}
         </p>
       ) : null}

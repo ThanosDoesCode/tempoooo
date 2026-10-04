@@ -38,11 +38,12 @@ export function latestWeightEntry(byDate: WeightByDate): { date: string; weightK
  * Weight trend over the last `spanDays`: a per-day 7-day-average series, the current average and the
  * change in that average over the last 7 days. Mode-agnostic — it only needs a day→weight map.
  */
-export function weightTrend(byDate: WeightByDate, spanDays: number) {
+export function weightTrend(byDate: WeightByDate, spanDays: number, todayISO = iso(new Date())) {
   const latest = latestWeightEntry(byDate);
-  const today = iso(new Date());
+  const end = parseISO(todayISO);
+  // Trailing window: the series runs from (spanDays-1) days ago up to today, chronologically.
   const series = Array.from({ length: spanDays }, (_, i) => {
-    const d = iso(addDays(parseISO(today), spanDays - 1 - i));
+    const d = iso(addDays(end, i - (spanDays - 1)));
     return { date: d, avg: trailingAvg(byDate, d) };
   });
   const avgKg = latest ? trailingAvg(byDate, latest.date) : null;

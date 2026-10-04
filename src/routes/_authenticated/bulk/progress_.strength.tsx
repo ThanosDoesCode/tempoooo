@@ -71,7 +71,7 @@ function StrengthBody({ data }: { data: AppData }) {
 
   return (
     <div className="space-y-3">
-      <Card className="grid grid-cols-2 gap-3 p-[18px]">
+      <Card className="grid grid-cols-2 gap-3 px-[18px] py-4">
         <div>
           <div className="num text-[26px] font-semibold">
             {up} of {measured.length}
