@@ -7,6 +7,7 @@ import {
   useRouterState,
   HeadContent,
   Scripts,
+  type ErrorComponentProps,
 } from "@tanstack/react-router";
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 
@@ -54,7 +55,7 @@ function NotFoundComponent() {
   );
 }
 
-function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
+function ErrorComponent({ error, reset }: ErrorComponentProps) {
   const router = useRouter();
   const cancelled = isExpectedQueryCancellation(error);
   useEffect(() => {
