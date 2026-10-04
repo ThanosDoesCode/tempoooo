@@ -270,8 +270,7 @@ export function TrainingPlanEditor({
                 onClick={() => setSelectedDayId(null)}
               >
                 <ArrowLeft className="h-4 w-4 text-primary" aria-hidden="true" />
-                <span className="text-primary">Training Plan</span>
-                <span aria-hidden="true">{"Training Plan →".slice(-1)}</span>
+                <span className="text-primary">Training Plan →</span>
                 <span className="truncate text-foreground">{day.name}</span>
               </button>
               <div className="flex items-start gap-2">
