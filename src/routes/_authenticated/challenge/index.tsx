@@ -37,6 +37,7 @@ import {
   type Activity,
 } from "@/lib/challenge";
 import { ChallengeInviteCard } from "@/components/ChallengeInvite";
+import { challengeParticipation, usePendingChallengeRefresh } from "@/lib/challenge-participation";
 import { ChallengeWaiting } from "@/components/ChallengeWaiting";
 
 export const Route = createFileRoute("/_authenticated/challenge/")({
@@ -97,7 +98,20 @@ function ChallengeHome() {
     return { n, ...weekBounds(challenge, n), hours: hoursLeft(challenge, n) };
   }, [challenge]);
 
-  const outgoingQuery = useOutgoingInvitation(challenge?.id);
+  const isCreator = !!challenge && challenge.created_by === user?.id;
+  const outgoingQuery = useOutgoingInvitation(challenge?.id, isCreator);
+  const waiting =
+    isCreator &&
+    !outgoingQuery.data?.accepted_at &&
+    !members?.some((member) => member.userId !== user?.id);
+  const now = usePendingChallengeRefresh(challenge?.id, waiting, outgoingQuery.data?.expires_at);
+  const participation = challengeParticipation(
+    challenge,
+    user?.id,
+    members,
+    outgoingQuery.data,
+    now,
+  );
 
   const range = week ? { start: week.start, end: week.end } : { start: "", end: "" };
   const summaryQuery = useActivitySummary(challenge?.id, range);
@@ -196,14 +210,37 @@ function ChallengeHome() {
         ? `You’re owed ${owedText(owedToMe, challenge.legacy_photo_owed)}`
         : "All square";
 
-  const isCreator = challenge.created_by === user?.id;
   const preStart = !!week && week.n < 1;
 
   // Creator is still waiting for the opponent to accept: the pending/Waiting screen (no "Week 0").
-  if (needsOpponent && isCreator && outgoingQuery.data) {
+  if (membersLoading || (isCreator && outgoingQuery.isLoading)) {
     return (
       <AppShell>
-        <ChallengeWaiting challenge={challenge} invitation={outgoingQuery.data} />
+        <PageSkeleton label="Loading challenge status" />
+      </AppShell>
+    );
+  }
+  if (membersError || (isCreator && outgoingQuery.error)) {
+    return (
+      <AppShell>
+        <DataError
+          message="Could not load challenge status."
+          onRetry={() => {
+            void membersQuery.refetch();
+            if (isCreator) void outgoingQuery.refetch();
+          }}
+        />
+      </AppShell>
+    );
+  }
+  if (participation !== "accepted") {
+    return (
+      <AppShell>
+        <ChallengeWaiting
+          challenge={challenge}
+          invitation={outgoingQuery.data ?? null}
+          expired={participation === "expired"}
+        />
       </AppShell>
     );
   }

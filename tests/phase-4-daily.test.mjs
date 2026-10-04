@@ -6,6 +6,7 @@ import vm from "node:vm";
 import ts from "typescript";
 import { checkInDraft, validateCheckIn } from "../src/lib/daily-check-in.ts";
 import * as nutrition from "../src/lib/bulk-nutrition.ts";
+import { challengeParticipation } from "../src/lib/challenge-participation.ts";
 import * as goalMetrics from "../src/lib/goal-metrics.ts";
 import { mainTabForPath, LOG_ACTIONS, isFocusScreen } from "../src/lib/main-navigation.ts";
 
@@ -634,8 +635,14 @@ function challengeFixture({
     {
       modules: {
         "@/lib/auth": { useAuth: () => ({ user: { id: "me" } }) },
+        "@/lib/challenge-participation": {
+          challengeParticipation,
+          usePendingChallengeRefresh: () => Date.now(),
+        },
+        "./ChallengeShareInvite": { ChallengeShareInvite: "ChallengeShareInvite" },
         "@/lib/challenge": {
           useMyChallenge: () => ({ ...q(challenge), isLoading: loading, error }),
+          useOutgoingInvitation: () => q(null),
           useChallengeMembers: () =>
             q([
               { userId: "me", name: "Me" },
@@ -656,17 +663,19 @@ function challengeFixture({
   );
 }
 
-test("Phase 4.1 active Challenge is compact, uses real progress and routes to Challenge", () => {
+test("Today active Challenge uses handoff hierarchy, real progress and routes to Challenge", () => {
   const tree = challengeFixture().render();
   assert.equal(tree.type, "Link");
   assert.equal(tree.props.to, "/challenge");
   assert.match(texts(tree), /Challenge with Alex/);
-  assert.match(texts(tree), /12.4\s+\/\s+15\s+km.*3\s*d left/);
+  assert.match(texts(tree), /3\s+days left/);
+  assert.match(texts(tree), /12.4\s+\/\s+15\s+km/);
   const progress = nodes(tree, (n) => n.props?.role === "progressbar")[0];
   assert.equal(progress.props["aria-valuenow"], 12.4);
   assert.equal(progress.props["aria-valuemax"], 15);
   assert.equal(progress.props.children.props.style.width, `${(12.4 / 15) * 100}%`);
-  assert.doesNotMatch(challengeSource, /text-\[52px\]|PageSkeleton|opponentKm/);
+  assert.match(challengeSource, /text-\[52px\]/);
+  assert.match(texts(tree), /Alex\s+0.0\s+km/);
   const paused = challengeFixture({ target: 0 }).render();
   assert.match(texts(paused), /Week paused · no penalty/);
   assert.equal(

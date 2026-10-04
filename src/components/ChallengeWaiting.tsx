@@ -5,6 +5,8 @@ import { differenceInCalendarDays, format, parseISO } from "date-fns";
 import { Card, Note, PendingLabel } from "@/components/ui-kit";
 import { userFacingError } from "@/lib/network-errors";
 import { cancelPendingChallenge } from "@/lib/privileged-rpcs.functions";
+import { ChallengeShareInvite } from "./ChallengeShareInvite";
+import { ChallengeInviteCard } from "./ChallengeInvite";
 import { km, type Challenge, type OutgoingInvitation } from "@/lib/challenge";
 
 /**
@@ -14,42 +16,21 @@ import { km, type Challenge, type OutgoingInvitation } from "@/lib/challenge";
 export function ChallengeWaiting({
   challenge,
   invitation,
+  expired = false,
 }: {
   challenge: Challenge;
-  invitation: OutgoingInvitation;
+  invitation: OutgoingInvitation | null;
+  expired?: boolean;
 }) {
   const qc = useQueryClient();
   const navigate = useNavigate();
-  const [shareNote, setShareNote] = useState<string | null>(null);
   const [cancelArmed, setCancelArmed] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const atUser = `@${invitation.invited_username}`;
-  const expires = parseISO(invitation.expires_at);
-  const daysLeft = Math.max(0, differenceInCalendarDays(expires, new Date()));
-
-  const share = async () => {
-    const url = window.location.origin;
-    const text = `I've set up a Tempo challenge for us. Open Tempo to accept — ${atUser}.`;
-    try {
-      if (typeof navigator !== "undefined" && navigator.share) {
-        await navigator.share({ title: "Tempo challenge", text, url });
-        return;
-      }
-      await navigator.clipboard.writeText(url);
-      setShareNote("Invite link copied");
-    } catch (cause) {
-      // A user cancelling the native share sheet is not an error.
-      if (cause instanceof DOMException && cause.name === "AbortError") return;
-      try {
-        await navigator.clipboard.writeText(url);
-        setShareNote("Invite link copied");
-      } catch {
-        setShareNote("Couldn’t share the link. Try again.");
-      }
-    }
-  };
+  const atUser = invitation ? `@${invitation.invited_username}` : "your opponent";
+  const expires = invitation ? parseISO(invitation.expires_at) : null;
+  const daysLeft = expires ? Math.max(0, differenceInCalendarDays(expires, new Date())) : 0;
 
   const cancel = async () => {
     if (!cancelArmed) {
@@ -74,37 +55,43 @@ export function ChallengeWaiting({
     <div className="space-y-3.5">
       <header className="fade-up mb-1">
         <p className="text-sm text-muted-foreground">{challenge.duration_weeks}-week challenge</p>
-        <h1 className="mt-1 text-3xl font-semibold tracking-tight">Waiting for {atUser}</h1>
+        <h1 className="mt-1 break-words text-3xl font-semibold tracking-tight">
+          Waiting for {atUser}
+        </h1>
       </header>
 
-      <Card className="space-y-3 p-5">
-        <div className="flex items-center gap-3">
-          <span className="h-2.5 w-2.5 flex-none rounded-full bg-warn" aria-hidden="true" />
-          <span className="text-[15px]">
-            Invite sent. It expires in {daysLeft} day{daysLeft === 1 ? "" : "s"} (
-            {format(expires, "d MMM")}).
+      <Card className="space-y-3.5 rounded-[20px] p-5">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-[15px] font-medium">
+            {expired ? "Invite expired" : invitation ? "Invite sent" : "Invite your opponent"}
+          </span>
+          <span className="rounded-full bg-secondary px-3 py-1 text-xs text-muted-foreground">
+            {expired ? "Expired" : "Pending"}
           </span>
         </div>
-        <p className="text-sm text-muted-foreground">
-          {atUser} will see it when they open Tempo. You can also send them the link.
-        </p>
-        <button
-          type="button"
-          onClick={() => void share()}
-          className="flex h-[52px] w-full items-center justify-center rounded-[16px] bg-primary text-base font-semibold text-primary-foreground active:scale-[0.99]"
-        >
-          Share invite link
-        </button>
-        {shareNote ? (
-          <p role="status" className="text-[13px] text-good">
-            {shareNote}
+        {expires ? (
+          <p className="text-[13px] text-muted-foreground">
+            {expired ? "Expired" : `Expires in ${daysLeft} day${daysLeft === 1 ? "" : "s"}`} (
+            {format(expires, "d MMM")})
           </p>
         ) : null}
+        <p className="text-sm text-muted-foreground">
+          {expired || !invitation
+            ? "Send a fresh invitation below. Your challenge terms stay the same."
+            : `${atUser} will see it when they open Tempo. You can also send them the link.`}
+        </p>
+        {invitation && !expired ? (
+          <ChallengeShareInvite username={invitation.invited_username} />
+        ) : null}
       </Card>
+      {expired || !invitation ? <ChallengeInviteCard challengeId={challenge.id} /> : null}
 
-      <Card className="space-y-1 p-5">
+      <Card className="space-y-1 rounded-[20px] p-5">
         <p className="text-base font-medium">
           Starts {format(parseISO(challenge.start_date), "EEEE d MMM")}
+        </p>
+        <p className="text-sm text-muted-foreground">
+          {km(Number(challenge.weekly_target_km))} a week · {challenge.duration_weeks} weeks
         </p>
         <p className="text-sm text-muted-foreground">
           The first week runs Monday to Sunday in {challenge.timezone} time.

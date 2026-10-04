@@ -554,9 +554,15 @@ export type TravelPause = {
   updated_at: string;
 };
 
-export type OutgoingInvitation = { id: string; invited_username: string; expires_at: string };
+export type OutgoingInvitation = {
+  id: string;
+  invited_username: string;
+  invited_user_id: string | null;
+  expires_at: string;
+  accepted_at: string | null;
+};
 
-/** The creator's own still-pending invitation for a challenge (for the Waiting screen). */
+// Retain the latest unrevoked invitation after expiry/acceptance for honest state presentation.
 export function useOutgoingInvitation(challengeId: string | undefined, enabled = true) {
   return useQuery({
     enabled: !!challengeId && enabled,
@@ -565,11 +571,9 @@ export function useOutgoingInvitation(challengeId: string | undefined, enabled =
     queryFn: async (): Promise<OutgoingInvitation | null> => {
       const { data, error } = await supabase
         .from("challenge_invitations")
-        .select("id, invited_username_snapshot, expires_at")
+        .select("id, invited_username_snapshot, invited_user_id, expires_at, accepted_at")
         .eq("challenge_id", challengeId!)
-        .is("accepted_at", null)
         .is("revoked_at", null)
-        .gt("expires_at", new Date().toISOString())
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -578,12 +582,16 @@ export function useOutgoingInvitation(challengeId: string | undefined, enabled =
       const row = data as unknown as {
         id: string;
         invited_username_snapshot: string | null;
+        invited_user_id: string | null;
+        accepted_at: string | null;
         expires_at: string;
       };
       return {
         id: row.id,
         invited_username: row.invited_username_snapshot ?? "your opponent",
         expires_at: row.expires_at,
+        invited_user_id: row.invited_user_id,
+        accepted_at: row.accepted_at,
       };
     },
   });

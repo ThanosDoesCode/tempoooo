@@ -207,25 +207,23 @@ test("Create is a focus-screen, 3-step flow that defers creation to the final st
 
 // --- Waiting (creator) ---------------------------------------------------------------------------
 test("Waiting replaces Week 0 and offers share + creator-only cancel", async () => {
-  const [waiting, index] = await Promise.all([
+  const [waiting, index, share] = await Promise.all([
     read("src/components/ChallengeWaiting.tsx"),
     read("src/routes/_authenticated/challenge/index.tsx"),
+    read("src/components/ChallengeShareInvite.tsx"),
   ]);
   assert.match(waiting, /Waiting for \{atUser\}/);
-  assert.match(waiting, /h-\[52px\] w-full/); // Share is a full-width primary button
-  assert.match(waiting, /navigator\.share/);
-  assert.match(waiting, /navigator\.clipboard\.writeText/);
-  assert.match(waiting, /name === "AbortError"/); // cancelled native share is not an error
-  assert.match(waiting, /Invite link copied/);
+  assert.match(share, /h-\[52px\] w-full/); // Share is a full-width primary button
+  assert.match(share, /navigator\.share/);
+  assert.match(share, /navigator\.clipboard\.writeText/);
+  assert.match(share, /name === "AbortError"/); // cancelled native share is not an error
+  assert.match(share, /Invite link copied/);
   assert.match(waiting, /cancelPendingChallenge\(\{ data: \{ challenge: challenge\.id \} \}\)/);
   assert.match(waiting, /Cancel this challenge/);
-  assert.match(waiting, /expires in \{daysLeft\}/);
+  assert.match(waiting, /Expires in \$\{daysLeft\}/);
   // The week screen renders Waiting for a pending creator and a pre-start card otherwise — never "Week 0".
-  assert.match(index, /needsOpponent && isCreator && outgoingQuery\.data/);
-  assert.match(
-    index,
-    /<ChallengeWaiting challenge=\{challenge\} invitation=\{outgoingQuery\.data\}/,
-  );
+  assert.match(index, /participation !== "accepted"/);
+  assert.match(index, /<ChallengeWaiting[\s\S]*invitation=\{outgoingQuery\.data \?\? null\}/);
   assert.match(index, /preStart = !!week && week\.n < 1/);
 });
 
@@ -254,9 +252,9 @@ test("useOutgoingInvitation reads the creator's own pending invitation, not the 
   // A direct, RLS-scoped read of the challenge's own invitation rows (creator can read these).
   assert.match(fn, /\.from\("challenge_invitations"\)/);
   assert.match(fn, /\.eq\("challenge_id", challengeId!\)/);
-  assert.match(fn, /\.is\("accepted_at", null\)/);
+  assert.match(fn, /accepted_at/);
   assert.match(fn, /\.is\("revoked_at", null\)/);
-  assert.match(fn, /\.gt\("expires_at"/);
+  assert.doesNotMatch(fn, /\.gt\("expires_at"/); // Keep expired records for recovery; acceptance RPC still enforces expiry.
   assert.match(fn, /invited_username_snapshot/);
   // It must NOT reuse the incoming/receiver invitation RPC.
   assert.doesNotMatch(fn, /list_my_challenge_invitations|listMyChallengeInvitations/);
@@ -269,7 +267,7 @@ test("a loaded pending challenge resolves to Waiting and never the empty Create 
   assert.ok(emptyGuard, "empty state is guarded by !challenge");
   // …and the Waiting / pre-start branches run only after that guard, on a loaded challenge.
   const emptyAt = index.indexOf("Create a challenge");
-  const waitingAt = index.indexOf("needsOpponent && isCreator && outgoingQuery.data");
+  const waitingAt = index.indexOf('participation !== "accepted"');
   assert.ok(waitingAt > emptyAt, "Waiting branch is evaluated on a loaded challenge");
   // Receiver incoming-invite behaviour is unchanged (still the list RPC).
   assert.match(await read("src/lib/challenge-invitations.ts"), /listMyChallengeInvitations\(\)/);

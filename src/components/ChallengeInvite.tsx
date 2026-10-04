@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Search, Send } from "lucide-react";
 import { Card, PendingLabel, SectionTitle } from "@/components/ui-kit";
 import { challengeUsernameError, normalizeUsername } from "@/lib/account-profile";
@@ -8,6 +9,7 @@ import {
 } from "@/lib/privileged-rpcs.functions";
 
 export function ChallengeInviteCard({ challengeId }: { challengeId: string }) {
+  const qc = useQueryClient();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Array<{ username: string }>>([]);
   const [searching, setSearching] = useState(false);
@@ -40,6 +42,7 @@ export function ChallengeInviteCard({ challengeId }: { challengeId: string }) {
     setNotice(null);
     try {
       await sendChallengeUsernameInvitation({ data: { challengeId, username } });
+      await qc.invalidateQueries({ queryKey: ["challenge-outgoing-invitation", challengeId] });
       setNotice(`Invitation sent to @${username}.`);
       setQuery("");
       setResults([]);
