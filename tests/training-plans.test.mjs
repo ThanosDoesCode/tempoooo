@@ -259,14 +259,16 @@ test("training UI supports generated, preset and empty custom paths without repl
 });
 
 test("training setup exposes all three creation options in fresh and replacing flows", async () => {
-  const [component, query] = await Promise.all([
+  const [component, query, options] = await Promise.all([
     read("src/components/TrainingPlanSetup.tsx"),
     read("src/lib/training-plans-query.ts"),
+    read("src/lib/bulk-onboarding.ts"),
   ]);
   // The three options are surfaced explicitly, not derived silently from onboarding.
-  assert.match(component, /Generate my program/);
-  assert.match(component, /Choose a Tempo program/);
-  assert.match(component, /Create my own program/);
+  assert.match(options, /Generate with AI/);
+  assert.match(options, /Choose a Tempo program/);
+  assert.match(options, /Create my own program/);
+  assert.match(component, /Coming soon/);
   assert.match(component, /role="radiogroup"/);
   // Custom creation is reachable regardless of the stored onboarding preference (mode state,
   // not `preference`, drives which body renders) and works when replacing an active plan.

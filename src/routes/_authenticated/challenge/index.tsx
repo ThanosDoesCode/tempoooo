@@ -129,7 +129,7 @@ function ChallengeHome() {
   if (challengeError && !challenge) {
     return (
       <AppShell>
-        <header className="fade-up mb-4">
+        <header className="fade-up mb-3.5">
           <h1 className="text-3xl font-semibold tracking-tight">Challenge</h1>
         </header>
         <DataError
@@ -143,7 +143,7 @@ function ChallengeHome() {
   if (!challenge) {
     return (
       <AppShell>
-        <header className="fade-up mb-5">
+        <header className="fade-up mb-3.5">
           <h1 className="text-3xl font-semibold tracking-tight">Challenge</h1>
           <p className="mt-1 text-sm text-muted-foreground">A private two-person endurance bet.</p>
         </header>
@@ -249,7 +249,7 @@ function ChallengeHome() {
   if (preStart) {
     return (
       <AppShell>
-        <header className="fade-up mb-3">
+        <header className="fade-up mb-3.5">
           <p className="text-sm text-muted-foreground">
             {opponent ? `With ${opponent.name} · ` : ""}
             {challenge.duration_weeks}-week challenge
@@ -278,7 +278,7 @@ function ChallengeHome() {
 
   return (
     <AppShell>
-      <header className="fade-up mb-3">
+      <header className="fade-up mb-3.5">
         <p className="text-sm text-muted-foreground">
           {opponent ? `With ${opponent.name} · ` : ""}Week {week?.n} of {challenge.duration_weeks}
         </p>

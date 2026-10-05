@@ -34,7 +34,6 @@ export function AppShell({ children }: { children: ReactNode }) {
 function AppChrome({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
   const navigationPending = useRouterState({ select: (router) => router.status === "pending" });
-  const isChallenge = pathname.startsWith("/challenge");
   const isAccountOnboarding = pathname === "/onboarding";
   const focusScreen = isFocusScreen(pathname);
   const { data: memberships } = useMemberships();
@@ -58,7 +57,7 @@ function AppChrome({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-background">
       <PullToRefresh>
         <main
-          className={`mx-auto w-full ${widerDailyLayout ? "max-w-2xl" : "max-w-lg"} px-5 ${isAccountOnboarding ? "pb-6 pt-0" : `${focusScreen ? "pb-10" : "pb-28"} ${isChallenge ? "pt-4" : "pt-6"}`}`}
+          className={`mx-auto w-full ${widerDailyLayout ? "max-w-2xl" : "max-w-lg"} px-5 ${isAccountOnboarding ? "pb-6 pt-0" : `${focusScreen ? "pb-10" : "pb-28"} pt-[max(1.5rem,env(safe-area-inset-top))]`}`}
         >
           <div key={pathname} className="tempo-route-content">
             {children}

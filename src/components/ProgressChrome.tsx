@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { type ReactNode } from "react";
 
 import { PERIOD_OPTIONS, useProgressSections, type ProgressSection } from "@/lib/progress-view";
@@ -15,7 +15,10 @@ const NAV: Record<ProgressSection, { label: string; to: string }> = {
 export function ProgressNav({ active }: { active: ProgressSection }) {
   const { sections } = useProgressSections();
   return (
-    <nav aria-label="Progress view" className="mb-3 flex gap-0.5 rounded-[13px] bg-card p-1">
+    <nav
+      aria-label="Progress view"
+      className="mb-3.5 grid auto-cols-fr grid-flow-col rounded-[13px] bg-card p-1"
+    >
       {sections.map((section) => {
         const { label, to } = NAV[section];
         const on = section === active;
@@ -25,7 +28,7 @@ export function ProgressNav({ active }: { active: ProgressSection }) {
             to={to}
             preload="intent"
             aria-current={on ? "page" : undefined}
-            className={`flex min-h-11 min-w-0 flex-1 items-center justify-center whitespace-nowrap rounded-[10px] text-[11px] min-[360px]:text-[13px] ${
+            className={`flex min-h-11 min-w-0 items-center justify-center whitespace-nowrap rounded-[10px] px-1 text-[11px] min-[360px]:text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
               on ? "bg-elevated font-semibold text-foreground" : "font-medium text-muted-foreground"
             }`}
           >
@@ -37,6 +40,16 @@ export function ProgressNav({ active }: { active: ProgressSection }) {
   );
 }
 
+/** Align the title with Today's heading below its leading metadata line. */
+export function ProgressHeader({ children }: { children?: ReactNode }) {
+  return (
+    <header className="mb-3.5 flex items-end justify-between gap-3 pt-6">
+      <h1 className="fade-up text-3xl font-semibold tracking-tight">Progress</h1>
+      {children}
+    </header>
+  );
+}
+
 export function PeriodPicker({
   weeks,
   onChange,
@@ -45,12 +58,12 @@ export function PeriodPicker({
   onChange: (weeks: number) => void;
 }) {
   return (
-    <label className="relative inline-flex">
+    <label className="relative inline-flex shrink-0">
       <span className="sr-only">Period</span>
       <select
         value={weeks}
         onChange={(event) => onChange(Number(event.target.value))}
-        className="h-9 rounded-[10px] bg-elevated pl-3 pr-7 text-[13px] font-medium text-foreground outline-none focus:ring-2 focus:ring-ring"
+        className="h-9 appearance-none rounded-[10px] bg-elevated bg-none pl-3 pr-8 text-[13px] font-medium text-foreground outline-none focus:ring-2 focus:ring-ring"
       >
         {PERIOD_OPTIONS.map((option) => (
           <option key={option} value={option}>
@@ -58,8 +71,8 @@ export function PeriodPicker({
           </option>
         ))}
       </select>
-      <ChevronRight
-        className="pointer-events-none absolute right-1.5 top-1/2 h-4 w-4 -translate-y-1/2 rotate-90 text-muted-foreground"
+      <ChevronDown
+        className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
         aria-hidden="true"
       />
     </label>

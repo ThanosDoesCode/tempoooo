@@ -53,7 +53,7 @@ export function ChallengeWaiting({
 
   return (
     <div className="space-y-3.5">
-      <header className="fade-up mb-1">
+      <header className="fade-up">
         <p className="text-sm text-muted-foreground">{challenge.duration_weeks}-week challenge</p>
         <h1 className="mt-1 break-words text-3xl font-semibold tracking-tight">
           Waiting for {atUser}

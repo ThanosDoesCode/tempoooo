@@ -10,6 +10,7 @@ const db = new PGlite();
 const root = new URL("../supabase/migrations/", import.meta.url);
 const owner = randomUUID();
 const other = randomUUID();
+let originalWeightDateConstraint;
 
 before(async () => {
   await db.exec(`
@@ -41,6 +42,13 @@ before(async () => {
   for (const file of (await readdir(root)).filter((name) => name.endsWith(".sql")).sort()) {
     try {
       await db.exec(await readFile(new URL(file, root), "utf8"));
+      if (file === "20260906220000_public_bulk_progress.sql") {
+        originalWeightDateConstraint = (
+          await db.query(
+            "SELECT pg_get_constraintdef(oid) AS definition FROM pg_constraint WHERE conrelid='public.bulk_weight_entries'::regclass AND conname='bulk_weight_entries_date_ck'",
+          )
+        ).rows[0].definition;
+      }
     } catch (error) {
       throw new Error(`Migration failed: ${file}`, { cause: error });
     }
@@ -89,6 +97,26 @@ const createMeal = (id, name, ingredients = [], calories = 612.5) =>
       [name, calories, JSON.stringify(ingredients)],
     ),
   );
+
+// Execute the migration's real RPC under fixed midnight instants by substituting
+// only its clock expression in the isolated PostgreSQL instance. CURRENT_DATE,
+// RLS and the original table constraint are not replaced. Restore the exact RPC
+// definition even on failure; production has no caller-controlled clock.
+async function withDatabaseClock(timestamp, action) {
+  const original = (
+    await db.query(
+      "SELECT pg_get_functiondef('public.save_bulk_weight_for_local_day(uuid,date,numeric,text,text)'::regprocedure) AS definition",
+    )
+  ).rows[0].definition;
+  const instant = new Date(timestamp).toISOString();
+  assert.ok(original.includes("pg_catalog.now()"));
+  try {
+    await db.exec(original.replace("pg_catalog.now()", `'${instant}'::timestamptz`));
+    return await action(instant);
+  } finally {
+    await db.exec(original);
+  }
+}
 
 test("public Goal starts without presets even when legacy meal data exists", async () => {
   const profile = (await db.query("SELECT id FROM public.bulk_profiles WHERE owner_id=$1", [owner]))
@@ -284,6 +312,295 @@ test("meal CRUD, duplication and normalized ordering are transactional", async (
     compacted.rows.map((row) => row.sort_order),
     [1, 2],
   );
+});
+
+test("local-day weight RPC preserves the date constraint and same-day upserts across timezone boundaries", async () => {
+  const profile = (await db.query("SELECT id FROM public.bulk_profiles WHERE owner_id=$1", [owner]))
+    .rows[0].id;
+  const rpc = (date, kg, note = "Morning", timezone = "Pacific/Kiritimati") =>
+    db.query("SELECT public.save_bulk_weight_for_local_day($1,$2,$3,$4,$5)", [
+      profile,
+      date,
+      kg,
+      note,
+      timezone,
+    ]);
+  let createdId;
+  try {
+    // UTC-12 vs UTC+14 guarantees two distinct calendar dates at the same instant.
+    await db.exec("SET TIME ZONE 'Etc/GMT+12'");
+    const dates = (
+      await db.query(`SELECT CURRENT_DATE::text AS server_day,
+      (now() AT TIME ZONE 'Pacific/Kiritimati')::date::text AS local_day`)
+    ).rows[0];
+    assert.ok(dates.local_day > dates.server_day);
+    await assert.rejects(
+      asUser(owner, () =>
+        db.query(
+          "INSERT INTO public.bulk_weight_entries(bulk_profile_id,log_date,weight_kg) VALUES($1,$2,70)",
+          [profile, dates.local_day],
+        ),
+      ),
+      (error) => error.code === "23514" && error.constraint === "bulk_weight_entries_date_ck",
+    );
+
+    await asUser(owner, () => rpc(dates.local_day, 71.25));
+    const original = (
+      await db.query(
+        "SELECT id,log_date::text FROM public.bulk_weight_entries WHERE bulk_profile_id=$1 AND log_date=$2",
+        [profile, dates.local_day],
+      )
+    ).rows[0];
+    createdId = original.id;
+    await asUser(owner, () => rpc(dates.local_day, 71.5, "Edited"));
+    const rows = (
+      await db.query(
+        "SELECT id,log_date::text,weight_kg::text,note FROM public.bulk_weight_entries WHERE bulk_profile_id=$1 AND log_date=$2",
+        [profile, dates.local_day],
+      )
+    ).rows;
+    assert.deepEqual(rows, [
+      { id: original.id, log_date: dates.local_day, weight_kg: "71.50", note: "Edited" },
+    ]);
+    assert.equal((await db.query("SHOW TimeZone")).rows[0].TimeZone, "Etc/GMT+12");
+
+    const tomorrow = (
+      await db.query("SELECT ((now() AT TIME ZONE 'Pacific/Kiritimati')::date+1)::text AS day")
+    ).rows[0].day;
+    await assert.rejects(
+      asUser(owner, () => rpc(tomorrow, 70)),
+      /Weight date must be today in the supplied timezone/,
+    );
+    await assert.rejects(
+      asUser(owner, () => rpc("1999-12-31", 70)),
+      /Weight date must be today in the supplied timezone/,
+    );
+    await assert.rejects(
+      asUser(owner, () => rpc(dates.local_day, 401)),
+      (error) => error.constraint === "bulk_weight_entries_weight_ck",
+    );
+    await assert.rejects(
+      asUser(owner, () => rpc(dates.local_day, 70, null, "not/a/timezone")),
+      /Invalid device timezone/,
+    );
+    await assert.rejects(
+      asUser(owner, () => rpc(dates.local_day, 70, null, null)),
+      /Invalid device timezone/,
+    );
+    await assert.rejects(
+      asUser(other, () => rpc(dates.local_day, 70)),
+      /Goal profile not found/,
+    );
+    await assert.rejects(
+      asUser("", () => rpc(dates.local_day, 70)),
+      /Not authenticated/,
+    );
+    await assert.rejects(
+      asAnon(() => rpc(dates.local_day, 70)),
+      /permission denied/,
+    );
+    assert.equal((await db.query("SHOW TimeZone")).rows[0].TimeZone, "Etc/GMT+12");
+    const fn = (
+      await db.query(`SELECT prosecdef,proconfig,
+      has_function_privilege('anon',oid,'EXECUTE') AS anon,
+      has_function_privilege('authenticated',oid,'EXECUTE') AS authenticated
+      FROM pg_proc WHERE proname='save_bulk_weight_for_local_day'`)
+    ).rows[0];
+    assert.equal(fn.prosecdef, false, "RLS remains in force for the caller");
+    assert.equal(fn.anon, false);
+    assert.equal(fn.authenticated, true);
+    assert.ok(fn.proconfig.includes('search_path=""'));
+    assert.equal(
+      (
+        await db.query(
+          "SELECT relrowsecurity FROM pg_class WHERE oid='public.bulk_weight_entries'::regclass",
+        )
+      ).rows[0].relrowsecurity,
+      true,
+    );
+  } finally {
+    await db.exec("SET TIME ZONE 'UTC'");
+    if (createdId)
+      await db.query("DELETE FROM public.bulk_weight_entries WHERE id=$1", [createdId]);
+  }
+});
+
+test("today-only weight RPC accepts Stockholm after midnight and timezones ahead/behind UTC", async (t) => {
+  const profile = (await db.query("SELECT id FROM public.bulk_profiles WHERE owner_id=$1", [owner]))
+    .rows[0].id;
+  const cases = [
+    ["Stockholm just after midnight", "2024-12-31T23:05:00Z", "Europe/Stockholm", "2025-01-01"],
+    ["ahead of UTC", "2025-01-31T10:05:00Z", "Pacific/Kiritimati", "2025-02-01"],
+    ["behind UTC", "2025-01-01T00:05:00Z", "America/Los_Angeles", "2024-12-31"],
+    ["Stockholm summer midnight", "2025-06-30T22:05:00Z", "Europe/Stockholm", "2025-07-01"],
+  ];
+  for (const [name, timestamp, timezone, expectedDate] of cases) {
+    await t.test(name, () =>
+      withDatabaseClock(timestamp, async (instant) => {
+        let createdId;
+        try {
+          assert.equal(
+            (
+              await db.query("SELECT ($1::timestamptz AT TIME ZONE $2)::date::text AS day", [
+                instant,
+                timezone,
+              ])
+            ).rows[0].day,
+            expectedDate,
+          );
+          await asUser(owner, () =>
+            db.query("SELECT public.save_bulk_weight_for_local_day($1,$2,72.25,NULL,$3)", [
+              profile,
+              expectedDate,
+              timezone,
+            ]),
+          );
+          const row = (
+            await db.query(
+              "SELECT id,log_date::text,weight_kg::text FROM public.bulk_weight_entries WHERE bulk_profile_id=$1 AND log_date=$2",
+              [profile, expectedDate],
+            )
+          ).rows[0];
+          createdId = row.id;
+          assert.equal(row.log_date, expectedDate);
+          assert.equal(row.weight_kg, "72.25");
+          assert.equal((await db.query("SHOW TimeZone")).rows[0].TimeZone, "UTC");
+        } finally {
+          if (createdId)
+            await db.query("DELETE FROM public.bulk_weight_entries WHERE id=$1", [createdId]);
+        }
+      }),
+    );
+  }
+});
+
+test("arbitrary valid timezone never permits tomorrow or yesterday relative to that timezone", async () => {
+  const profile = (await db.query("SELECT id FROM public.bulk_profiles WHERE owner_id=$1", [owner]))
+    .rows[0].id;
+  await withDatabaseClock("2025-01-01T12:05:00Z", async (instant) => {
+    const before = (
+      await db.query(
+        "SELECT count(*) AS count FROM public.bulk_weight_entries WHERE bulk_profile_id=$1",
+        [profile],
+      )
+    ).rows[0].count;
+    for (const timezone of [
+      "UTC",
+      "Europe/Stockholm",
+      "Pacific/Kiritimati",
+      "America/Los_Angeles",
+      "Etc/GMT+12",
+    ]) {
+      const dates = (
+        await db.query(
+          "SELECT (($1::timestamptz AT TIME ZONE $2)::date+1)::text AS tomorrow, (($1::timestamptz AT TIME ZONE $2)::date-1)::text AS yesterday",
+          [instant, timezone],
+        )
+      ).rows[0];
+      for (const date of [dates.tomorrow, dates.yesterday]) {
+        // Both are below the real CURRENT_DATE: the explicit RPC guard, not the
+        // existing table bound, must reject them under the test clock.
+        await assert.rejects(
+          asUser(owner, () =>
+            db.query("SELECT public.save_bulk_weight_for_local_day($1,$2,72,NULL,$3)", [
+              profile,
+              date,
+              timezone,
+            ]),
+          ),
+          /Weight date must be today in the supplied timezone/,
+        );
+        assert.equal((await db.query("SHOW TimeZone")).rows[0].TimeZone, "UTC");
+      }
+    }
+    assert.equal(
+      (
+        await db.query(
+          "SELECT count(*) AS count FROM public.bulk_weight_entries WHERE bulk_profile_id=$1",
+          [profile],
+        )
+      ).rows[0].count,
+      before,
+    );
+  });
+});
+
+test("local-day weight RPC keeps original constraint, RLS and execution/ownership boundaries", async () => {
+  assert.equal(
+    (
+      await db.query(
+        "SELECT pg_get_constraintdef(oid) AS definition FROM pg_constraint WHERE conrelid='public.bulk_weight_entries'::regclass AND conname='bulk_weight_entries_date_ck'",
+      )
+    ).rows[0].definition,
+    originalWeightDateConstraint,
+  );
+  assert.match(originalWeightDateConstraint, /2000-01-01/);
+  assert.match(originalWeightDateConstraint, /CURRENT_DATE/);
+  const migration = await readFile(
+    new URL("20261005120000_save_goal_weight_local_day.sql", root),
+    "utf8",
+  );
+  assert.doesNotMatch(
+    migration,
+    /\bEXECUTE\s+(?:format|')|SECURITY DEFINER|ALTER TABLE|DROP CONSTRAINT/i,
+  );
+  assert.match(migration, /pg_catalog\.pg_timezone_names/);
+  assert.match(migration, /pg_catalog\.set_config\('TimeZone', _timezone, true\)/);
+  assert.match(migration, /p\.owner_id = caller/);
+  assert.match(migration, /m\.user_id = caller AND m\.role = 'owner'/);
+  assert.equal(
+    (
+      await db.query(
+        "SELECT has_function_privilege('anon','public.save_bulk_weight_for_local_day(uuid,date,numeric,text,text)','EXECUTE') AS anon, has_function_privilege('service_role','public.save_bulk_weight_for_local_day(uuid,date,numeric,text,text)','EXECUTE') AS service",
+      )
+    ).rows[0].anon,
+    false,
+  );
+  assert.equal(
+    (
+      await db.query(
+        "SELECT has_function_privilege('service_role','public.save_bulk_weight_for_local_day(uuid,date,numeric,text,text)','EXECUTE') AS allowed",
+      )
+    ).rows[0].allowed,
+    false,
+  );
+});
+
+test("weight RPC restores timezone inside an existing transaction on success and constraint failure", async () => {
+  const profile = (await db.query("SELECT id FROM public.bulk_profiles WHERE owner_id=$1", [owner]))
+    .rows[0].id;
+  try {
+    await db.exec("BEGIN; SET LOCAL TIME ZONE 'Etc/GMT+12'");
+    await db.query("SELECT set_config('request.jwt.claim.sub',$1,true)", [owner]);
+    await db.exec("SET LOCAL ROLE authenticated");
+    const date = (
+      await db.query(
+        "SELECT (pg_catalog.now() AT TIME ZONE 'Pacific/Kiritimati')::date::text AS day",
+      )
+    ).rows[0].day;
+    await db.query(
+      "SELECT public.save_bulk_weight_for_local_day($1,$2,72,NULL,'Pacific/Kiritimati')",
+      [profile, date],
+    );
+    assert.equal(
+      (await db.query("SHOW TimeZone")).rows[0].TimeZone,
+      "Etc/GMT+12",
+      "restored before the outer transaction ends",
+    );
+    await db.exec("SAVEPOINT rejected_weight");
+    await assert.rejects(
+      db.query(
+        "SELECT public.save_bulk_weight_for_local_day($1,$2,401,NULL,'Pacific/Kiritimati')",
+        [profile, date],
+      ),
+      (error) => error.constraint === "bulk_weight_entries_weight_ck",
+    );
+    await db.exec("ROLLBACK TO SAVEPOINT rejected_weight");
+    assert.equal((await db.query("SHOW TimeZone")).rows[0].TimeZone, "Etc/GMT+12");
+  } finally {
+    await db.exec("ROLLBACK");
+  }
+  assert.equal((await db.query("SHOW TimeZone")).rows[0].TimeZone, "UTC");
 });
 
 test("public Bulk weight entries are decimal, canonical by date and owner-only", async () => {

@@ -104,7 +104,11 @@ test("Goal Today and Progress share structured weights and refresh active bodywe
   const morning = await read("src/components/DailyCheckIn.tsx");
   assert.match(morning, /saveBulkWeight/);
   assert.match(morning, /bulkWeightQueryKey/);
-  assert.match(progressQuery, /onConflict: "bulk_profile_id,log_date"/);
+  assert.match(progressQuery, /rpc\("save_bulk_weight_for_local_day"/);
+  const weightSave = await read(
+    "supabase/migrations/20261005120000_save_goal_weight_local_day.sql",
+  );
+  assert.match(weightSave, /ON CONFLICT \(bulk_profile_id, log_date\)/);
   assert.match(progressQuery, /refreshActiveBulkTrainingBodyweight/);
 });
 

@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 
 import { AppShell } from "@/components/AppShell";
 import { Card } from "@/components/ui-kit";
-import { ProgressNav, ProgressRow, Sparkline } from "@/components/ProgressChrome";
+import { ProgressHeader, ProgressNav, ProgressRow, Sparkline } from "@/components/ProgressChrome";
 import { useTrackedLifts } from "@/lib/progress-view";
 import { useStrengthModel } from "@/lib/progress-model";
 import { BULK_START, fmt, iso } from "@/lib/calc";
@@ -22,7 +22,7 @@ function StrengthPage() {
   const data = useAppData();
   return (
     <AppShell>
-      <h1 className="fade-up mb-3 text-3xl font-semibold tracking-tight">Progress</h1>
+      <ProgressHeader />
       <ProgressNav active="strength" />
       {data ? (
         <StrengthBody data={data} />

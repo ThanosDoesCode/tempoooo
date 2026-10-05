@@ -246,6 +246,121 @@ test("Phase 4 failed check-in preserves values, stays on form and retries withou
   assert.equal(f.destinations.length, 1);
 });
 
+test("Morning check-in keeps weight/sleep on the browser-local day and steps on the previous local day", async () => {
+  const source = await read("src/lib/use-local-day.ts");
+  const previousTimezone = process.env.TZ;
+  const cases = [
+    ["Europe/Stockholm", "2026-01-31T23:30:00Z", "2026-02-01", "2026-01-31"],
+    ["Europe/Stockholm", "2025-12-31T23:30:00Z", "2026-01-01", "2025-12-31"],
+    ["America/Los_Angeles", "2026-01-01T00:30:00Z", "2025-12-31", "2025-12-30"],
+    ["Europe/Stockholm", "2026-03-28T23:30:00Z", "2026-03-29", "2026-03-28"],
+    ["UTC", "2026-01-01T00:30:00Z", "2026-01-01", "2025-12-31"],
+  ];
+  try {
+    for (const [timezone, timestamp, expectedDay, expectedYesterday] of cases) {
+      process.env.TZ = timezone;
+      const context = {
+        exports: {},
+        Date: class extends Date {
+          constructor() {
+            super(timestamp);
+          }
+        },
+        require: (name) =>
+          name === "react"
+            ? { useState: (initial) => [initial(), () => {}], useEffect() {} }
+            : { iso },
+      };
+      vm.runInNewContext(
+        ts.transpileModule(source, {
+          compilerOptions: { module: ts.ModuleKind.CommonJS },
+        }).outputText,
+        context,
+      );
+      const localDay = context.exports.useLocalDay();
+      assert.equal(localDay, expectedDay, timezone);
+      const f = fixture(checkSource, "DailyCheckIn", {
+        ...checkProps,
+        date: localDay,
+        weight: 71.5,
+        day: { sleepHours: 7.5, sleepQuality: 4 },
+        yesterdayDay: { steps: 8000 },
+      });
+      nodes(f.render(), (n) => n.props?.["aria-busy"] != null)[0].props.onClick();
+      await new Promise((resolve) => setImmediate(resolve));
+      const weightWrite = f.calls.find(([name]) => name === "saveWeight");
+      assert.equal(weightWrite[2].logDate, expectedDay);
+      const todayWrite = f.calls.find(([name, date]) => name === "saveDay" && date === expectedDay);
+      assert.equal(todayWrite[2].sleepHours, 7.5);
+      assert.equal(todayWrite[2].sleepQuality, 4);
+      assert.equal(
+        f.calls.find(([name, date]) => name === "saveDay" && date === expectedYesterday)[2].steps,
+        8000,
+      );
+    }
+  } finally {
+    if (previousTimezone == null) delete process.env.TZ;
+    else process.env.TZ = previousTimezone;
+  }
+});
+
+test("weight save sends the unchanged local date and device timezone to the RLS-preserving RPC", async () => {
+  const source = await read("src/lib/bulk-progress-query.ts");
+  const calls = [];
+  let fail = false;
+  const context = {
+    exports: {},
+    Intl: { DateTimeFormat: () => ({ resolvedOptions: () => ({ timeZone: "Europe/Stockholm" }) }) },
+    require: (name) => {
+      if (name === "@/integrations/supabase/client")
+        return {
+          supabase: {
+            rpc: async (rpc, args) => {
+              calls.push([rpc, args]);
+              return { error: fail ? new Error("Offline") : null };
+            },
+          },
+        };
+      if (name === "./bulk-training-sessions")
+        return {
+          refreshActiveBulkTrainingBodyweight: async (profile) =>
+            calls.push(["bodyweight", profile]),
+        };
+      return { queryOptions: (options) => options };
+    },
+  };
+  vm.runInNewContext(
+    ts.transpileModule(source, {
+      compilerOptions: { module: ts.ModuleKind.CommonJS },
+    }).outputText,
+    context,
+  );
+  await context.exports.saveBulkWeight("owner", {
+    logDate: "2026-02-01",
+    weightKg: 71.5,
+    note: "Keep",
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(calls)), [
+    [
+      "save_bulk_weight_for_local_day",
+      {
+        _profile: "owner",
+        _log_date: "2026-02-01",
+        _weight_kg: 71.5,
+        _note: "Keep",
+        _timezone: "Europe/Stockholm",
+      },
+    ],
+    ["bodyweight", "owner"],
+  ]);
+  fail = true;
+  await assert.rejects(
+    context.exports.saveBulkWeight("owner", { logDate: "2026-02-01", weightKg: 72, note: "Keep" }),
+    /Offline/,
+  );
+  assert.equal(calls.filter(([name]) => name === "bodyweight").length, 1);
+});
+
 test("Phase 4 custom meal preserves date/macros, clears on confirmed success and refetches daily totals", async () => {
   const f = fixture(mealSource, "BulkNutritionLog", { ...mealProps, mode: "add" });
   find(f.render(), "NutritionEntryEditor").props.onChange({

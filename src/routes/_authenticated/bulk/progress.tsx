@@ -2,7 +2,13 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo } from "react";
 
 import { AppShell } from "@/components/AppShell";
-import { PeriodPicker, ProgressNav, ProgressRow, Sparkline } from "@/components/ProgressChrome";
+import {
+  ProgressHeader,
+  PeriodPicker,
+  ProgressNav,
+  ProgressRow,
+  Sparkline,
+} from "@/components/ProgressChrome";
 import { fmt, fmt0 } from "@/lib/calc";
 import { useAppData, useBulkMeta } from "@/lib/store";
 import { bulkPlanModeFor, useMemberships } from "@/lib/bulk-access";
@@ -39,7 +45,7 @@ function ProgressPage() {
   if (!data || planMode === "none") {
     return (
       <AppShell>
-        <h1 className="fade-up mb-3 text-3xl font-semibold tracking-tight">Progress</h1>
+        <ProgressHeader />
         <div className="h-48 animate-pulse rounded-[20px] bg-card" aria-label="Loading progress" />
       </AppShell>
     );
@@ -83,10 +89,9 @@ function OwnProgress({ data }: { data: AppData }) {
 
   return (
     <AppShell>
-      <div className="mb-3 flex items-end justify-between">
-        <h1 className="fade-up text-3xl font-semibold tracking-tight">Progress</h1>
+      <ProgressHeader>
         <PeriodPicker weeks={weeks} onChange={setWeeks} />
-      </div>
+      </ProgressHeader>
       <ProgressNav active="overview" />
 
       {insight ? (
@@ -109,18 +114,14 @@ function OwnProgress({ data }: { data: AppData }) {
               ? `${fmt(endurance.avgKmPerActiveWeek, 1)} km`
               : challenge.isLoading
                 ? "Loading progress…"
-                : hasChallenge
-                  ? "Not enough data yet"
-                  : "Start a challenge"
+                : "No data yet"
           }
           sub={
             endurance?.avgKmPerActiveWeek != null
               ? endurance.targetKm != null
                 ? `a week · target ${fmt0(endurance.targetKm)}`
                 : "a week"
-              : hasChallenge
-                ? "Log runs and rides to build your trends"
-                : "Unlock your endurance trends"
+              : "Log a run or ride"
           }
           empty={endurance?.avgKmPerActiveWeek == null}
           spark={
@@ -138,15 +139,9 @@ function OwnProgress({ data }: { data: AppData }) {
                 ? `${strengthTile.up} of ${strengthTile.total}`
                 : strength.loading
                   ? "Loading progress…"
-                  : "Not enough data yet"
+                  : "No data yet"
             }
-            sub={
-              strengthTile.total > 0
-                ? "main lifts up"
-                : strength.records.length
-                  ? "Complete another workout to see trends"
-                  : "Complete a workout to start tracking"
-            }
+            sub={strengthTile.total > 0 ? "main lifts up" : "Complete a workout"}
             empty={strengthTile.total === 0}
             spark={[]}
           />
@@ -244,7 +239,11 @@ function Tile({
       >
         {big}
       </span>
-      <span className="text-[13px] text-muted-foreground">{sub}</span>
+      <span
+        className={`text-muted-foreground ${empty ? "text-[11px] tracking-tight min-[360px]:text-[13px] min-[360px]:tracking-normal" : "text-[13px]"}`}
+      >
+        {sub}
+      </span>
       <span className="mt-auto [&>svg]:max-w-full">
         <Sparkline points={spark} />
       </span>

@@ -6,6 +6,7 @@ import vm from "node:vm";
 import ts from "typescript";
 import * as domain from "../src/lib/bulk-training-session-domain.ts";
 import * as plans from "../src/lib/training-plans.ts";
+import { TRAINING_SETUP_OPTIONS } from "../src/lib/bulk-onboarding.ts";
 import * as progression from "../src/lib/bulk-progression.ts";
 import * as guidance from "../src/lib/bulk-next-session-guidance.ts";
 import { EXERCISE_MUSCLE_CATEGORIES, MUSCLE_GROUPS } from "../src/lib/exercise-library.ts";
@@ -157,6 +158,7 @@ function fixture(source, exportName, initialProps, options = {}) {
       ].map((name) => [name, (...args) => record(name, ...args)]),
     ),
     "@/lib/training-plans": plans,
+    "@/lib/bulk-onboarding": { TRAINING_SETUP_OPTIONS },
     "@/lib/training-plans-query": {
       useTrainingPlanTemplates: () => ({
         data: options.templates ?? [],
@@ -600,7 +602,7 @@ test("Phase 5 keeps original routes, goal separate from frequency, historical ed
   assert.doesNotMatch(planSource, /saveTargets|weeklyWorkoutGoal\s*:/);
 });
 
-test("Phase 5 plan selection retains template/generated/custom paths and blocks repeated creation", async () => {
+test("Phase 5 plan selection keeps template/custom paths, gates AI and blocks repeated creation", async () => {
   const template = {
     id: "template1",
     slug: "real",
@@ -634,7 +636,9 @@ test("Phase 5 plan selection retains template/generated/custom paths and blocks 
   find(f.render(), "Create My Training Plan").props.onClick();
   await new Promise(setImmediate);
   assert.ok(f.calls.some(([n]) => n === "createEmptyTrainingPlan"));
-  assert.match(planSource, /const planType = mode === "generated" \? "generated" : "tempo_preset"/);
+  assert.match(planSource, /mode !== "tempo_preset"\) return/);
+  assert.match(planSource, /mode === "generated"/);
+  assert.match(planSource, /Coming soon/);
   assert.match(planSource, /rankTrainingPlans/);
   const blocked = fixture(
     planSource,

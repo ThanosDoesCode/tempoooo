@@ -12,7 +12,12 @@ import {
 
 import { AppShell } from "@/components/AppShell";
 import { Card } from "@/components/ui-kit";
-import { PeriodPicker, ProgressNav, ProgressRow } from "@/components/ProgressChrome";
+import {
+  ProgressHeader,
+  PeriodPicker,
+  ProgressNav,
+  ProgressRow,
+} from "@/components/ProgressChrome";
 import { fmt, fmt0, signed } from "@/lib/calc";
 import { chartAxis, chartTooltip, usePeriodWeeks } from "@/lib/progress-view";
 import { useFoodModel, usePhotoCount, useWeightModel } from "@/lib/progress-model";
@@ -30,10 +35,9 @@ function BodyPage() {
 
   return (
     <AppShell>
-      <div className="mb-3 flex items-end justify-between">
-        <h1 className="fade-up text-3xl font-semibold tracking-tight">Progress</h1>
+      <ProgressHeader>
         <PeriodPicker weeks={weeks} onChange={setWeeks} />
-      </div>
+      </ProgressHeader>
       <ProgressNav active="body" />
 
       {weight.loading && food.loading ? (

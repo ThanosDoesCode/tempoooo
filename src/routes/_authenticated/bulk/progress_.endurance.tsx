@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 
 import { AppShell } from "@/components/AppShell";
 import { Card } from "@/components/ui-kit";
-import { PeriodPicker, ProgressNav, Sparkline } from "@/components/ProgressChrome";
+import { ProgressHeader, PeriodPicker, ProgressNav, Sparkline } from "@/components/ProgressChrome";
 import { usePeriodWeeks } from "@/lib/progress-view";
 import { fmt, fmt0 } from "@/lib/calc";
 import { useAuth } from "@/lib/auth";
@@ -41,10 +41,9 @@ function EndurancePage() {
 
   return (
     <AppShell>
-      <div className="mb-3 flex items-end justify-between">
-        <h1 className="fade-up text-3xl font-semibold tracking-tight">Progress</h1>
+      <ProgressHeader>
         <PeriodPicker weeks={weeks} onChange={setWeeks} />
-      </div>
+      </ProgressHeader>
       <ProgressNav active="endurance" />
 
       {challenge.isLoading ? (

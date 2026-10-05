@@ -130,15 +130,13 @@ export async function saveBulkWeight(
   profileId: string,
   input: { logDate: string; weightKg: number; note: string | null },
 ) {
-  const { error } = await supabase.from("bulk_weight_entries").upsert(
-    {
-      bulk_profile_id: profileId,
-      log_date: input.logDate,
-      weight_kg: input.weightKg,
-      note: input.note,
-    },
-    { onConflict: "bulk_profile_id,log_date" },
-  );
+  const { error } = await supabase.rpc("save_bulk_weight_for_local_day", {
+    _profile: profileId,
+    _log_date: input.logDate,
+    _weight_kg: input.weightKg,
+    _note: input.note,
+    _timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+  });
   if (error) throw error;
   await refreshActiveBulkTrainingBodyweight(profileId);
 }

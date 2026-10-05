@@ -211,7 +211,7 @@ test("Overview keeps honest empty states instead of hiding product areas", async
   assert.match(overview, /planMode === "none"/);
   assert.match(overview, /animate-pulse/);
   assert.match(overview, /sections\.includes\("strength"\) \?/);
-  assert.match(overview, /Not enough data yet/);
+  assert.match(overview, /No data yet/);
   assert.match(overview, /Log your first weight/);
   assert.match(overview, /Start logging meals/);
   assert.match(overview, /food\.loggedDays > 0/);
@@ -708,6 +708,14 @@ async function progressFixture(options = {}) {
       await prepare(file);
       return renderToStaticMarkup(React.createElement(cache[file].Route.component));
     },
+    picker(weeks) {
+      return renderToStaticMarkup(
+        React.createElement(cache["src/components/ProgressChrome.tsx"].PeriodPicker, {
+          weeks,
+          onChange() {},
+        }),
+      );
+    },
     nav(active) {
       return renderToStaticMarkup(
         React.createElement(cache["src/components/ProgressChrome.tsx"].ProgressNav, { active }),
@@ -729,8 +737,8 @@ test("empty enabled public and legacy Overview renders four honest tiles and sta
     assert.equal(tiles.length, 4);
     for (const [index, label] of ["Endurance", "Strength", "Body", "Food"].entries())
       assert.match(tiles[index], new RegExp(label));
-    assert.match(tiles[0], /Start a challenge/);
-    assert.match(tiles[1], /Not enough data yet.*Complete a workout to start tracking/s);
+    assert.match(tiles[0], /No data yet.*Log a run or ride/s);
+    assert.match(tiles[1], /No data yet.*Complete a workout/s);
     assert.match(tiles[2], /Log your first weight/);
     assert.match(tiles[3], /Start logging meals/);
     for (const tile of tiles)
@@ -756,8 +764,8 @@ test("Body/Food retain real values and insight without inventing missing Strengt
     const html = await fixture.render(overviewPath);
     const tiles = tileMarkup(html);
     assert.equal(tiles.length, 4);
-    assert.match(tiles[0], /Start a challenge/);
-    assert.match(tiles[1], /Not enough data yet/);
+    assert.match(tiles[0], /No data yet.*Log a run or ride/s);
+    assert.match(tiles[1], /No data yet/);
     assert.match(tiles[2], weight.latestKg != null ? /70.0 kg/ : /Log your first weight/);
     assert.match(tiles[3], /5 of 7/);
     const insight = html.match(/<p class="[^"]*bg-primary\/10[^"]*">([\s\S]*?)<\/p>/)?.[1];
@@ -784,7 +792,7 @@ test("one measurable workout calibrates Strength rather than claiming a fake imp
     },
   });
   const html = await fixture.render(overviewPath);
-  assert.match(tileMarkup(html)[1], /Not enough data yet.*Complete another workout/s);
+  assert.match(tileMarkup(html)[1], /No data yet.*Complete a workout/s);
   assert.doesNotMatch(tileMarkup(html)[1], /main lifts up|↑/);
 });
 
@@ -836,4 +844,50 @@ test("measured Endurance and Strength still use real summaries, trends and suppo
   const insight = html.match(/<p class="[^"]*bg-primary\/10[^"]*">([\s\S]*?)<\/p>/)?.[1];
   assert.match(insight, /endurance target in 1 of 1 active week/);
   assert.match(insight, /1 of 1 main lifts are up/);
+});
+
+test("Progress controls retain equal-width centered segments and a single explicit select chevron", async () => {
+  const fixture = await progressFixture();
+  const nav = fixture.nav("body");
+  assert.match(nav, /grid auto-cols-fr grid-flow-col/);
+  const links = [...nav.matchAll(/<a\b[^>]*>/g)].map((match) => match[0]);
+  assert.equal(links.length, 4);
+  for (const link of links) {
+    assert.match(link, /min-h-11 min-w-0/);
+    assert.match(link, /justify-center/);
+    assert.match(link, /px-1/);
+    assert.match(link, /focus-visible:ring-inset/);
+  }
+  assert.equal((nav.match(/aria-current="page"/g) ?? []).length, 1);
+  const picker = fixture.picker(4);
+  assert.match(picker, /<select[^>]*appearance-none[^>]*bg-none/);
+  assert.match(picker, /h-9/);
+  assert.equal((picker.match(/<svg/g) ?? []).length, 1);
+  assert.match(picker, /lucide-chevron-down/);
+  assert.doesNotMatch(picker, /rotate-90/);
+  assert.match(picker, /<span class="sr-only">Period<\/span>/);
+  assert.match(picker, /value="4" selected="">Last 4 weeks/);
+});
+
+test("Today, Progress and Challenge share the safe-area-aware shell inset and 14px header rhythm", async () => {
+  const [shell, waiting, today] = await Promise.all([
+    read("src/components/AppShell.tsx"),
+    read("src/components/ChallengeWaiting.tsx"),
+    read("src/routes/_authenticated/bulk/index.tsx"),
+  ]);
+  assert.match(shell, /px-5/);
+  assert.match(shell, /pt-\[max\(1.5rem,env\(safe-area-inset-top\)\)\]/);
+  assert.doesNotMatch(shell, /isChallenge.*pt-4/);
+  assert.match(waiting, /space-y-3.5/);
+  assert.doesNotMatch(waiting, /header className="fade-up mb-1"/);
+  assert.match(today, /space-y-\[14px\]/);
+  const fixture = await progressFixture();
+  const html = await fixture.render(overviewPath);
+  assert.match(html, /<header class="mb-3.5[^"]*pt-6">/);
+  const tiles = tileMarkup(html);
+  assert.equal(tiles.length, 4);
+  assert.match(tiles[0], /No data yet.*Log a run or ride/s);
+  assert.match(tiles[1], /No data yet.*Complete a workout/s);
+  assert.match(tiles[1], /text-\[11px\] tracking-tight min-\[360px\]:text-\[13px\]/);
+  assert.doesNotMatch(tiles[0] + tiles[1], /<svg|Not enough data|build your trends|start tracking/);
 });

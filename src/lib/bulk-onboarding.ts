@@ -29,9 +29,9 @@ export const EQUIPMENT_OPTIONS = [
 ] as const;
 
 export const TRAINING_SETUP_OPTIONS = [
-  { value: "generated", label: "Build a plan for me" },
-  { value: "tempo_preset", label: "Choose a Tempo plan" },
-  { value: "custom", label: "Create my own plan" },
+  { value: "generated", label: "Generate with AI", comingSoon: true },
+  { value: "tempo_preset", label: "Choose a Tempo program", comingSoon: false },
+  { value: "custom", label: "Create my own program", comingSoon: false },
 ] as const;
 
 export const DEFAULT_NUTRITION_TARGETS = {

@@ -2190,6 +2190,16 @@ export type Database = {
           weekly_target_km: number
         }[]
       }
+      save_bulk_weight_for_local_day: {
+        Args: {
+          _profile: string
+          _log_date: string
+          _weight_kg: number
+          _note: string | null
+          _timezone: string
+        }
+        Returns: undefined
+      }
       refresh_active_bulk_training_bodyweight: {
         Args: { _profile: string }
         Returns: number

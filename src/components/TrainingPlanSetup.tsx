@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronDown, ChevronUp, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import type { Targets } from "@/lib/types";
+import { TRAINING_SETUP_OPTIONS } from "@/lib/bulk-onboarding";
 import {
   formatEquipment,
   planCompatibility,
@@ -147,12 +148,6 @@ function PlanCard({
 
 type CreationMode = "generated" | "tempo_preset" | "custom";
 
-const MODE_OPTIONS: { value: CreationMode; label: string }[] = [
-  { value: "generated", label: "Generate my program" },
-  { value: "tempo_preset", label: "Choose a Tempo program" },
-  { value: "custom", label: "Create my own program" },
-];
-
 function ModeSelector({
   mode,
   onChange,
@@ -163,29 +158,35 @@ function ModeSelector({
   disabled: boolean;
 }) {
   return (
-    <Card className="space-y-2">
+    <div className="space-y-2 pb-3">
       <SectionTitle>How do you want to set up training?</SectionTitle>
       <div className="grid gap-2" role="radiogroup" aria-label="Training setup method">
-        {MODE_OPTIONS.map((option) => (
+        {TRAINING_SETUP_OPTIONS.map((option) => (
           <button
             key={option.value}
             type="button"
             role="radio"
             aria-checked={mode === option.value}
-            disabled={disabled}
+            disabled={disabled || option.comingSoon}
             onClick={() => onChange(option.value)}
-            className={`flex min-h-11 items-center justify-between rounded-xl border px-3 text-left text-sm font-medium transition-colors disabled:opacity-60 ${
+            className={`flex min-h-11 items-center justify-between gap-2 rounded-xl border px-3 py-2 text-left text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 ${
               mode === option.value
                 ? "border-primary/50 bg-primary/10 text-primary"
                 : "border-input text-foreground active:bg-elevated"
             }`}
           >
             {option.label}
-            {mode === option.value ? <Check className="h-4 w-4" aria-hidden="true" /> : null}
+            {option.comingSoon ? (
+              <span className="shrink-0 text-xs font-normal text-muted-foreground">
+                Coming soon
+              </span>
+            ) : mode === option.value ? (
+              <Check className="h-4 w-4" aria-hidden="true" />
+            ) : null}
           </button>
         ))}
       </div>
-    </Card>
+    </div>
   );
 }
 
@@ -255,13 +256,12 @@ export function TrainingPlanSetup({
   }
 
   async function choose(plan: TrainingPlanTemplate) {
-    if (choosing.current || selectionDisabled) return;
+    if (choosing.current || selectionDisabled || mode !== "tempo_preset") return;
     choosing.current = true;
     setPendingId(plan.id);
     try {
-      const planType = mode === "generated" ? "generated" : "tempo_preset";
-      if (replacingPlan) await switchTrainingPlan(plan.id, planType);
-      else await instantiateTrainingPlan(plan.id, planType);
+      if (replacingPlan) await switchTrainingPlan(plan.id, "tempo_preset");
+      else await instantiateTrainingPlan(plan.id, "tempo_preset");
       await refreshPlan();
       toast.success(replacingPlan ? "Training plan changed" : "Training plan created");
       await onCreated?.();
@@ -321,11 +321,11 @@ export function TrainingPlanSetup({
     ) : null;
   const modeSelector = (
     <details className="rounded-[20px] border border-border px-4">
-      <summary className="flex min-h-14 cursor-pointer items-center justify-between text-sm font-medium text-foreground">
+      <summary className="flex min-h-11 cursor-pointer items-center justify-between gap-2 py-2 text-sm font-medium text-foreground">
         <span>
           Setup options
           <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
-            Templates, generated or custom
+            Tempo programs or your own
           </span>
         </span>
         <ChevronDown className="h-5 w-5" aria-hidden="true" />
@@ -338,12 +338,28 @@ export function TrainingPlanSetup({
     </details>
   );
 
+  // Older saved preferences may still say "generated". Never substitute a template for AI.
+  if (mode === "generated") {
+    return (
+      <div className="space-y-3">
+        {currentPlanCard}
+        {modeSelector}
+        <Card className="space-y-1.5">
+          <h2 className="font-semibold">Generate with AI</h2>
+          <p className="text-sm text-muted-foreground">
+            Coming soon. Choose a Tempo program or create your own to get started.
+          </p>
+        </Card>
+      </div>
+    );
+  }
+
   if (mode === "custom") {
     return (
       <div className="space-y-3">
         {currentPlanCard}
         {modeSelector}
-        <Card className="space-y-4">
+        <Card className="space-y-3">
           <div>
             <SectionTitle>Create my own program</SectionTitle>
             <h2 className="text-xl font-semibold">Start with an empty plan</h2>
@@ -438,7 +454,7 @@ export function TrainingPlanSetup({
       </div>
       <Button
         variant="outline"
-        className="flex min-h-14 w-full justify-between rounded-[20px] bg-card px-4"
+        className="flex min-h-11 w-full justify-between rounded-[14px] bg-card px-4"
         disabled={pendingId !== null || selectionDisabled}
         onClick={() => setMode("custom")}
       >

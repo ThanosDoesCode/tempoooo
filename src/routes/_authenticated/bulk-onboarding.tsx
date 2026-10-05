@@ -279,13 +279,13 @@ function BulkOnboarding() {
             {submitError}
           </p>
         ) : null}
-        <div className="mt-6 grid grid-cols-2 gap-2">
+        <div className="mt-4 grid grid-cols-2 gap-2">
           {step > 1 ? (
             <button
               type="button"
               disabled={busy}
               onClick={() => setStep((step - 1) as Step)}
-              className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-border px-4 py-3 text-sm font-medium disabled:opacity-60"
+              className="flex h-11 items-center justify-center gap-2 rounded-xl border border-border px-3 text-sm font-medium disabled:opacity-60"
             >
               <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Back
             </button>
@@ -293,7 +293,7 @@ function BulkOnboarding() {
             <button
               type="button"
               onClick={() => void navigate({ to: "/profile" })}
-              className="min-h-11 rounded-xl border border-border px-4 py-3 text-sm font-medium"
+              className="h-11 rounded-xl border border-border px-3 text-sm font-medium"
             >
               Cancel
             </button>
@@ -302,7 +302,7 @@ function BulkOnboarding() {
             <button
               type="button"
               onClick={next}
-              className="min-h-11 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground active:scale-[0.98]"
+              className="h-11 rounded-xl bg-primary px-3 text-sm font-semibold text-primary-foreground active:scale-[0.98]"
             >
               {step === 4 && form.experienceLevel === "beginner" && !nutritionManuallyAdjusted
                 ? "Use these targets"
@@ -313,7 +313,7 @@ function BulkOnboarding() {
               type="button"
               disabled={busy}
               onClick={() => void submit()}
-              className="flex min-h-11 items-center justify-center rounded-xl bg-primary px-3 py-3 text-sm font-semibold text-primary-foreground active:scale-[0.98] disabled:opacity-60"
+              className="flex min-h-11 items-center justify-center rounded-xl bg-primary px-2 py-2 text-xs font-semibold text-primary-foreground active:scale-[0.98] disabled:opacity-60 min-[360px]:h-11 min-[360px]:py-0 min-[360px]:text-sm"
             >
               {busy ? <PendingLabel>Creating My Goal Plan...</PendingLabel> : "Create My Goal Plan"}
             </button>
@@ -381,17 +381,22 @@ function Choice({
   selected,
   onClick,
   children,
+  disabled = false,
+  compact = false,
 }: {
   selected: boolean;
   onClick: () => void;
   children: ReactNode;
+  disabled?: boolean;
+  compact?: boolean;
 }) {
   return (
     <button
       type="button"
       aria-pressed={selected}
+      disabled={disabled}
       onClick={onClick}
-      className={`flex min-h-11 items-center justify-between rounded-xl border px-3 py-2.5 text-left text-sm font-medium transition-colors ${selected ? "border-primary bg-primary/10 text-primary" : "border-border bg-elevated text-foreground"}`}
+      className={`flex min-h-11 items-center justify-between rounded-xl border px-3 ${compact ? "py-2" : "py-2.5"} text-left text-sm font-medium transition-colors disabled:opacity-60 ${selected ? "border-primary bg-primary/10 text-primary" : "border-border bg-elevated text-foreground"}`}
     >
       <span>{children}</span>
       {selected ? <Check className="h-4 w-4" aria-hidden="true" /> : null}
@@ -623,18 +628,24 @@ function PreferenceStep({
 }) {
   return (
     <>
-      <Heading
-        title="How do you want to train?"
-        copy="Choose the setup path you want to use when training plans arrive."
-      />
-      <div className="grid gap-3">
+      <Heading title="How do you want to train?" copy="Choose a Tempo program or build your own." />
+      <div className="grid gap-2">
         {TRAINING_SETUP_OPTIONS.map((option) => (
           <Choice
             key={option.value}
             selected={form.trainingSetupPreference === option.value}
+            disabled={option.comingSoon}
+            compact
             onClick={() => update("trainingSetupPreference", option.value)}
           >
-            {option.label}
+            <span className="flex w-full items-center justify-between gap-2">
+              {option.label}
+              {option.comingSoon ? (
+                <span className="shrink-0 text-xs font-normal text-muted-foreground">
+                  Coming soon
+                </span>
+              ) : null}
+            </span>
           </Choice>
         ))}
       </div>
@@ -643,10 +654,6 @@ function PreferenceStep({
           {error}
         </p>
       ) : null}
-      <p className="mt-4 rounded-xl bg-elevated/70 p-3 text-xs leading-5 text-muted-foreground">
-        This choice is saved now. Plan generation, Tempo plans and the custom builder will be added
-        in later rollout segments.
-      </p>
     </>
   );
 }

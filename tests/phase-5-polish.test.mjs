@@ -114,7 +114,7 @@ test("Phase 5 overview and plan management retain actions with compact expandabl
   assert.match(more, /Muscle coverage/);
   assert.match(more, /showCurrentPlan=\{false\}/);
   assert.match(setup, /expanded \? <PlanDetail plan=\{plan\}/);
-  assert.match(setup, /selectionDisabled\) return/);
+  assert.match(setup, /selectionDisabled \|\| mode !== "tempo_preset"\) return/);
   assert.match(setup, /Build my own plan/);
   assert.match(setup, /Setup options/);
 });
