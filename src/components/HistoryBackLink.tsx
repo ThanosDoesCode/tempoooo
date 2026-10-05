@@ -1,12 +1,22 @@
 import { Link, useRouter } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
-import { backWithinApp } from "@/lib/in-app-back";
+import { backWithinApp, inAppBackPath } from "@/lib/in-app-back";
 
-export function HistoryBackLink({ fallback }: { fallback: string }) {
+export function HistoryBackLink({
+  fallback,
+  fallbackLabel = "Back",
+  originLabels,
+}: {
+  fallback: string;
+  fallbackLabel?: string;
+  originLabels?: Readonly<Record<string, string>>;
+}) {
   const router = useRouter();
+  const previous = inAppBackPath(router.history);
+  const label = previous ? (originLabels?.[previous] ?? "Back") : fallbackLabel;
   return (
     <Link
-      to={fallback}
+      to={previous ?? fallback}
       preload="intent"
       className="mb-2 inline-flex min-h-11 items-center gap-2 rounded-xl pr-3 text-sm font-semibold text-muted-foreground active:bg-elevated"
       onClick={(event) => {
@@ -15,7 +25,7 @@ export function HistoryBackLink({ fallback }: { fallback: string }) {
         if (backWithinApp(router.history)) event.preventDefault();
       }}
     >
-      <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Back
+      <ArrowLeft className="h-4 w-4" aria-hidden="true" /> {label}
     </Link>
   );
 }

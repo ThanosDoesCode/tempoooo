@@ -66,10 +66,10 @@ test("Phase 5 PR/history/library use shared history-aware links with safe Traini
   const shell = await read("src/components/AppShell.tsx");
   const link = await read("src/components/HistoryBackLink.tsx");
   const router = await read("src/router.tsx");
-  assert.match(shell, /HistoryBackLink fallback=\{backTo\}/);
+  assert.match(shell, /HistoryBackLink\s+fallback=\{backTo\}/);
   assert.match(link, /backWithinApp\(router.history\)/);
   assert.match(link, /event\.metaKey.*event\.ctrlKey.*event\.shiftKey.*event\.altKey/);
-  assert.match(link, /to=\{fallback\}/);
+  assert.match(link, /to=\{previous \?\? fallback\}/);
   assert.match(router, /trackInAppHistory\(router.history\)/);
   assert.doesNotMatch(link, /location\.(reload|href|assign)/);
 });

@@ -19,6 +19,11 @@ export const Route = createFileRoute("/_authenticated/bulk/meals_/history")({
 const macro = (value: number | undefined, unit: string) =>
   value == null ? "—" : `${Math.round(value)} ${unit}`;
 
+const backOriginLabels = {
+  "/bulk/progress/body/food": "Food details",
+  "/bulk/meals": "Meals",
+} as const;
+
 function MealsHistoryPage() {
   const data = useAppData();
   const { bulkId } = useBulkMeta();
@@ -42,8 +47,10 @@ function MealsHistoryPage() {
       <PageHeader
         title="Nutrition history"
         subtitle={format(parseISO(date), "EEEE, d MMMM yyyy")}
-        backTo="/bulk/progress"
-        backLabel="Progress"
+        historyBack
+        backTo="/bulk/meals"
+        backLabel="Meals"
+        backOriginLabels={backOriginLabels}
       />
       <div className="mb-4 grid grid-cols-[44px_1fr_44px] items-center gap-2" data-no-pull>
         <button

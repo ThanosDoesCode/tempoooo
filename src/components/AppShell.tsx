@@ -178,6 +178,7 @@ export function PageHeader({
   backLabel = "Back",
   backParams,
   historyBack = false,
+  backOriginLabels,
 }: {
   title: string;
   subtitle?: string;
@@ -188,11 +189,17 @@ export function PageHeader({
   backParams?: Record<string, string>;
   /** Use the actual in-app history; backTo is only the safe deep-link fallback. */
   historyBack?: boolean;
+  /** Optional labels for known origins when this page is shared by multiple areas. */
+  backOriginLabels?: Readonly<Record<string, string>>;
 }) {
   return (
     <header className="fade-up mb-5">
       {backTo && historyBack ? (
-        <HistoryBackLink fallback={backTo} />
+        <HistoryBackLink
+          fallback={backTo}
+          fallbackLabel={backLabel}
+          {...(backOriginLabels ? { originLabels: backOriginLabels } : {})}
+        />
       ) : backTo ? (
         <Link
           to={backTo}

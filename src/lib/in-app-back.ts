@@ -22,9 +22,15 @@ export function trackInAppHistory(history: RouterHistory) {
   });
 }
 
-export function backWithinApp(history: RouterHistory): boolean {
+/** Read the same safe origin used by Back, so shared pages can label their parent. */
+export function inAppBackPath(history: RouterHistory): string | undefined {
   const previous = trails.get(history)?.get(history.location.state.__TSR_index - 1);
-  if (!previous || previous === "/auth" || previous.startsWith("/onboarding")) return false;
+  if (!previous || previous === "/auth" || previous.startsWith("/onboarding")) return undefined;
+  return previous;
+}
+
+export function backWithinApp(history: RouterHistory): boolean {
+  if (!inAppBackPath(history)) return false;
   history.back();
   return true;
 }
