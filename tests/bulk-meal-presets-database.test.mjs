@@ -1942,3 +1942,659 @@ test("all Tempo templates use valid metadata and retain whole-body coverage", as
     }
   }
 });
+
+async function historyFixture() {
+  const user = randomUUID();
+  await db.query("INSERT INTO auth.users VALUES ($1)", [user]);
+  await db.query("INSERT INTO public.profiles(id) VALUES ($1)", [user]);
+  const profile = (
+    await asUser(user, () =>
+      db.query(
+        `SELECT public.complete_goal_onboarding('gain',70,78,0.25,'intermediate',4,ARRAY['full_gym'],'custom',2900,140,360,90) AS id`,
+      ),
+    )
+  ).rows[0].id;
+  const session = randomUUID(),
+    exercise = randomUUID();
+  await db.query(
+    `INSERT INTO public.bulk_training_sessions(id,bulk_profile_id,plan_name_snapshot,workout_day_name_snapshot,workout_day_order_snapshot,started_at,workout_date,bodyweight_kg) VALUES ($1,$2,'Preserved plan','Upper A',1,'2026-09-28T12:00:00Z','2026-09-28',70)`,
+    [session, profile],
+  );
+  await db.query(
+    `INSERT INTO public.bulk_training_session_exercises(id,session_id,exercise_name_snapshot,exercise_order,execution_mode,is_bodyweight,target_sets,target_rep_min,target_rep_max,notes_snapshot) VALUES ($1,$2,'Incline press',1,'bilateral',false,3,8,12,'Bench 3')`,
+    [exercise, session],
+  );
+  const sets = [];
+  for (const [index, type] of ["warmup", "normal", "failure", "drop"].entries()) {
+    const id = randomUUID();
+    sets.push(id);
+    await db.query(
+      `INSERT INTO public.bulk_training_session_sets(id,session_exercise_id,set_order,set_type,bilateral_weight,bilateral_reps,rpe) VALUES ($1,$2,$3,$4,24,10,8)`,
+      [id, exercise, index + 1, type],
+    );
+  }
+  await db.query(
+    `UPDATE public.bulk_training_sessions SET status='completed',completed_at='2026-09-28T13:00:00Z' WHERE id=$1`,
+    [session],
+  );
+  return { user, profile, session, exercise, sets };
+}
+const correction = (f, args = []) =>
+  asUser(f.user, () =>
+    db.query(
+      `SELECT public.correct_completed_bulk_training_set($1,$2,$3,$4,NULL,NULL,NULL,NULL,$5,$6) AS id`,
+      [f.session, f.sets[1], args[0] ?? 26, args[1] ?? 12, args[2] ?? "normal", args[3] ?? 8.5],
+    ),
+  );
+
+test("completed-set corrections are narrow, owner authorized, validated and transaction-scoped", async () => {
+  const f = await historyFixture();
+  const snapshot = (
+    await db.query(
+      "SELECT * FROM public.bulk_training_session_sets WHERE session_exercise_id=$1 ORDER BY set_order",
+      [f.exercise],
+    )
+  ).rows;
+  assert.equal((await correction(f)).rows[0].id, f.sets[1]);
+  const updated = (
+    await db.query(
+      "SELECT * FROM public.bulk_training_session_sets WHERE session_exercise_id=$1 ORDER BY set_order",
+      [f.exercise],
+    )
+  ).rows;
+  assert.equal(Number(updated[1].bilateral_weight), 26);
+  assert.equal(updated[1].bilateral_reps, 12);
+  assert.equal(Number(updated[1].rpe), 8.5);
+  for (const i of [0, 2, 3]) assert.deepEqual(updated[i], snapshot[i]);
+  for (const args of [
+    [26, 12, "invalid", 8],
+    [26, 12, "normal", 5],
+    [26, 12, "normal", 8.2],
+    [1001, 12],
+    [26, 0],
+  ])
+    await assert.rejects(correction(f, args));
+  assert.equal(
+    Number(
+      (await db.query("SELECT count(*) AS n FROM private.bulk_completed_set_corrections")).rows[0]
+        .n,
+    ),
+    0,
+  );
+  await assert.rejects(
+    db.query("UPDATE public.bulk_training_session_sets SET bilateral_weight=99 WHERE id=$1", [
+      f.sets[1],
+    ]),
+    /Completed workouts cannot be changed/,
+  );
+  await assert.rejects(
+    asUser(f.user, () =>
+      db.query("UPDATE public.bulk_training_session_sets SET bilateral_weight=99 WHERE id=$1", [
+        f.sets[1],
+      ]),
+    ),
+    /permission denied/,
+  );
+  await assert.rejects(
+    asUser(f.user, () =>
+      db.query("INSERT INTO private.bulk_completed_set_corrections VALUES (txid_current(),$1,$2)", [
+        f.sets[1],
+        f.user,
+      ]),
+    ),
+    /permission denied/,
+  );
+  await assert.rejects(
+    asUser(other, () =>
+      db.query(
+        `SELECT public.correct_completed_bulk_training_set($1,$2,25,12,NULL,NULL,NULL,NULL,'normal',8)`,
+        [f.session, f.sets[1]],
+      ),
+    ),
+    /Completed workout not found/,
+  );
+  await assert.rejects(
+    asAnon(() =>
+      db.query(
+        `SELECT public.correct_completed_bulk_training_set($1,$2,25,12,NULL,NULL,NULL,NULL,'normal',8)`,
+        [f.session, f.sets[1]],
+      ),
+    ),
+    /permission denied/,
+  );
+  assert.equal(
+    Number(
+      (
+        await db.query(
+          "SELECT bilateral_weight FROM public.bulk_training_session_sets WHERE id=$1",
+          [f.sets[1]],
+        )
+      ).rows[0].bilateral_weight,
+    ),
+    26,
+  );
+});
+
+test("time correction preserves the local calendar day at UTC boundaries and changes no sets or bodyweight", async () => {
+  const f = await historyFixture();
+  const sets = (
+    await db.query(
+      "SELECT * FROM public.bulk_training_session_sets WHERE session_exercise_id=$1 ORDER BY set_order",
+      [f.exercise],
+    )
+  ).rows;
+  const time = (date, start, end, zone = "Europe/Stockholm") =>
+    asUser(f.user, () =>
+      db.query("SELECT public.correct_completed_bulk_training_time($1,$2,$3,$4,$5)", [
+        f.session,
+        date,
+        start,
+        end,
+        zone,
+      ]),
+    );
+  await time("2026-10-02", "2026-10-01T22:30:00Z", "2026-10-01T23:15:00Z");
+  const row = (
+    await db.query("SELECT * FROM public.bulk_training_sessions WHERE id=$1", [f.session])
+  ).rows[0];
+  assert.equal(new Date(row.workout_date).toISOString().slice(0, 10), "2026-10-02");
+  assert.equal(Number(row.bodyweight_kg), 70);
+  assert.equal(Date.parse(row.completed_at) - Date.parse(row.started_at), 45 * 60 * 1000);
+  await assert.rejects(time("2026-10-02", "2026-10-01T22:30Z", "2026-10-01T22:30Z"), /End time/);
+  await assert.rejects(time("2026-10-02", "2026-10-01T22:30Z", "2026-10-01T22:00Z"), /End time/);
+  await assert.rejects(
+    time("2026-10-01", "2026-10-01T22:30Z", "2026-10-01T23:15Z"),
+    /local start date/,
+  );
+  await assert.rejects(
+    time("2026-10-02", "2026-10-01T22:30Z", "2026-10-01T23:15Z", "fake/timezone"),
+    /Invalid timezone/,
+  );
+  await assert.rejects(
+    asUser(other, () =>
+      db.query(
+        `SELECT public.correct_completed_bulk_training_time($1,'2026-10-02','2026-10-01T22:30Z','2026-10-01T23:15Z','Europe/Stockholm')`,
+        [f.session],
+      ),
+    ),
+    /Completed workout not found/,
+  );
+  assert.deepEqual(
+    (
+      await db.query(
+        "SELECT * FROM public.bulk_training_session_sets WHERE session_exercise_id=$1 ORDER BY set_order",
+        [f.exercise],
+      )
+    ).rows,
+    sets,
+  );
+});
+
+test("repeat copies prescriptions into new incomplete sets without mutating history or an existing active workout", async () => {
+  const f = await historyFixture();
+  const before = (
+    await db.query("SELECT * FROM public.bulk_training_sessions WHERE id=$1", [f.session])
+  ).rows[0];
+  const repeat = () =>
+    asUser(f.user, () =>
+      db.query("SELECT public.repeat_completed_bulk_training_session($1,CURRENT_DATE) AS id", [
+        f.session,
+      ]),
+    );
+  await assert.rejects(
+    asUser(other, () =>
+      db.query("SELECT public.repeat_completed_bulk_training_session($1,CURRENT_DATE)", [
+        f.session,
+      ]),
+    ),
+    /Completed workout not found/,
+  );
+  await assert.rejects(
+    asAnon(() =>
+      db.query("SELECT public.repeat_completed_bulk_training_session($1,CURRENT_DATE)", [
+        f.session,
+      ]),
+    ),
+    /permission denied/,
+  );
+  const id = (await repeat()).rows[0].id;
+  assert.notEqual(id, f.session);
+  const row = (await db.query("SELECT * FROM public.bulk_training_sessions WHERE id=$1", [id]))
+    .rows[0];
+  assert.equal(row.status, "in_progress");
+  assert.equal(row.completed_at, null);
+  assert.notEqual(row.started_at, before.started_at);
+  const exercises = (
+    await db.query(
+      "SELECT * FROM public.bulk_training_session_exercises WHERE session_id=$1 ORDER BY exercise_order",
+      [id],
+    )
+  ).rows;
+  assert.equal(exercises[0].exercise_name_snapshot, "Incline press");
+  assert.equal(exercises[0].target_sets, 3);
+  assert.equal(exercises[0].target_rep_min, 8);
+  assert.equal(exercises[0].target_rep_max, 12);
+  assert.equal(exercises[0].notes_snapshot, "Bench 3");
+  const sets = (
+    await db.query(
+      "SELECT * FROM public.bulk_training_session_sets WHERE session_exercise_id=$1 ORDER BY set_order",
+      [exercises[0].id],
+    )
+  ).rows;
+  assert.deepEqual(
+    sets.map((s) => s.set_type),
+    ["warmup", "normal", "failure", "drop"],
+  );
+  assert.ok(
+    sets.every(
+      (s) =>
+        Number(s.bilateral_weight) === 24 &&
+        s.bilateral_reps === null &&
+        s.rpe === null &&
+        !s.is_complete &&
+        !f.sets.includes(s.id),
+    ),
+  );
+  await assert.rejects(repeat(), (e) => e.code === "55000" && e.detail === "active_workout_exists");
+  assert.deepEqual(
+    (await db.query("SELECT * FROM public.bulk_training_sessions WHERE id=$1", [f.session]))
+      .rows[0],
+    before,
+  );
+  assert.equal(
+    Number(
+      (
+        await db.query(
+          "SELECT count(*) AS n FROM public.bulk_training_sessions WHERE bulk_profile_id=$1 AND status='in_progress'",
+          [f.profile],
+        )
+      ).rows[0].n,
+    ),
+    1,
+  );
+});
+
+test("history RPC grants stay authenticated-only and tables stay read-only under RLS", async () => {
+  const signatures = [
+    "public.correct_completed_bulk_training_set(uuid,uuid,numeric,integer,numeric,integer,numeric,integer,text,numeric)",
+    "public.correct_completed_bulk_training_time(uuid,date,timestamptz,timestamptz,text)",
+    "public.repeat_completed_bulk_training_session(uuid,date)",
+    "public.correct_legacy_bulk_workout_time(date,date,timestamptz,timestamptz,text)",
+    "public.repeat_legacy_bulk_workout(date,date)",
+  ];
+  for (const signature of signatures) {
+    const row = (
+      await db.query(
+        `SELECT prosecdef,proconfig,has_function_privilege('authenticated',oid,'EXECUTE') AS allowed,has_function_privilege('anon',oid,'EXECUTE') AS anon,has_function_privilege('service_role',oid,'EXECUTE') AS service FROM pg_proc WHERE oid=$1::regprocedure`,
+        [signature],
+      )
+    ).rows[0];
+    assert.equal(row.prosecdef, true);
+    assert.ok(row.proconfig.includes('search_path=""'));
+    assert.equal(row.allowed, true);
+    assert.equal(row.anon, false);
+    assert.equal(row.service, false);
+  }
+  for (const table of [
+    "bulk_training_sessions",
+    "bulk_training_session_exercises",
+    "bulk_training_session_sets",
+  ]) {
+    assert.equal(
+      (
+        await db.query(`SELECT has_table_privilege('authenticated',$1,'UPDATE') AS allowed`, [
+          `public.${table}`,
+        ])
+      ).rows[0].allowed,
+      false,
+    );
+    assert.equal(
+      (
+        await db.query("SELECT relrowsecurity FROM pg_class WHERE oid=$1::regclass", [
+          `public.${table}`,
+        ])
+      ).rows[0].relrowsecurity,
+      true,
+    );
+  }
+});
+
+test("deleting a corrected workout removes its children but preserves unrelated data", async () => {
+  const f = await historyFixture();
+  const second = await historyFixture();
+  await correction(f);
+  assert.equal(
+    (
+      await asUser(other, () =>
+        db.query("SELECT public.delete_completed_bulk_training_session($1) AS ok", [f.session]),
+      )
+    ).rows[0].ok,
+    false,
+  );
+  assert.equal(
+    (
+      await asUser(f.user, () =>
+        db.query("SELECT public.delete_completed_bulk_training_session($1) AS ok", [f.session]),
+      )
+    ).rows[0].ok,
+    true,
+  );
+  assert.equal(
+    Number(
+      (
+        await db.query(
+          "SELECT count(*) AS n FROM public.bulk_training_session_sets WHERE session_exercise_id=$1",
+          [f.exercise],
+        )
+      ).rows[0].n,
+    ),
+    0,
+  );
+  assert.equal(
+    Number(
+      (
+        await db.query(
+          "SELECT count(*) AS n FROM public.bulk_training_session_exercises WHERE session_id=$1",
+          [f.session],
+        )
+      ).rows[0].n,
+    ),
+    0,
+  );
+  assert.equal(
+    Number(
+      (
+        await db.query("SELECT count(*) AS n FROM public.bulk_training_sessions WHERE id=$1", [
+          second.session,
+        ])
+      ).rows[0].n,
+    ),
+    1,
+  );
+  assert.equal(
+    Number(
+      (await db.query("SELECT count(*) AS n FROM public.bulk_profiles WHERE id=$1", [f.profile]))
+        .rows[0].n,
+    ),
+    1,
+  );
+});
+
+test("legacy time correction and repeat keep JSON history and same-day nutrition intact", async () => {
+  const f = await historyFixture();
+  const day = "2026-09-27";
+  const payload = {
+    date: day,
+    type: "Chest & Back",
+    entries: [
+      {
+        exercise: "Incline Dumbbell Press",
+        weight: 24,
+        reps: [10, 9, 8],
+        rpe: 8,
+        notes: "Saved note",
+      },
+    ],
+    durationSeconds: 999,
+    status: "completed",
+    sessionNote: "Do not lose",
+  };
+  await db.query(
+    "INSERT INTO public.bulk_workouts(bulk_profile_id,day,payload) VALUES ($1,$2,$3::jsonb)",
+    [f.profile, day, JSON.stringify(payload)],
+  );
+  await db.query(
+    "INSERT INTO public.bulk_days(bulk_profile_id,day,payload) VALUES ($1,$2,$3::jsonb)",
+    [f.profile, day, JSON.stringify({ calories: 2900, weight: 70, note: "Nutrition" })],
+  );
+  await asUser(f.user, () =>
+    db.query(
+      `SELECT public.correct_legacy_bulk_workout_time($1,$1,'2026-09-27T10:00Z','2026-09-27T10:45Z','UTC')`,
+      [day],
+    ),
+  );
+  const corrected = (
+    await db.query("SELECT payload FROM public.bulk_workouts WHERE bulk_profile_id=$1 AND day=$2", [
+      f.profile,
+      day,
+    ])
+  ).rows[0].payload;
+  assert.deepEqual(corrected.entries, payload.entries);
+  assert.equal(corrected.sessionNote, payload.sessionNote);
+  assert.equal(corrected.durationSeconds, 2700);
+  const repeated = (
+    await asUser(f.user, () =>
+      db.query("SELECT public.repeat_legacy_bulk_workout($1,CURRENT_DATE) AS id", [day]),
+    )
+  ).rows[0].id;
+  assert.ok(repeated);
+  assert.deepEqual(
+    (
+      await db.query(
+        "SELECT payload FROM public.bulk_workouts WHERE bulk_profile_id=$1 AND day=$2",
+        [f.profile, day],
+      )
+    ).rows[0].payload,
+    corrected,
+  );
+  assert.deepEqual(
+    (
+      await db.query("SELECT payload FROM public.bulk_days WHERE bulk_profile_id=$1 AND day=$2", [
+        f.profile,
+        day,
+      ])
+    ).rows[0].payload,
+    { calories: 2900, weight: 70, note: "Nutrition" },
+  );
+});
+
+test("history migration is safely re-runnable and does not update preserved workouts", async () => {
+  const f = await historyFixture();
+  const before = (
+    await db.query("SELECT * FROM public.bulk_training_sessions WHERE id=$1", [f.session])
+  ).rows;
+  const sets = (
+    await db.query(
+      "SELECT * FROM public.bulk_training_session_sets WHERE session_exercise_id=$1 ORDER BY set_order",
+      [f.exercise],
+    )
+  ).rows;
+  await db.exec(
+    await readFile(new URL("20261005140000_owner_workout_history_actions.sql", root), "utf8"),
+  );
+  assert.deepEqual(
+    (await db.query("SELECT * FROM public.bulk_training_sessions WHERE id=$1", [f.session])).rows,
+    before,
+  );
+  assert.deepEqual(
+    (
+      await db.query(
+        "SELECT * FROM public.bulk_training_session_sets WHERE session_exercise_id=$1 ORDER BY set_order",
+        [f.exercise],
+      )
+    ).rows,
+    sets,
+  );
+  assert.equal(
+    (
+      await db.query(
+        "SELECT has_function_privilege('anon','public.correct_completed_bulk_training_time(uuid,date,timestamptz,timestamptz,text)','EXECUTE') AS allowed",
+      )
+    ).rows[0].allowed,
+    false,
+  );
+  await correction(f);
+});
+
+test("completed corrections preserve unilateral sides, reject active/missing/wrong-session sets and repeat preserves exercise order", async () => {
+  const f = await historyFixture();
+  await db.query(
+    "UPDATE public.bulk_training_sessions SET status='in_progress',completed_at=NULL WHERE id=$1",
+    [f.session],
+  );
+  await assert.rejects(correction(f), /Completed workout not found/);
+  const exercise = randomUUID(),
+    set = randomUUID();
+  await db.query(
+    `INSERT INTO public.bulk_training_session_exercises(id,session_id,exercise_name_snapshot,exercise_order,execution_mode,is_bodyweight,target_sets,target_rep_min,target_rep_max) VALUES ($1,$2,'One-arm row',2,'unilateral',false,2,8,12)`,
+    [exercise, f.session],
+  );
+  await db.query(
+    `INSERT INTO public.bulk_training_session_sets(id,session_exercise_id,set_order,left_weight,left_reps,right_weight,right_reps,rpe) VALUES ($1,$2,1,20,10,22,9,7.5)`,
+    [set, exercise],
+  );
+  await db.query(
+    "UPDATE public.bulk_training_sessions SET status='completed',completed_at='2026-09-28T13:00Z' WHERE id=$1",
+    [f.session],
+  );
+  const otherWorkout = await historyFixture();
+  await assert.rejects(
+    asUser(f.user, () =>
+      db.query(
+        "SELECT public.correct_completed_bulk_training_set($1,$2,26,12,NULL,NULL,NULL,NULL,'normal',8)",
+        [f.session, otherWorkout.sets[0]],
+      ),
+    ),
+    /Workout set not found/,
+  );
+  await assert.rejects(
+    asUser(f.user, () =>
+      db.query(
+        "SELECT public.correct_completed_bulk_training_set($1,$2,26,12,NULL,NULL,NULL,NULL,'normal',8)",
+        [randomUUID(), f.sets[0]],
+      ),
+    ),
+    /Completed workout not found/,
+  );
+  await asUser(f.user, () =>
+    db.query(
+      "SELECT public.correct_completed_bulk_training_set($1,$2,NULL,NULL,24,12,26,11,'failure',9.5)",
+      [f.session, set],
+    ),
+  );
+  const corrected = (
+    await db.query("SELECT * FROM public.bulk_training_session_sets WHERE id=$1", [set])
+  ).rows[0];
+  assert.equal(Number(corrected.left_weight), 24);
+  assert.equal(corrected.left_reps, 12);
+  assert.equal(Number(corrected.right_weight), 26);
+  assert.equal(corrected.right_reps, 11);
+  assert.equal(corrected.set_type, "failure");
+  assert.equal(Number(corrected.rpe), 9.5);
+  const id = (
+    await asUser(f.user, () =>
+      db.query("SELECT public.repeat_completed_bulk_training_session($1,CURRENT_DATE) AS id", [
+        f.session,
+      ]),
+    )
+  ).rows[0].id;
+  const copies = (
+    await db.query(
+      "SELECT * FROM public.bulk_training_session_exercises WHERE session_id=$1 ORDER BY exercise_order",
+      [id],
+    )
+  ).rows;
+  assert.deepEqual(
+    copies.map((e) => e.exercise_name_snapshot),
+    ["Incline press", "One-arm row"],
+  );
+  assert.deepEqual(
+    copies.map((e) => e.exercise_order),
+    [1, 2],
+  );
+  const copied = (
+    await db.query("SELECT * FROM public.bulk_training_session_sets WHERE session_exercise_id=$1", [
+      copies[1].id,
+    ])
+  ).rows[0];
+  assert.equal(Number(copied.left_weight), 24);
+  assert.equal(Number(copied.right_weight), 26);
+  assert.equal(copied.left_reps, null);
+  assert.equal(copied.right_reps, null);
+  assert.equal(copied.rpe, null);
+  assert.equal(copied.is_complete, false);
+});
+
+test("repeat rejects legacy draft collisions and unsupported prescriptions without modifying the source", async () => {
+  const f = await historyFixture();
+  const day = "2026-09-26";
+  const source = {
+    date: day,
+    type: "Legs",
+    status: "completed",
+    entries: [{ exercise: "Squat", weight: 40, reps: [101], bodyweight: null }],
+  };
+  await db.query(
+    "INSERT INTO public.bulk_workouts(bulk_profile_id,day,payload) VALUES ($1,$2,$3::jsonb)",
+    [f.profile, day, JSON.stringify(source)],
+  );
+  await assert.rejects(
+    asUser(other, () =>
+      db.query("SELECT public.repeat_legacy_bulk_workout($1,CURRENT_DATE)", [day]),
+    ),
+    /Completed workout not found/,
+  );
+  await assert.rejects(
+    asUser(f.user, () =>
+      db.query("SELECT public.repeat_legacy_bulk_workout($1,CURRENT_DATE)", [day]),
+    ),
+    /exceeds the normalized plan limits/,
+  );
+  assert.deepEqual(
+    (
+      await db.query(
+        "SELECT payload FROM public.bulk_workouts WHERE bulk_profile_id=$1 AND day=$2",
+        [f.profile, day],
+      )
+    ).rows[0].payload,
+    source,
+  );
+  assert.equal(
+    Number(
+      (
+        await db.query(
+          "SELECT count(*) AS n FROM public.bulk_training_sessions WHERE bulk_profile_id=$1 AND status='in_progress'",
+          [f.profile],
+        )
+      ).rows[0].n,
+    ),
+    0,
+  );
+  source.entries[0].reps = [10];
+  await db.query(
+    "UPDATE public.bulk_workouts SET payload=$3::jsonb WHERE bulk_profile_id=$1 AND day=$2",
+    [f.profile, day, JSON.stringify(source)],
+  );
+  await db.query(
+    'INSERT INTO public.bulk_workouts(bulk_profile_id,day,payload) VALUES ($1,CURRENT_DATE,\'{"status":"draft"}\')',
+    [f.profile],
+  );
+  await assert.rejects(
+    asUser(f.user, () =>
+      db.query("SELECT public.repeat_completed_bulk_training_session($1,CURRENT_DATE)", [
+        f.session,
+      ]),
+    ),
+    (e) => e.code === "55000" && e.detail === "active_workout_exists",
+  );
+  await assert.rejects(
+    asUser(f.user, () =>
+      db.query("SELECT public.repeat_legacy_bulk_workout($1,CURRENT_DATE)", [day]),
+    ),
+    (e) => e.code === "55000" && e.detail === "active_workout_exists",
+  );
+  await db.query("DELETE FROM public.bulk_workouts WHERE bulk_profile_id=$1 AND day=CURRENT_DATE", [
+    f.profile,
+  ]);
+  const id = (
+    await asUser(f.user, () =>
+      db.query("SELECT public.repeat_legacy_bulk_workout($1,CURRENT_DATE) AS id", [day]),
+    )
+  ).rows[0].id;
+  const exercise = (
+    await db.query("SELECT * FROM public.bulk_training_session_exercises WHERE session_id=$1", [id])
+  ).rows[0];
+  assert.equal(exercise.is_bodyweight, false);
+  assert.equal(exercise.target_rep_min, 10);
+  assert.equal(exercise.target_rep_max, 10);
+});

@@ -262,8 +262,8 @@ test("contextual navigation uses distinct route-backed tasks", async () => {
   assert.doesNotMatch(trainingToday, /TrainingPlanEditor|<TrainingPlanSetup/);
   assert.match(trainingMore, /TrainingPlanEditor/);
   assert.match(trainingMore, /TrainingPlanSetup/);
-  assert.match(trainingHistory, /PublicWorkoutCard/);
-  assert.match(trainingHistory, /PublicWorkoutDetail/);
+  assert.match(trainingHistory, /WorkoutHistoryList/);
+  assert.match(trainingHistory, /WorkoutDetail/);
 
   assert.match(mealsToday, /BulkNutritionLog/);
   assert.doesNotMatch(mealsToday, /BulkMealPresets/);

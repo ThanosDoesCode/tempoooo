@@ -13,6 +13,7 @@ import {
 } from "./bulk-training-sessions.ts";
 import { iso } from "./calc.ts";
 import { collectCompletedWorkouts } from "./goal-metrics.ts";
+import { recordedLegacyWorkouts } from "./workout-history.ts";
 import {
   deriveLegacyPersonalRecords,
   derivePublicPersonalRecords,
@@ -163,10 +164,9 @@ export function useStrengthModel() {
     () =>
       collectCompletedWorkouts({
         sessions: dates.data ?? [],
-        legacyWorkouts: data?.workouts ?? null,
-        legacyDays: data?.days ?? null,
+        legacyWorkouts: recordedLegacyWorkouts(data),
       }),
-    [dates.data, data?.workouts, data?.days],
+    [dates.data, data],
   );
 
   return {

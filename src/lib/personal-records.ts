@@ -24,6 +24,39 @@ export type PersonalRecord = {
   bestVolume: RecordPerformance | null;
 };
 
+/** Compare the existing PR summaries; history never uses a separate PR formula. */
+export function personalRecordImprovements(before: PersonalRecord[], after: PersonalRecord[]) {
+  return after.flatMap((record) => {
+    const previous = before.find((r) => compatibleRecordKey(r) === compatibleRecordKey(record));
+    const weight = record.bestWeight;
+    const reps = record.bestReps;
+    const volume = record.bestVolume;
+    const result: {
+      record: PersonalRecord;
+      kind: "weight" | "reps" | "volume";
+      performance: RecordPerformance;
+    }[] = [];
+    if (
+      weight &&
+      (!previous?.bestWeight ||
+        weight.load! > previous.bestWeight.load! ||
+        (weight.load === previous.bestWeight.load && weight.reps > previous.bestWeight.reps))
+    )
+      result.push({ record, kind: "weight", performance: weight });
+    if (
+      reps &&
+      (!previous?.bestReps ||
+        reps.repCount > previous.bestReps.repCount ||
+        (reps.repCount === previous.bestReps.repCount &&
+          (reps.repLoad ?? -1) > (previous.bestReps.repLoad ?? -1)))
+    )
+      result.push({ record, kind: "reps", performance: reps });
+    if (volume && (!previous?.bestVolume || volume.volume! > previous.bestVolume.volume!))
+      result.push({ record, kind: "volume", performance: volume });
+    return result;
+  });
+}
+
 function summarize(
   key: string,
   exerciseId: string | null,
@@ -51,11 +84,14 @@ function summarize(
   };
 }
 
-const compatibleRecordKey = (record: PersonalRecord) =>
-  `${record.name
+export const personalRecordNameKey = (name: string) =>
+  name
     .trim()
     .toLocaleLowerCase("en-GB")
-    .replaceAll(/[^a-z0-9]+/g, "")}:${record.side ?? "bilateral"}`;
+    .replaceAll(/[^a-z0-9]+/g, "");
+
+const compatibleRecordKey = (record: PersonalRecord) =>
+  `${personalRecordNameKey(record.name)}:${record.side ?? "bilateral"}`;
 
 /**
  * Combines preserved legacy JSON performances with normalized sessions without

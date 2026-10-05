@@ -17,9 +17,9 @@ test("completed public workouts stay in Training history", async () => {
     /session\.status === "completed"\) return <CompletedWorkout session=\{session\}/,
   );
   assert.doesNotMatch(session, /Workout completed[\s\S]{0,200}to: "\/bulk\/history"/);
-  assert.match(trainingHistory, /fetchRecentCompletedBulkTrainingSessions/);
-  assert.match(trainingHistory, /PublicWorkoutCard/);
-  assert.match(trainingHistory, /PublicWorkoutDetail/);
+  assert.match(trainingHistory, /useCompletedBulkTrainingSessions/);
+  assert.match(trainingHistory, /WorkoutHistoryList/);
+  assert.match(trainingHistory, /WorkoutDetail/);
   assert.doesNotMatch(trainingHistory, /useBulkNutritionDay|Logged meals and entries/);
   assert.match(mealHistory, /useBulkNutritionDay/);
   assert.doesNotMatch(mealHistory, /CompletedWorkout|fetchRecentCompletedBulkTrainingSessions/);

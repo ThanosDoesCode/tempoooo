@@ -189,12 +189,12 @@ test("public workout UI resumes durable compact sessions and protects set metada
   assert.match(workout, />\s*Retry\s*</);
   assert.match(workout, /tempo:bulk-workout-draft/);
   assert.match(workout, /localStorage\.removeItem/);
-  assert.match(history, /Training history/);
-  assert.match(history, /PublicWorkoutCard/);
-  assert.match(history, /PublicWorkoutDetail/);
-  assert.match(history, /Delete workout\?/);
-  assert.match(history, /completedWorkingSets/);
-  assert.match(history, /completedSessionVolume/);
+  assert.match(history, /Workout history/);
+  assert.match(history, /WorkoutHistoryList/);
+  assert.match(history, /WorkoutDetail/);
+  assert.match(await read("src/components/WorkoutHistory.tsx"), /Delete workout\?/);
+  assert.match(await read("src/lib/workout-history.ts"), /completedWorkingSets/);
+  assert.match(await read("src/lib/workout-history.ts"), /completedSessionVolume/);
   assert.match(query, /staleTime: 0/);
   assert.match(cache, /bulk-training-session/);
   assert.match(migration, /bulk_training_sessions_one_active_uidx/);

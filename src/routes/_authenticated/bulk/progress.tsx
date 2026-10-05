@@ -141,7 +141,7 @@ function OwnProgress({ data }: { data: AppData }) {
                   ? "Loading progress…"
                   : "No data yet"
             }
-            sub={strengthTile.total > 0 ? "main lifts up" : "Complete a workout"}
+            sub={strengthTile.total > 0 ? "tracked lifts up" : "Complete a workout"}
             empty={strengthTile.total === 0}
             spark={[]}
           />
@@ -273,7 +273,7 @@ function buildInsight({
     );
   }
   if (strengthTile.total > 0 && strengthTile.up > 0) {
-    parts.push(`${strengthTile.up} of ${strengthTile.total} main lifts are up`);
+    parts.push(`${strengthTile.up} of ${strengthTile.total} tracked lifts are up`);
   }
   if (!parts.length && toGoal != null && Math.abs(toGoal) > 0) {
     parts.push(`you're ${fmt(Math.abs(toGoal), 1)} kg from your goal weight`);

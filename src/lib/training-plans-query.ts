@@ -108,7 +108,7 @@ export const activeTrainingPlanQueryOptions = (bulkProfileId: string | null) =>
       const { data: plan, error } = await supabase
         .from("bulk_training_plans")
         .select(
-          "id,source_template_id,plan_type,name,description,experience_level,training_days_per_week,updated_at",
+          "id,source_template_id,plan_type,name,description,experience_level,training_days_per_week,updated_at,created_at",
         )
         .eq("bulk_profile_id", bulkProfileId)
         .eq("active", true)
@@ -138,6 +138,7 @@ export const activeTrainingPlanQueryOptions = (bulkProfileId: string | null) =>
         experienceLevel: plan.experience_level as UserTrainingPlan["experienceLevel"],
         trainingDaysPerWeek: plan.training_days_per_week,
         updatedAt: plan.updated_at,
+        createdAt: plan.created_at,
         days: (days ?? []).map((day) => ({
           id: day.id,
           order: day.day_order,

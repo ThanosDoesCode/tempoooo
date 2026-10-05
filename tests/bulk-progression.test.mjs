@@ -277,8 +277,10 @@ test("public progression integration is batched, derived and invalidated without
     read("src/lib/calc.ts"),
   ]);
   assert.match(query, /fetchRecentCompletedBulkTrainingSessions/);
-  assert.match(sessions, /\.in\("session_id", sessionIds\)/);
-  assert.match(sessions, /\.in\("session_exercise_id", exerciseIds\)/);
+  assert.match(sessions, /\.in\(\s*"session_id",\s*batch\.map\(\(session\) => session\.id\)/);
+  assert.match(sessions, /\.in\("session_exercise_id", ids\)/);
+  assert.match(sessions, /sessions\.slice\(offset, offset \+ 20\)/);
+  assert.match(sessions, /exercises\.slice\(offset, offset \+ 50\)/);
   assert.doesNotMatch(query, /progressionFor/);
   assert.match(training, /useBulkProgressionTargets/);
   assert.match(workout, /buildBulkNextSessionGuidance/);

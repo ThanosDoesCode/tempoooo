@@ -15,6 +15,8 @@ import {
   epleyEstimatedMax,
   liftEstimate,
   defaultTrackedLifts,
+  trackedLiftCandidates,
+  resolveTrackedLifts,
 } from "../src/lib/strength-estimates.ts";
 import {
   enduranceSummary,
@@ -239,7 +241,7 @@ test("Strength shows Epley estimated max per tracked lift with an Edit control a
   const strength = await read("src/routes/_authenticated/bulk/progress_.strength.tsx");
   assert.match(strength, /useTrackedLifts\(data\)/);
   assert.match(strength, /liftEstimate\(record, BULK_START\)/);
-  assert.match(strength, /main lifts up since/);
+  assert.match(strength, /tracked lifts up since/);
   assert.match(strength, /aria-expanded=\{editing\}/); // Edit toggle
   assert.match(strength, /to="\/bulk\/progress\/strength\/\$lift"/);
   assert.match(strength, /to="\/bulk\/prs"/);
@@ -661,7 +663,25 @@ async function progressFixture(options = {}) {
       useStrengthModel: () => strength,
     },
     "@/lib/calc": calc,
-    "@/lib/strength-estimates": { epleyEstimatedMax, liftEstimate, defaultTrackedLifts },
+    "@/lib/strength-estimates": {
+      epleyEstimatedMax,
+      liftEstimate,
+      defaultTrackedLifts,
+      trackedLiftCandidates,
+      resolveTrackedLifts,
+    },
+    "@/lib/training-plans-query": {
+      useActiveTrainingPlan: () =>
+        q(
+          options.plan ?? {
+            id: "plan",
+            days: defaultTrackedLifts(data).map((name, order) => ({
+              order,
+              exercises: [{ name, order: 0, isBodyweight: false, repMin: 8, repMax: 12 }],
+            })),
+          },
+        ),
+    },
     "@/lib/types": types,
     "@/lib/goal-metrics": require("../src/lib/goal-metrics.ts"),
     "@/lib/progress-sections": { availableProgressSections },
@@ -682,6 +702,8 @@ async function progressFixture(options = {}) {
         if (name === "./progress-model.ts") return modules["@/lib/progress-model"];
         if (name === "./progress-sections.ts") return modules["@/lib/progress-sections"];
         if (name === "./strength-estimates.ts") return modules["@/lib/strength-estimates"];
+        if (name === "./training-plans-query.ts") return modules["@/lib/training-plans-query"];
+        if (name === "./types.ts") return types;
         if (name === "@/lib/progress-view") return cache["src/lib/progress-view.ts"];
         if (name === "@/components/ProgressChrome")
           return cache["src/components/ProgressChrome.tsx"];
@@ -796,13 +818,13 @@ test("one measurable workout calibrates Strength rather than claiming a fake imp
   });
   const html = await fixture.render(overviewPath);
   assert.match(tileMarkup(html)[1], /No data yet.*Complete a workout/s);
-  assert.doesNotMatch(tileMarkup(html)[1], /main lifts up|↑/);
+  assert.doesNotMatch(tileMarkup(html)[1], /tracked lifts up|↑/);
 });
 
 test("empty direct Strength and Endurance routes render actionable states without records/history dead ends", async () => {
   const fixture = await progressFixture();
   const strength = await fixture.render("src/routes/_authenticated/bulk/progress_.strength.tsx");
-  assert.match(strength, /No tracked lifts yet.*Complete a workout/s);
+  assert.match(strength, /Tracked lifts.*No data yet/s);
   assert.match(strength, /href="\/bulk\/training"/);
   assert.doesNotMatch(strength, /0 of 0|href="\/bulk\/prs"|href="\/bulk\/training\/history"/);
   const endurance = await fixture.render("src/routes/_authenticated/bulk/progress_.endurance.tsx");
@@ -843,10 +865,10 @@ test("measured Endurance and Strength still use real summaries, trends and suppo
   const tiles = tileMarkup(html);
   assert.equal(tiles.length, 4);
   assert.match(tiles[0], /16.0 km.*a week · target 15/s);
-  assert.match(tiles[1], /1 of 1.*main lifts up/s);
+  assert.match(tiles[1], /1 of 1.*tracked lifts up/s);
   const insight = html.match(/<p class="[^"]*bg-primary\/10[^"]*">([\s\S]*?)<\/p>/)?.[1];
   assert.match(insight, /endurance target in 1 of 1 active week/);
-  assert.match(insight, /1 of 1 main lifts are up/);
+  assert.match(insight, /1 of 1 tracked lifts are up/);
 });
 
 test("Progress controls retain equal-width centered segments and a single explicit select chevron", async () => {

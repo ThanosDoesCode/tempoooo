@@ -11,7 +11,7 @@ import { BULK_START, fmt, iso } from "@/lib/calc";
 import { useAppData } from "@/lib/store";
 import { countWorkoutsInRange } from "@/lib/goal-metrics";
 import { liftEstimate } from "@/lib/strength-estimates";
-import { ALL_EXERCISES, exerciseLabel, type AppData } from "@/lib/types";
+import { exerciseLabel, type AppData } from "@/lib/types";
 
 export const Route = createFileRoute("/_authenticated/bulk/progress_/strength")({
   head: () => ({ meta: [{ title: "Tempo" }] }),
@@ -36,18 +36,22 @@ function StrengthPage() {
 function StrengthBody({ data }: { data: AppData }) {
   const today = iso(new Date());
   const { records, workoutRecords, loading } = useStrengthModel();
-  const [trackedNames, setTrackedNames] = useTrackedLifts(data);
+  const [trackedNames, setTrackedNames, resetTrackedNames, candidates, planLoading] =
+    useTrackedLifts(data);
+  const [search, setSearch] = useState("");
   const [editing, setEditing] = useState(false);
 
   const estimates = useMemo(
     () =>
       trackedNames.flatMap((name) => {
         const record = records.find((r) => r.name === name);
-        return record ? [liftEstimate(record, BULK_START)] : [];
+        return [{ name, estimate: record ? liftEstimate(record, BULK_START) : null }];
       }),
     [records, trackedNames],
   );
-  const measured = estimates.filter((e) => e.trend !== "insufficient");
+  const measured = estimates.flatMap(({ estimate }) =>
+    estimate && estimate.trend !== "insufficient" ? [estimate] : [],
+  );
   const up = measured.filter((e) => e.trend === "up").length;
 
   // Planned workouts: a fixed four-week window (plan-start comparisons stay period-independent).
@@ -78,10 +82,10 @@ function StrengthBody({ data }: { data: AppData }) {
           </div>
           <div className="text-[13px] text-muted-foreground">
             {measured.length
-              ? `main lifts up since ${format(parseISO(BULK_START), "d MMM")}`
+              ? `tracked lifts up since ${format(parseISO(BULK_START), "d MMM")}`
               : loading
                 ? "Loading strength…"
-                : "Not enough data yet"}
+                : "No data yet"}
           </div>
         </div>
         <div>
@@ -94,7 +98,7 @@ function StrengthBody({ data }: { data: AppData }) {
       </Card>
 
       <div className="mx-1 flex items-center justify-between text-[13px] font-medium text-muted-foreground">
-        <span>Your main lifts · estimated max</span>
+        <span>Tracked lifts · estimated max</span>
         <button
           type="button"
           onClick={() => setEditing((value) => !value)}
@@ -108,76 +112,114 @@ function StrengthBody({ data }: { data: AppData }) {
       {editing ? (
         <Card className="p-3">
           <p className="mb-2 px-1 text-[13px] text-muted-foreground">
-            Choose the lifts to track (default: first lift of each plan day).
+            Choose the exercises you want to follow over time
           </p>
-          <div className="max-h-72 space-y-0.5 overflow-y-auto">
-            {ALL_EXERCISES.map((exercise) => {
-              const checked = trackedNames.includes(exercise.name);
-              return (
-                <label
-                  key={exercise.name}
-                  className="flex min-h-11 items-center gap-3 rounded-lg px-2 text-[15px] active:bg-elevated"
-                >
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    onChange={() =>
-                      setTrackedNames(
-                        checked
-                          ? trackedNames.filter((name) => name !== exercise.name)
-                          : [...trackedNames, exercise.name],
-                      )
-                    }
-                    className="h-5 w-5 accent-[var(--color-primary)]"
-                  />
-                  {exerciseLabel(exercise.name)}
-                </label>
+          <input
+            aria-label="Search tracked exercises"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search your exercises"
+            className="mb-2 h-11 w-full rounded-xl bg-elevated px-3 text-sm"
+          />
+          <div className="max-h-80 space-y-2 overflow-y-auto">
+            {[
+              { label: "Tracked", names: trackedNames },
+              {
+                label: "From your plan",
+                names: candidates.fromPlan.filter((name) => !trackedNames.includes(name)),
+              },
+              {
+                label: "From completed workouts",
+                names: candidates.history.filter((name) => !trackedNames.includes(name)),
+              },
+            ].map((group) => {
+              const names = group.names.filter((name) =>
+                name.toLowerCase().includes(search.toLowerCase()),
               );
+              return names.length ? (
+                <section key={group.label}>
+                  <h3 className="px-1 text-xs text-muted-foreground">{group.label}</h3>
+                  {names.map((name) => (
+                    <label
+                      key={name}
+                      className="flex min-h-11 items-center gap-3 rounded-lg px-2 text-sm active:bg-elevated"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={trackedNames.includes(name)}
+                        className="h-5 w-5 accent-[var(--color-primary)]"
+                        onChange={() =>
+                          setTrackedNames(
+                            trackedNames.includes(name)
+                              ? trackedNames.filter((n) => n !== name)
+                              : [...trackedNames, name],
+                          )
+                        }
+                      />
+                      {exerciseLabel(name)}
+                    </label>
+                  ))}
+                </section>
+              ) : null;
             })}
+            {planLoading ? (
+              <p className="text-sm text-muted-foreground">Loading your plan…</p>
+            ) : null}
           </div>
+          <button
+            type="button"
+            className="mt-2 min-h-11 px-1 text-sm font-medium text-primary"
+            onClick={resetTrackedNames}
+          >
+            Reset to plan defaults
+          </button>
         </Card>
       ) : (
         <>
           <div className="rounded-[20px] bg-card px-4">
             {estimates.length ? (
-              estimates.map((estimate) => (
+              estimates.map(({ name, estimate }) => (
                 <Link
-                  key={estimate.record.name}
+                  key={name}
                   to="/bulk/progress/strength/$lift"
-                  params={{ lift: estimate.record.name }}
+                  params={{ lift: name }}
                   preload="intent"
                   className="flex min-h-[62px] items-center gap-3 border-t border-border first:border-t-0 active:opacity-80"
                 >
                   <div className="min-w-0 flex-1">
-                    <p className="text-[15px] font-medium">{exerciseLabel(estimate.record.name)}</p>
+                    <p className="text-[15px] font-medium">{exerciseLabel(name)}</p>
                     <p className="num text-[13px] text-muted-foreground">
-                      {estimate.current != null
+                      {estimate?.current != null
                         ? `${fmt(estimate.current, 1)} kg${
-                            estimate.changeKg != null
+                            estimate?.changeKg != null
                               ? ` · was ${fmt(estimate.baseline, 1)} kg`
-                              : estimate.series.length === 1
+                              : estimate?.series.length === 1
                                 ? " · one session"
                                 : ""
                           }`
-                        : "Not enough data yet"}
+                        : "No data yet"}
                     </p>
                   </div>
                   <Sparkline
-                    points={estimate.series.map((p) => p.value)}
+                    points={
+                      estimate?.series.length && estimate.series.length >= 2
+                        ? estimate.series.map((p) => p.value)
+                        : []
+                    }
                     width={56}
                     height={22}
                     tone={
-                      estimate.trend === "up"
+                      estimate?.trend === "up"
                         ? "var(--color-primary)"
                         : "var(--color-muted-foreground)"
                     }
                   />
                   <span
                     className={`num w-11 text-right text-[13px] font-semibold ${
-                      estimate.trend === "up" ? "text-primary" : "text-muted-foreground"
+                      estimate?.trend === "up" ? "text-primary" : "text-muted-foreground"
                     }`}
                   >
-                    {estimate.changePct != null
+                    {estimate?.changePct != null
                       ? `${estimate.changePct >= 0 ? "+" : ""}${estimate.changePct.toFixed(0)}%`
                       : "—"}
                   </span>

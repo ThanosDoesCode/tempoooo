@@ -334,6 +334,8 @@ test("overview and active workout render guidance from the one batched progressi
   assert.match(workout, /Progression guidance is unavailable|buildBulkNextSessionGuidance/);
   assert.match(query, /fetchRecentCompletedBulkTrainingSessions\(bulkProfileId, 30\)/);
   assert.doesNotMatch(query, /forEach[\s\S]*fetchRecentCompletedBulkTrainingSessions/);
-  assert.match(sessions, /\.in\("session_id", sessionIds\)/);
-  assert.match(sessions, /\.in\("session_exercise_id", exerciseIds\)/);
+  assert.match(sessions, /\.in\(\s*"session_id",\s*batch\.map\(\(session\) => session\.id\)/);
+  assert.match(sessions, /\.in\("session_exercise_id", ids\)/);
+  assert.match(sessions, /sessions\.slice\(offset, offset \+ 20\)/);
+  assert.match(sessions, /exercises\.slice\(offset, offset \+ 50\)/);
 });

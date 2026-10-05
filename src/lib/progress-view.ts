@@ -2,9 +2,14 @@ import { useState } from "react";
 
 import { useMyChallenge } from "./challenge.ts";
 import { availableProgressSections, type ProgressSection } from "./progress-sections.ts";
-import { useProgressMode } from "./progress-model.ts";
-import { defaultTrackedLifts } from "./strength-estimates.ts";
-import type { AppData } from "./types.ts";
+import { useProgressMode, useStrengthModel } from "./progress-model.ts";
+import { useActiveTrainingPlan } from "./training-plans-query.ts";
+import {
+  defaultTrackedLifts,
+  trackedLiftCandidates,
+  resolveTrackedLifts,
+} from "./strength-estimates.ts";
+import { EXERCISES, orderedExerciseDefs, type AppData, type SplitType } from "./types.ts";
 
 export type { ProgressSection } from "./progress-sections.ts";
 
@@ -50,31 +55,64 @@ export function usePeriodWeeks(): [number, (weeks: number) => void] {
 
 const TRACKED_KEY = "tempo:progress-tracked-lifts";
 
-/**
- * The user's tracked main lifts for the Strength view. Defaults to the first lift of each plan day
- * and remembers an explicit choice as a per-viewer preference (localStorage, no migration).
- */
-export function useTrackedLifts(data: AppData): [string[], (names: string[]) => void] {
-  const [override, setOverride] = useState<string[] | null>(() => {
+/** Plan-derived defaults with explicit per-profile preferences under the existing key. */
+export function useTrackedLifts(
+  data: AppData,
+): [
+  string[],
+  (names: string[]) => void,
+  () => void,
+  { fromPlan: string[]; history: string[] },
+  boolean,
+] {
+  const { publicId, bulkId, mode } = useProgressMode();
+  const plan = useActiveTrainingPlan(publicId);
+  const { records } = useStrengthModel();
+  const scope = bulkId ?? "legacy";
+  const read = (): string[] | null => {
     try {
-      const raw = localStorage.getItem(TRACKED_KEY);
-      const parsed = raw ? (JSON.parse(raw) as unknown) : null;
-      return Array.isArray(parsed) && parsed.every((name) => typeof name === "string")
-        ? (parsed as string[])
-        : null;
+      const parsed = JSON.parse(localStorage.getItem(TRACKED_KEY) ?? "null");
+      const value = Array.isArray(parsed) ? parsed : parsed?.[scope];
+      if (Array.isArray(parsed) && parsed.every((name) => typeof name === "string"))
+        localStorage.setItem(TRACKED_KEY, JSON.stringify({ [scope]: parsed }));
+      return Array.isArray(value) && value.every((name) => typeof name === "string") ? value : null;
     } catch {
       return null;
     }
-  });
-  const update = (names: string[]) => {
-    setOverride(names);
+  };
+  const [saved, setSaved] = useState(() => ({ scope, value: read() }));
+  const override = saved.scope === scope ? saved.value : read();
+  const defaults = defaultTrackedLifts(mode === "public" ? (plan.data ?? null) : data);
+  const candidates = trackedLiftCandidates(plan.data ?? null, records);
+  if (mode !== "public")
+    candidates.fromPlan = [
+      ...new Set([
+        ...defaults,
+        ...(Object.keys(EXERCISES) as SplitType[]).flatMap((split) =>
+          orderedExerciseDefs(data.targets, split).map((exercise) => exercise.name),
+        ),
+      ]),
+    ];
+  const available = [...new Set([...candidates.fromPlan, ...candidates.history, ...defaults])];
+  const update = (names: string[] | null) => {
+    setSaved({ scope, value: names });
     try {
-      localStorage.setItem(TRACKED_KEY, JSON.stringify(names));
+      const old = JSON.parse(localStorage.getItem(TRACKED_KEY) ?? "null");
+      const preferences = old && !Array.isArray(old) && typeof old === "object" ? old : {};
+      if (names === null) delete preferences[scope];
+      else preferences[scope] = names;
+      localStorage.setItem(TRACKED_KEY, JSON.stringify(preferences));
     } catch {
-      /* ignore */
+      /* storage may be unavailable */
     }
   };
-  return [override ?? defaultTrackedLifts(data), update];
+  return [
+    resolveTrackedLifts(defaults, override, available),
+    (names) => update(names),
+    () => update(null),
+    candidates,
+    plan.isLoading,
+  ];
 }
 
 export const chartAxis = {

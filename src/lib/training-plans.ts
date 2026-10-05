@@ -49,6 +49,7 @@ export type UserTrainingPlan = {
   experienceLevel: ExperienceLevel | null;
   trainingDaysPerWeek: number;
   updatedAt: string;
+  createdAt?: string;
   days: TrainingPlanDay[];
 };
 

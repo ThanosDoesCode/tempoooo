@@ -1,15 +1,58 @@
 import type { PersonalRecord } from "./personal-records.ts";
 import { EXERCISES, orderedExerciseDefs, type AppData, type SplitType } from "./types.ts";
+import type { UserTrainingPlan } from "./training-plans.ts";
 
 /**
  * Default tracked lifts: the first exercise of each plan day (split), in the user's own order. This
  * is a derived default — the Strength screen lets the user override it, kept as a local preference.
  */
-export function defaultTrackedLifts(data: AppData): string[] {
-  return (Object.keys(EXERCISES) as SplitType[]).flatMap((split) => {
-    const first = orderedExerciseDefs(data.targets, split)[0];
-    return first ? [first.name] : [];
-  });
+export function defaultTrackedLifts(data: AppData | UserTrainingPlan | null): string[] {
+  const days =
+    data && "days" in data && "id" in data
+      ? [...data.days]
+          .sort((a, b) => a.order - b.order)
+          .map((day) =>
+            [...day.exercises]
+              .sort((a, b) => a.order - b.order)
+              .filter((e) => !e.isBodyweight && e.repMin > 0 && e.repMax >= e.repMin)
+              .map((e) => e.name),
+          )
+      : data && "targets" in data
+        ? (Object.keys(EXERCISES) as SplitType[]).map((split) =>
+            orderedExerciseDefs(data.targets, split)
+              .filter((e) => e.loadKind !== "bodyweight")
+              .map((e) => e.name),
+          )
+        : [];
+  const names: string[] = [];
+  for (const day of days) {
+    const first = day.find((name) => !names.includes(name));
+    if (first) names.push(first);
+    if (names.length === 6) break;
+  }
+  return names;
+}
+
+export function trackedLiftCandidates(plan: UserTrainingPlan | null, records: PersonalRecord[]) {
+  const fromPlan = [
+    ...new Set(plan?.days.flatMap((day) => day.exercises.map((e) => e.name)) ?? []),
+  ];
+  const history = [
+    ...new Set(
+      records
+        .filter((r) => r.performances.some((p) => p.load != null && p.load > 0))
+        .map((r) => r.name),
+    ),
+  ].filter((name) => !fromPlan.includes(name));
+  return { fromPlan, history };
+}
+
+export function resolveTrackedLifts(
+  defaults: string[],
+  override: string[] | null,
+  available: string[],
+) {
+  return [...new Set(override ?? defaults)].filter((name) => available.includes(name));
 }
 
 export type EstimatedMaxPoint = { date: string; value: number; load: number; reps: number };

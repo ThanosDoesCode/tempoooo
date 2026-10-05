@@ -1,38 +1,39 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate, useRouter } from "@tanstack/react-router";
-import { ArrowLeft, MoreHorizontal } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { z } from "zod";
 import { AppShell, PageHeader } from "@/components/AppShell";
+import { HistoryBackLink } from "@/components/HistoryBackLink";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Card, DataError, PendingLabel } from "@/components/ui-kit";
+  WorkoutHistoryList,
+  WorkoutDetail,
+  WorkoutTimeDialog,
+  ConfirmWorkoutRemoval,
+} from "@/components/WorkoutHistory";
+import { TrainingSession } from "@/components/TrainingSession";
+import { DataError } from "@/components/ui-kit";
 import {
+  useCompletedBulkTrainingSessions,
+  useActiveBulkTrainingSession,
   deleteCompletedBulkTrainingSession,
   deleteLegacyBulkWorkout,
-  fetchRecentCompletedBulkTrainingSessions,
-  type BulkTrainingSession,
+  discardBulkTrainingSession,
+  correctCompletedBulkTrainingSet,
+  correctCompletedBulkTrainingTime,
+  repeatCompletedBulkTrainingSession,
+  workoutHistoryInvalidationKeys,
+  correctLegacyBulkWorkoutTime,
+  repeatLegacyBulkWorkout,
 } from "@/lib/bulk-training-sessions";
-import {
-  completedSessionVolume,
-  completedWorkingSets,
-  sessionElapsedSeconds,
-  sessionSetLabel,
-  skippedSessionSets,
-} from "@/lib/bulk-training-session-domain";
-import { readRetryDelay, shouldRetryRead, userFacingError } from "@/lib/network-errors";
-import { refreshBulk, useAppData, useBulkMeta } from "@/lib/store";
-import { splitLabel, type Workout } from "@/lib/types";
-import { workoutDuration, workoutMetrics } from "@/lib/training";
+import { workoutHistory, previousSameWorkout, type HistoryWorkout } from "@/lib/workout-history";
+import { iso } from "@/lib/calc";
+import { developmentErrorDiagnostic, userFacingError } from "@/lib/network-errors";
+import { refreshBulk, useActions, useAppData, useBulkMeta } from "@/lib/store";
+import { useActiveTrainingPlan } from "@/lib/training-plans-query";
 import { bulkPlanModeFor, useMemberships } from "@/lib/bulk-access";
+import { backWithinApp, inAppBackPath } from "@/lib/in-app-back";
+import { resolveWeeklyWorkoutTarget } from "@/lib/goal-metrics";
+import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/_authenticated/bulk/training_/history")({
   validateSearch: z.object({
@@ -43,306 +44,220 @@ export const Route = createFileRoute("/_authenticated/bulk/training_/history")({
   component: TrainingHistoryPage,
 });
 
-const durationLabel = (seconds: number | null | undefined) =>
-  seconds && seconds > 0 ? `${Math.max(1, Math.round(seconds / 60))} min` : "Unavailable";
-
 function TrainingHistoryPage() {
   const data = useAppData();
   const { bulkId } = useBulkMeta();
   const memberships = useMemberships();
+  const mode = bulkPlanModeFor(memberships.data, bulkId);
+  const plan = useActiveTrainingPlan(mode === "public" ? bulkId : null);
+  const sessions = useCompletedBulkTrainingSessions(
+    mode !== "none" ? bulkId : null,
+    "2000-01-01",
+    "2999-12-31",
+  );
+  const active = useActiveBulkTrainingSession(mode !== "none" ? bulkId : null);
+  const { user } = useAuth();
+  const { saveWorkout } = useActions();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const router = useRouter();
   const search = Route.useSearch();
-  const planMode = bulkPlanModeFor(memberships.data, bulkId);
-  const [confirming, setConfirming] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-  const sessions = useQuery({
-    queryKey: ["bulk-training-sessions", "history", bulkId],
-    enabled: planMode !== "none" && !!bulkId,
-    queryFn: () => fetchRecentCompletedBulkTrainingSessions(bulkId!, 100),
-    staleTime: 30_000,
-    retry: shouldRetryRead,
-    retryDelay: readRetryDelay,
-  });
-  const legacy = Object.values(data?.workouts ?? {})
-    .filter((workout) => workout.status === "completed" || workout.status == null)
-    .sort((a, b) => b.date.localeCompare(a.date));
-  const selectedSession = sessions.data?.find((session) => session.id === search.session) ?? null;
-  const selectedLegacy = legacy.find((workout) => workout.date === search.legacy) ?? null;
-
-  const remove = async () => {
-    if (deleting || (!selectedSession && !selectedLegacy)) return;
-    setDeleting(true);
-    setDeleteError(null);
+  const [pending, setPending] = useState(false);
+  const busy = useRef(false);
+  const [error, setError] = useState<string | null>(null);
+  const [fixing, setFixing] = useState<HistoryWorkout | null>(null);
+  const [discardOpen, setDiscardOpen] = useState(false);
+  const rows = useMemo(() => workoutHistory(sessions.data ?? [], data), [sessions.data, data]);
+  const selected = rows.find(
+    (row) =>
+      (!!search.session && row.session?.id === search.session) ||
+      (!!search.legacy && row.legacy?.date === search.legacy),
+  );
+  const hasSelection = !!(search.session || search.legacy);
+  const refresh = () =>
+    Promise.all(
+      workoutHistoryInvalidationKeys.map((queryKey) => queryClient.invalidateQueries({ queryKey })),
+    );
+  const act = async (action: () => Promise<unknown>): Promise<boolean> => {
+    if (busy.current) return false;
+    busy.current = true;
+    setPending(true);
+    setError(null);
     try {
-      if (selectedSession) await deleteCompletedBulkTrainingSession(selectedSession.id);
-      else if (selectedLegacy) {
-        await deleteLegacyBulkWorkout(selectedLegacy.date);
-        await refreshBulk();
-      }
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["bulk-training-sessions"] }),
-        queryClient.invalidateQueries({ queryKey: ["bulk-personal-records"] }),
-        queryClient.invalidateQueries({ queryKey: ["bulk-progression"] }),
-        queryClient.invalidateQueries({ queryKey: ["bulk-progress-summary"] }),
-      ]);
-      await navigate({ to: "/bulk/training/history", search: {}, replace: true });
-    } catch (error) {
-      setDeleteError(userFacingError(error, "delete this workout"));
+      await action();
+      await refresh();
+      return true;
+    } catch (cause) {
+      developmentErrorDiagnostic("workout_history_action", cause);
+      const details = cause as { code?: string; details?: string } | null;
+      setError(
+        details?.code === "55000" && details.details === "active_workout_exists"
+          ? "Finish or discard your active workout before repeating this workout."
+          : userFacingError(cause, "update this workout", { inputPreserved: true }),
+      );
+      return false;
     } finally {
-      setDeleting(false);
-      setConfirming(false);
+      busy.current = false;
+      setPending(false);
     }
   };
-
-  if (selectedSession || selectedLegacy) {
-    return (
-      <AppShell>
-        <button
-          type="button"
-          onClick={() => router.history.back()}
-          className="mb-2 inline-flex min-h-11 items-center gap-2 rounded-xl pr-3 text-sm font-semibold text-muted-foreground"
-        >
-          <ArrowLeft className="h-4 w-4" aria-hidden="true" /> History
-        </button>
-        <div className="flex items-start justify-between gap-3">
-          <PageHeader
-            title={selectedSession?.workoutDayName ?? splitLabel(selectedLegacy!.type)}
-            subtitle={
-              selectedSession
-                ? `${new Date(selectedSession.completedAt!).toLocaleString("en-GB")} · ${selectedSession.planName}`
-                : new Date(`${selectedLegacy!.date}T12:00:00`).toLocaleDateString("en-GB")
-            }
-          />
-          <button
-            type="button"
-            aria-label="Workout actions"
-            onClick={() => setConfirming(true)}
-            className="grid min-h-11 min-w-11 place-items-center rounded-xl border border-border text-muted-foreground"
-          >
-            <MoreHorizontal className="h-5 w-5" aria-hidden="true" />
-          </button>
-        </div>
-        {selectedSession ? (
-          <PublicWorkoutDetail session={selectedSession} />
-        ) : (
-          <LegacyWorkoutDetail workout={selectedLegacy!} />
-        )}
-        {deleteError ? <p className="mt-3 text-sm text-danger">{deleteError}</p> : null}
-        <AlertDialog open={confirming} onOpenChange={setConfirming}>
-          <AlertDialogContent className="max-w-[calc(100%-2rem)] rounded-2xl">
-            <AlertDialogHeader>
-              <AlertDialogTitle>Delete workout?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This workout and its logged sets will be permanently removed from your training
-                history. This cannot be undone.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel className="min-h-11">Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                disabled={deleting}
-                onClick={(event) => {
-                  event.preventDefault();
-                  void remove();
-                }}
-                className="min-h-11 bg-danger text-white"
-              >
-                {deleting ? <PendingLabel>Deleting</PendingLabel> : "Delete workout"}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </AppShell>
-    );
-  }
-
+  const saveTime = async (row: HistoryWorkout, date: string, start: string, end: string) => {
+    const ok = await act(async () => {
+      if (row.session) await correctCompletedBulkTrainingTime(row.session.id, date, start, end);
+      else {
+        await correctLegacyBulkWorkoutTime(row.date, date, start, end);
+        await refreshBulk();
+      }
+    });
+    if (ok && row.legacy && hasSelection)
+      await navigate({ to: "/bulk/training/history", search: { legacy: date }, replace: true });
+    return ok;
+  };
+  const detailBack = () => {
+    if (inAppBackPath(router.history) === "/bulk/training/history" && backWithinApp(router.history))
+      return;
+    void navigate({ to: "/bulk/training/history", search: {}, replace: true });
+  };
   return (
     <AppShell>
-      <PageHeader
-        title="Training history"
-        subtitle="Completed workouts, newest first."
-        historyBack
-        backTo="/bulk/training"
-        backLabel="Back"
-      />
-      {planMode === "none" || sessions.isLoading ? (
-        <div className="h-40 animate-pulse rounded-2xl bg-card" />
+      {hasSelection ? (
+        <button
+          className="mb-2 inline-flex min-h-11 items-center gap-2 text-sm text-muted-foreground"
+          onClick={detailBack}
+        >
+          ‹ History
+        </button>
+      ) : (
+        <HistoryBackLink
+          fallback="/bulk/training"
+          fallbackLabel="Training"
+          originLabels={{ "/bulk/progress/strength": "Strength", "/bulk/training": "Training" }}
+        />
+      )}
+      {!hasSelection ? <PageHeader title="Workout history" /> : null}
+      {mode === "none" || !data || sessions.isLoading ? (
+        <div
+          className="h-48 motion-safe:animate-pulse rounded-[20px] bg-card"
+          aria-label="Loading workout history"
+        />
       ) : sessions.error ? (
         <DataError
           message={userFacingError(sessions.error, "load your training history")}
           onRetry={() => void sessions.refetch()}
         />
-      ) : sessions.data?.length || legacy.length ? (
-        <div className="space-y-2">
-          {sessions.data?.map((session) => (
-            <PublicWorkoutCard key={session.id} session={session} />
-          ))}
-          {legacy.map((workout) => (
-            <LegacyWorkoutCard key={workout.date} workout={workout} />
-          ))}
-        </div>
+      ) : hasSelection ? (
+        selected ? (
+          <WorkoutDetail
+            key={selected.key}
+            row={selected}
+            previous={previousSameWorkout(selected, rows)}
+            pending={pending}
+            error={error}
+            onRepeat={() =>
+              void act(async () => {
+                const id = selected.session
+                  ? await repeatCompletedBulkTrainingSession(selected.session.id, iso(new Date()))
+                  : await repeatLegacyBulkWorkout(selected.date, iso(new Date()));
+                await navigate({ to: "/bulk/workout/$sessionId", params: { sessionId: id } });
+              })
+            }
+            onDelete={() =>
+              void act(async () => {
+                if (selected.session) await deleteCompletedBulkTrainingSession(selected.session.id);
+                else {
+                  await deleteLegacyBulkWorkout(selected.date);
+                  await refreshBulk();
+                }
+                await navigate({ to: "/bulk/training/history", search: {}, replace: true });
+              })
+            }
+            onSaveSet={(set) =>
+              act(() => correctCompletedBulkTrainingSet(selected.session!.id, set))
+            }
+            onSaveTime={(date, start, end) => saveTime(selected, date, start, end)}
+            legacyEditor={
+              selected.legacy ? (
+                <TrainingSession
+                  data={data}
+                  date={selected.date}
+                  cacheKey={`tempo:history-edit:${bulkId}:${selected.date}`}
+                  onSave={async (workout) => {
+                    await saveWorkout(workout, user?.id);
+                    await refresh();
+                  }}
+                />
+              ) : null
+            }
+          />
+        ) : (
+          <div className="rounded-xl bg-card p-4">
+            <p>Workout unavailable</p>
+            <p className="mt-1 text-sm text-muted-foreground">It may have been deleted.</p>
+            <Link
+              to="/bulk/training/history"
+              search={{}}
+              className="inline-flex min-h-11 items-center text-primary"
+            >
+              Open workout history
+            </Link>
+          </div>
+        )
       ) : (
-        <Card className="py-8 text-center">
-          <h2 className="font-semibold">No completed workouts yet</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Finished workouts will appear here without changing your active session.
-          </p>
-        </Card>
+        <>
+          <WorkoutHistoryList
+            rows={rows}
+            today={iso(new Date())}
+            expected={resolveWeeklyWorkoutTarget({
+              weeklyWorkoutGoal: data.targets.weeklyWorkoutGoal ?? null,
+              activePlanDaysPerWeek: plan.data?.trainingDaysPerWeek ?? null,
+              targetDaysPerWeek: data.targets.trainingDaysPerWeek ?? null,
+            })}
+            planName={plan.data?.name}
+            planId={plan.data?.id}
+            planStartedAt={plan.data?.createdAt}
+            active={active.data ?? null}
+            pending={pending}
+            onDiscard={() => setDiscardOpen(true)}
+            onFixTime={setFixing}
+          />
+          {active.error ? (
+            <DataError
+              message={userFacingError(active.error, "load your unfinished workout")}
+              onRetry={() => void active.refetch()}
+            />
+          ) : null}
+          {error ? (
+            <p role="alert" className="mt-3 text-sm text-danger">
+              {error}
+            </p>
+          ) : null}
+        </>
       )}
+      {fixing ? (
+        <WorkoutTimeDialog
+          key={fixing.key}
+          row={fixing}
+          open
+          onOpenChange={(open) => {
+            if (!open) setFixing(null);
+          }}
+          pending={pending}
+          error={error}
+          onSave={(date, start, end) => saveTime(fixing, date, start, end)}
+        />
+      ) : null}
+      <ConfirmWorkoutRemoval
+        open={discardOpen}
+        onOpenChange={setDiscardOpen}
+        pending={pending}
+        discard
+        onConfirm={() =>
+          void act(async () => {
+            if (active.data) await discardBulkTrainingSession(active.data.id);
+            setDiscardOpen(false);
+          })
+        }
+      />
     </AppShell>
-  );
-}
-
-function PublicWorkoutCard({ session }: { session: BulkTrainingSession }) {
-  const volume = completedSessionVolume(session);
-  return (
-    <Link
-      to="/bulk/training/history"
-      search={{ session: session.id }}
-      className="card-surface block min-h-20 p-4 active:scale-[0.99]"
-    >
-      <h2 className="font-semibold">{session.workoutDayName}</h2>
-      <p className="mt-0.5 text-xs text-muted-foreground">
-        {new Date(session.completedAt!).toLocaleDateString("en-GB")} · {session.planName}
-      </p>
-      <p className="num mt-3 text-xs text-muted-foreground">
-        {durationLabel(sessionElapsedSeconds(session.startedAt, Date.now(), session.completedAt))} ·{" "}
-        {completedWorkingSets(session)} sets ·{" "}
-        {volume == null ? "Volume unavailable" : `${Math.round(volume)} kg`}
-      </p>
-    </Link>
-  );
-}
-
-function LegacyWorkoutCard({ workout }: { workout: Workout }) {
-  const metrics = workoutMetrics(workout);
-  return (
-    <Link
-      to="/bulk/training/history"
-      search={{ legacy: workout.date }}
-      className="card-surface block min-h-20 p-4 active:scale-[0.99]"
-    >
-      <h2 className="font-semibold">{splitLabel(workout.type)}</h2>
-      <p className="mt-0.5 text-xs text-muted-foreground">
-        {new Date(`${workout.date}T12:00:00`).toLocaleDateString("en-GB")} · Original Tempo program
-      </p>
-      <p className="num mt-3 text-xs text-muted-foreground">
-        {durationLabel(workoutDuration(workout))} · {metrics.workingSets} sets ·{" "}
-        {Math.round(metrics.volume ?? 0)} kg
-      </p>
-    </Link>
-  );
-}
-
-function PublicWorkoutDetail({ session }: { session: BulkTrainingSession }) {
-  const skipped = skippedSessionSets(session);
-  const volume = completedSessionVolume(session);
-  return (
-    <div className="space-y-3">
-      <Card className="grid grid-cols-3 gap-2 text-center">
-        <Metric
-          label="Duration"
-          value={durationLabel(
-            sessionElapsedSeconds(session.startedAt, Date.now(), session.completedAt),
-          )}
-        />
-        <Metric label="Sets" value={String(completedWorkingSets(session))} />
-        <Metric
-          label="Volume"
-          value={volume == null ? "Unavailable" : `${Math.round(volume)} kg`}
-        />
-        {session.bodyweightKg != null ? (
-          <Metric label="Bodyweight" value={`${session.bodyweightKg.toFixed(1)} kg`} />
-        ) : null}
-      </Card>
-      {session.exercises.map((exercise) => {
-        const completed = exercise.sets.filter((set) => set.isComplete);
-        if (!completed.length) return null;
-        return (
-          <Card key={exercise.id}>
-            <h2 className="font-semibold">{exercise.name}</h2>
-            <ol className="mt-3 space-y-2">
-              {completed.map((set) => (
-                <li
-                  key={set.id}
-                  className="flex justify-between gap-3 rounded-xl bg-elevated p-3 text-sm"
-                >
-                  <span>
-                    Set {set.order}
-                    {set.setType !== "normal" ? ` · ${set.setType}` : set.isExtra ? " · extra" : ""}
-                  </span>
-                  <span className="text-right font-medium tabular-nums">
-                    {sessionSetLabel(set, exercise)}
-                    {set.rpe != null ? (
-                      <span className="block text-xs text-muted-foreground">RPE {set.rpe}</span>
-                    ) : null}
-                  </span>
-                </li>
-              ))}
-            </ol>
-            {exercise.notes ? (
-              <p className="mt-2 text-xs text-muted-foreground">{exercise.notes}</p>
-            ) : null}
-          </Card>
-        );
-      })}
-      {skipped ? (
-        <p className="text-xs text-muted-foreground">{skipped} planned sets skipped.</p>
-      ) : null}
-    </div>
-  );
-}
-
-function LegacyWorkoutDetail({ workout }: { workout: Workout }) {
-  const metrics = workoutMetrics(workout);
-  return (
-    <div className="space-y-3">
-      <Card className="grid grid-cols-3 gap-2 text-center">
-        <Metric label="Duration" value={durationLabel(workoutDuration(workout))} />
-        <Metric label="Sets" value={String(metrics.workingSets)} />
-        <Metric label="Volume" value={`${Math.round(metrics.volume ?? 0)} kg`} />
-      </Card>
-      {workout.entries.map((entry) => {
-        const completed = entry.reps.flatMap((reps, index) =>
-          typeof reps === "number" && reps > 0 ? [{ reps, index }] : [],
-        );
-        if (!completed.length) return null;
-        return (
-          <Card key={entry.exercise}>
-            <h2 className="font-semibold">{entry.exercise}</h2>
-            <ol className="mt-3 space-y-2">
-              {completed.map(({ reps, index }) => (
-                <li key={index} className="flex justify-between rounded-xl bg-elevated p-3 text-sm">
-                  <span>Set {index + 1}</span>
-                  <span className="font-medium tabular-nums">
-                    {entry.weight != null ? `${entry.weight} kg × ` : ""}
-                    {reps}
-                    {entry.rpe != null ? ` · RPE ${entry.rpe}` : ""}
-                  </span>
-                </li>
-              ))}
-            </ol>
-            {entry.notes ? (
-              <p className="mt-2 text-xs text-muted-foreground">{entry.notes}</p>
-            ) : null}
-          </Card>
-        );
-      })}
-      {workout.sessionNote ? (
-        <Card className="text-sm text-muted-foreground">{workout.sessionNote}</Card>
-      ) : null}
-    </div>
-  );
-}
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="min-w-0">
-      <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</p>
-      <p className="num mt-1 truncate text-sm font-semibold">{value}</p>
-    </div>
   );
 }

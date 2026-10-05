@@ -62,6 +62,26 @@ type SetRow = {
 
 const numberOrNull = (value: number | null) => (value == null ? null : Number(value));
 
+const HISTORY_READ_PAGE_SIZE = 200;
+
+/** Immutable IDs provide a stable cursor; never accept a truncated history as complete. */
+async function readAllById<Row extends { id: string }>(
+  page: (cursor: string | null) => PromiseLike<{ data: Row[] | null; error: unknown }>,
+) {
+  const rows: Row[] = [];
+  let cursor: string | null = null;
+  while (true) {
+    const result = await page(cursor);
+    if (result.error) throw result.error;
+    const batch = result.data ?? [];
+    rows.push(...batch);
+    if (batch.length < HISTORY_READ_PAGE_SIZE) return rows;
+    const next = batch[batch.length - 1]!.id;
+    if (cursor && next <= cursor) throw new Error("Workout history cursor did not advance");
+    cursor = next;
+  }
+}
+
 function mapSessions(
   sessions: SessionRow[],
   exercises: ExerciseRow[],
@@ -118,23 +138,42 @@ function mapSessions(
 
 async function hydrateSessions(sessions: SessionRow[]): Promise<BulkTrainingSession[]> {
   if (!sessions.length) return [];
-  const sessionIds = sessions.map((session) => session.id);
-  const { data: exercises, error: exerciseError } = await supabase
-    .from("bulk_training_session_exercises")
-    .select("*")
-    .in("session_id", sessionIds)
-    .order("exercise_order");
-  if (exerciseError) throw exerciseError;
-  const exerciseIds = (exercises ?? []).map((exercise) => exercise.id);
-  const sets = exerciseIds.length
-    ? await supabase
-        .from("bulk_training_session_sets")
+  const result: BulkTrainingSession[] = [];
+  // Bound IN lists as well as response sizes, including large completed histories.
+  for (let offset = 0; offset < sessions.length; offset += 20) {
+    const batch = sessions.slice(offset, offset + 20);
+    const exercises = await readAllById<ExerciseRow>((cursor) => {
+      let query = supabase
+        .from("bulk_training_session_exercises")
         .select("*")
-        .in("session_exercise_id", exerciseIds)
-        .order("set_order")
-    : { data: [], error: null };
-  if (sets.error) throw sets.error;
-  return mapSessions(sessions, (exercises ?? []) as ExerciseRow[], (sets.data ?? []) as SetRow[]);
+        .in(
+          "session_id",
+          batch.map((session) => session.id),
+        )
+        .order("id")
+        .limit(HISTORY_READ_PAGE_SIZE);
+      if (cursor) query = query.gt("id", cursor);
+      return query;
+    });
+    const sets: SetRow[] = [];
+    for (let offset = 0; offset < exercises.length; offset += 50) {
+      const ids = exercises.slice(offset, offset + 50).map((exercise) => exercise.id);
+      sets.push(
+        ...(await readAllById<SetRow>((cursor) => {
+          let query = supabase
+            .from("bulk_training_session_sets")
+            .select("*")
+            .in("session_exercise_id", ids)
+            .order("id")
+            .limit(HISTORY_READ_PAGE_SIZE);
+          if (cursor) query = query.gt("id", cursor);
+          return query;
+        })),
+      );
+    }
+    result.push(...mapSessions(batch, exercises, sets));
+  }
+  return result;
 }
 
 export async function fetchRecentCompletedBulkTrainingSessions(bulkProfileId: string, limit = 30) {
@@ -198,16 +237,23 @@ export const completedBulkTrainingSessionsQueryOptions = (
     enabled: !!bulkProfileId,
     queryFn: async () => {
       if (!bulkProfileId) return [];
-      const { data, error } = await supabase
-        .from("bulk_training_sessions")
-        .select("*")
-        .eq("bulk_profile_id", bulkProfileId)
-        .eq("status", "completed")
-        .gte("completed_at", from)
-        .lt("completed_at", to)
-        .order("completed_at", { ascending: false });
-      if (error) throw error;
-      return hydrateSessions((data ?? []) as SessionRow[]);
+      const data = await readAllById<SessionRow>((cursor) => {
+        let query = supabase
+          .from("bulk_training_sessions")
+          .select("*")
+          .eq("bulk_profile_id", bulkProfileId)
+          .eq("status", "completed")
+          .gte("completed_at", from)
+          .lt("completed_at", to)
+          .order("id")
+          .limit(HISTORY_READ_PAGE_SIZE);
+        if (cursor) query = query.gt("id", cursor);
+        return query;
+      });
+      data.sort(
+        (a, b) => b.completed_at!.localeCompare(a.completed_at!) || b.id.localeCompare(a.id),
+      );
+      return hydrateSessions(data);
     },
     staleTime: 30_000,
     retry: shouldRetryRead,
@@ -241,15 +287,25 @@ export const completedSessionDatesQueryOptions = (
     enabled: !!bulkProfileId,
     queryFn: async () => {
       if (!bulkProfileId) return [];
-      const { data, error } = await supabase
-        .from("bulk_training_sessions")
-        .select("id, status, workout_date, source_plan_day_id")
-        .eq("bulk_profile_id", bulkProfileId)
-        .eq("status", "completed")
-        .gte("workout_date", fromDate)
-        .lte("workout_date", toDate);
-      if (error) throw error;
-      return (data ?? []).map((row) => ({
+      const data = await readAllById<{
+        id: string;
+        status: string;
+        workout_date: string;
+        source_plan_day_id: string | null;
+      }>((cursor) => {
+        let query = supabase
+          .from("bulk_training_sessions")
+          .select("id, status, workout_date, source_plan_day_id")
+          .eq("bulk_profile_id", bulkProfileId)
+          .eq("status", "completed")
+          .gte("workout_date", fromDate)
+          .lte("workout_date", toDate)
+          .order("id")
+          .limit(HISTORY_READ_PAGE_SIZE);
+        if (cursor) query = query.gt("id", cursor);
+        return query;
+      });
+      return data.map((row) => ({
         id: row.id,
         status: row.status,
         workoutDate: row.workout_date,
@@ -363,4 +419,94 @@ export async function deleteLegacyBulkWorkout(day: string) {
   );
   if (error) throw error;
   if (!data) throw new Error("Historical workout not found");
+}
+
+export async function correctCompletedBulkTrainingSet(sessionId: string, set: EditableSessionSet) {
+  const { error } = await supabase.rpc(
+    "correct_completed_bulk_training_set" as never,
+    {
+      _session: sessionId,
+      _set: set.id,
+      _bilateral_weight: set.bilateralWeight,
+      _bilateral_reps: set.bilateralReps,
+      _left_weight: set.leftWeight,
+      _left_reps: set.leftReps,
+      _right_weight: set.rightWeight,
+      _right_reps: set.rightReps,
+      _set_type: set.setType,
+      _rpe: set.rpe,
+    } as never,
+  );
+  if (error) throw error;
+}
+
+export async function correctCompletedBulkTrainingTime(
+  sessionId: string,
+  date: string,
+  start: string,
+  end: string,
+) {
+  const { error } = await supabase.rpc(
+    "correct_completed_bulk_training_time" as never,
+    {
+      _session: sessionId,
+      _workout_date: date,
+      _started_at: new Date(start).toISOString(),
+      _completed_at: new Date(end).toISOString(),
+      _timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    } as never,
+  );
+  if (error) throw error;
+}
+
+export async function repeatCompletedBulkTrainingSession(
+  sessionId: string,
+  date: string,
+): Promise<string> {
+  const { data, error } = await supabase.rpc(
+    "repeat_completed_bulk_training_session" as never,
+    {
+      _session: sessionId,
+      _workout_date: date,
+    } as never,
+  );
+  if (error) throw error;
+  return data as string;
+}
+
+/** Refresh every existing history/PR/progression/Strength consumer after corrections/deletion. */
+export const workoutHistoryInvalidationKeys = [
+  ["bulk-training-session"],
+  ["bulk-training-sessions"],
+  ["bulk-personal-records"],
+  ["bulk-progression"],
+  ["bulk-progress-summary"],
+  ["goal-settings-dashboard"],
+];
+
+export async function correctLegacyBulkWorkoutTime(
+  day: string,
+  date: string,
+  start: string,
+  end: string,
+) {
+  const { error } = await supabase.rpc(
+    "correct_legacy_bulk_workout_time" as never,
+    {
+      _day: day,
+      _workout_date: date,
+      _started_at: new Date(start).toISOString(),
+      _completed_at: new Date(end).toISOString(),
+      _timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    } as never,
+  );
+  if (error) throw error;
+}
+export async function repeatLegacyBulkWorkout(day: string, date: string): Promise<string> {
+  const { data, error } = await supabase.rpc(
+    "repeat_legacy_bulk_workout" as never,
+    { _day: day, _workout_date: date } as never,
+  );
+  if (error) throw error;
+  return data as string;
 }

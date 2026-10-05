@@ -59,8 +59,13 @@ test("Phase 5 Back after account setup uses its fallback instead of reopening on
 test("Phase 5 PR/history/library use shared history-aware links with safe Training fallback", async () => {
   for (const route of ["prs", "training_.history", "exercises", "training_.more"]) {
     const source = await read(`src/routes/_authenticated/bulk/${route}.tsx`);
-    assert.match(source, /historyBack/);
-    assert.match(source, /backTo="\/bulk\/training"/);
+    if (route === "training_.history") {
+      assert.match(source, /<HistoryBackLink/);
+      assert.match(source, /fallback="\/bulk\/training"/);
+    } else {
+      assert.match(source, /historyBack/);
+      assert.match(source, /backTo="\/bulk\/training"/);
+    }
     assert.doesNotMatch(source, /backTo="\/bulk\/progress"/);
   }
   const shell = await read("src/components/AppShell.tsx");

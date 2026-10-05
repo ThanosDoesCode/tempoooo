@@ -435,7 +435,7 @@ test("Progress Strength lists tracked lifts by estimated max with sign formattin
   const strength = await read("src/routes/_authenticated/bulk/progress_.strength.tsx");
   assert.match(strength, /liftEstimate\(record, BULK_START\)/);
   assert.match(strength, /useTrackedLifts\(data\)/);
-  assert.match(strength, /Not enough data yet/);
+  assert.match(strength, /No data yet/);
   assert.match(strength, /estimate\.changePct >= 0 \? "\+" : ""/);
   // An Edit control lets the user choose which lifts to track (default: first lift of each day).
   assert.match(strength, /editing \? "Done" : "Edit"/);

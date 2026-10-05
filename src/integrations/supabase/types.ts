@@ -2006,6 +2006,26 @@ export type Database = {
         }
         Returns: string
       }
+      correct_completed_bulk_training_set: {
+        Args: { _session: string; _set: string; _bilateral_weight: number | null; _bilateral_reps: number | null; _left_weight: number | null; _left_reps: number | null; _right_weight: number | null; _right_reps: number | null; _set_type: string; _rpe: number | null }
+        Returns: string
+      }
+      correct_completed_bulk_training_time: {
+        Args: { _session: string; _workout_date: string; _started_at: string; _completed_at: string; _timezone: string }
+        Returns: string
+      }
+      correct_legacy_bulk_workout_time: {
+        Args: { _day: string; _workout_date: string; _started_at: string; _completed_at: string; _timezone: string }
+        Returns: string
+      }
+      repeat_completed_bulk_training_session: {
+        Args: { _session: string; _workout_date: string }
+        Returns: string
+      }
+      repeat_legacy_bulk_workout: {
+        Args: { _day: string; _workout_date: string }
+        Returns: string
+      }
       create_bulk_meal_preset: {
         Args: {
           _calories: number

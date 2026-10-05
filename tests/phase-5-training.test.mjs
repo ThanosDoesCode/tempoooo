@@ -928,8 +928,9 @@ test("Phase 5 keeps original routes, goal separate from frequency, historical ed
   assert.match(training, /if \(starting\.current/);
   assert.match(training, /activeSession\.data\.id/);
   const history = await read("src/routes/_authenticated/bulk/training_.history.tsx");
-  assert.match(history, /Delete workout\?/);
-  assert.match(history, /PublicWorkoutDetail/);
+  const historyView = await read("src/components/WorkoutHistory.tsx");
+  assert.match(historyView, /Delete workout\?/);
+  assert.match(history, /WorkoutDetail/);
   const metadata = await read("supabase/migrations/20260915120000_workout_set_metadata.sql");
   assert.match(metadata, /_rpe < 6 OR _rpe > 10 OR _rpe \* 2 <> trunc\(_rpe \* 2\)/);
   assert.match(metadata, /SECURITY DEFINER SET search_path = ''/);
