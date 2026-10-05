@@ -225,6 +225,7 @@ export type Database = {
           id: string
           name: string
           protein_g: number
+          show_in_quick_add: boolean
           sort_order: number
           source_key: string | null
           updated_at: string
@@ -239,6 +240,7 @@ export type Database = {
           id?: string
           name: string
           protein_g: number
+          show_in_quick_add?: boolean
           sort_order: number
           source_key?: string | null
           updated_at?: string
@@ -253,6 +255,7 @@ export type Database = {
           id?: string
           name?: string
           protein_g?: number
+          show_in_quick_add?: boolean
           sort_order?: number
           source_key?: string | null
           updated_at?: string
@@ -2289,6 +2292,10 @@ export type Database = {
           _user: string
         }
         Returns: undefined
+      }
+      set_bulk_meal_preset_quick_add_visibility: {
+        Args: { _meal: string; _visible: boolean }
+        Returns: boolean
       }
       set_challenge_week_target: {
         Args: {

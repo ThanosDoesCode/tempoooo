@@ -6,8 +6,9 @@ import ts from "typescript";
 const require = createRequire(import.meta.url);
 
 // Run the authored presentation primitive, not a copy of its markup or prop handling.
-export function presentationComponent(file, modules = {}) {
+export function presentationComponent(file, modules = {}, globals = {}) {
   const context = {
+    ...globals,
     exports: {},
     require(name) {
       if (modules[name]) return modules[name];

@@ -10,6 +10,8 @@ const db = new PGlite();
 const root = new URL("../supabase/migrations/", import.meta.url);
 const owner = randomUUID();
 const other = randomUUID();
+const existingPresetOwner = randomUUID();
+const existingPreset = randomUUID();
 let originalWeightDateConstraint;
 
 before(async () => {
@@ -41,6 +43,25 @@ before(async () => {
   `);
   for (const file of (await readdir(root)).filter((name) => name.endsWith(".sql")).sort()) {
     try {
+      if (file === "20261005130000_meal_preset_quick_add_visibility.sql") {
+        const profile = randomUUID();
+        await db.query("INSERT INTO auth.users(id) VALUES ($1)", [existingPresetOwner]);
+        await db.query("INSERT INTO public.profiles(id) VALUES ($1)", [existingPresetOwner]);
+        await db.query(
+          "INSERT INTO public.bulk_profiles(id,owner_id,goal_status) VALUES ($1,$2,'active')",
+          [profile, existingPresetOwner],
+        );
+        await db.query(
+          "INSERT INTO public.bulk_members(bulk_profile_id,user_id,role) VALUES ($1,$2,'owner')",
+          [profile, existingPresetOwner],
+        );
+        await db.query(
+          `INSERT INTO public.bulk_meal_presets(id,bulk_profile_id,name,sort_order,
+            calories,protein_g,carbs_g,fat_g,source_key)
+           VALUES ($1,$2,'Preserved imported meal',1,2850,120,369,96,'legacy:salmon')`,
+          [existingPreset, profile],
+        );
+      }
       await db.exec(await readFile(new URL(file, root), "utf8"));
       if (file === "20260906220000_public_bulk_progress.sql") {
         originalWeightDateConstraint = (
@@ -901,6 +922,15 @@ test("nutrition logs snapshot targets, presets and ingredients with idempotent r
   );
   assert.deepEqual(snapshot.ingredient_snapshot, [{ name: "Rice", quantity: 125.5, unit: "g" }]);
 
+  await asUser(owner, () =>
+    db.query("SELECT public.set_bulk_meal_preset_quick_add_visibility($1,false)", [preset]),
+  );
+  assert.deepEqual(
+    (await db.query("SELECT * FROM public.bulk_nutrition_entries WHERE id=$1", [firstEntry]))
+      .rows[0],
+    snapshot,
+  );
+
   const presetUpdated = (
     await db.query("SELECT updated_at FROM public.bulk_meal_presets WHERE id=$1", [preset])
   ).rows[0].updated_at;
@@ -909,6 +939,11 @@ test("nutrition logs snapshot targets, presets and ingredients with idempotent r
       "SELECT public.update_bulk_meal_preset($1,$2,'Changed preset',NULL,700,50,70,30,'[]'::jsonb)",
       [preset, presetUpdated],
     ),
+  );
+  assert.equal(
+    (await db.query("SELECT show_in_quick_add FROM public.bulk_meal_presets WHERE id=$1", [preset]))
+      .rows[0].show_in_quick_add,
+    false,
   );
   assert.equal(
     Number(
@@ -923,14 +958,274 @@ test("nutrition logs snapshot targets, presets and ingredients with idempotent r
   await asUser(owner, () => db.query("SELECT public.delete_bulk_meal_preset($1)", [preset]));
   const afterPresetDelete = (
     await db.query(
-      "SELECT source_meal_preset_id,name_snapshot,calories,ingredient_snapshot FROM public.bulk_nutrition_entries WHERE id=$1",
+      "SELECT source_meal_preset_id,name_snapshot,calories,protein_g,carbs_g,fat_g,ingredient_snapshot FROM public.bulk_nutrition_entries WHERE id=$1",
       [firstEntry],
     )
   ).rows[0];
   assert.equal(afterPresetDelete.source_meal_preset_id, null);
   assert.equal(afterPresetDelete.name_snapshot, "Snapshot meal");
   assert.equal(Number(afterPresetDelete.calories), 600.25);
+  assert.deepEqual(
+    [
+      Number(afterPresetDelete.protein_g),
+      Number(afterPresetDelete.carbs_g),
+      Number(afterPresetDelete.fat_g),
+    ],
+    [40.5, 60.25, 20.75],
+  );
   assert.equal(afterPresetDelete.ingredient_snapshot[0].name, "Rice");
+});
+
+test("Quick Add migration preserves existing imported presets and makes new/duplicated presets visible", async () => {
+  const imported = (
+    await asUser(existingPresetOwner, () =>
+      db.query("SELECT * FROM public.bulk_meal_presets WHERE id=$1", [existingPreset]),
+    )
+  ).rows[0];
+  assert.equal(imported.show_in_quick_add, true);
+  assert.equal(imported.source_key, "legacy:salmon");
+  assert.equal(imported.name, "Preserved imported meal");
+  assert.equal(Number(imported.calories), 2850);
+
+  const created = (await createMeal(owner, "Visible by default")).rows[0].id;
+  assert.equal(
+    (
+      await db.query("SELECT show_in_quick_add FROM public.bulk_meal_presets WHERE id=$1", [
+        created,
+      ])
+    ).rows[0].show_in_quick_add,
+    true,
+  );
+  await asUser(existingPresetOwner, () =>
+    db.query("SELECT public.set_bulk_meal_preset_quick_add_visibility($1,false)", [existingPreset]),
+  );
+  const copy = (
+    await asUser(existingPresetOwner, () =>
+      db.query("SELECT public.duplicate_bulk_meal_preset($1) AS id", [existingPreset]),
+    )
+  ).rows[0].id;
+  const duplicated = (
+    await db.query(
+      "SELECT source_key,show_in_quick_add FROM public.bulk_meal_presets WHERE id=$1",
+      [copy],
+    )
+  ).rows[0];
+  assert.equal(duplicated.source_key, null);
+  assert.equal(duplicated.show_in_quick_add, true);
+});
+
+test("owner can show/hide presets idempotently without changing order, macros or ingredients", async () => {
+  const meal = (
+    await createMeal(owner, "Visibility preference", [{ name: "Rice", quantity: 125, unit: "g" }])
+  ).rows[0].id;
+  const before = (await db.query("SELECT * FROM public.bulk_meal_presets WHERE id=$1", [meal]))
+    .rows[0];
+  const ingredients = (
+    await db.query("SELECT * FROM public.bulk_meal_preset_ingredients WHERE meal_preset_id=$1", [
+      meal,
+    ])
+  ).rows;
+  for (const visible of [false, false, true, true, false]) {
+    assert.equal(
+      (
+        await asUser(owner, () =>
+          db.query("SELECT public.set_bulk_meal_preset_quick_add_visibility($1,$2) AS ok", [
+            meal,
+            visible,
+          ]),
+        )
+      ).rows[0].ok,
+      true,
+    );
+    const current = (
+      await asUser(owner, () =>
+        db.query("SELECT * FROM public.bulk_meal_presets WHERE id=$1", [meal]),
+      )
+    ).rows[0];
+    assert.deepEqual(current, { ...before, show_in_quick_add: visible });
+  }
+  assert.deepEqual(
+    (
+      await db.query("SELECT * FROM public.bulk_meal_preset_ingredients WHERE meal_preset_id=$1", [
+        meal,
+      ])
+    ).rows,
+    ingredients,
+  );
+  await asUser(owner, () => db.query("SELECT public.move_bulk_meal_preset($1,-1)", [meal]));
+  const moved = (
+    await db.query(
+      "SELECT sort_order,show_in_quick_add FROM public.bulk_meal_presets WHERE id=$1",
+      [meal],
+    )
+  ).rows[0];
+  assert.equal(moved.sort_order, before.sort_order - 1);
+  assert.equal(moved.show_in_quick_add, false);
+});
+
+test("visibility is owner-only through both RPC and RLS; invalid/unauthenticated calls are rejected", async () => {
+  const meal = (await createMeal(owner, "Owner preference")).rows[0].id;
+  assert.equal(
+    (
+      await asUser(other, () =>
+        db.query("SELECT public.set_bulk_meal_preset_quick_add_visibility($1,false) AS ok", [meal]),
+      )
+    ).rows[0].ok,
+    false,
+  );
+  assert.equal(
+    (
+      await asUser(other, () =>
+        db.query(
+          "UPDATE public.bulk_meal_presets SET show_in_quick_add=false WHERE id=$1 RETURNING id",
+          [meal],
+        ),
+      )
+    ).rows.length,
+    0,
+  );
+  assert.equal(
+    (await db.query("SELECT show_in_quick_add FROM public.bulk_meal_presets WHERE id=$1", [meal]))
+      .rows[0].show_in_quick_add,
+    true,
+  );
+  await assert.rejects(
+    asAnon(() =>
+      db.query("SELECT public.set_bulk_meal_preset_quick_add_visibility($1,false)", [meal]),
+    ),
+    /permission denied/i,
+  );
+  await assert.rejects(
+    asUser("", () =>
+      db.query("SELECT public.set_bulk_meal_preset_quick_add_visibility($1,false)", [meal]),
+    ),
+    /Authentication required/i,
+  );
+  for (const args of [
+    [null, false],
+    [meal, null],
+  ])
+    await assert.rejects(
+      asUser(owner, () =>
+        db.query("SELECT public.set_bulk_meal_preset_quick_add_visibility($1,$2)", args),
+      ),
+      /required/i,
+    );
+  assert.equal(
+    (
+      await asUser(owner, () =>
+        db.query("SELECT public.set_bulk_meal_preset_quick_add_visibility($1,false) AS ok", [
+          randomUUID(),
+        ]),
+      )
+    ).rows[0].ok,
+    false,
+  );
+
+  const profile = (
+    await db.query("SELECT bulk_profile_id FROM public.bulk_meal_presets WHERE id=$1", [meal])
+  ).rows[0].bulk_profile_id;
+  for (const role of ["editor", "viewer"]) {
+    const user = randomUUID();
+    await db.query("INSERT INTO auth.users(id) VALUES ($1)", [user]);
+    await db.query("INSERT INTO public.profiles(id) VALUES ($1)", [user]);
+    await db.query(
+      "INSERT INTO public.bulk_members(bulk_profile_id,user_id,role) VALUES ($1,$2,$3)",
+      [profile, user, role],
+    );
+    assert.equal(
+      (
+        await asUser(user, () =>
+          db.query("SELECT public.set_bulk_meal_preset_quick_add_visibility($1,false) AS ok", [
+            meal,
+          ]),
+        )
+      ).rows[0].ok,
+      false,
+    );
+  }
+});
+
+test("visibility requires profile ownership as well as an owner membership", async () => {
+  const user = randomUUID();
+  const member = randomUUID();
+  const profile = randomUUID();
+  const meal = randomUUID();
+  await db.query("INSERT INTO auth.users(id) VALUES ($1)", [user]);
+  await db.query("INSERT INTO auth.users(id) VALUES ($1)", [member]);
+  await db.query("INSERT INTO public.profiles(id) VALUES ($1),($2)", [user, member]);
+  await db.query(
+    "INSERT INTO public.bulk_profiles(id,owner_id,goal_status) VALUES ($1,$2,'active')",
+    [profile, user],
+  );
+  await db.query(
+    "INSERT INTO public.bulk_members(bulk_profile_id,user_id,role) VALUES ($1,$2,'owner')",
+    [profile, member],
+  );
+  await db.query(
+    "INSERT INTO public.bulk_meal_presets(id,bulk_profile_id,name,sort_order,calories,protein_g,carbs_g,fat_g) VALUES ($1,$2,'Ownership mismatch',1,200,20,10,5)",
+    [meal, profile],
+  );
+  for (const actor of [member, user])
+    assert.equal(
+      (
+        await asUser(actor, () =>
+          db.query("SELECT public.set_bulk_meal_preset_quick_add_visibility($1,false) AS ok", [
+            meal,
+          ]),
+        )
+      ).rows[0].ok,
+      false,
+    );
+  assert.equal(
+    (await db.query("SELECT show_in_quick_add FROM public.bulk_meal_presets WHERE id=$1", [meal]))
+      .rows[0].show_in_quick_add,
+    true,
+  );
+});
+
+test("visibility RPC is invoker-only with locked search path and only the new column writable", async () => {
+  const definition = (
+    await db.query(
+      "SELECT prosecdef,proconfig FROM pg_proc WHERE oid='public.set_bulk_meal_preset_quick_add_visibility(uuid,boolean)'::regprocedure",
+    )
+  ).rows[0];
+  assert.equal(definition.prosecdef, false);
+  assert.ok(definition.proconfig.includes('search_path=""'));
+  const access = (
+    await db.query(`SELECT
+    has_function_privilege('authenticated','public.set_bulk_meal_preset_quick_add_visibility(uuid,boolean)','EXECUTE') AS authenticated,
+    has_function_privilege('anon','public.set_bulk_meal_preset_quick_add_visibility(uuid,boolean)','EXECUTE') AS anon,
+    has_function_privilege('service_role','public.set_bulk_meal_preset_quick_add_visibility(uuid,boolean)','EXECUTE') AS service,
+    has_table_privilege('authenticated','public.bulk_meal_presets','UPDATE') AS table_update,
+    has_column_privilege('authenticated','public.bulk_meal_presets','show_in_quick_add','UPDATE') AS visibility_update,
+    (SELECT relrowsecurity FROM pg_class WHERE oid='public.bulk_meal_presets'::regclass) AS rls`)
+  ).rows[0];
+  assert.deepEqual(access, {
+    authenticated: true,
+    anon: false,
+    service: false,
+    table_update: false,
+    visibility_update: true,
+    rls: true,
+  });
+  for (const column of [
+    "name",
+    "bulk_profile_id",
+    "calories",
+    "sort_order",
+    "source_key",
+    "updated_at",
+  ])
+    assert.equal(
+      (
+        await db.query(
+          "SELECT has_column_privilege('authenticated','public.bulk_meal_presets',$1,'UPDATE') AS allowed",
+          [column],
+        )
+      ).rows[0].allowed,
+      false,
+    );
 });
 
 test("custom entries edit independently, aggregate decimals and preserve historical targets", async () => {

@@ -166,7 +166,13 @@ const entry = {
   updatedAt: "version",
   sortOrder: 0,
 };
-const preset = { ...entry, id: "preset", name: "My breakfast" };
+const preset = {
+  ...entry,
+  id: "preset",
+  name: "My breakfast",
+  sourceKey: null,
+  showInQuickAdd: true,
+};
 const find = (tree, name) =>
   nodes(tree, (n) => (typeof n.type === "function" ? n.type.name === name : n.type === name))[0];
 
@@ -458,6 +464,68 @@ test("Phase 4 real nutrition totals remain central, target snapshots win, no pre
   assert.equal(find(f.render(), "NutritionOverview").props.summary.calories.consumed, 3000);
   assert.match(texts(f.render()), /individual meals were not recorded/);
   assert.match(texts(f.render()), /No meal presets yet/);
+});
+
+test("Quick Add exposes Manage and filters visibility without changing preset order", () => {
+  const rows = [
+    { ...preset, id: "first", name: "First" },
+    { ...preset, id: "hidden", name: "Hidden", showInQuickAdd: false },
+    { ...preset, id: "last", name: "Last" },
+  ];
+  const f = fixture(mealSource, "BulkNutritionLog", mealProps, { presets: rows });
+  const tree = f.render();
+  const manage = nodes(tree, (n) => n.type === "Link" && texts(n).trim() === "Manage")[0];
+  assert.equal(manage.props.to, "/bulk/meals/presets");
+  assert.equal(manage.props.preload, "intent");
+  assert.match(manage.props.className, /min-h-11/);
+  assert.deepEqual(
+    nodes(tree, (n) => n.type?.name === "PresetQuickAdd").map((n) => n.props.preset.id),
+    ["first", "last"],
+  );
+  assert.equal(rows[1].id, "hidden"); // Filtering does not remove it from management data.
+});
+
+test("empty/hidden Quick Add stays compact and links to the existing preset manager", () => {
+  for (const rows of [[], [{ ...preset, showInQuickAdd: false }]]) {
+    const f = fixture(mealSource, "BulkNutritionLog", mealProps, { presets: rows });
+    const tree = f.render();
+    assert.equal(nodes(tree, (n) => n.type?.name === "PresetQuickAdd").length, 0);
+    assert.match(texts(tree), rows.length ? /No presets in Quick Add/ : /No meal presets yet/);
+    const action = nodes(
+      tree,
+      (n) => n.type === "Link" && /^(Manage presets|Create meal preset)$/.test(texts(n).trim()),
+    )[0];
+    assert.equal(action.props.to, "/bulk/meals/presets");
+    assert.match(action.props.className, /min-h-11/);
+  }
+});
+
+test("Quick Add reacts to newly created presets and show/hide query updates without a reload", () => {
+  const rows = [];
+  const f = fixture(mealSource, "BulkNutritionLog", mealProps, { presets: rows });
+  assert.equal(find(f.render(), "PresetQuickAdd"), undefined);
+  rows.push({ ...preset });
+  assert.equal(find(f.render(), "PresetQuickAdd").props.preset.id, "preset");
+  rows[0] = { ...preset, showInQuickAdd: false };
+  assert.equal(find(f.render(), "PresetQuickAdd"), undefined);
+  rows[0] = { ...preset, showInQuickAdd: true };
+  assert.equal(find(f.render(), "PresetQuickAdd").props.preset.id, "preset");
+});
+
+test("hidden Quick Add presets remain selectable through the normal Add meal flow", async () => {
+  const f = fixture(
+    mealSource,
+    "BulkNutritionLog",
+    { ...mealProps, mode: "add" },
+    {
+      presets: [{ ...preset, showInQuickAdd: false }],
+    },
+  );
+  find(f.render(), "NativeSelect").props.onChange({ target: { value: "preset" } });
+  assert.equal(find(f.render(), "NutritionEntryEditor").props.editor.draft.name, "My breakfast");
+  find(f.render(), "NutritionEntryEditor").props.onSave();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(f.calls.find(([name]) => name === "logPreset")[1], "preset");
 });
 
 test("Phase 4 routes retain Today, invitation, local calendar, native Back and unchanged workout entry", async () => {

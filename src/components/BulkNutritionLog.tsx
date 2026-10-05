@@ -71,6 +71,7 @@ export function BulkNutritionLog({
   const [saveQuick, setSaveQuick] = useState(false);
   const dayQuery = useBulkNutritionDay(bulkProfileId, selectedDate);
   const presets = useBulkMealPresets(bulkProfileId);
+  const quickAddPresets = (presets.data ?? []).filter((preset) => preset.showInQuickAdd);
   const [pending, setPending] = useState<string | null>(null);
   const [failedPreset, setFailedPreset] = useState<FailedPresetLog | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -355,7 +356,16 @@ export function BulkNutritionLog({
 
       {mode === "overview" && !isFuture ? (
         <div>
-          <h2 className="px-1 text-[13px] text-muted-foreground">Quick add</h2>
+          <div className="flex min-h-11 items-center justify-between gap-3">
+            <h2 className="px-1 text-[13px] text-muted-foreground">Quick add</h2>
+            <Link
+              to="/bulk/meals/presets"
+              preload="intent"
+              className="inline-flex min-h-11 items-center rounded-lg px-3 text-sm font-medium text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:bg-elevated"
+            >
+              Manage
+            </Link>
+          </div>
           <p className="mt-0.5 text-xs text-muted-foreground">
             Log to {format(parseISO(selectedDate), "d MMM")}. Each tap creates one meal occurrence.
           </p>
@@ -369,9 +379,9 @@ export function BulkNutritionLog({
                 onRetry={() => void presets.refetch()}
               />
             </div>
-          ) : presets.data?.length ? (
+          ) : quickAddPresets.length ? (
             <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
-              {presets.data.map((preset) => (
+              {quickAddPresets.map((preset) => (
                 <PresetQuickAdd
                   key={preset.id}
                   preset={preset}
@@ -388,14 +398,17 @@ export function BulkNutritionLog({
               ))}
             </div>
           ) : (
-            <div className="mt-3 rounded-xl bg-elevated p-3">
-              <p className="font-semibold">No meal presets yet</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Create meals you eat often so logging them later is fast.
+            <div className="mt-2 flex items-center justify-between gap-3 rounded-xl bg-elevated px-3 py-1">
+              <p className="text-sm text-muted-foreground">
+                {presets.data?.length ? "No presets in Quick Add" : "No meal presets yet"}
               </p>
-              <Button asChild className="mt-3 min-h-11 rounded-xl">
-                <Link to="/bulk/meals/presets">Create meal preset</Link>
-              </Button>
+              <Link
+                to="/bulk/meals/presets"
+                preload="intent"
+                className="inline-flex min-h-11 shrink-0 items-center rounded-lg px-2 text-sm font-medium text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:opacity-80"
+              >
+                {presets.data?.length ? "Manage presets" : "Create meal preset"}
+              </Link>
             </div>
           )}
         </div>

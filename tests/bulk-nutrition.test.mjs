@@ -138,7 +138,7 @@ test("nutrition UI keeps daily logging and route-backed preset management distin
   assert.match(query, /bulkNutritionDayQueryKey\(bulkProfileId, logDate\)/);
   assert.match(query, /log_bulk_meal_preset/);
   assert.match(query, /_local_today: localToday\(\)/);
-  assert.match(presetComponent, /Create Meal/);
+  assert.match(presetComponent, /Create meal/);
   assert.match(cache, /"bulk-nutrition-day"/);
 });
 

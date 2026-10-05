@@ -31,6 +31,8 @@ export type BulkMealPreset = {
   fat: number;
   createdAt: string;
   updatedAt: string;
+  sourceKey: string | null;
+  showInQuickAdd: boolean;
   ingredients: BulkMealIngredient[];
 };
 

@@ -1,11 +1,12 @@
 import { NativeSelect } from "@/components/ui/native-select";
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Copy, LoaderCircle, Pencil, Plus, Trash2, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import { Card, DataError, Field, PendingLabel } from "@/components/ui-kit";
 import {
   BULK_MEAL_UNITS,
@@ -23,6 +24,7 @@ import {
   deleteBulkMealPreset,
   duplicateBulkMealPreset,
   moveBulkMealPreset,
+  setBulkMealPresetQuickAddVisibility,
   updateBulkMealPreset,
   useBulkMealPresets,
 } from "@/lib/bulk-meal-presets-query";
@@ -37,6 +39,7 @@ const numberLabel = (value: number) =>
 export function BulkMealPresets({ bulkProfileId }: { bulkProfileId: string }) {
   const queryClient = useQueryClient();
   const meals = useBulkMealPresets(bulkProfileId);
+  const mutationBusy = useRef(false);
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [pending, setPending] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -67,12 +70,13 @@ export function BulkMealPresets({ bulkProfileId }: { bulkProfileId: string }) {
   };
 
   const save = async () => {
-    if (!editor || pending) return;
+    if (!editor || mutationBusy.current) return;
     const validated = validateBulkMealDraft(editor.draft);
     if (!validated.input) {
       setActionError(validated.errors[0] ?? "Check the meal details and try again.");
       return;
     }
+    mutationBusy.current = true;
     setPending("save");
     setActionError(null);
     try {
@@ -89,12 +93,14 @@ export function BulkMealPresets({ bulkProfileId }: { bulkProfileId: string }) {
           : userFacingError(error, "save this meal", { inputPreserved: true }),
       );
     } finally {
+      mutationBusy.current = false;
       setPending(null);
     }
   };
 
   const act = async (key: string, action: () => Promise<unknown>, success: string) => {
-    if (pending) return;
+    if (mutationBusy.current) return;
+    mutationBusy.current = true;
     setPending(key);
     setActionError(null);
     try {
@@ -104,6 +110,7 @@ export function BulkMealPresets({ bulkProfileId }: { bulkProfileId: string }) {
     } catch (error) {
       setActionError(userFacingError(error, "update your meals"));
     } finally {
+      mutationBusy.current = false;
       setPending(null);
     }
   };
@@ -129,12 +136,10 @@ export function BulkMealPresets({ bulkProfileId }: { bulkProfileId: string }) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">
-          Save meals you eat regularly for faster logging.
-        </p>
+        <p className="text-sm text-muted-foreground">Save meals for faster logging.</p>
         {!editor ? (
           <Button className="min-h-11 shrink-0 rounded-xl" onClick={beginCreate}>
-            <Plus aria-hidden="true" /> Create Meal
+            <Plus aria-hidden="true" /> Create meal
           </Button>
         ) : null}
       </div>
@@ -197,6 +202,13 @@ export function BulkMealPresets({ bulkProfileId }: { bulkProfileId: string }) {
                   "Meal order updated",
                 )
               }
+              onVisibility={(visible) =>
+                void act(
+                  `visibility:${meal.id}`,
+                  () => setBulkMealPresetQuickAddVisibility(meal.id, visible),
+                  visible ? "Shown in Quick Add" : "Hidden from Quick Add",
+                )
+              }
             />
           ))
         : null}
@@ -213,6 +225,7 @@ function MealCard({
   onDuplicate,
   onDelete,
   onMove,
+  onVisibility,
 }: {
   meal: BulkMealPreset;
   index: number;
@@ -222,6 +235,7 @@ function MealCard({
   onDuplicate: () => void;
   onDelete: () => void;
   onMove: (direction: -1 | 1) => void;
+  onVisibility: (visible: boolean) => void;
 }) {
   const busy = pending?.endsWith(meal.id) ?? false;
   const preview = meal.ingredients
@@ -233,6 +247,9 @@ function MealCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="truncate font-semibold">{meal.name}</h2>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">
+            {meal.sourceKey ? "Imported preset" : "Custom preset"}
+          </p>
           {meal.description ? (
             <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{meal.description}</p>
           ) : null}
@@ -269,6 +286,19 @@ function MealCard({
           </IconButton>
         </div>
       </div>
+      <label
+        htmlFor={`quick-add-${meal.id}`}
+        className="mt-2 flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-lg px-2 text-sm"
+      >
+        <span>Show in Quick Add</span>
+        <Switch
+          id={`quick-add-${meal.id}`}
+          aria-label={`Show ${meal.name} in Quick Add`}
+          checked={meal.showInQuickAdd}
+          disabled={!!pending}
+          onCheckedChange={onVisibility}
+        />
+      </label>
       <div className="mt-3 grid grid-cols-3 gap-1 border-t border-border pt-2">
         <ActionButton label="Edit" disabled={!!pending} onClick={onEdit}>
           <Pencil />

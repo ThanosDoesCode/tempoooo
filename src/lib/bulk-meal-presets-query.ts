@@ -15,6 +15,8 @@ type MealRow = {
   fat_g: number;
   created_at: string;
   updated_at: string;
+  source_key: string | null;
+  show_in_quick_add: boolean;
 };
 
 type IngredientRow = {
@@ -58,6 +60,8 @@ export const bulkMealPresetsQueryOptions = (bulkProfileId: string) =>
         fat: Number(meal.fat_g),
         createdAt: meal.created_at,
         updatedAt: meal.updated_at,
+        sourceKey: meal.source_key,
+        showInQuickAdd: meal.show_in_quick_add,
         ingredients: ingredientRows
           .filter((ingredient) => ingredient.meal_preset_id === meal.id)
           .map((ingredient) => ({
@@ -139,4 +143,16 @@ export async function moveBulkMealPreset(mealId: string, direction: -1 | 1): Pro
   });
   if (error) throw error;
   if (!data) throw new Error("Meal cannot move in that direction");
+}
+
+export async function setBulkMealPresetQuickAddVisibility(
+  mealId: string,
+  visible: boolean,
+): Promise<void> {
+  const { data, error } = await supabase.rpc("set_bulk_meal_preset_quick_add_visibility", {
+    _meal: mealId,
+    _visible: visible,
+  });
+  if (error) throw error;
+  if (!data) throw new Error("Meal unavailable or not owned by your account");
 }

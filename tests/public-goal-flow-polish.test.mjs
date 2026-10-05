@@ -132,7 +132,9 @@ test("public Meals never falls back to legacy presets and future dates are read-
       read("src/routes/_authenticated/bulk/route.tsx"),
     ]);
   assert.match(today, /No meal presets yet/);
-  assert.match(today, /Create meals you eat often so logging them later is fast\./);
+  assert.match(today, /No presets in Quick Add/);
+  assert.match(today, /Manage presets/);
+  assert.match(today, /Create meal preset/);
   assert.match(today, /to="\/bulk\/meals\/presets"/);
   for (const legacyName of ["Beef day", "Lentil day", "Kebab day", "Salmon day"])
     assert.doesNotMatch(today, new RegExp(legacyName));
