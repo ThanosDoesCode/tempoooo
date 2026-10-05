@@ -118,7 +118,7 @@ function TodayPage() {
       key={label}
       to={to}
       preload="intent"
-      className="flex min-h-[62px] items-center gap-[14px] border-t border-border first:border-t-0"
+      className="flex min-h-[62px] items-center justify-between gap-[14px] border-t border-border first:border-t-0"
     >
       <span
         aria-label={done ? "Complete" : "Not complete"}
@@ -134,7 +134,7 @@ function TodayPage() {
         <span className="block text-[15px] font-medium">{label}</span>
         <span className="num block text-[13px] text-muted-foreground">{subtitle}</span>
       </span>
-      <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+      <ChevronRight className="control-chevron text-muted-foreground" aria-hidden="true" />
     </Link>
   );
   return (
@@ -230,7 +230,10 @@ function TodayPage() {
                       {activeSession.data ? "Resume" : plan.data ? "Start" : "Choose plan"}
                     </Link>
                   ) : workoutDone ? (
-                    <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                    <ChevronRight
+                      className="control-chevron text-muted-foreground"
+                      aria-hidden="true"
+                    />
                   ) : null}
                   {!workoutDone && rest ? (
                     <button

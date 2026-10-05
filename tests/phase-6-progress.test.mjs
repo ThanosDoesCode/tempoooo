@@ -6,6 +6,7 @@ import vm from "node:vm";
 import ts from "typescript";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { presentationComponent } from "./presentation-component-fixture.mjs";
 import * as calc from "../src/lib/calc.ts";
 import * as types from "../src/lib/types.ts";
 
@@ -684,6 +685,8 @@ async function progressFixture(options = {}) {
         if (name === "@/lib/progress-view") return cache["src/lib/progress-view.ts"];
         if (name === "@/components/ProgressChrome")
           return cache["src/components/ProgressChrome.tsx"];
+        if (name === "@/components/ui/native-select")
+          return presentationComponent("src/components/ui/native-select.tsx");
         if (name === "date-fns" || name === "lucide-react") return require(name);
         throw new Error(`Unexpected import ${name} in ${file}`);
       },
@@ -861,7 +864,7 @@ test("Progress controls retain equal-width centered segments and a single explic
   assert.equal((nav.match(/aria-current="page"/g) ?? []).length, 1);
   const picker = fixture.picker(4);
   assert.match(picker, /<select[^>]*appearance-none[^>]*bg-none/);
-  assert.match(picker, /h-9/);
+  assert.match(picker, /min-h-11/);
   assert.equal((picker.match(/<svg/g) ?? []).length, 1);
   assert.match(picker, /lucide-chevron-down/);
   assert.doesNotMatch(picker, /rotate-90/);

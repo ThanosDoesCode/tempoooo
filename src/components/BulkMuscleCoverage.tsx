@@ -73,11 +73,12 @@ export function BulkMuscleCoverage({
             type="button"
             aria-expanded={expanded}
             onClick={() => setExpanded((value) => !value)}
-            className="mt-3 flex min-h-11 w-full items-center justify-between rounded-xl border border-border px-3 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-ring"
+            className="mt-3 flex min-h-11 w-full items-center justify-between gap-3 rounded-xl border border-border px-4 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-ring"
           >
             {expanded ? "Hide detailed coverage" : "Show detailed coverage"}
             <ChevronDown
-              className={`size-4 transition-transform motion-reduce:transition-none ${expanded ? "rotate-180" : ""}`}
+              className={`control-chevron transition-transform duration-150 motion-reduce:transition-none ${expanded ? "rotate-180" : ""}`}
+              aria-hidden="true"
             />
           </button>
           {expanded ? (

@@ -393,7 +393,7 @@ test("Phase 4 saved meal uses original preset logging path; failed save preserve
     { ...mealProps, mode: "add" },
     { presets: [preset], fail: true },
   );
-  find(f.render(), "select").props.onChange({ target: { value: "preset" } });
+  find(f.render(), "NativeSelect").props.onChange({ target: { value: "preset" } });
   find(f.render(), "NutritionEntryEditor").props.onSave();
   await new Promise((r) => setImmediate(r));
   assert.equal(find(f.render(), "NutritionEntryEditor").props.editor.draft.name, "My breakfast");

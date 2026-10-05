@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { BookOpen, ChevronRight } from "lucide-react";
+import { ChevronDown, BookOpen, ChevronRight } from "lucide-react";
 import { useState } from "react";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { BulkMuscleCoverage } from "@/components/BulkMuscleCoverage";
@@ -87,8 +87,12 @@ function TrainingMorePage() {
                 Edit training plan
               </Button>
               <details className="mt-3 border-t border-border pt-2">
-                <summary className="flex min-h-11 cursor-pointer items-center justify-between font-medium">
-                  Workout days <ChevronRight className="h-5 w-5" aria-hidden="true" />
+                <summary className="disclosure-summary min-h-11 font-medium">
+                  Workout days
+                  <ChevronDown
+                    className="disclosure-chevron text-muted-foreground"
+                    aria-hidden="true"
+                  />
                 </summary>
                 {activePlan.data.days.map((day) => (
                   <div key={day.id} className="py-3 first:pt-0 last:pb-0">
@@ -114,11 +118,11 @@ function TrainingMorePage() {
               >
                 <summary
                   aria-expanded={coverageOpen}
-                  className="flex min-h-11 cursor-pointer items-center justify-between font-medium [&::-webkit-details-marker]:hidden"
+                  className="disclosure-summary min-h-11 font-medium"
                 >
                   Muscle coverage
-                  <ChevronRight
-                    className={`h-5 w-5 transition-transform ${coverageOpen ? "rotate-90" : ""}`}
+                  <ChevronDown
+                    className="disclosure-chevron text-muted-foreground"
                     aria-hidden="true"
                   />
                 </summary>
@@ -182,7 +186,7 @@ function TrainingMorePage() {
               Browse exercises and create your own.
             </span>
           </span>
-          <ChevronRight className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+          <ChevronRight className="control-chevron text-muted-foreground" aria-hidden="true" />
         </Link>
       ) : null}
     </AppShell>

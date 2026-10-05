@@ -86,7 +86,7 @@ function BulkHistoryPage() {
           aria-label="Previous day"
           className="grid min-h-11 place-items-center rounded-xl border border-border bg-card active:bg-elevated"
         >
-          <ChevronLeft className="h-5 w-5" />
+          <ChevronLeft aria-hidden="true" className="control-chevron" />
         </button>
         <input
           type="date"
@@ -103,7 +103,7 @@ function BulkHistoryPage() {
           aria-label="Next day"
           className="grid min-h-11 place-items-center rounded-xl border border-border bg-card active:bg-elevated disabled:opacity-35"
         >
-          <ChevronRight className="h-5 w-5" />
+          <ChevronRight aria-hidden="true" className="control-chevron" />
         </button>
       </div>
 

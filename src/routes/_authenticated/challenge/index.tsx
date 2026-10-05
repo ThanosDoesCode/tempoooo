@@ -483,7 +483,7 @@ function ActivityRow({ activity, today }: { activity: Activity; today: string })
       to="/challenge/activity/$activityId"
       params={{ activityId: activity.id }}
       preload="intent"
-      className="flex min-h-[52px] items-center gap-3 border-t border-border py-2.5 first:border-t-0 active:opacity-80"
+      className="flex min-h-[52px] items-center justify-between gap-3 border-t border-border py-2.5 first:border-t-0 active:opacity-80"
     >
       <span
         className={`grid h-9 w-9 flex-none place-items-center rounded-[11px] ${
@@ -514,7 +514,7 @@ function ActivityRow({ activity, today }: { activity: Activity; today: string })
       >
         {metrics.qualified ? `+${eq.toFixed(1)}` : "0"}
       </span>
-      <ChevronRight className="h-4 w-4 flex-none text-muted-foreground" aria-hidden="true" />
+      <ChevronRight className="control-chevron text-muted-foreground" aria-hidden="true" />
     </Link>
   );
 }
@@ -534,7 +534,7 @@ function DestinationRow({
     <Link
       to={to}
       preload="intent"
-      className="flex min-h-[52px] items-center gap-3 border-t border-border first:border-t-0 active:opacity-80"
+      className="flex min-h-[52px] items-center justify-between gap-3 border-t border-border first:border-t-0 active:opacity-80"
     >
       <span className="flex-1 text-[15px] font-medium">{label}</span>
       <span
@@ -542,7 +542,7 @@ function DestinationRow({
       >
         {hint}
       </span>
-      <ChevronRight className="h-4 w-4 flex-none text-muted-foreground" aria-hidden="true" />
+      <ChevronRight className="control-chevron text-muted-foreground" aria-hidden="true" />
     </Link>
   );
 }

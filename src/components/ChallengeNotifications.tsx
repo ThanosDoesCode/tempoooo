@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Bell, ChevronRight, TriangleAlert } from "lucide-react";
+import { Bell, ChevronDown, TriangleAlert } from "lucide-react";
 import { PendingLabel } from "@/components/ui-kit";
 import {
   disableChallengePush,
@@ -155,14 +155,14 @@ export function ChallengeNotifications({ userId }: { userId: string }) {
   return (
     <div className="card-surface overflow-hidden">
       <details className="group">
-        <summary className="flex cursor-pointer list-none items-center gap-3 px-3 py-2.5 [&::-webkit-details-marker]:hidden">
-          <span className="grid h-8 w-8 place-items-center rounded-lg bg-elevated text-muted-foreground">
+        <summary className="disclosure-summary px-4 py-2.5">
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-elevated text-muted-foreground">
             <Bell className="h-4 w-4" aria-hidden="true" />
           </span>
-          <span className="text-sm font-medium">Notifications</span>
+          <span className="min-w-0 text-sm font-medium">Notifications</span>
           <span
             role="status"
-            className={`ml-auto text-xs ${
+            className={`ml-auto min-w-0 text-right text-xs ${
               feedback?.tone === "error"
                 ? "text-danger"
                 : on
@@ -194,10 +194,8 @@ export function ChallengeNotifications({ userId }: { userId: string }) {
                                 ? "On"
                                 : "Off"}
           </span>
-          <ChevronRight
-            className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-90"
-            aria-hidden="true"
-          />
+
+          <ChevronDown className="disclosure-chevron text-muted-foreground" aria-hidden="true" />
         </summary>
         <div className="border-t border-border px-3 pb-3 pt-2.5">
           <p className="text-[11px] leading-relaxed text-muted-foreground">

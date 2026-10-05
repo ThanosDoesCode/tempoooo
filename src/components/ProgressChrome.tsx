@@ -1,5 +1,6 @@
+import { NativeSelect } from "@/components/ui/native-select";
 import { Link } from "@tanstack/react-router";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { type ReactNode } from "react";
 
 import { PERIOD_OPTIONS, useProgressSections, type ProgressSection } from "@/lib/progress-view";
@@ -58,23 +59,19 @@ export function PeriodPicker({
   onChange: (weeks: number) => void;
 }) {
   return (
-    <label className="relative inline-flex shrink-0">
+    <label className="relative inline-flex min-w-0">
       <span className="sr-only">Period</span>
-      <select
+      <NativeSelect
         value={weeks}
         onChange={(event) => onChange(Number(event.target.value))}
-        className="h-9 appearance-none rounded-[10px] bg-elevated bg-none pl-3 pr-8 text-[13px] font-medium text-foreground outline-none focus:ring-2 focus:ring-ring"
+        className="h-11 rounded-[10px] bg-elevated text-[13px] font-medium text-foreground outline-none focus:ring-2 focus:ring-ring"
       >
         {PERIOD_OPTIONS.map((option) => (
           <option key={option} value={option}>
             Last {option} weeks
           </option>
         ))}
-      </select>
-      <ChevronDown
-        className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
-        aria-hidden="true"
-      />
+      </NativeSelect>
     </label>
   );
 }
@@ -85,11 +82,11 @@ export function ProgressRow({ to, label, hint }: { to: string; label: string; hi
     <Link
       to={to}
       preload="intent"
-      className="flex min-h-[52px] items-center gap-3 border-t border-border first:border-t-0 active:opacity-80"
+      className="flex min-h-[52px] items-center justify-between gap-3 border-t border-border first:border-t-0 active:opacity-80"
     >
       <span className="flex-1 text-[15px] font-medium">{label}</span>
       {hint != null ? <span className="text-[13px] text-muted-foreground">{hint}</span> : null}
-      <ChevronRight className="h-4 w-4 flex-none text-muted-foreground" aria-hidden="true" />
+      <ChevronRight className="control-chevron text-muted-foreground" aria-hidden="true" />
     </Link>
   );
 }

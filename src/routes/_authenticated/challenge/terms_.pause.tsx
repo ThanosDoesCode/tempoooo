@@ -1,3 +1,4 @@
+import { NativeSelect } from "@/components/ui/native-select";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -164,12 +165,13 @@ function PauseEditor({
           </div>
 
           <p className="px-1 text-[13px] text-muted-foreground">Where are you going?</p>
-          <select
+          <NativeSelect
             aria-label="Country"
             value={country}
             disabled={busy}
             onChange={(e) => setCountry(e.target.value)}
-            className="h-[54px] w-full rounded-[14px] border border-input bg-card px-4 text-[15px] font-semibold outline-none"
+            containerClassName="w-full"
+            className="h-[54px] rounded-[14px] border border-input bg-card px-4 text-[15px] font-semibold outline-none"
           >
             <option value="">Select a country…</option>
             {COUNTRIES.filter((c) => !challenge.travel_pause_home_countries.includes(c.code)).map(
@@ -179,7 +181,7 @@ function PauseEditor({
                 </option>
               ),
             )}
-          </select>
+          </NativeSelect>
 
           <div className="rounded-[16px] bg-card px-4 py-3.5 text-sm leading-relaxed">
             Week {week} ({format(parseISO(bounds.start), "d MMM")}–

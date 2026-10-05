@@ -1,7 +1,8 @@
+import { NativeSelect } from "@/components/ui/native-select";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { addDays, format, parseISO } from "date-fns";
-import { ChevronLeft, ChevronRight, Pencil, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Pencil, Plus, Trash2 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -270,7 +271,7 @@ export function BulkNutritionLog({
       {mode === "add" && presets.data?.length ? (
         <label className="block text-[13px] text-muted-foreground">
           Use a saved meal
-          <select
+          <NativeSelect
             disabled={!!pending}
             defaultValue=""
             onChange={(event) => {
@@ -291,7 +292,8 @@ export function BulkNutritionLog({
                 },
               });
             }}
-            className="mt-1.5 h-[52px] w-full rounded-[14px] border border-input bg-card px-3 text-base text-foreground"
+            containerClassName="mt-1.5 w-full"
+            className="h-[52px] rounded-[14px] border border-input bg-card px-3 text-base text-foreground"
           >
             <option value="">Choose a saved meal</option>
             {presets.data.map((p) => (
@@ -299,7 +301,7 @@ export function BulkNutritionLog({
                 {p.name}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </label>
       ) : null}
 
@@ -460,7 +462,7 @@ function DateNavigation({
         className="grid min-h-11 min-w-11 place-items-center rounded-xl active:bg-elevated"
         onClick={() => move(-1)}
       >
-        <ChevronLeft />
+        <ChevronLeft aria-hidden="true" className="control-chevron" />
       </button>
       <label className="min-w-0 text-center text-xs text-muted-foreground">
         <span className="sr-only">Nutrition date</span>
@@ -477,7 +479,7 @@ function DateNavigation({
         className="grid min-h-11 min-w-11 place-items-center rounded-xl active:bg-elevated"
         onClick={() => move(1)}
       >
-        <ChevronRight />
+        <ChevronRight aria-hidden="true" className="control-chevron" />
       </button>
       {selectedDate !== today ? (
         <Button variant="ghost" className="min-h-11 px-2" onClick={() => onChange(today)}>
@@ -586,8 +588,12 @@ function NutritionEntryCard({
           </p>
           {ingredients || entry.note ? (
             <details className="mt-1 text-xs text-muted-foreground">
-              <summary className="inline-flex min-h-11 cursor-pointer items-center">
+              <summary className="disclosure-summary min-h-11">
                 Meal details
+                <ChevronDown
+                  className="disclosure-chevron text-muted-foreground"
+                  aria-hidden="true"
+                />
               </summary>
               {ingredients ? <p>{ingredients}</p> : null}
               {entry.note ? <p>{entry.note}</p> : null}
@@ -680,8 +686,9 @@ function NutritionEntryEditor({
       </div>
       {adding ? (
         <details>
-          <summary className="inline-flex min-h-11 cursor-pointer items-center text-sm text-muted-foreground">
+          <summary className="disclosure-summary min-h-11 text-sm text-muted-foreground">
             Note (optional)
+            <ChevronDown className="disclosure-chevron text-muted-foreground" aria-hidden="true" />
           </summary>
           <Field label="Note" hint="Optional">
             <Textarea

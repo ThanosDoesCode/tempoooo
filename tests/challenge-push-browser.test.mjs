@@ -590,7 +590,7 @@ async function notificationCard(fixture, interactive = false) {
       if (name === "@/lib/challenge-push") return fixture.api;
       if (name === "@/components/ui-kit")
         return { PendingLabel: ({ children }) => jsxRuntime.jsx("span", { children }) };
-      return { Bell: () => null, ChevronRight: () => null, TriangleAlert: () => null };
+      return { Bell: () => null, ChevronDown: () => null, TriangleAlert: () => null };
     },
   };
   vm.runInNewContext(compiledCard, context);

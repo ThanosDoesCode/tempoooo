@@ -1,7 +1,7 @@
 import { format, parseISO } from "date-fns";
 import { Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { Trash2 } from "lucide-react";
+import { ChevronDown, Trash2 } from "lucide-react";
 import {
   CartesianGrid,
   Line,
@@ -661,8 +661,12 @@ export function TrainingSession({
             />
           </label>
           <details>
-            <summary className="min-h-11 cursor-pointer py-3 text-xs text-muted-foreground">
+            <summary className="disclosure-summary min-h-11 py-3 text-xs text-muted-foreground">
               Correct workout duration
+              <ChevronDown
+                className="disclosure-chevron text-muted-foreground"
+                aria-hidden="true"
+              />
             </summary>
             <SmallInput
               label="Duration minutes (optional)"
@@ -751,8 +755,9 @@ function SetupNote({
   };
   return (
     <details className="mt-1">
-      <summary className="min-h-11 cursor-pointer py-3 text-xs font-medium text-primary">
+      <summary className="disclosure-summary min-h-11 py-3 text-xs font-medium text-primary">
         Setup note
+        <ChevronDown className="disclosure-chevron text-muted-foreground" aria-hidden="true" />
       </summary>
       <label className="block text-xs text-muted-foreground">
         Saved for future workouts

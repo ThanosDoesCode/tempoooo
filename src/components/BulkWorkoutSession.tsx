@@ -7,7 +7,15 @@ import {
 } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Check, ChevronLeft, ChevronRight, Plus, Trash2 } from "lucide-react";
+import {
+  ChevronDown,
+  ArrowLeft,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "./ui/button";
 import {
@@ -598,8 +606,12 @@ export function BulkWorkoutSessionView({
               });
               return (
                 <details className="mt-2 text-sm text-muted-foreground">
-                  <summary className="flex min-h-11 cursor-pointer items-center text-primary">
+                  <summary className="disclosure-summary min-h-11 text-primary">
                     Next-session guidance
+                    <ChevronDown
+                      className="disclosure-chevron text-muted-foreground"
+                      aria-hidden="true"
+                    />
                   </summary>
                   <p>{guidance.targetText}</p>
                   <p className="mt-1 text-xs">{guidance.reasonText}</p>
@@ -717,7 +729,7 @@ export function BulkWorkoutSessionView({
           onClick={() => setActiveExerciseIndex(activeIndex - 1)}
           className="flex min-h-12 items-center justify-center gap-1 rounded-2xl border border-border bg-card text-sm font-medium text-foreground disabled:opacity-30"
         >
-          <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+          <ChevronLeft className="control-chevron" aria-hidden="true" />
           Previous
         </button>
         <button
@@ -727,7 +739,7 @@ export function BulkWorkoutSessionView({
           className="flex min-h-12 items-center justify-center gap-1 rounded-2xl border border-border bg-card text-sm font-medium text-primary disabled:opacity-30"
         >
           Next exercise
-          <ChevronRight className="h-4 w-4" aria-hidden="true" />
+          <ChevronRight className="control-chevron" aria-hidden="true" />
         </button>
       </div>
       <div className="rounded-2xl bg-card p-4">

@@ -512,7 +512,9 @@ test("Phase 5 overview selects actual next incomplete day, preserves day order, 
   assert.match(text(f.render()), /1\/5/);
   find(f.render(), "Start workout").props.onClick();
   assert.deepEqual(starts, ["d2"]);
-  nodes(f.render(), (n) => n.type === "select")[0].props.onChange({ target: { value: "d3" } });
+  nodes(f.render(), (n) => n.type === "NativeSelect")[0].props.onChange({
+    target: { value: "d3" },
+  });
   assert.match(text(f.render()), /Stored exercise 3/);
   f.update({
     plan: { ...plan, days: [] },

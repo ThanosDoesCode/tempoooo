@@ -1,3 +1,4 @@
+import { NativeSelect } from "@/components/ui/native-select";
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Copy, LoaderCircle, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -453,8 +454,9 @@ function MealEditor({
               <div className="mt-2 flex items-end gap-2">
                 <label className="min-w-0 flex-1 text-xs font-medium text-muted-foreground">
                   Unit
-                  <select
-                    className="mt-1 min-h-11 w-full rounded-md border border-input bg-background px-3 text-base text-foreground"
+                  <NativeSelect
+                    containerClassName="mt-1 w-full"
+                    className="min-h-11 rounded-md border border-input bg-background px-3 text-base text-foreground"
                     value={ingredient.unit}
                     onChange={(event) =>
                       updateIngredient(index, { unit: event.target.value as BulkMealUnit })
@@ -465,7 +467,7 @@ function MealEditor({
                         {unit}
                       </option>
                     ))}
-                  </select>
+                  </NativeSelect>
                 </label>
                 <IconButton
                   label={`Move ingredient ${index + 1} up`}

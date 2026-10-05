@@ -598,11 +598,11 @@ function AddActivity() {
           disabled={busy}
           aria-expanded={moreOpen}
           onClick={() => setMoreOpen((open) => !open)}
-          className="flex min-h-11 w-full items-center justify-between rounded-lg px-1 py-2 text-[13px] font-medium text-muted-foreground disabled:opacity-60"
+          className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg px-4 py-2 text-[13px] font-medium text-muted-foreground disabled:opacity-60"
         >
           More details
           <ChevronDown
-            className={`h-4 w-4 transition-transform ${moreOpen ? "rotate-180" : ""}`}
+            className={`control-chevron transition-transform duration-150 motion-reduce:transition-none ${moreOpen ? "rotate-180" : ""}`}
             aria-hidden="true"
           />
         </button>

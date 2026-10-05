@@ -1,6 +1,7 @@
+import { NativeSelect } from "@/components/ui/native-select";
 import { useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronDown, ChevronUp, ChevronRight } from "lucide-react";
+import { Check, ChevronDown, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import type { Targets } from "@/lib/types";
 import { TRAINING_SETUP_OPTIONS } from "@/lib/bulk-onboarding";
@@ -85,7 +86,7 @@ function PlanCard({
       <button
         type="button"
         onClick={onToggle}
-        className="flex min-h-11 w-full items-start justify-between gap-3 text-left"
+        className="flex min-h-11 w-full items-center justify-between gap-3 text-left"
         aria-expanded={expanded}
       >
         <span className="min-w-0">
@@ -101,7 +102,10 @@ function PlanCard({
             {plan.experienceLevel} · {plan.trainingDaysPerWeek} days/week
           </span>
         </span>
-        {expanded ? <ChevronUp aria-hidden="true" /> : <ChevronDown aria-hidden="true" />}
+        <ChevronDown
+          className={`control-chevron text-muted-foreground transition-transform duration-150 motion-reduce:transition-none ${expanded ? "rotate-180" : ""}`}
+          aria-hidden="true"
+        />
       </button>
       {expanded ? (
         <p className="text-sm leading-relaxed text-muted-foreground">{plan.description}</p>
@@ -321,14 +325,15 @@ export function TrainingPlanSetup({
     ) : null;
   const modeSelector = (
     <details className="rounded-[20px] border border-border px-4">
-      <summary className="flex min-h-11 cursor-pointer items-center justify-between gap-2 py-2 text-sm font-medium text-foreground">
+      <summary className="disclosure-summary min-h-11 py-2 text-sm font-medium text-foreground">
         <span>
           Setup options
           <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
             Tempo programs or your own
           </span>
         </span>
-        <ChevronDown className="h-5 w-5" aria-hidden="true" />
+
+        <ChevronDown className="disclosure-chevron text-muted-foreground" aria-hidden="true" />
       </summary>
       <ModeSelector
         mode={mode}
@@ -458,7 +463,7 @@ export function TrainingPlanSetup({
         disabled={pendingId !== null || selectionDisabled}
         onClick={() => setMode("custom")}
       >
-        Build my own plan <ChevronRight className="h-5 w-5" aria-hidden="true" />
+        Build my own plan <ChevronRight className="control-chevron" aria-hidden="true" />
       </Button>
       {modeSelector}
     </div>
@@ -516,18 +521,19 @@ export function TrainingPlanOverview({
           {plan.days.length > 1 ? (
             <label className="flex min-h-11 items-center justify-between gap-3 text-sm text-muted-foreground">
               Workout day
-              <select
+              <NativeSelect
                 aria-label="Workout day"
                 value={day.id}
                 onChange={(event) => setSelectedDayId(event.target.value)}
-                className="min-h-11 min-w-0 max-w-[70%] rounded-[14px] border border-input bg-card px-3 text-base text-foreground"
+                containerClassName="min-w-0 max-w-[70%]"
+                className="min-h-11 rounded-[14px] border border-input bg-card px-3 text-base text-foreground"
               >
                 {plan.days.map((item) => (
                   <option key={item.id} value={item.id}>
                     {item.name}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </label>
           ) : null}
           {!workoutActive ? (

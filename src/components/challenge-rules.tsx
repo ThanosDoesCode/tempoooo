@@ -1,3 +1,4 @@
+import { ChevronDown } from "lucide-react";
 import { Card, Note, SectionTitle } from "@/components/ui-kit";
 import { challengeTerms, eur, penaltyBands, type ChallengeTerms } from "@/lib/challenge";
 import { countryListLabel } from "@/lib/countries";
@@ -31,10 +32,9 @@ export function ChallengePrimer({ terms }: { terms?: Partial<ChallengeTerms> | n
         </PrimerStep>
       </ol>
       <details className="group mt-3 border-t border-border pt-1">
-        <summary className="flex min-h-11 cursor-pointer list-none items-center text-xs font-semibold text-primary [&::-webkit-details-marker]:hidden">
+        <summary className="disclosure-summary min-h-11 text-xs font-semibold text-primary">
           View all challenge rules
-          <span className="ml-auto text-muted-foreground group-open:hidden">+</span>
-          <span className="ml-auto hidden text-muted-foreground group-open:inline">−</span>
+          <ChevronDown className="disclosure-chevron text-muted-foreground" aria-hidden="true" />
         </summary>
         <div className="space-y-4 pb-1 pt-2">
           <RulesContent terms={configured} />

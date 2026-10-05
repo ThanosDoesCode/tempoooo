@@ -1,3 +1,4 @@
+import { NativeSelect } from "@/components/ui/native-select";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { addDays, format, parseISO, startOfWeek } from "date-fns";
@@ -678,7 +679,7 @@ function StepThree({
                 </button>
               ))}
               {adding ? (
-                <select
+                <NativeSelect
                   autoFocus
                   value={countryToAdd}
                   onChange={(e) => {
@@ -689,6 +690,7 @@ function StepThree({
                     setCountryToAdd("");
                     setAdding(false);
                   }}
+                  containerClassName="inline-block max-w-full align-middle"
                   className="h-9 rounded-full border border-dashed border-input bg-transparent px-3 text-sm text-primary outline-none"
                 >
                   <option value="">Select…</option>
@@ -697,7 +699,7 @@ function StepThree({
                       {c.name}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
               ) : (
                 <button
                   type="button"

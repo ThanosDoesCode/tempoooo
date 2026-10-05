@@ -72,7 +72,7 @@ export function TodayChallenge({ hideDiscovery = false }: { hideDiscovery?: bool
           <span className="block text-[15px] font-medium">Challenge</span>
           <span className="block text-[13px] text-muted-foreground">Start one with a friend</span>
         </span>
-        <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <ChevronRight className="control-chevron text-muted-foreground" aria-hidden="true" />
       </Link>
     );
   if (members.isLoading || (isCreator && outgoing.isLoading))
@@ -119,9 +119,10 @@ export function TodayChallenge({ hideDiscovery = false }: { hideDiscovery?: bool
           <Link
             to="/challenge"
             preload="intent"
-            className="flex min-h-11 items-center font-medium text-primary"
+            className="flex min-h-11 items-center justify-between gap-3 font-medium text-primary"
           >
-            Invite your opponent <ChevronRight className="ml-1 h-4 w-4" aria-hidden="true" />
+            Invite your opponent{" "}
+            <ChevronRight className="control-chevron ml-1" aria-hidden="true" />
           </Link>
         )}
       </section>

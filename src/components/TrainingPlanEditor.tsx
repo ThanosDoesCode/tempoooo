@@ -1,3 +1,4 @@
+import { NativeSelect } from "@/components/ui/native-select";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowDown, ArrowLeft, ArrowUp, ChevronRight, Plus, Replace, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -248,10 +249,10 @@ export function TrainingPlanEditor({
               </div>
               <Button
                 variant="outline"
-                className="min-h-11 w-full"
+                className="min-h-11 w-full justify-between gap-3 px-4"
                 onClick={() => setSelectedDayId(day.id)}
               >
-                Edit Day <ChevronRight aria-hidden="true" />
+                Edit Day <ChevronRight className="control-chevron" aria-hidden="true" />
               </Button>
             </Card>
           ))}
@@ -375,7 +376,7 @@ export function TrainingPlanEditor({
                   {exercise.supportsUnilateral ? (
                     <label className="mt-3 block text-xs font-medium text-muted-foreground">
                       Execution
-                      <select
+                      <NativeSelect
                         value={exercise.intendedUnilateralMode}
                         onChange={(event) =>
                           updateExercise(dayIndex, exerciseIndex, {
@@ -384,11 +385,12 @@ export function TrainingPlanEditor({
                           })
                         }
                         aria-label={`Execution mode for ${exercise.name}`}
-                        className="mt-1 min-h-11 w-full rounded-xl border border-input bg-elevated px-3 text-sm text-foreground"
+                        containerClassName="mt-1 w-full"
+                        className="min-h-11 rounded-xl border border-input bg-elevated px-3 text-sm text-foreground"
                       >
                         <option value="bilateral">Bilateral / standard</option>
                         <option value="unilateral">Unilateral / single side</option>
-                      </select>
+                      </NativeSelect>
                     </label>
                   ) : null}
                   <label className="mt-3 block text-xs font-medium text-muted-foreground">

@@ -185,6 +185,39 @@ html[data-tempo-ready="true"] .tempo-startup {
   border-radius: var(--radius-2xl);
 }
 
+@utility control-chevron {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+}
+
+@utility disclosure-summary {
+  display: flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  cursor: pointer;
+  list-style: none;
+
+  &::-webkit-details-marker {
+    display: none;
+  }
+}
+
+@utility disclosure-chevron {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+  transition: transform 150ms ease-out;
+}
+
+@layer components {
+  details[open] > .disclosure-summary > .disclosure-chevron {
+    transform: rotate(180deg);
+  }
+}
+
 @utility fade-up {
   animation: fade-up 0.16s cubic-bezier(0.2, 0.7, 0.3, 1) both;
 }

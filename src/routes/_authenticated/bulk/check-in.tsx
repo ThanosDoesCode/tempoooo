@@ -1,3 +1,4 @@
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { createFileRoute } from "@tanstack/react-router";
 import { addDays, endOfMonth, format, parseISO, startOfMonth } from "date-fns";
 import { useMemo, useState } from "react";
@@ -180,7 +181,7 @@ function CheckInPage() {
                 aria-label="Previous week"
                 className="grid min-h-11 min-w-11 place-items-center rounded-lg text-primary active:bg-elevated"
               >
-                ‹
+                <ChevronLeft className="control-chevron" aria-hidden="true" />
               </button>
               <button
                 onClick={() => setWeekOffset((w) => Math.min(0, w + 1))}
@@ -188,7 +189,7 @@ function CheckInPage() {
                 className="grid min-h-11 min-w-11 place-items-center rounded-lg text-primary active:bg-elevated disabled:opacity-30"
                 disabled={weekOffset >= 0}
               >
-                ›
+                <ChevronRight className="control-chevron" aria-hidden="true" />
               </button>
             </span>
           </div>

@@ -1,3 +1,4 @@
+import { NativeSelect } from "@/components/ui/native-select";
 import { useDeferredValue, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
@@ -116,14 +117,15 @@ export function PlanExercisePicker({
             className="min-h-11 w-full rounded-xl border border-input bg-elevated px-3 text-base outline-none focus:border-ring"
           />
           <div className="grid grid-cols-2 gap-2">
-            <select
+            <NativeSelect
               value={muscle}
               onChange={(event) => {
                 setMuscle(event.target.value as MuscleGroup | "");
                 resetPage();
               }}
               aria-label="Filter plan exercises by muscle"
-              className="min-h-11 min-w-0 rounded-xl border border-input bg-elevated px-2 text-sm"
+              containerClassName="min-w-0"
+              className="min-h-11 rounded-xl border border-input bg-elevated px-2 text-sm"
             >
               <option value="">All muscles</option>
               {MUSCLE_GROUPS.map((item) => (
@@ -131,15 +133,16 @@ export function PlanExercisePicker({
                   {label(item)}
                 </option>
               ))}
-            </select>
-            <select
+            </NativeSelect>
+            <NativeSelect
               value={equipment}
               onChange={(event) => {
                 setEquipment(event.target.value as ExerciseEquipment | "");
                 resetPage();
               }}
               aria-label="Filter plan exercises by equipment"
-              className="min-h-11 min-w-0 rounded-xl border border-input bg-elevated px-2 text-sm"
+              containerClassName="min-w-0"
+              className="min-h-11 rounded-xl border border-input bg-elevated px-2 text-sm"
             >
               <option value="">All equipment</option>
               {EXERCISE_EQUIPMENT.map((item) => (
@@ -147,20 +150,21 @@ export function PlanExercisePicker({
                   {label(item)}
                 </option>
               ))}
-            </select>
-            <select
+            </NativeSelect>
+            <NativeSelect
               value={origin}
               onChange={(event) => {
                 setOrigin(event.target.value as typeof origin);
                 resetPage();
               }}
               aria-label="Filter plan exercises by source"
-              className="min-h-11 min-w-0 rounded-xl border border-input bg-elevated px-2 text-sm"
+              containerClassName="min-w-0"
+              className="min-h-11 rounded-xl border border-input bg-elevated px-2 text-sm"
             >
               <option value="all">Tempo + mine</option>
               <option value="system">Tempo exercises</option>
               <option value="custom">My exercises</option>
-            </select>
+            </NativeSelect>
             <label className="flex min-h-11 items-center gap-2 rounded-xl border border-input px-3 text-sm">
               <input
                 type="checkbox"
@@ -191,30 +195,32 @@ export function PlanExercisePicker({
                 className="min-h-11 w-full rounded-xl border border-input bg-elevated px-3 text-base"
               />
               <div className="grid grid-cols-2 gap-2">
-                <select
+                <NativeSelect
                   value={customMuscle}
                   onChange={(event) => setCustomMuscle(event.target.value as MuscleGroup)}
                   aria-label="Custom exercise primary muscle"
-                  className="min-h-11 min-w-0 rounded-xl border border-input bg-elevated px-2 text-sm"
+                  containerClassName="min-w-0"
+                  className="min-h-11 rounded-xl border border-input bg-elevated px-2 text-sm"
                 >
                   {MUSCLE_GROUPS.map((item) => (
                     <option key={item} value={item}>
                       {label(item)}
                     </option>
                   ))}
-                </select>
-                <select
+                </NativeSelect>
+                <NativeSelect
                   value={customEquipment}
                   onChange={(event) => setCustomEquipment(event.target.value as ExerciseEquipment)}
                   aria-label="Custom exercise equipment"
-                  className="min-h-11 min-w-0 rounded-xl border border-input bg-elevated px-2 text-sm"
+                  containerClassName="min-w-0"
+                  className="min-h-11 rounded-xl border border-input bg-elevated px-2 text-sm"
                 >
                   {EXERCISE_EQUIPMENT.map((item) => (
                     <option key={item} value={item}>
                       {label(item)}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
               </div>
               <label className="flex min-h-11 items-center gap-2 text-sm">
                 <input

@@ -57,9 +57,12 @@ test("Muscle coverage row has a clear, accessible expand affordance like Workout
   const summary = more.match(/<summary[\s\S]*?Muscle coverage[\s\S]*?<\/summary>/)?.[0] ?? "";
   assert.ok(summary, "muscle coverage summary found");
   assert.match(summary, /aria-expanded=\{coverageOpen\}/);
-  assert.match(summary, /justify-between/); // same layout as the Workout days row
-  assert.match(summary, /ChevronRight/);
-  assert.match(summary, /coverageOpen \? "rotate-90" : ""/);
+  assert.match(summary, /disclosure-summary/); // same shared layout as Workout days
+  assert.match(summary, /ChevronDown/);
+  assert.match(summary, /disclosure-chevron/);
+  const css = await read("src/styles.css");
+  assert.match(css, /details\[open\] > \.disclosure-summary > \.disclosure-chevron/);
+  assert.match(css, /transform: rotate\(180deg\)/);
   // Coverage calculation/content is untouched — same component, same query input.
   assert.match(more, /<BulkMuscleCoverage/);
   assert.match(

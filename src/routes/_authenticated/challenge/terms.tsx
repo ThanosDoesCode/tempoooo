@@ -1,3 +1,4 @@
+import { ChevronDown } from "lucide-react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -87,11 +88,9 @@ function TermsContent({ challenge }: { challenge: Challenge }) {
       <TermsCards terms={challenge} timezone={challenge.timezone} manage />
 
       <details className="group rounded-[20px] bg-card">
-        <summary className="flex min-h-[52px] cursor-pointer list-none items-center px-[18px] text-[13px] font-medium text-muted-foreground [&::-webkit-details-marker]:hidden">
+        <summary className="disclosure-summary min-h-[52px] px-[18px] text-[13px] font-medium text-muted-foreground">
           Leave this challenge
-          <span className="ml-auto text-muted-foreground transition-transform group-open:rotate-90">
-            ›
-          </span>
+          <ChevronDown className="disclosure-chevron text-muted-foreground" aria-hidden="true" />
         </summary>
         <div className="border-t border-border px-[18px] py-3.5">
           <p className="text-[13px] leading-relaxed text-muted-foreground">

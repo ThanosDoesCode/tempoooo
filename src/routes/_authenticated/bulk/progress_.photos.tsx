@@ -1,3 +1,5 @@
+import { ChevronDown } from "lucide-react";
+import { NativeSelect } from "@/components/ui/native-select";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
@@ -449,8 +451,9 @@ function PhotosSection({ data }: { data: AppData }) {
       </button>
 
       <details className="rounded-[20px] bg-card">
-        <summary className="flex min-h-11 cursor-pointer list-none items-center px-4 text-[13px] font-medium text-muted-foreground [&::-webkit-details-marker]:hidden">
+        <summary className="disclosure-summary min-h-11 px-4 text-[13px] font-medium text-muted-foreground">
           Backup &amp; restore
+          <ChevronDown className="disclosure-chevron text-muted-foreground" aria-hidden="true" />
         </summary>
         <div className="px-4 pb-4">
           <Note>
@@ -511,16 +514,17 @@ function PhotoSelect({
   onChange: (id: string) => void;
 }) {
   return (
-    <select
+    <NativeSelect
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="w-full rounded-xl border border-input bg-elevated px-2 py-2 text-xs outline-none focus:border-ring"
+      containerClassName="w-full"
+      className="rounded-xl border border-input bg-elevated px-2 py-2 text-xs outline-none focus:border-ring"
     >
       {photos.map((p) => (
         <option key={p.id} value={p.id}>
           {format(parseISO(p.date), "d MMM yyyy")}
         </option>
       ))}
-    </select>
+    </NativeSelect>
   );
 }

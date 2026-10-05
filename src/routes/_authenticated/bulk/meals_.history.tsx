@@ -52,7 +52,7 @@ function MealsHistoryPage() {
           aria-label="Previous day"
           className="grid min-h-11 place-items-center rounded-xl border border-border bg-card active:bg-elevated"
         >
-          <ChevronLeft aria-hidden="true" />
+          <ChevronLeft className="control-chevron" aria-hidden="true" />
         </button>
         <input
           type="date"
@@ -69,7 +69,7 @@ function MealsHistoryPage() {
           aria-label="Next day"
           className="grid min-h-11 place-items-center rounded-xl border border-border bg-card disabled:opacity-40 active:bg-elevated"
         >
-          <ChevronRight aria-hidden="true" />
+          <ChevronRight className="control-chevron" aria-hidden="true" />
         </button>
       </div>
 

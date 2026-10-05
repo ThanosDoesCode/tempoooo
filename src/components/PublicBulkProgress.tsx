@@ -1,3 +1,4 @@
+import { NativeSelect } from "@/components/ui/native-select";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { addDays, format, parseISO } from "date-fns";
 import { useQueryClient } from "@tanstack/react-query";
@@ -826,7 +827,7 @@ function ProgressPhotos({
           onChange={(event) => setDate(event.target.value)}
           className="min-h-11 rounded-xl border border-input bg-elevated px-2 text-base"
         />
-        <select
+        <NativeSelect
           aria-label="Photo view"
           value={view}
           onChange={(event) => setView(event.target.value as BulkProgressPhoto["viewType"])}
@@ -836,7 +837,7 @@ function ProgressPhotos({
           <option value="front">Front</option>
           <option value="side">Side</option>
           <option value="back">Back</option>
-        </select>
+        </NativeSelect>
         <input
           aria-label="Photo note"
           placeholder="Optional note"
