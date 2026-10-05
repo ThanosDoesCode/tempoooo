@@ -165,7 +165,7 @@ test("public workout UI resumes durable compact sessions and protects set metada
     assert.match(workout, new RegExp(`>${label}<`));
   assert.match(workout, /exercise\.isBodyweight \? "\+kg" : "kg"/);
   assert.match(workout, /Previous:/);
-  assert.match(workout, /draft\.rpe == null \? "Choose RPE" : `RPE \$\{draft\.rpe\}`/);
+  assert.match(workout, /draft\.rpe \?\? "RPE"/);
   assert.match(workout, /Add set/);
   assert.match(workout, /SET_TYPES/);
   assert.match(workout, /RPE_VALUES/);
@@ -182,7 +182,7 @@ test("public workout UI resumes durable compact sessions and protects set metada
   assert.doesNotMatch(workout, />\s*Remove Set\s*</);
   assert.match(workout, /previousPerformance/);
   assert.doesNotMatch(workout, /min-w-\[330px\]/);
-  assert.match(workout, /grid-cols-\[44px_minmax\(0,1fr\)_minmax\(0,1fr\)_48px\]/);
+  assert.match(workout, /workout-set-grid/);
   assert.match(workout, /Finish with incomplete sets/);
   assert.match(workout, /permanently discarded/);
   assert.match(workout, /Save failed/);

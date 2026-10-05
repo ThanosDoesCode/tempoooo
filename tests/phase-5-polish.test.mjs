@@ -76,20 +76,20 @@ test("Phase 5 PR/history/library use shared history-aware links with safe Traini
 
 test("Phase 5 workout polish keeps fields/drawers and constrains discard to a compact modal", async () => {
   const workout = await read("src/components/BulkWorkoutSession.tsx");
-  assert.match(workout, /grid-cols-\[44px_minmax\(0,1fr\)_minmax\(0,1fr\)_48px\]/);
+  assert.match(workout, /workout-set-grid/);
   for (const value of [
     "bilateralWeight",
     "bilateralReps",
     "leftWeight",
     "rightWeight",
     "rpeDraft",
-    "setTypeOpen",
+    "SET_TYPES[(index + 1) % SET_TYPES.length]",
     "Previous:",
     "Next-session guidance",
-    "Done with set",
-    "Finish workout",
+    '"Finish"',
   ])
     assert.ok(workout.includes(value), value);
+  assert.doesNotMatch(workout, /Done with set|typeOpen|100px\+env/);
   assert.match(workout, /w-\[calc\(100%-2rem\)\] max-w-sm rounded-\[20px\]/);
   assert.match(workout, /Discard this workout\?/);
   assert.match(workout, /Keep workout/);

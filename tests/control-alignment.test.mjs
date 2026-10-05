@@ -105,7 +105,7 @@ test("application native selects and disclosures consistently use the shared pat
     inspect(parsed);
   }
   assert.ok(selects >= 19, "covers filters, workout days, photos, nutrition and Challenge selects");
-  assert.ok(disclosures >= 14, "covers public/legacy training, meals, notifications and settings");
+  assert.ok(disclosures >= 13, "covers public/legacy training, meals, notifications and settings");
 });
 
 test("disclosure rotation is scoped to its own open details and respects reduced motion", () => {

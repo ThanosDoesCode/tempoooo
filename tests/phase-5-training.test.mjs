@@ -97,6 +97,7 @@ function fixture(source, exportName, initialProps, options = {}) {
     destinations = [],
     effects = [],
     timers = new Map(),
+    intervals = new Map(),
     storage = new Map(options.storage ?? []);
   const record = async (name, ...args) => {
     calls.push([name, ...args]);
@@ -185,11 +186,21 @@ function fixture(source, exportName, initialProps, options = {}) {
       setItem: (k, v) => storage.set(k, v),
       removeItem: (k) => storage.delete(k),
     },
-    setInterval: () => 0,
-    clearInterval() {},
+    setInterval: (fn, delay) => {
+      intervals.set(++timerId, { fn, delay });
+      return timerId;
+    },
+    clearInterval: (id) => intervals.delete(id),
   };
   const context = {
     exports: {},
+    Date: options.now
+      ? class extends Date {
+          static now() {
+            return options.now();
+          }
+        }
+      : Date,
     window: browser,
     document: { addEventListener() {}, removeEventListener() {} },
     setTimeout: schedule,
@@ -228,6 +239,10 @@ function fixture(source, exportName, initialProps, options = {}) {
     invalidations,
     destinations,
     storage,
+    intervals,
+    tick() {
+      intervals.forEach(({ fn }) => fn());
+    },
     setFail(v) {
       fail = v;
     },
@@ -250,6 +265,130 @@ function fixture(source, exportName, initialProps, options = {}) {
 }
 const setRows = (tree) =>
   nodes(tree, (n) => typeof n.type === "function" && n.type.name === "WorkoutSetRow");
+
+test("active workout keeps one header Finish and a pinned rest/navigation dock without duplicate finish controls", () => {
+  const f = fixture(workoutSource, "BulkWorkoutSessionView", {
+    session: session(),
+    progression: {},
+  });
+  const assertActions = (tree) => {
+    assert.equal(nodes(tree, (n) => n.type === "Button" && text(n) === "Finish").length, 1);
+    assert.ok(find(nodes(tree, (n) => n.type === "header")[0], "Finish"));
+    assert.ok(find(tree, "Minimise"));
+    assert.ok(find(tree, "Previous"));
+    assert.ok(find(tree, "Next exercise"));
+    const dock = nodes(tree, (n) => n.props["aria-label"] === "Workout controls")[0];
+    assert.match(dock.props.className, /fixed.*bottom-0/);
+    assert.match(
+      dock.props.className,
+      /my-0!/,
+      "page spacing must not lift the dock off the bottom",
+    );
+    assert.ok(find(dock, "Previous"));
+    assert.ok(find(dock, "Next exercise"));
+    assert.equal(find(dock, "Finish workout"), undefined);
+    assert.doesNotMatch(text(dock), /Done with set|Discard workout/);
+    assert.match(tree.props.className, /160px\+env\(safe-area-inset-bottom\)/);
+    assert.match(text(tree), /0\s*\/\s*4\s+sets/);
+    assert.match(text(tree), /0 kg volume/);
+    assert.ok(nodes(tree, (n) => n.props.style?.width === "0%").length);
+  };
+  assertActions(f.render());
+  assert.equal(find(f.render(), "Previous").props.disabled, true);
+  find(f.render(), "Next exercise").props.onClick();
+  assertActions(f.render());
+  assert.equal(find(f.render(), "Next exercise").props.disabled, true);
+  assert.equal(
+    nodes(f.render(), (n) => n.type === "section" && !n.props.hidden)[0].props["aria-label"],
+    "Real row",
+  );
+  find(f.render(), "Previous").props.onClick();
+  assert.equal(find(f.render(), "Next exercise").props.disabled, false);
+  find(f.render(), "Finish").props.onClick();
+  assert.ok(nodes(f.render(), (n) => n.type === "AlertDialog" && n.props.open).length);
+  assert.match(text(f.render()), /Finish with incomplete sets\?/);
+  assert.equal(f.calls.length, 0); // Finish still requires confirmation for incomplete sets.
+});
+
+test("set checkmark still saves once and starts rest while elapsed, +15s and Skip use the existing deadline", async () => {
+  let now = Date.parse("2026-10-03T10:02:03Z");
+  const f = fixture(
+    workoutSource,
+    "BulkWorkoutSessionView",
+    { session: session(), progression: {} },
+    { now: () => now },
+  );
+  f.render();
+  f.runEffects();
+  assert.equal([...f.intervals.values()][0].delay, 1000);
+  assert.match(text(nodes(f.render(), (n) => n.type === "header")[0]), /2:03/);
+  setRows(f.render())[0].props.onChange({ bilateralWeight: 20, bilateralReps: 10, rpe: 8.5 });
+  const row = fixture(workoutSource, "WorkoutSetRow", setRows(f.render())[0].props);
+  const check = nodes(
+    row.render(),
+    (n) => n.type === "button" && n.props["aria-label"] === "Save Real press set 1",
+  )[0];
+  assert.equal(check.props.disabled, true); // The existing autosave must settle first.
+  await f.flushTimers();
+  row.update(setRows(f.render())[0].props);
+  const savedCheck = nodes(
+    row.render(),
+    (n) => n.type === "button" && n.props["aria-label"] === "Save Real press set 1",
+  )[0];
+  assert.equal(savedCheck.props.disabled, false);
+  savedCheck.props.onClick();
+  savedCheck.props.onClick();
+  await new Promise(setImmediate);
+  const rest = () => nodes(f.render(), (n) => n.props.role === "timer")[0];
+  assert.match(text(rest()), /2:00/);
+  assert.equal(f.calls.filter(([name]) => name === "saveBulkTrainingSet").length, 1);
+  assert.equal(f.calls.find(([name]) => name === "saveBulkTrainingSet")[2].rpe, 8.5);
+  assert.match(text(f.render()), /1\s*\/\s*4\s+sets/);
+  assert.match(text(f.render()), /200 kg volume/);
+  now += 30_000;
+  f.tick();
+  assert.match(text(rest()), /1:30/);
+  assert.match(text(nodes(f.render(), (n) => n.type === "header")[0]), /2:33/);
+  find(f.render(), "+15s").props.onClick();
+  assert.match(text(rest()), /1:45/);
+  find(f.render(), "+15s").props.onClick();
+  assert.match(text(rest()), /2:00/);
+  now += 121_000;
+  f.tick();
+  assert.equal(rest(), undefined);
+  find(f.render(), "Start 2:00 rest").props.onClick();
+  assert.match(text(rest()), /2:00/);
+  find(f.render(), "Skip").props.onClick();
+  assert.equal(rest(), undefined);
+  assert.ok(find(f.render(), "Start 2:00 rest"));
+});
+
+test("Discard workout is inside Finish confirmation and still requires its separate destructive confirmation", async () => {
+  const f = fixture(workoutSource, "BulkWorkoutSessionView", {
+    session: session(),
+    progression: {},
+  });
+  setRows(f.render())[0].props.onChange({ bilateralWeight: 20 });
+  find(f.render(), "Finish").props.onClick();
+  const finishDialog = nodes(f.render(), (n) => n.type === "AlertDialog" && n.props.open)[0];
+  const trigger = find(finishDialog, "Discard workout");
+  assert.match(trigger.props.className, /text-danger/);
+  trigger.props.onClick();
+  assert.equal(f.calls.length, 0);
+  assert.equal(f.storage.has("tempo:bulk-workout-draft:owner1:session1"), true);
+  assert.ok(nodes(f.render(), (n) => n.type === "AlertDialog" && n.props.open).length);
+  assert.match(text(f.render()), /Discard this workout\?/);
+  const confirm = nodes(
+    f.render(),
+    (n) => n.type === "AlertDialogAction" && text(n) === "Discard workout",
+  )[0];
+  confirm.props.onClick();
+  await new Promise(setImmediate);
+  assert.equal(f.calls.filter(([name]) => name === "discardBulkTrainingSession").length, 1);
+  assert.equal(f.calls.filter(([name]) => name === "finishBulkTrainingSession").length, 0);
+  assert.equal(f.storage.has("tempo:bulk-workout-draft:owner1:session1"), false);
+  assert.equal(f.destinations[0].to, "/bulk/training");
+});
 
 test("Phase 5 focus shows real exercises, keeps hidden sets mounted, and preserves per-set RPE drafts", async () => {
   const f = fixture(workoutSource, "BulkWorkoutSessionView", {
@@ -330,7 +469,6 @@ test("Phase 5 RPE drawer keeps original optional choices and saves through the r
     canRemove: true,
     swipeOpen: false,
     previous: "20×10",
-    onSelect() {},
     onChange: (patch) => updates.push(patch),
     onDone() {},
     onRemove() {},
@@ -347,7 +485,7 @@ test("Phase 5 RPE drawer keeps original optional choices and saves through the r
   assert.ok(rpe);
   assert.equal(rpe.props["aria-haspopup"], "dialog");
   assert.equal(rpe.props["aria-expanded"], false);
-  assert.match(rpe.props.className, /min-h-11.*border border-input bg-elevated/);
+  assert.match(rpe.props.className, /h-12 min-w-11.*border border-input/);
   rpe.props.onClick();
   assert.equal(
     nodes(f.render(), (n) => n.type === "button" && n.props["aria-label"]?.includes("RPE"))[0]
@@ -372,15 +510,15 @@ test("Phase 5 RPE drawer keeps original optional choices and saves through the r
   assert.equal(updates.at(-1).rpe, null);
   assert.match(text(f.render()), /Previous:\s+20×10/);
   f.update({ ...props, draft: { ...props.draft, rpe: null } });
-  assert.ok(find(f.render(), "Choose RPE"));
+  assert.ok(find(f.render(), "RPE"));
 });
 
-test("set-type marker and picker share muted tones without changing set data or completion", () => {
-  for (const [setType, marker, tone, label] of [
-    ["warmup", "W", "warn", "Warm-up set"],
-    ["failure", "F", "danger", "Failure set"],
-    ["drop", "D", "chart-2", "Drop set"],
-    ["normal", "1", "foreground", "Normal set"],
+test("set-type badge cycles normal → W → F → D → normal through the existing change callback", () => {
+  for (const [setType, marker, tone, nextType] of [
+    ["warmup", "W", "warn", "failure"],
+    ["failure", "F", "danger", "drop"],
+    ["drop", "D", "chart-2", "normal"],
+    ["normal", "1", "foreground", "warmup"],
   ]) {
     const updates = [];
     const f = fixture(workoutSource, "WorkoutSetRow", {
@@ -397,16 +535,74 @@ test("set-type marker and picker share muted tones without changing set data or 
     const badge = find(f.render(), marker);
     assert.match(badge.props.className, new RegExp(`text-${tone}`));
     badge.props.onClick();
-    const option = find(f.render(), label);
-    assert.equal(option.props["aria-pressed"], true);
-    if (setType !== "normal")
-      assert.match(option.props.className, new RegExp(`bg-${tone}/10.*text-${tone}`));
-    option.props.onClick();
     assert.deepEqual(
       updates.map((patch) => ({ ...patch })),
-      [{ setType }],
+      [{ setType: nextType }],
     );
     assert.equal(f.calls.length, 0);
+  }
+});
+
+test("compact set row keeps previous, load, reps, RPE and checkmark including bodyweight and both sides", () => {
+  for (const ex of [
+    exercise(),
+    exercise("ex1", { isBodyweight: true }),
+    exercise("ex1", { executionMode: "unilateral" }),
+  ]) {
+    const updates = [];
+    const draft = makeSet("set", 1, {
+      bilateralWeight: ex.isBodyweight ? null : 20,
+      bilateralReps: 10,
+      leftWeight: 12,
+      leftReps: 10,
+      rightWeight: 14,
+      rightReps: 8,
+      rpe: 8.5,
+    });
+    const f = fixture(workoutSource, "WorkoutSetRow", {
+      exercise: ex,
+      set: draft,
+      draft,
+      saving: false,
+      removing: false,
+      canRemove: false,
+      swipeOpen: false,
+      previous: "20×10",
+      onChange: (patch) => updates.push(patch),
+      onDone() {},
+    });
+    const grid = nodes(f.render(), (n) => n.props.className?.includes("workout-set-grid"))[0];
+    assert.match(grid.props.className, /bg-primary\/5/);
+    assert.match(text(grid), /Previous:\s+20×10/);
+    assert.equal(
+      nodes(grid, (n) => n.type === "button" && n.props["aria-haspopup"] === "dialog").length,
+      1,
+    );
+    assert.ok(find(grid, "8.5"));
+    const fields = nodes(grid, (n) => n.type === "DecimalInput");
+    assert.equal(fields.length, ex.executionMode === "unilateral" ? 4 : 2);
+    assert.ok(fields.every((n) => /bg-primary\/10/.test(n.props.className)));
+    assert.ok(nodes(grid, (n) => n.props["aria-label"] === "Save Real press set 1").length);
+    const kg = fields[0];
+    assert.equal(kg.props.min, 0);
+    assert.equal(kg.props.max, 1000);
+    assert.equal(kg.props.value, ex.executionMode === "unilateral" ? 12 : ex.isBodyweight ? 0 : 20);
+    kg.props.onChange(22.5);
+    assert.deepEqual(
+      updates.map((patch) => ({ ...patch })),
+      [ex.executionMode === "unilateral" ? { leftWeight: 22.5 } : { bilateralWeight: 22.5 }],
+    );
+    f.update({
+      exercise: ex,
+      set: draft,
+      draft: makeSet("set", 1),
+      previous: "20×10",
+      onChange() {},
+    });
+    assert.doesNotMatch(
+      nodes(f.render(), (n) => n.props.className?.includes("workout-set-grid"))[0].props.className,
+      /bg-primary\/5/,
+    );
   }
 });
 
@@ -450,9 +646,15 @@ test("Phase 5 finish flushes RPE, prevents duplicate completion and invalidates 
       release = resolve;
     }),
   );
-  const finish = find(f.render(), "Finish workout");
+  const finish = find(f.render(), "Finish");
   finish.props.onClick();
-  finish.props.onClick();
+  assert.equal(f.calls.filter(([n]) => n === "finishBulkTrainingSession").length, 0);
+  const confirm = nodes(
+    f.render(),
+    (n) => n.type === "AlertDialogAction" && text(n) === "Finish workout",
+  )[0];
+  confirm.props.onClick();
+  confirm.props.onClick();
   release();
   await new Promise(setImmediate);
   await new Promise(setImmediate);

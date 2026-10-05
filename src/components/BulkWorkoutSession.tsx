@@ -14,6 +14,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Plus,
+  TrendingUp,
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -201,12 +202,6 @@ export function BulkWorkoutSessionView({
   const [removing, setRemoving] = useState(new Set<string>());
   const [openSetId, setOpenSetId] = useState<string | null>(null);
   const [activeExerciseIndex, setActiveExerciseIndex] = useState(0);
-  const [selectedSetId, setSelectedSetId] = useState<string | null>(
-    () =>
-      session.exercises[0]?.sets.find((set) => !set.isComplete)?.id ??
-      session.exercises[0]?.sets[0]?.id ??
-      null,
-  );
   const confirmingSets = useRef(new Set<string>());
   const [restDeadline, setRestDeadline] = useState<number | null>(null);
   const terminalPending = useRef(false);
@@ -482,11 +477,6 @@ export function BulkWorkoutSessionView({
   if (session.status === "completed") return <CompletedWorkout session={session} />;
 
   const activeIndex = Math.min(activeExerciseIndex, Math.max(0, session.exercises.length - 1));
-  const activeExercise = session.exercises[activeIndex];
-  const nextSet =
-    activeExercise?.sets.find((set) => set.id === selectedSetId) ??
-    activeExercise?.sets.find((set) => !set.isComplete) ??
-    activeExercise?.sets.at(-1);
   const restSeconds =
     restDeadline == null ? 0 : Math.max(0, Math.ceil((restDeadline - clock) / 1000));
   async function confirmSet(exercise: BulkTrainingSessionExercise, set: BulkTrainingSet) {
@@ -508,40 +498,34 @@ export function BulkWorkoutSessionView({
         )
       ) {
         setActiveExerciseIndex((index) => Math.min(session.exercises.length - 1, index + 1));
-        setSelectedSetId(null);
-      } else {
-        setSelectedSetId(
-          exercise.sets.find(
-            (item) => !isSessionSetComplete(draftsRef.current[item.id] ?? toDraft(item), exercise),
-          )?.id ?? set.id,
-        );
       }
     } finally {
       confirmingSets.current.delete(set.id);
     }
   }
   return (
-    <div className="space-y-[14px] pb-[calc(100px+env(safe-area-inset-bottom))]">
+    <div className="space-y-[14px] pb-[calc(160px+env(safe-area-inset-bottom))]">
       <header className="sticky top-0 z-20 -mx-5 border-b border-border bg-background/95 px-5 pb-3 pt-2 backdrop-blur">
         <div className="flex min-h-11 items-center gap-2">
           <button
             type="button"
             aria-label="Minimise workout, keep progress"
-            className="min-h-11 shrink-0 text-sm text-muted-foreground"
+            className="grid min-h-11 min-w-11 shrink-0 place-items-center text-muted-foreground"
             onClick={() => void navigate({ to: "/bulk/training" })}
           >
-            Minimise
+            <ChevronDown className="h-5 w-5" aria-hidden="true" />
+            <span className="sr-only">Minimise</span>
           </button>
           <div className="min-w-0 flex-1 text-center">
-            <h1 className="truncate text-sm font-medium">{session.workoutDayName}</h1>
+            <h1 className="truncate text-base font-semibold">{session.workoutDayName}</h1>
             <p className="num text-[13px] text-muted-foreground">
-              {formatDuration(elapsedSeconds)}
+              {formatDuration(elapsedSeconds)} · {completedSets} of {totalSets} sets
             </p>
           </div>
           <Button
             variant="ghost"
             className="min-h-11 shrink-0 px-2 text-primary"
-            onClick={() => (incomplete ? setFinishDialog(true) : void finish(false))}
+            onClick={() => setFinishDialog(true)}
             disabled={finishing || discarding || adding.size > 0 || removing.size > 0}
           >
             {finishing ? <PendingLabel>Finishing…</PendingLabel> : "Finish"}
@@ -605,17 +589,15 @@ export function BulkWorkoutSessionView({
                 repMax: exercise.targetRepMax,
               });
               return (
-                <details className="mt-2 text-sm text-muted-foreground">
-                  <summary className="disclosure-summary min-h-11 text-primary">
-                    Next-session guidance
-                    <ChevronDown
-                      className="disclosure-chevron text-muted-foreground"
-                      aria-hidden="true"
-                    />
-                  </summary>
-                  <p>{guidance.targetText}</p>
-                  <p className="mt-1 text-xs">{guidance.reasonText}</p>
-                </details>
+                <p
+                  className="mt-3 flex items-center gap-2 rounded-2xl bg-primary/10 px-3 py-3 text-sm font-medium"
+                  aria-label="Next-session guidance"
+                  title={guidance.reasonText}
+                >
+                  <TrendingUp className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                  <span>{guidance.targetText}</span>
+                  <span className="sr-only">{guidance.reasonText}</span>
+                </p>
               );
             })()}
             {exercise.notes ? (
@@ -631,10 +613,14 @@ export function BulkWorkoutSessionView({
               </p>
             ) : null}
             <div className="mt-[14px] space-y-2">
-              <div className="grid grid-cols-[44px_minmax(0,1fr)_minmax(0,1fr)_48px] gap-2 px-3 text-center text-xs text-muted-foreground">
+              <div className="workout-set-grid text-center text-[10px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">
                 <span>Set</span>
+                <span className="text-left normal-case tracking-normal min-[375px]:uppercase">
+                  Previous
+                </span>
                 <span>{exercise.isBodyweight ? "+kg" : "kg"}</span>
                 <span>Reps</span>
+                <span>RPE</span>
                 <span>Done</span>
               </div>
               {exercise.sets.map((set, index) => (
@@ -657,7 +643,6 @@ export function BulkWorkoutSessionView({
                     exercise,
                   )}
                   {...(saveErrors[set.id] ? { error: saveErrors[set.id] } : {})}
-                  onSelect={() => setSelectedSetId(set.id)}
                   onChange={(patch) => update(set.id, patch)}
                   onRetry={() => void persist(set.id)}
                   onDone={() => void confirmSet(exercise, set)}
@@ -671,76 +656,96 @@ export function BulkWorkoutSessionView({
               ))}
             </div>
             <Button
-              variant="outline"
-              className="mt-3 min-h-11 w-full rounded-[14px]"
+              variant="ghost"
+              className="mt-3 min-h-11 px-1 text-primary"
               onClick={() => void addSet(exercise.id)}
               disabled={adding.has(exercise.id)}
             >
               <Plus aria-hidden="true" />
               {adding.has(exercise.id) ? "Adding…" : "Add set"}
             </Button>
+            <p className="text-xs text-muted-foreground">
+              Tap a set badge: <span className="text-warn">W</span> warmup ·{" "}
+              <span className="text-danger">F</span> failure ·{" "}
+              <span className="text-chart-2">D</span> dropset
+            </p>
           </section>
         ))}
       </fieldset>
-      {restSeconds > 0 ? (
-        <div
-          className="flex items-center gap-3 rounded-[16px] border border-border bg-card p-3"
-          role="timer"
-          aria-label="Rest timer"
-        >
-          <div className="flex-1">
-            <p className="text-xs text-muted-foreground">Rest</p>
-            <p className="num text-[22px] font-semibold">{formatDuration(restSeconds)}</p>
+      <div
+        className="fixed inset-x-0 bottom-0 z-30 my-0! border-t border-border bg-background/95 px-5 pt-3 pb-[calc(12px+env(safe-area-inset-bottom))] backdrop-blur"
+        aria-label="Workout controls"
+      >
+        <div className="mx-auto max-w-2xl">
+          {restSeconds > 0 ? (
+            <>
+              <div
+                className="flex min-h-11 items-center gap-3"
+                role="timer"
+                aria-label="Rest timer"
+              >
+                <p className="flex-1 text-sm text-muted-foreground">Rest</p>
+                <p className="num text-[22px] font-semibold">{formatDuration(restSeconds)}</p>
+                <button
+                  type="button"
+                  className="min-h-11 rounded-xl bg-elevated px-3 text-sm font-semibold active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label="Add 15 seconds to rest"
+                  onClick={() => {
+                    const now = Date.now();
+                    setRestDeadline((deadline) => Math.max(deadline ?? now, now) + 15_000);
+                    setClock(now);
+                  }}
+                >
+                  +15s
+                </button>
+                <button
+                  type="button"
+                  className="min-h-11 px-2 text-sm font-medium text-primary"
+                  onClick={() => setRestDeadline(null)}
+                >
+                  Skip
+                </button>
+              </div>
+              <div className="mt-1 h-1 overflow-hidden rounded-full bg-elevated" aria-hidden="true">
+                <div
+                  className="h-full rounded-full bg-primary transition-[width] duration-150 motion-reduce:transition-none"
+                  style={{ width: `${Math.min(100, (restSeconds / 120) * 100)}%` }}
+                />
+              </div>
+            </>
+          ) : (
+            <button
+              type="button"
+              className="min-h-12 text-sm text-muted-foreground"
+              onClick={() => {
+                setRestDeadline(Date.now() + 120_000);
+                setClock(Date.now());
+              }}
+            >
+              Start 2:00 rest
+            </button>
+          )}
+          <div className="mt-3 grid grid-cols-[minmax(44px,0.4fr)_minmax(0,1fr)] gap-2">
+            <button
+              type="button"
+              disabled={activeIndex === 0}
+              onClick={() => setActiveExerciseIndex(activeIndex - 1)}
+              className="flex min-h-12 items-center justify-center gap-1 rounded-2xl border border-border bg-card text-sm font-medium text-foreground disabled:opacity-30"
+            >
+              <ChevronLeft className="control-chevron" aria-hidden="true" />
+              Previous
+            </button>
+            <button
+              type="button"
+              disabled={activeIndex >= session.exercises.length - 1}
+              onClick={() => setActiveExerciseIndex(activeIndex + 1)}
+              className="flex min-h-12 items-center justify-center gap-1 rounded-2xl border border-primary/30 bg-primary text-sm font-semibold text-primary-foreground disabled:border-border disabled:bg-card disabled:text-muted-foreground disabled:opacity-50"
+            >
+              Next exercise
+              <ChevronRight className="control-chevron" aria-hidden="true" />
+            </button>
           </div>
-          <button
-            type="button"
-            className="min-h-11 px-2 text-sm text-muted-foreground"
-            onClick={() => {
-              setRestDeadline(Date.now() + 120_000);
-              setClock(Date.now());
-            }}
-          >
-            Restart
-          </button>
-          <button
-            type="button"
-            className="min-h-11 px-2 text-sm text-primary"
-            onClick={() => setRestDeadline(null)}
-          >
-            Skip
-          </button>
         </div>
-      ) : (
-        <button
-          type="button"
-          className="min-h-11 text-sm text-muted-foreground"
-          onClick={() => {
-            setRestDeadline(Date.now() + 120_000);
-            setClock(Date.now());
-          }}
-        >
-          Start 2:00 rest
-        </button>
-      )}
-      <div className="grid grid-cols-2 gap-2">
-        <button
-          type="button"
-          disabled={activeIndex === 0}
-          onClick={() => setActiveExerciseIndex(activeIndex - 1)}
-          className="flex min-h-12 items-center justify-center gap-1 rounded-2xl border border-border bg-card text-sm font-medium text-foreground disabled:opacity-30"
-        >
-          <ChevronLeft className="control-chevron" aria-hidden="true" />
-          Previous
-        </button>
-        <button
-          type="button"
-          disabled={activeIndex >= session.exercises.length - 1}
-          onClick={() => setActiveExerciseIndex(activeIndex + 1)}
-          className="flex min-h-12 items-center justify-center gap-1 rounded-2xl border border-border bg-card text-sm font-medium text-primary disabled:opacity-30"
-        >
-          Next exercise
-          <ChevronRight className="control-chevron" aria-hidden="true" />
-        </button>
       </div>
       <div className="rounded-2xl bg-card p-4">
         <div className="flex items-baseline justify-between text-xs text-muted-foreground">
@@ -763,58 +768,35 @@ export function BulkWorkoutSessionView({
           />
         </div>
       </div>
-      <div className="pt-1 text-center">
-        <button
-          type="button"
-          className="min-h-11 px-4 text-xs font-medium text-danger/80 disabled:opacity-50"
-          onClick={() => setDiscardDialog(true)}
-          disabled={finishing || discarding}
-        >
-          Discard workout
-        </button>
-      </div>
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 px-5 pt-3 pb-[calc(12px+env(safe-area-inset-bottom))] backdrop-blur">
-        <div className="mx-auto flex max-w-2xl gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            disabled={finishing || discarding || adding.size > 0 || removing.size > 0}
-            className={`h-[54px] rounded-[16px] ${activeExercise && nextSet ? "shrink-0 px-4" : "w-full"}`}
-            onClick={() => (incomplete ? setFinishDialog(true) : void finish(false))}
-          >
-            {finishing ? "Finishing…" : "Finish workout"}
-          </Button>
-          {activeExercise && nextSet ? (
-            <Button
-              className="h-[54px] flex-1 rounded-[16px]"
-              disabled={
-                finishing ||
-                discarding ||
-                saving.has(nextSet.id) ||
-                !isSessionSetComplete(drafts[nextSet.id] ?? toDraft(nextSet), activeExercise)
-              }
-              onClick={() => void confirmSet(activeExercise, nextSet)}
-            >
-              Done with set {nextSet.order}
-            </Button>
-          ) : null}
-        </div>
-      </div>
       <AlertDialog open={finishDialog} onOpenChange={setFinishDialog}>
         <AlertDialogContent className="w-[calc(100%-2rem)] max-w-sm rounded-[20px] sm:rounded-[20px]">
           <AlertDialogHeader>
-            <AlertDialogTitle>Finish with incomplete sets?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {incomplete ? "Finish with incomplete sets?" : "Finish this workout?"}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              You still have {incomplete} incomplete {incomplete === 1 ? "set" : "sets"}. Their
-              missing values will remain empty in history.
+              {incomplete
+                ? `You still have ${incomplete} incomplete ${incomplete === 1 ? "set" : "sets"}. Their missing values will remain empty in history.`
+                : "Your logged sets will be saved to workout history."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="flex-col gap-2 sm:flex-row sm:gap-2 sm:space-x-0">
             <AlertDialogCancel className="min-h-11">Keep logging</AlertDialogCancel>
-            <AlertDialogAction className="min-h-11" onClick={() => void finish(true)}>
-              Finish anyway
+            <AlertDialogAction className="min-h-11" onClick={() => void finish(incomplete > 0)}>
+              {incomplete ? "Finish anyway" : "Finish workout"}
             </AlertDialogAction>
           </AlertDialogFooter>
+          <button
+            type="button"
+            className="min-h-11 w-full text-xs font-medium text-danger/80 disabled:opacity-50"
+            onClick={() => {
+              setFinishDialog(false);
+              setDiscardDialog(true);
+            }}
+            disabled={finishing || discarding}
+          >
+            Discard workout
+          </button>
         </AlertDialogContent>
       </AlertDialog>
       <AlertDialog open={discardDialog} onOpenChange={setDiscardDialog}>
@@ -855,7 +837,6 @@ function WorkoutSetRow({
   previous,
   error,
   onChange,
-  onSelect,
   onRetry,
   onDone,
   onRemove,
@@ -872,7 +853,6 @@ function WorkoutSetRow({
   swipeOpen: boolean;
   previous: string;
   error?: string;
-  onSelect: () => void;
   onChange: (patch: Partial<SetDraft>) => void;
   onRetry: () => void;
   onDone: () => void;
@@ -882,7 +862,6 @@ function WorkoutSetRow({
   onSwipeClose: () => void;
 }) {
   const done = isSessionSetComplete(draft, exercise);
-  const [typeOpen, setTypeOpen] = useState(false);
   const [rpeOpen, setRpeOpen] = useState(false);
   const [rpeDraft, setRpeDraft] = useState<number | null>(draft.rpe);
   const rowRef = useRef<HTMLDivElement>(null);
@@ -942,7 +921,10 @@ function WorkoutSetRow({
       max={1000}
       integer={integer}
       label={`${exercise.name}, set ${set.order}, ${label}`}
-      className="h-12 min-w-0 w-full rounded-[14px] border border-input bg-card px-1 text-center text-base outline-none focus:border-ring"
+      className={cn(
+        "h-12 min-w-0 w-full rounded-[14px] border px-1 text-center text-base outline-none focus:border-ring",
+        done ? "border-primary/20 bg-primary/10" : "border-transparent bg-elevated",
+      )}
       onChange={(next) => onChange({ [key]: next ?? null })}
     />
   );
@@ -960,13 +942,8 @@ function WorkoutSetRow({
       ? `${draft.bilateralWeight != null ? `${draft.bilateralWeight} kg` : exercise.isBodyweight ? "BW" : "—"} · ${draft.bilateralReps ?? "—"} reps`
       : `${draft.leftReps ?? "—"}/${draft.rightReps ?? "—"} reps`;
   return (
-    <div className="rounded-[20px] border border-border bg-card pb-1">
-      <div
-        ref={rowRef}
-        onFocusCapture={onSelect}
-        className="relative overflow-hidden rounded-[20px]"
-        data-set-swipe={set.id}
-      >
+    <div className="space-y-1">
+      <div ref={rowRef} className="relative overflow-hidden rounded-[14px]" data-set-swipe={set.id}>
         {canRemove && dragOffset > 0 ? (
           <button
             type="button"
@@ -986,15 +963,18 @@ function WorkoutSetRow({
           onPointerCancel={endSwipe}
           style={{ transform: `translateX(${dragOffset}px)`, touchAction: "pan-y" }}
           className={cn(
-            "grid grid-cols-[44px_minmax(0,1fr)_minmax(0,1fr)_48px] items-center gap-2 rounded-[14px] px-3 py-2 transition-transform duration-150 ease-out motion-reduce:transition-none",
-            "relative z-10 bg-card",
-            done && "ring-1 ring-inset ring-good/20",
+            "workout-set-grid relative z-10 rounded-[14px] py-1 transition-transform duration-150 ease-out motion-reduce:transition-none",
+            done ? "bg-primary/5" : "bg-background",
           )}
         >
           <button
             type="button"
-            onClick={() => setTypeOpen(true)}
+            onClick={() => {
+              const index = SET_TYPES.findIndex((option) => option.value === draft.setType);
+              onChange({ setType: SET_TYPES[(index + 1) % SET_TYPES.length]!.value });
+            }}
             aria-label={`Set ${set.order}, ${draft.setType} set. Change set type`}
+            aria-description="Cycles normal, warmup, failure and dropset"
             className={cn(
               "grid h-12 min-w-10 place-items-center rounded-[14px] border text-xs font-medium transition-colors hover:brightness-110 active:brightness-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card motion-reduce:transition-none",
               typeTone,
@@ -1002,6 +982,10 @@ function WorkoutSetRow({
           >
             {typeBadge}
           </button>
+          <span className="min-w-0 break-words text-xs tabular-nums text-muted-foreground">
+            <span className="sr-only">Previous: </span>
+            {previous}
+          </span>
           {exercise.executionMode === "bilateral" ? (
             <>
               {field(
@@ -1025,12 +1009,31 @@ function WorkoutSetRow({
           )}
           <button
             type="button"
+            className={cn(
+              "grid h-12 min-w-11 place-items-center rounded-[14px] border border-input text-base font-semibold transition-colors hover:border-ring/60 active:brightness-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none",
+              done ? "bg-primary/10" : "bg-elevated",
+              draft.rpe == null && "text-xs text-muted-foreground",
+            )}
+            aria-label={`${exercise.name}, set ${set.order}, RPE ${draft.rpe ?? "not set"}`}
+            aria-haspopup="dialog"
+            aria-expanded={rpeOpen}
+            onClick={() => {
+              setRpeDraft(draft.rpe);
+              setRpeOpen(true);
+            }}
+          >
+            {draft.rpe ?? "RPE"}
+          </button>
+          <button
+            type="button"
             disabled={!done || saving}
             onClick={onDone}
             aria-label={`${done ? "Save" : "Complete"} ${exercise.name} set ${set.order}`}
             className={cn(
-              "grid h-12 min-w-12 place-items-center rounded-[14px] border",
-              done ? "border-good/40 bg-good/10 text-good" : "border-border text-muted-foreground",
+              "grid h-12 min-w-11 place-items-center rounded-[14px] border",
+              done
+                ? "border-primary bg-primary text-primary-foreground"
+                : "border-transparent bg-elevated text-muted-foreground",
             )}
           >
             {saving ? (
@@ -1051,25 +1054,11 @@ function WorkoutSetRow({
           </button>
         ) : null}
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 px-3 pb-1 pt-1 text-xs text-muted-foreground">
-        <span className="min-w-0 break-words">Previous: {previous}</span>
-        <button
-          type="button"
-          className="inline-flex min-h-11 shrink-0 items-center justify-between gap-2 rounded-xl border border-input bg-elevated px-3 text-sm font-medium text-foreground transition-colors hover:border-ring/60 hover:bg-muted active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card motion-reduce:transition-none"
-          aria-label={`${exercise.name}, set ${set.order}, RPE ${draft.rpe ?? "not set"}`}
-          aria-haspopup="dialog"
-          aria-expanded={rpeOpen}
-          onClick={() => {
-            setRpeDraft(draft.rpe);
-            setRpeOpen(true);
-          }}
-        >
-          <span>{draft.rpe == null ? "Choose RPE" : `RPE ${draft.rpe}`}</span>
-          <ChevronDown className="control-chevron text-muted-foreground" aria-hidden="true" />
-        </button>
-      </div>
       <div
-        className="flex items-center justify-end gap-2 px-3 text-[10px] text-muted-foreground"
+        className={cn(
+          "text-[10px] text-muted-foreground",
+          error ? "flex items-center justify-end gap-2" : "sr-only",
+        )}
         aria-live="polite"
       >
         {saving ? "Saving..." : error ? "Save failed" : done ? "Saved" : ""}
@@ -1083,45 +1072,6 @@ function WorkoutSetRow({
           </button>
         ) : null}
       </div>
-
-      <Drawer open={typeOpen} onOpenChange={setTypeOpen}>
-        <DrawerContent className="mx-auto max-w-lg pb-[env(safe-area-inset-bottom)]">
-          <DrawerHeader>
-            <DrawerTitle>Set {set.order} type</DrawerTitle>
-            <DrawerDescription>Choose how this set should be recorded.</DrawerDescription>
-          </DrawerHeader>
-          <div className="space-y-1 px-4">
-            {SET_TYPES.map((option) => (
-              <DrawerClose asChild key={option.value}>
-                <button
-                  type="button"
-                  className={cn(
-                    "flex min-h-12 w-full items-center justify-between rounded-xl border px-4 text-left text-sm font-medium transition-colors hover:brightness-110 active:brightness-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none",
-                    SET_TYPE_TONES[option.value],
-                    draft.setType === option.value && option.value === "normal"
-                      ? "border-primary/30 bg-primary/10 text-primary"
-                      : "",
-                  )}
-                  aria-pressed={draft.setType === option.value}
-                  onClick={() => onChange({ setType: option.value })}
-                >
-                  {option.label}
-                  {draft.setType === option.value ? (
-                    <Check className="h-4 w-4 text-primary" aria-hidden="true" />
-                  ) : null}
-                </button>
-              </DrawerClose>
-            ))}
-          </div>
-          <DrawerFooter>
-            <DrawerClose asChild>
-              <Button variant="outline" className="min-h-11">
-                Cancel
-              </Button>
-            </DrawerClose>
-          </DrawerFooter>
-        </DrawerContent>
-      </Drawer>
 
       <Drawer open={rpeOpen} onOpenChange={setRpeOpen}>
         <DrawerContent className="mx-auto max-w-lg pb-[env(safe-area-inset-bottom)]">
@@ -1172,8 +1122,8 @@ function WorkoutSetRow({
 }
 
 const SET_TYPES: Array<{ value: BulkSetType; label: string }> = [
-  { value: "warmup", label: "Warm-up set" },
   { value: "normal", label: "Normal set" },
+  { value: "warmup", label: "Warm-up set" },
   { value: "failure", label: "Failure set" },
   { value: "drop", label: "Drop set" },
 ];
