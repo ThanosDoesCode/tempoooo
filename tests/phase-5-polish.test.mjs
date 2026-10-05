@@ -83,13 +83,17 @@ test("Phase 5 workout polish keeps fields/drawers and constrains discard to a co
     "leftWeight",
     "rightWeight",
     "rpeDraft",
-    "SET_TYPES[(index + 1) % SET_TYPES.length]",
+    "SET_TYPES.map",
     "Previous:",
     "Next-session guidance",
     '"Finish"',
   ])
     assert.ok(workout.includes(value), value);
-  assert.doesNotMatch(workout, /Done with set|typeOpen|100px\+env/);
+  assert.doesNotMatch(
+    workout,
+    /Done with set|Cycles normal|\(index \+ 1\) % SET_TYPES.length|100px\+env/,
+  );
+  assert.match(workout, /<Drawer open=\{typeOpen\} onOpenChange=\{setTypeOpen\} autoFocus/);
   assert.match(workout, /w-\[calc\(100%-2rem\)\] max-w-sm rounded-\[20px\]/);
   assert.match(workout, /Discard this workout\?/);
   assert.match(workout, /Keep workout/);

@@ -390,6 +390,41 @@ test("Discard workout is inside Finish confirmation and still requires its separ
   assert.equal(f.destinations[0].to, "/bulk/training");
 });
 
+test("compact Finish confirmation keeps balanced 48px actions and cancellation leaves the workout untouched", () => {
+  const value = session({
+    exercises: [
+      exercise("ex1", {
+        sets: [makeSet("set", 1, { bilateralWeight: 20, bilateralReps: 10, rpe: 8 })],
+      }),
+    ],
+  });
+  const f = fixture(workoutSource, "BulkWorkoutSessionView", { session: value, progression: {} });
+  const before = setRows(f.render())[0].props.draft;
+  find(f.render(), "Finish").props.onClick();
+  const dialog = nodes(f.render(), (n) => n.type === "AlertDialog" && n.props.open)[0];
+  assert.ok(dialog);
+  assert.match(text(dialog), /Finish this workout\?/);
+  assert.match(text(dialog), /Your logged sets will be saved to workout history\./);
+  const content = nodes(dialog, (n) => n.type === "AlertDialogContent")[0];
+  assert.match(content.props.className, /gap-3.*p-4/);
+  const row = nodes(dialog, (n) => n.type === "AlertDialogFooter")[0];
+  assert.match(row.props.className, /grid grid-cols-2 gap-2/);
+  for (const kind of ["AlertDialogCancel", "AlertDialogAction"]) {
+    assert.match(nodes(row, (n) => n.type === kind)[0].props.className, /h-12 w-full/);
+  }
+  assert.equal(text(nodes(row, (n) => n.type === "AlertDialogCancel")[0]), "Keep logging");
+  assert.equal(text(nodes(row, (n) => n.type === "AlertDialogAction")[0]), "Finish workout");
+  const actions = nodes(dialog, (n) => n.type === "div" && n.props.className === "space-y-1")[0];
+  assert.ok(find(actions, "Discard workout"));
+  assert.match(find(actions, "Discard workout").props.className, /min-h-11.*text-xs.*text-danger/);
+  // Radix AlertDialogCancel closes through the existing Root callback; it has no mutation handler.
+  assert.equal(nodes(row, (n) => n.type === "AlertDialogCancel")[0].props.onClick, undefined);
+  dialog.props.onOpenChange(false);
+  assert.equal(nodes(f.render(), (n) => n.type === "AlertDialog" && n.props.open).length, 0);
+  assert.deepEqual(setRows(f.render())[0].props.draft, before);
+  assert.equal(f.calls.length, 0);
+});
+
 test("Phase 5 focus shows real exercises, keeps hidden sets mounted, and preserves per-set RPE drafts", async () => {
   const f = fixture(workoutSource, "BulkWorkoutSessionView", {
     session: session(),
@@ -513,12 +548,12 @@ test("Phase 5 RPE drawer keeps original optional choices and saves through the r
   assert.ok(find(f.render(), "RPE"));
 });
 
-test("set-type badge cycles normal → W → F → D → normal through the existing change callback", () => {
-  for (const [setType, marker, tone, nextType] of [
-    ["warmup", "W", "warn", "failure"],
-    ["failure", "F", "danger", "drop"],
-    ["drop", "D", "chart-2", "normal"],
-    ["normal", "1", "foreground", "warmup"],
+test("compact set badge opens all four choices without cycling and direct selection closes the picker", () => {
+  for (const [setType, marker, tone] of [
+    ["warmup", "W", "warn"],
+    ["failure", "F", "danger"],
+    ["drop", "D", "chart-2"],
+    ["normal", "1", "foreground"],
   ]) {
     const updates = [];
     const f = fixture(workoutSource, "WorkoutSetRow", {
@@ -534,13 +569,65 @@ test("set-type badge cycles normal → W → F → D → normal through the exis
     });
     const badge = find(f.render(), marker);
     assert.match(badge.props.className, new RegExp(`text-${tone}`));
+    assert.equal(badge.props["aria-haspopup"], "dialog");
+    assert.equal(badge.props["aria-expanded"], false);
     badge.props.onClick();
+    assert.equal(updates.length, 0, "opening the picker must not change or save the type");
+    const picker = () => nodes(f.render(), (n) => n.type === "Drawer" && n.props.open)[0];
+    assert.equal(picker().props.autoFocus, true);
+    assert.match(text(picker()), /Set\s+1\s+type/);
+    assert.equal(find(f.render(), marker).props["aria-expanded"], true);
+    const choices = nodes(picker(), (n) => n.type === "button" && "aria-pressed" in n.props);
     assert.deepEqual(
-      updates.map((patch) => ({ ...patch })),
-      [{ setType: nextType }],
+      choices.map((choice) => text(choice).trim()),
+      ["Normal", "Warmup", "Failure", "Dropset"],
     );
+    assert.equal(choices.filter((n) => n.props["aria-pressed"]).length, 1);
+    for (const choice of choices) assert.match(choice.props.className, /min-h-12/);
+    for (const [label, chosenType] of [
+      ["Normal", "normal"],
+      ["Warmup", "warmup"],
+      ["Failure", "failure"],
+      ["Dropset", "drop"],
+    ]) {
+      find(f.render(), marker).props.onClick();
+      find(picker(), label).props.onClick();
+      assert.deepEqual({ ...updates.at(-1) }, { setType: chosenType });
+      assert.equal(picker(), undefined, "each selection closes the drawer");
+      assert.equal(find(f.render(), marker).props["aria-expanded"], false);
+    }
     assert.equal(f.calls.length, 0);
   }
+});
+
+test("direct set-type selection retains the existing autosave path and all other set values", async () => {
+  const value = session({
+    exercises: [
+      exercise("ex1", {
+        sets: [makeSet("set", 1, { bilateralWeight: 20, bilateralReps: 10, rpe: 8.5 })],
+      }),
+    ],
+  });
+  const f = fixture(workoutSource, "BulkWorkoutSessionView", { session: value, progression: {} });
+  const row = fixture(workoutSource, "WorkoutSetRow", setRows(f.render())[0].props);
+  find(row.render(), "1").props.onClick();
+  assert.equal(f.calls.length, 0);
+  find(
+    nodes(row.render(), (n) => n.type === "Drawer" && n.props.open)[0],
+    "Failure",
+  ).props.onClick();
+  await f.flushTimers();
+  const saves = f.calls.filter(([name]) => name === "saveBulkTrainingSet");
+  assert.equal(saves.length, 1);
+  assert.equal(saves[0][2].setType, "failure");
+  assert.equal(saves[0][2].bilateralWeight, 20);
+  assert.equal(saves[0][2].bilateralReps, 10);
+  assert.equal(saves[0][2].rpe, 8.5);
+  assert.equal(nodes(f.render(), (n) => n.props.role === "timer").length, 0);
+  assert.equal(
+    f.calls.some(([name]) => /finish|discard/i.test(name)),
+    false,
+  );
 });
 
 test("compact set row keeps previous, load, reps, RPE and checkmark including bodyweight and both sides", () => {
@@ -576,7 +663,7 @@ test("compact set row keeps previous, load, reps, RPE and checkmark including bo
     assert.match(text(grid), /Previous:\s+20×10/);
     assert.equal(
       nodes(grid, (n) => n.type === "button" && n.props["aria-haspopup"] === "dialog").length,
-      1,
+      2,
     );
     assert.ok(find(grid, "8.5"));
     const fields = nodes(grid, (n) => n.type === "DecimalInput");

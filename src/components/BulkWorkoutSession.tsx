@@ -665,7 +665,7 @@ export function BulkWorkoutSessionView({
               {adding.has(exercise.id) ? "Adding…" : "Add set"}
             </Button>
             <p className="text-xs text-muted-foreground">
-              Tap a set badge: <span className="text-warn">W</span> warmup ·{" "}
+              Tap a set badge to choose: <span className="text-warn">W</span> warmup ·{" "}
               <span className="text-danger">F</span> failure ·{" "}
               <span className="text-chart-2">D</span> dropset
             </p>
@@ -769,34 +769,41 @@ export function BulkWorkoutSessionView({
         </div>
       </div>
       <AlertDialog open={finishDialog} onOpenChange={setFinishDialog}>
-        <AlertDialogContent className="w-[calc(100%-2rem)] max-w-sm rounded-[20px] sm:rounded-[20px]">
-          <AlertDialogHeader>
-            <AlertDialogTitle>
+        <AlertDialogContent className="w-[calc(100%-2rem)] max-w-sm gap-3 rounded-[20px] p-4 sm:rounded-[20px]">
+          <AlertDialogHeader className="space-y-1 sm:text-center">
+            <AlertDialogTitle className="text-base leading-6">
               {incomplete ? "Finish with incomplete sets?" : "Finish this workout?"}
             </AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogDescription className="text-[13px] leading-5">
               {incomplete
                 ? `You still have ${incomplete} incomplete ${incomplete === 1 ? "set" : "sets"}. Their missing values will remain empty in history.`
                 : "Your logged sets will be saved to workout history."}
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter className="flex-col gap-2 sm:flex-row sm:gap-2 sm:space-x-0">
-            <AlertDialogCancel className="min-h-11">Keep logging</AlertDialogCancel>
-            <AlertDialogAction className="min-h-11" onClick={() => void finish(incomplete > 0)}>
-              {incomplete ? "Finish anyway" : "Finish workout"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-          <button
-            type="button"
-            className="min-h-11 w-full text-xs font-medium text-danger/80 disabled:opacity-50"
-            onClick={() => {
-              setFinishDialog(false);
-              setDiscardDialog(true);
-            }}
-            disabled={finishing || discarding}
-          >
-            Discard workout
-          </button>
+          <div className="space-y-1">
+            <AlertDialogFooter className="grid grid-cols-2 gap-2 sm:space-x-0">
+              <AlertDialogCancel className="mt-0 h-12 w-full rounded-xl px-2 text-sm">
+                Keep logging
+              </AlertDialogCancel>
+              <AlertDialogAction
+                className="h-12 w-full rounded-xl px-2 text-sm"
+                onClick={() => void finish(incomplete > 0)}
+              >
+                {incomplete ? "Finish anyway" : "Finish workout"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+            <button
+              type="button"
+              className="min-h-11 w-full rounded-lg text-xs font-medium text-danger/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+              onClick={() => {
+                setFinishDialog(false);
+                setDiscardDialog(true);
+              }}
+              disabled={finishing || discarding}
+            >
+              Discard workout
+            </button>
+          </div>
         </AlertDialogContent>
       </AlertDialog>
       <AlertDialog open={discardDialog} onOpenChange={setDiscardDialog}>
@@ -862,6 +869,8 @@ function WorkoutSetRow({
   onSwipeClose: () => void;
 }) {
   const done = isSessionSetComplete(draft, exercise);
+  const [typeOpen, setTypeOpen] = useState(false);
+  const typeTriggerRef = useRef<HTMLButtonElement>(null);
   const [rpeOpen, setRpeOpen] = useState(false);
   const [rpeDraft, setRpeDraft] = useState<number | null>(draft.rpe);
   const rowRef = useRef<HTMLDivElement>(null);
@@ -968,13 +977,12 @@ function WorkoutSetRow({
           )}
         >
           <button
+            ref={typeTriggerRef}
             type="button"
-            onClick={() => {
-              const index = SET_TYPES.findIndex((option) => option.value === draft.setType);
-              onChange({ setType: SET_TYPES[(index + 1) % SET_TYPES.length]!.value });
-            }}
+            onClick={() => setTypeOpen(true)}
             aria-label={`Set ${set.order}, ${draft.setType} set. Change set type`}
-            aria-description="Cycles normal, warmup, failure and dropset"
+            aria-haspopup="dialog"
+            aria-expanded={typeOpen}
             className={cn(
               "grid h-12 min-w-10 place-items-center rounded-[14px] border text-xs font-medium transition-colors hover:brightness-110 active:brightness-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card motion-reduce:transition-none",
               typeTone,
@@ -1073,6 +1081,51 @@ function WorkoutSetRow({
         ) : null}
       </div>
 
+      <Drawer open={typeOpen} onOpenChange={setTypeOpen} autoFocus>
+        <DrawerContent
+          className="mx-auto max-w-lg pb-[env(safe-area-inset-bottom)]"
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            typeTriggerRef.current?.focus();
+          }}
+        >
+          <DrawerHeader>
+            <DrawerTitle>Set {set.order} type</DrawerTitle>
+            <DrawerDescription>Choose how this set should be recorded.</DrawerDescription>
+          </DrawerHeader>
+          <div className="space-y-1 px-4">
+            {SET_TYPES.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                className={cn(
+                  "flex min-h-12 w-full items-center justify-between rounded-xl border px-4 text-left text-sm font-medium transition-colors hover:brightness-110 active:brightness-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none",
+                  SET_TYPE_TONES[option.value],
+                  draft.setType === option.value && "ring-1 ring-inset ring-current",
+                )}
+                aria-pressed={draft.setType === option.value}
+                onClick={() => {
+                  onChange({ setType: option.value });
+                  setTypeOpen(false);
+                }}
+              >
+                {option.label}
+                {draft.setType === option.value ? (
+                  <Check className="h-4 w-4" aria-hidden="true" />
+                ) : null}
+              </button>
+            ))}
+          </div>
+          <DrawerFooter>
+            <DrawerClose asChild>
+              <Button variant="outline" className="min-h-11">
+                Cancel
+              </Button>
+            </DrawerClose>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
+
       <Drawer open={rpeOpen} onOpenChange={setRpeOpen}>
         <DrawerContent className="mx-auto max-w-lg pb-[env(safe-area-inset-bottom)]">
           <DrawerHeader>
@@ -1122,10 +1175,10 @@ function WorkoutSetRow({
 }
 
 const SET_TYPES: Array<{ value: BulkSetType; label: string }> = [
-  { value: "normal", label: "Normal set" },
-  { value: "warmup", label: "Warm-up set" },
-  { value: "failure", label: "Failure set" },
-  { value: "drop", label: "Drop set" },
+  { value: "normal", label: "Normal" },
+  { value: "warmup", label: "Warmup" },
+  { value: "failure", label: "Failure" },
+  { value: "drop", label: "Dropset" },
 ];
 
 const SET_TYPE_TONES: Record<BulkSetType, string> = {
