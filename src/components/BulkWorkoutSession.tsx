@@ -954,7 +954,7 @@ function WorkoutSetRow({
         : draft.setType === "drop"
           ? "D"
           : String(set.order);
-  const typeTone = "border-border bg-elevated text-foreground";
+  const typeTone = SET_TYPE_TONES[draft.setType];
   const context =
     exercise.executionMode === "bilateral"
       ? `${draft.bilateralWeight != null ? `${draft.bilateralWeight} kg` : exercise.isBodyweight ? "BW" : "—"} · ${draft.bilateralReps ?? "—"} reps`
@@ -996,7 +996,7 @@ function WorkoutSetRow({
             onClick={() => setTypeOpen(true)}
             aria-label={`Set ${set.order}, ${draft.setType} set. Change set type`}
             className={cn(
-              "grid h-12 min-w-10 place-items-center rounded-[14px] border text-xs font-medium",
+              "grid h-12 min-w-10 place-items-center rounded-[14px] border text-xs font-medium transition-colors hover:brightness-110 active:brightness-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card motion-reduce:transition-none",
               typeTone,
             )}
           >
@@ -1051,18 +1051,21 @@ function WorkoutSetRow({
           </button>
         ) : null}
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-x-2 px-3 text-xs text-muted-foreground">
+      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 px-3 pb-1 pt-1 text-xs text-muted-foreground">
         <span className="min-w-0 break-words">Previous: {previous}</span>
         <button
           type="button"
-          className="min-h-11 px-2 text-sm"
+          className="inline-flex min-h-11 shrink-0 items-center justify-between gap-2 rounded-xl border border-input bg-elevated px-3 text-sm font-medium text-foreground transition-colors hover:border-ring/60 hover:bg-muted active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card motion-reduce:transition-none"
           aria-label={`${exercise.name}, set ${set.order}, RPE ${draft.rpe ?? "not set"}`}
+          aria-haspopup="dialog"
+          aria-expanded={rpeOpen}
           onClick={() => {
             setRpeDraft(draft.rpe);
             setRpeOpen(true);
           }}
         >
-          RPE {draft.rpe ?? "—"}
+          <span>{draft.rpe == null ? "Choose RPE" : `RPE ${draft.rpe}`}</span>
+          <ChevronDown className="control-chevron text-muted-foreground" aria-hidden="true" />
         </button>
       </div>
       <div
@@ -1093,14 +1096,18 @@ function WorkoutSetRow({
                 <button
                   type="button"
                   className={cn(
-                    "flex min-h-12 w-full items-center justify-between rounded-xl px-4 text-left text-sm font-medium",
-                    draft.setType === option.value ? "bg-primary/10 text-primary" : "bg-elevated",
+                    "flex min-h-12 w-full items-center justify-between rounded-xl border px-4 text-left text-sm font-medium transition-colors hover:brightness-110 active:brightness-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none",
+                    SET_TYPE_TONES[option.value],
+                    draft.setType === option.value && option.value === "normal"
+                      ? "border-primary/30 bg-primary/10 text-primary"
+                      : "",
                   )}
+                  aria-pressed={draft.setType === option.value}
                   onClick={() => onChange({ setType: option.value })}
                 >
                   {option.label}
                   {draft.setType === option.value ? (
-                    <Check className="h-4 w-4" aria-hidden="true" />
+                    <Check className="h-4 w-4 text-primary" aria-hidden="true" />
                   ) : null}
                 </button>
               </DrawerClose>
@@ -1170,6 +1177,13 @@ const SET_TYPES: Array<{ value: BulkSetType; label: string }> = [
   { value: "failure", label: "Failure set" },
   { value: "drop", label: "Drop set" },
 ];
+
+const SET_TYPE_TONES: Record<BulkSetType, string> = {
+  warmup: "border-warn/30 bg-warn/10 text-warn",
+  normal: "border-border bg-elevated text-foreground",
+  failure: "border-danger/30 bg-danger/10 text-danger",
+  drop: "border-chart-2/30 bg-chart-2/10 text-chart-2",
+};
 
 const RPE_VALUES = [6, 7, 7.5, 8, 8.5, 9, 9.5, 10] as const;
 const rpeDescription = (value: number | null) =>

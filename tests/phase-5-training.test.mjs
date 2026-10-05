@@ -345,10 +345,21 @@ test("Phase 5 RPE drawer keeps original optional choices and saves through the r
     (n) => n.type === "button" && n.props["aria-label"]?.includes("RPE"),
   )[0];
   assert.ok(rpe);
+  assert.equal(rpe.props["aria-haspopup"], "dialog");
+  assert.equal(rpe.props["aria-expanded"], false);
+  assert.match(rpe.props.className, /min-h-11.*border border-input bg-elevated/);
   rpe.props.onClick();
+  assert.equal(
+    nodes(f.render(), (n) => n.type === "button" && n.props["aria-label"]?.includes("RPE"))[0]
+      .props["aria-expanded"],
+    true,
+  );
   const choices = nodes(
     f.render(),
-    (n) => n.type === "button" && typeof n.props["aria-pressed"] === "boolean",
+    (n) =>
+      n.type === "button" &&
+      typeof n.props["aria-pressed"] === "boolean" &&
+      typeof n.props.children === "number",
   );
   assert.deepEqual(
     choices.map((n) => Number(text(n))),
@@ -360,6 +371,43 @@ test("Phase 5 RPE drawer keeps original optional choices and saves through the r
   find(f.render(), "Clear RPE").props.onClick();
   assert.equal(updates.at(-1).rpe, null);
   assert.match(text(f.render()), /Previous:\s+20×10/);
+  f.update({ ...props, draft: { ...props.draft, rpe: null } });
+  assert.ok(find(f.render(), "Choose RPE"));
+});
+
+test("set-type marker and picker share muted tones without changing set data or completion", () => {
+  for (const [setType, marker, tone, label] of [
+    ["warmup", "W", "warn", "Warm-up set"],
+    ["failure", "F", "danger", "Failure set"],
+    ["drop", "D", "chart-2", "Drop set"],
+    ["normal", "1", "foreground", "Normal set"],
+  ]) {
+    const updates = [];
+    const f = fixture(workoutSource, "WorkoutSetRow", {
+      exercise: exercise(),
+      set: makeSet("set", 1),
+      draft: { ...makeSet("set", 1), setType },
+      saving: false,
+      removing: false,
+      canRemove: false,
+      swipeOpen: false,
+      previous: "20×10",
+      onChange: (patch) => updates.push(patch),
+    });
+    const badge = find(f.render(), marker);
+    assert.match(badge.props.className, new RegExp(`text-${tone}`));
+    badge.props.onClick();
+    const option = find(f.render(), label);
+    assert.equal(option.props["aria-pressed"], true);
+    if (setType !== "normal")
+      assert.match(option.props.className, new RegExp(`bg-${tone}/10.*text-${tone}`));
+    option.props.onClick();
+    assert.deepEqual(
+      updates.map((patch) => ({ ...patch })),
+      [{ setType }],
+    );
+    assert.equal(f.calls.length, 0);
+  }
 });
 
 test("Phase 5 add/remove set handlers keep snapshots and use the same session RPCs", async () => {

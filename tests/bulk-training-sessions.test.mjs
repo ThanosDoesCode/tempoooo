@@ -165,7 +165,7 @@ test("public workout UI resumes durable compact sessions and protects set metada
     assert.match(workout, new RegExp(`>${label}<`));
   assert.match(workout, /exercise\.isBodyweight \? "\+kg" : "kg"/);
   assert.match(workout, /Previous:/);
-  assert.match(workout, /RPE \{draft\.rpe/);
+  assert.match(workout, /draft\.rpe == null \? "Choose RPE" : `RPE \$\{draft\.rpe\}`/);
   assert.match(workout, /Add set/);
   assert.match(workout, /SET_TYPES/);
   assert.match(workout, /RPE_VALUES/);
