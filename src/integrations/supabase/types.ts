@@ -2262,6 +2262,10 @@ export type Database = {
         Returns: string
       }
       safe_uuid: { Args: { _t: string }; Returns: string }
+      save_bulk_targets_for_local_day: {
+        Args: { _profile: string; _targets: Json; _timezone: string }
+        Returns: string
+      }
       save_bulk_training_plan: {
         Args: {
           _days: Json
