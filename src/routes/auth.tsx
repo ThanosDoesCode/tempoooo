@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { HistoryBackLink } from "@/components/HistoryBackLink";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { lovable } from "@/integrations/lovable";
 import { supabase } from "@/integrations/supabase/client";
 import { syncProfile } from "@/lib/auth";
@@ -48,14 +48,14 @@ type PendingAction = "password" | "google" | null;
 function AuthPage() {
   const navigate = useNavigate();
   const search = Route.useSearch();
-  const goAfterAuth = async () => {
+  const goAfterAuth = useCallback(async () => {
     const destination = takeDestination(search.redirect ?? null);
     if (destination) {
       await navigate({ href: destination, replace: true });
       return;
     }
     await navigate({ to: "/challenge", replace: true });
-  };
+  }, [navigate, search.redirect]);
   const [mode, setMode] = useState<"signin" | "signup">(search.mode ?? "signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -75,7 +75,7 @@ function AuthPage() {
         setNotice({ kind: "error", text: userFacingError(error, "restore your account") });
       }
     });
-  }, [navigate, search.redirect]);
+  }, [goAfterAuth, search.redirect]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();

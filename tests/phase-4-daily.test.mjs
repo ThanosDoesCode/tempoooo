@@ -359,12 +359,20 @@ test("weight save sends the unchanged local date and device timezone to the RLS-
     ],
     ["bodyweight", "owner"],
   ]);
+  for (const note of [null, ""]) {
+    await context.exports.saveBulkWeight("owner", {
+      logDate: "2026-02-01",
+      weightKg: 71.5,
+      note,
+    });
+    assert.equal(calls.at(-2)[1]._note, note, "no-note values reach SQL without coercion");
+  }
   fail = true;
   await assert.rejects(
     context.exports.saveBulkWeight("owner", { logDate: "2026-02-01", weightKg: 72, note: "Keep" }),
     /Offline/,
   );
-  assert.equal(calls.filter(([name]) => name === "bodyweight").length, 1);
+  assert.equal(calls.filter(([name]) => name === "bodyweight").length, 3);
 });
 
 test("Phase 4 custom meal preserves date/macros, clears on confirmed success and refetches daily totals", async () => {

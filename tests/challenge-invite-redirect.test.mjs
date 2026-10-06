@@ -16,7 +16,7 @@ test("the auth gate preserves the page a signed-out visitor opened", async () =>
 
 test("sign-in returns the visitor to the invitation instead of the challenge", async () => {
   const source = await read("src/routes/auth.tsx");
-  assert.match(source, /const goAfterAuth = async \(\) => \{/);
+  assert.match(source, /const goAfterAuth = useCallback\(async \(\) => \{/);
   assert.match(source, /takeDestination\(search\.redirect \?\? null\)/);
   assert.match(source, /rememberDestination\(search\.redirect\)/);
   // No authenticated path may hard-code the challenge as the only destination.

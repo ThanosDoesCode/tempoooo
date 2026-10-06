@@ -383,6 +383,16 @@ test("local-day weight RPC preserves the date constraint and same-day upserts ac
     assert.deepEqual(rows, [
       { id: original.id, log_date: dates.local_day, weight_kg: "71.50", note: "Edited" },
     ]);
+    for (const note of [null, ""]) {
+      await asUser(owner, () => rpc(dates.local_day, 71.5, note));
+      const updated = (
+        await db.query(
+          "SELECT id,note FROM public.bulk_weight_entries WHERE bulk_profile_id=$1 AND log_date=$2",
+          [profile, dates.local_day],
+        )
+      ).rows;
+      assert.deepEqual(updated, [{ id: original.id, note }]);
+    }
     assert.equal((await db.query("SHOW TimeZone")).rows[0].TimeZone, "Etc/GMT+12");
 
     const tomorrow = (

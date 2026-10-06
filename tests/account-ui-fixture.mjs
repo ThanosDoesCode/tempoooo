@@ -33,6 +33,9 @@ export function accountUI(file, exportName, modules = {}, props = {}, globals = 
       if (!slots[i] || !same(slots[i].deps, deps)) slots[i] = { value: fn(), deps };
       return slots[i].value;
     },
+    useCallback(fn, deps) {
+      return react.useMemo(() => fn, deps);
+    },
     useEffect(fn, deps) {
       const i = cursor++;
       if (!slots[i] || !same(slots[i].deps, deps)) {

@@ -719,6 +719,88 @@ test("Phase 7 auth still exposes labelled credentials and Google provider with r
   assert.deepEqual(plain(calls), [{ email: "someone@tempo.test", password: "test-password" }]);
 });
 
+for (const flow of ["restored session", "password", "Google"]) {
+  test(`auth ${flow} redirects once after profile sync and preserves its pending destination`, async () => {
+    const storage = new Map();
+    const localStorage = {
+      getItem: (key) => storage.get(key) ?? null,
+      setItem: (key, value) => storage.set(key, value),
+      removeItem: (key) => storage.delete(key),
+    };
+    const destinations = presentationComponent(
+      "src/lib/pending-destination.ts",
+      {},
+      {
+        localStorage,
+        URL,
+      },
+    );
+    const search = flow === "restored session" ? { redirect: "/bulk/prs?period=all#records" } : {};
+    if (flow === "password") destinations.rememberDestination("/bulk/meals/history");
+    const profile = deferred();
+    const user = { id: "owner" };
+    const session = { user };
+    let sessionReads = 0;
+    let profileSyncs = 0;
+    const navigation = [];
+    const ui = accountUI(
+      "src/routes/auth.tsx",
+      "Route",
+      {
+        "@tanstack/react-router": router((value) => navigation.push(value), search),
+        "@/integrations/supabase/client": {
+          supabase: {
+            auth: {
+              getSession: async () => {
+                sessionReads++;
+                return { data: { session: flow === "restored session" ? session : null } };
+              },
+              signInWithPassword: async () => ({ data: { user, session }, error: null }),
+              getUser: async () => ({ data: { user }, error: null }),
+            },
+          },
+        },
+        "@/integrations/lovable": {
+          lovable: { auth: { signInWithOAuth: async () => ({ error: null }) } },
+        },
+        "@/lib/auth": {
+          syncProfile: async () => {
+            profileSyncs++;
+            await profile.promise;
+          },
+        },
+        "@/lib/network-errors": { userFacingError: () => "Unable to sign in" },
+        "@/lib/pending-destination": destinations,
+      },
+      {},
+      { localStorage },
+    );
+    await ui.flush();
+    ui.find("input")[0].props.onChange(event("someone@tempo.test"));
+    ui.find("input")[1].props.onChange(event("test-password"));
+    if (flow === "password") ui.find("form")[0].props.onSubmit(event());
+    if (flow === "Google") ui.button("Continue with Google").props.onClick();
+    await ui.flush();
+    assert.equal(sessionReads, 1, "form/pending state does not rerun session restoration");
+    assert.equal(profileSyncs, 1);
+    assert.deepEqual(navigation, [], "redirect still waits for profile synchronization");
+    profile.resolve();
+    await ui.flush();
+    await ui.flush();
+    const expected =
+      flow === "restored session"
+        ? { href: search.redirect, replace: true }
+        : flow === "password"
+          ? { href: "/bulk/meals/history", replace: true }
+          : { to: "/challenge", replace: true };
+    assert.deepEqual(plain(navigation), [expected]);
+    assert.equal(destinations.readDestination(), null, "pending destination is consumed once");
+    assert.equal(sessionReads, 1);
+    assert.equal(profileSyncs, 1);
+    ui.dispose();
+  });
+}
+
 for (const name of ["NutritionTargetsEditor", "WeeklyWorkoutGoalEditor"]) {
   test(`Phase 7 ${name} preserves the retry draft during the real store's optimistic rollback sequence`, async () => {
     const pending = deferred();
