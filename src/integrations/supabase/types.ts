@@ -2302,7 +2302,7 @@ export type Database = {
       save_bulk_weight_for_local_day: {
         Args: {
           _log_date: string
-          _note: string | null
+          _note: string
           _profile: string
           _timezone: string
           _weight_kg: number
