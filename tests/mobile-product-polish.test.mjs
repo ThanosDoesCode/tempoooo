@@ -286,12 +286,14 @@ test("Goal discovery is persisted on the self-owned profile and activation ackno
 });
 
 test("nested navigation, evidence recovery and sign-out stay local and responsive", async () => {
-  const [shell, profile, evidence] = await Promise.all([
+  const [shell, profile, evidence, backLink] = await Promise.all([
     read("src/components/AppShell.tsx"),
     read("src/routes/_authenticated/profile.tsx"),
     read("src/components/ChallengeEvidenceViewer.tsx"),
+    read("src/components/HistoryBackLink.tsx"),
   ]);
-  assert.match(shell, /ArrowLeft/);
+  assert.match(shell, /HistoryBackLink/);
+  assert.match(backLink, /BackLabel/);
   assert.match(shell, /min-h-11/);
   assert.match(profile, /setSigningOut\(true\)/);
   assert.match(profile, /Signing out…/);

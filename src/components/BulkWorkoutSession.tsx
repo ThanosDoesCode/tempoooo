@@ -9,7 +9,6 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   ChevronDown,
-  ArrowLeft,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -19,6 +18,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "./ui/button";
+import { BackLabel, backControlClassName } from "./BackControl";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -1286,9 +1286,9 @@ export function CompletedWorkout({
         </Card>
       ))}
       {showBackLink ? (
-        <Button asChild variant="outline" className="min-h-11 w-full">
-          <Link to="/bulk/training">Back to Training</Link>
-        </Button>
+        <Link to="/bulk/training" className={backControlClassName}>
+          <BackLabel>Training</BackLabel>
+        </Link>
       ) : null}
     </div>
   );

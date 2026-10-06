@@ -82,12 +82,17 @@ function TodayPage() {
   const mealTarget = nutrition.data?.day?.targets.calories ?? data?.targets.calories ?? 0;
   const mealsComplete =
     mealTarget > 0 && nutritionMacroStatus(totals.calories, mealTarget).status !== "under";
-  const habits = [
-    weight != null,
-    day?.sleepHours != null && day.sleepQuality != null,
-    workoutDone || rest,
-    mealsComplete,
-  ];
+  // Presentation only: weight and sleep remain separate persisted Goal requirements.
+  const sleep = day?.sleepHours;
+  const morningSubtitle =
+    weight == null && sleep == null
+      ? "Add weight and sleep"
+      : weight == null
+        ? `${sleep} h sleep · add weight`
+        : sleep == null
+          ? `${weight} kg · add sleep`
+          : `${weight} kg · ${sleep} h sleep`;
+  const habits = [weight != null && sleep != null, workoutDone || rest, mealsComplete];
   const target = resolveWeeklyWorkoutTarget({
     weeklyWorkoutGoal: data?.targets.weeklyWorkoutGoal ?? 5,
     targetDaysPerWeek: data?.targets.trainingDaysPerWeek ?? null,
@@ -171,23 +176,12 @@ function TodayPage() {
           <>
             <div className="flex justify-between px-1 text-[13px] text-muted-foreground">
               <span>Today's habits</span>
-              <span>{habits.filter(Boolean).length} of 4 done</span>
+              <span>
+                {habits.filter(Boolean).length} of {habits.length} done
+              </span>
             </div>
             <div className="card-surface rounded-[20px] px-4 py-0.5">
-              {habit(
-                "Weigh-in",
-                weight == null ? "Add today's weight" : `${weight} kg`,
-                habits[0]!,
-                "/bulk/morning",
-              )}
-              {habit(
-                "Sleep",
-                day?.sleepHours == null
-                  ? "Add sleep and quality"
-                  : `${day.sleepHours} hours · quality ${day.sleepQuality ?? "not logged"} of 5`,
-                habits[1]!,
-                "/bulk/morning",
-              )}
+              {habit("Morning check-in", morningSubtitle, habits[0]!, "/bulk/morning")}
               <div className="border-t border-border" role="group" aria-label="Workout">
                 <div className="flex min-h-[62px] items-center gap-[14px] py-2">
                   <Link
@@ -196,14 +190,14 @@ function TodayPage() {
                     className="flex min-w-0 flex-1 items-center gap-[14px]"
                   >
                     <span
-                      aria-label={habits[2] ? "Complete" : "Not complete"}
+                      aria-label={habits[1] ? "Complete" : "Not complete"}
                       className={
-                        habits[2]
+                        habits[1]
                           ? "grid h-6 w-6 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground"
                           : "h-6 w-6 shrink-0 rounded-full border-2 border-muted-foreground/40"
                       }
                     >
-                      {habits[2] ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : null}
+                      {habits[1] ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : null}
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block text-[15px] font-medium">Workout</span>
@@ -221,7 +215,7 @@ function TodayPage() {
                       </span>
                     </span>
                   </Link>
-                  {!habits[2] || activeSession.data ? (
+                  {!habits[1] || activeSession.data ? (
                     <Link
                       to="/bulk/training"
                       preload="intent"
@@ -269,7 +263,7 @@ function TodayPage() {
               {habit(
                 "Meals",
                 `${totals.calories} of ${mealTarget} kcal`,
-                habits[3]!,
+                habits[2]!,
                 "/bulk/meals",
               )}
             </div>

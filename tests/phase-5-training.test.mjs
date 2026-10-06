@@ -210,7 +210,13 @@ function fixture(source, exportName, initialProps, options = {}) {
       if (options.modules?.[name]) return options.modules[name];
       if (modules[name]) return modules[name];
       if (name === "date-fns") return require(name);
-      if (name.includes("ui") || name === "lucide-react" || name.includes("DecimalInput"))
+      if (
+        name.includes("ui") ||
+        name === "lucide-react" ||
+        name.includes("DecimalInput") ||
+        name.endsWith("BackControl") ||
+        name.endsWith("TempoDateTimePicker")
+      )
         return new Proxy({}, { get: (_, key) => String(key) });
       throw Error(name);
     },
@@ -1013,6 +1019,7 @@ test("Phase 5 actual Training route starts one session, resumes its exact id and
     resolveStart;
   const modules = {
     "@/components/AppShell": { AppShell: "AppShell", PageHeader: "PageHeader" },
+    "@/components/HistoryBackLink": { HistoryBackLink: "HistoryBackLink" },
     "@/components/NavRows": { NavRows: "NavRows" },
     "@/components/PageSkeleton": { PageSkeleton: "PageSkeleton" },
     "@/components/TrainingSession": { TrainingSession: "TrainingSession" },

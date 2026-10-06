@@ -239,7 +239,8 @@ test("training UI supports generated, preset and empty custom paths without repl
   assert.match(editor, /Save Changes/);
   assert.match(editor, /Workout days/);
   assert.match(editor, /Edit Day/);
-  assert.match(editor, /Training Plan →/);
+  assert.match(editor, /<BackButton onClick=\{\(\) => setSelectedDayId\(null\)\}/);
+  assert.match(editor, /Training plan/);
   assert.match(editor, /days[\s\S]*\.filter\(\(day\) => day\.id === selectedDayId\)/);
   assert.match(editor, /Save and return/);
   assert.match(editor, /Add Workout Day/);

@@ -5,6 +5,8 @@ import { addDays, format, parseISO } from "date-fns";
 import { useMemo, useRef, useState } from "react";
 import { NavRows } from "@/components/NavRows";
 import { AppShell, PageHeader } from "@/components/AppShell";
+import { TempoDatePicker } from "@/components/TempoDateTimePicker";
+import { HistoryBackLink } from "@/components/HistoryBackLink";
 import { TrainingSession } from "@/components/TrainingSession";
 import { TrainingPlanOverview } from "@/components/TrainingPlanSetup";
 import { iso } from "@/lib/calc";
@@ -141,13 +143,7 @@ function TrainingPage() {
   return (
     <AppShell>
       {usesPlanSetup ? (
-        <Link
-          to="/bulk"
-          preload="intent"
-          className="mb-5 flex min-h-11 items-center text-sm text-muted-foreground"
-        >
-          ‹ Today
-        </Link>
+        <HistoryBackLink fallback="/bulk" fallbackLabel="Today" />
       ) : (
         <PageHeader
           title="Training"
@@ -179,12 +175,12 @@ function TrainingPage() {
       {!usesPlanSetup ? (
         <label className="mb-3 flex items-center justify-between gap-3 text-xs text-muted-foreground">
           Training date
-          <input
-            type="date"
+          <TempoDatePicker
+            label="Training date"
             value={date}
             max={today}
-            onChange={(event) => {
-              if (event.target.value && event.target.value <= today) setDate(event.target.value);
+            onChange={(value) => {
+              if (value && value <= today) setDate(value);
             }}
             className="min-h-11 min-w-0 rounded-xl border border-input bg-elevated px-3 text-base outline-none focus:border-ring"
           />

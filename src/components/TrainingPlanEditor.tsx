@@ -1,6 +1,7 @@
 import { NativeSelect } from "@/components/ui/native-select";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowDown, ArrowLeft, ArrowUp, ChevronRight, Plus, Replace, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronRight, Plus, Replace, Trash2 } from "lucide-react";
+import { BackButton } from "./BackControl";
 import { toast } from "sonner";
 import { PlanExercisePicker } from "@/components/PlanExercisePicker";
 import { Button } from "@/components/ui/button";
@@ -265,15 +266,7 @@ export function TrainingPlanEditor({
           const dayIndex = days.findIndex((item) => item.id === day.id);
           return (
             <Card key={day.id} className="space-y-3">
-              <button
-                type="button"
-                className="-ml-1 flex min-h-11 items-center gap-2 text-sm font-medium text-muted-foreground"
-                onClick={() => setSelectedDayId(null)}
-              >
-                <ArrowLeft className="h-4 w-4 text-primary" aria-hidden="true" />
-                <span className="text-primary">Training Plan →</span>
-                <span className="truncate text-foreground">{day.name}</span>
-              </button>
+              <BackButton onClick={() => setSelectedDayId(null)}>Training plan</BackButton>
               <div className="flex items-start gap-2">
                 <label className="min-w-0 flex-1 text-xs font-medium text-muted-foreground">
                   Day {dayIndex + 1}

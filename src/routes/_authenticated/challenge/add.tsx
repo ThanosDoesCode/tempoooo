@@ -1,3 +1,4 @@
+import { TempoDatePicker } from "@/components/TempoDateTimePicker";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
@@ -610,12 +611,12 @@ function AddActivity() {
         {moreOpen ? (
           <div className="space-y-3 border-t border-border pt-3">
             <Field label="Activity date">
-              <input
-                type="date"
+              <TempoDatePicker
+                label="Activity date"
                 max={today}
                 value={date}
                 disabled={busy}
-                onChange={(e) => setDate(e.target.value)}
+                onChange={setDate}
                 className={inputCls}
               />
             </Field>

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, Check, Dumbbell } from "lucide-react";
+import { Check, Dumbbell } from "lucide-react";
+import { BackButton } from "@/components/BackControl";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { Card, PendingLabel } from "@/components/ui-kit";
 import { activeBulkMemberships, bulkOwnerQueryOptions } from "@/lib/bulk-access";
@@ -281,14 +282,13 @@ function BulkOnboarding() {
         ) : null}
         <div className="mt-4 grid grid-cols-2 gap-2">
           {step > 1 ? (
-            <button
-              type="button"
+            <BackButton
               disabled={busy}
               onClick={() => setStep((step - 1) as Step)}
-              className="flex h-11 items-center justify-center gap-2 rounded-xl border border-border px-3 text-sm font-medium disabled:opacity-60"
+              className="justify-center"
             >
-              <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Back
-            </button>
+              Back
+            </BackButton>
           ) : (
             <button
               type="button"

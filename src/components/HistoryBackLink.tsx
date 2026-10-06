@@ -1,31 +1,49 @@
-import { Link, useRouter } from "@tanstack/react-router";
-import { ArrowLeft } from "lucide-react";
-import { backWithinApp, inAppBackPath } from "@/lib/in-app-back";
+import { defaultParseSearch, Link, useRouter, useRouterState } from "@tanstack/react-router";
+import { BackLabel, backControlClassName } from "./BackControl";
+import { backWithinApp, inAppBackLabel, inAppBackLocation } from "@/lib/in-app-back";
 
 export function HistoryBackLink({
   fallback,
   fallbackLabel = "Back",
   originLabels,
+  fallbackParams,
+  fallbackSearch,
+  parentPath,
 }: {
   fallback: string;
   fallbackLabel?: string;
   originLabels?: Readonly<Record<string, string>>;
+  fallbackParams?: Record<string, string>;
+  fallbackSearch?: Record<string, unknown>;
+  /** A detail sharing its parent's pathname must return to that list, not skip it. */
+  parentPath?: string;
 }) {
   const router = useRouter();
-  const previous = inAppBackPath(router.history);
-  const label = previous ? (originLabels?.[previous] ?? "Back") : fallbackLabel;
+  useRouterState({ select: (state) => state.location.href });
+  const location = inAppBackLocation(router.history, parentPath);
+  const previous = location?.pathname;
+  const label = previous
+    ? (originLabels?.[previous] ?? inAppBackLabel(previous) ?? "Back")
+    : fallbackLabel;
   return (
     <Link
       to={previous ?? fallback}
+      {...(!previous && fallbackParams ? { params: fallbackParams } : {})}
+      search={
+        location
+          ? (router.options?.parseSearch ?? defaultParseSearch)(location.search)
+          : (fallbackSearch ?? {})
+      }
+      hash={location?.hash.replace(/^#/, "") ?? ""}
       preload="intent"
-      className="mb-2 inline-flex min-h-11 items-center gap-2 rounded-xl pr-3 text-sm font-semibold text-muted-foreground active:bg-elevated"
+      className={`mb-2 ${backControlClassName}`}
       onClick={(event) => {
         if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
           return;
-        if (backWithinApp(router.history)) event.preventDefault();
+        if (backWithinApp(router.history, parentPath)) event.preventDefault();
       }}
     >
-      <ArrowLeft className="h-4 w-4" aria-hidden="true" /> {label}
+      <BackLabel>{label}</BackLabel>
     </Link>
   );
 }

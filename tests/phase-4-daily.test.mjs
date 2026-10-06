@@ -109,7 +109,7 @@ function fixture(source, exportName, props, options = {}) {
       if (options.modules?.[name]) return options.modules[name];
       if (modules[name]) return modules[name];
       if (name === "date-fns") return require(name);
-      if (name.includes("ui") || name === "lucide-react")
+      if (name.includes("ui") || name === "lucide-react" || name.endsWith("TempoDateTimePicker"))
         return new Proxy({}, { get: (_, key) => String(key) });
       throw new Error(`Unexpected module ${name}`);
     },
@@ -614,7 +614,7 @@ test("Phase 4 Today renders persisted habits and invitation, then skeleton/error
   );
   const tree = f.render();
   assert.match(texts(tree), /81.6 kg/);
-  assert.match(texts(tree), /7.25 hours/);
+  assert.match(texts(tree), /7.25 h sleep/);
   assert.match(texts(tree), /200 of 2500 kcal/);
   assert.match(texts(tree), /My actual plan/);
   assert.ok(find(tree, "ChallengeInviteReceiver"));
@@ -650,11 +650,14 @@ function todayFixture({
   sessions = [],
   save,
   invites = [],
+  weight = 81.6,
+  sleep = 8,
+  quality = 4,
 } = {}) {
   const today = iso(new Date());
   const q = (data) => ({ data, isLoading: false, error: null });
   const data = {
-    days: { [today]: { weight: 81.6, sleepHours: 8, sleepQuality: 4, restDay } },
+    days: { [today]: { weight, sleepHours: sleep, sleepQuality: quality, restDay } },
     workouts: {},
     targets: { ...mealProps.currentTargets, weeklyWorkoutGoal: 6, trainingDaysPerWeek: 3 },
   };
@@ -689,7 +692,7 @@ function todayFixture({
           }),
         },
         "@/lib/bulk-progress-query": {
-          useBulkWeights: () => q([{ logDate: today, weightKg: 81.6 }]),
+          useBulkWeights: () => q(weight == null ? [] : [{ logDate: today, weightKg: weight }]),
         },
         "@/lib/bulk-nutrition-query": { useBulkNutritionDay: () => q({ day: null, entries: [] }) },
         "@/lib/bulk-training-sessions": {
@@ -736,8 +739,8 @@ test("Phase 4.1 weekly goal stays independent of plan frequency and inside Worko
   const tree = f.render();
   assert.match(texts(workoutGroup(tree)), /2 of 6 workouts this week/);
   assert.equal((texts(tree).match(/2 of 6 workouts this week/g) ?? []).length, 1);
-  assert.equal(nodes(tree, (n) => n.props?.["aria-label"] === "Complete").length, 3);
-  assert.match(texts(tree), /3\s+of 4 done/);
+  assert.equal(nodes(tree, (n) => n.props?.["aria-label"] === "Complete").length, 2);
+  assert.match(texts(tree), /2\s+of\s+3\s+done/);
   assert.equal(restButton(tree), undefined); // Actual completed workout takes precedence over rest controls.
   const legacy = todayFixture({ publicGoal: false });
   legacy.data.workouts[legacy.today] = { date: legacy.today, status: "completed" };
@@ -747,12 +750,12 @@ test("Phase 4.1 weekly goal stays independent of plan frequency and inside Worko
     texts(workoutGroup(legacy.render())),
     /Workout completed\s+1 of 6 workouts this week/,
   );
-  assert.match(texts(legacy.render()), /4\s+of 4 done/);
+  assert.match(texts(legacy.render()), /3\s+of\s+3\s+done/);
 });
 
 test("Phase 4.1 rest day and Undo retain existing persisted field and completion semantics", async () => {
   const f = todayFixture();
-  assert.match(texts(f.render()), /2\s+of 4 done/);
+  assert.match(texts(f.render()), /1\s+of\s+3\s+done/);
   assert.match(texts(workoutGroup(f.render())), /Start/);
   restButton(f.render()).props.onClick();
   await settle();
@@ -760,11 +763,11 @@ test("Phase 4.1 rest day and Undo retain existing persisted field and completion
   assert.match(texts(workoutGroup(f.render())), /Rest day\s+0 of 6 workouts this week/);
   assert.equal(texts(restButton(f.render())), "Undo");
   assert.doesNotMatch(texts(workoutGroup(f.render())), /Start/);
-  assert.match(texts(f.render()), /3\s+of 4 done/);
+  assert.match(texts(f.render()), /2\s+of\s+3\s+done/);
   restButton(f.render()).props.onClick();
   await settle();
   assert.deepEqual(f.writes[1], [f.today, { restDay: false }]);
-  assert.match(texts(f.render()), /2\s+of 4 done/);
+  assert.match(texts(f.render()), /1\s+of\s+3\s+done/);
 });
 
 test("Phase 4.1 rest writes block duplicate taps, show pending and preserve state after failure", async () => {
@@ -781,7 +784,7 @@ test("Phase 4.1 rest writes block duplicate taps, show pending and preserve stat
   assert.equal(f.writes.length, 1);
   assert.equal(restButton(f.render()).props.disabled, true);
   assert.equal(texts(restButton(f.render())), "Saving rest day…");
-  assert.match(texts(f.render()), /2\s+of 4 done/);
+  assert.match(texts(f.render()), /1\s+of\s+3\s+done/);
   reject(new Error("offline"));
   await settle();
   assert.equal(f.data.days[f.today].restDay, false);
@@ -798,9 +801,55 @@ test("Phase 4.1 active workout shows actual name and Resume even with persisted 
     assert.equal(nodes(group, (n) => n.type === "Link")[0].props.to, "/bulk/training");
     assert.equal(
       nodes(f.render(), (n) => n.props?.["aria-label"] === "Complete").length,
-      restDay ? 3 : 2,
+      restDay ? 2 : 1,
     );
   }
+});
+
+for (const publicGoal of [true, false]) {
+  for (const [weight, sleep, subtitle, complete] of [
+    [undefined, undefined, "Add weight and sleep", false],
+    [63, undefined, "63 kg · add sleep", false],
+    [undefined, 8, "8 h sleep · add weight", false],
+    [63, 8, "63 kg · 8 h sleep", true],
+    [63.5, 7.25, "63.5 kg · 7.25 h sleep", true],
+    [63, 0, "63 kg · 0 h sleep", true],
+  ]) {
+    test(`Today ${publicGoal ? "public" : "legacy"} Morning check-in aggregates real weight=${weight} sleep=${sleep}`, () => {
+      const f = todayFixture({ publicGoal, weight: weight ?? null, sleep: sleep ?? null });
+      const tree = f.render();
+      const morning = nodes(
+        tree,
+        (node) => node.type === "Link" && node.props.to === "/bulk/morning",
+      );
+      assert.equal(morning.length, 1, "one Morning check-in replaces Weight and Sleep");
+      assert.match(texts(morning[0]), /Morning check-in/);
+      assert.ok(texts(morning[0]).includes(subtitle));
+      assert.equal(
+        nodes(morning[0], (node) => node.props?.["aria-label"] === "Complete").length,
+        Number(complete),
+      );
+      assert.match(texts(tree), complete ? /1\s+of\s+3\s+done/ : /0\s+of\s+3\s+done/);
+      assert.doesNotMatch(texts(tree), /Weigh-in|Add sleep and quality|of 4 done/);
+      assert.equal(f.writes.length, 0, "Today is presentation only, not a check-in mutation");
+    });
+  }
+}
+
+test("Today combines weight and sleep visually without changing the separate Goal requirements", () => {
+  const f = todayFixture({ weight: 63, sleep: 8, quality: null });
+  assert.match(texts(f.render()), /63 kg · 8 h sleep/);
+  assert.match(texts(f.render()), /1\s+of\s+3\s+done/);
+  const requirements = goalMetrics.dayCompletionRequirements({
+    bodyweightRecorded: true,
+    sleepRecorded: false,
+    activityRecorded: false,
+    mealLogged: false,
+    workoutCompleted: false,
+    restDay: false,
+  });
+  assert.equal(requirements.find((r) => r.key === "bodyweight").done, true);
+  assert.equal(requirements.find((r) => r.key === "sleep").done, false);
 });
 
 function challengeFixture({

@@ -1,3 +1,4 @@
+import { TempoDatePicker } from "@/components/TempoDateTimePicker";
 import { NativeSelect } from "@/components/ui/native-select";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -479,11 +480,11 @@ function DateNavigation({
       </button>
       <label className="min-w-0 text-center text-xs text-muted-foreground">
         <span className="sr-only">Nutrition date</span>
-        <Input
-          type="date"
+        <TempoDatePicker
+          label="Nutrition date"
           className="min-h-11 rounded-[14px] text-center text-sm font-medium"
           value={selectedDate}
-          onChange={(event) => onChange(event.target.value)}
+          onChange={onChange}
         />
       </label>
       <button

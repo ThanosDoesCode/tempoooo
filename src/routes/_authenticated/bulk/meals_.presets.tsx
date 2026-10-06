@@ -15,7 +15,12 @@ function MealPresetsPage() {
   const planMode = bulkPlanModeFor(memberships.data, bulkId);
   return (
     <AppShell>
-      <PageHeader title="Meal presets" subtitle="Reusable saved meals for faster logging." />
+      <PageHeader
+        title="Meal presets"
+        subtitle="Reusable saved meals for faster logging."
+        backTo="/bulk/meals"
+        backLabel="Meals"
+      />
       {!bulkId || planMode === "none" ? (
         <div className="h-40 animate-pulse rounded-2xl bg-card" aria-label="Loading meal presets" />
       ) : (

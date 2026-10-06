@@ -1,5 +1,5 @@
-import { createFileRoute, useRouter } from "@tanstack/react-router";
-import { ArrowLeft, Bike, Footprints } from "lucide-react";
+import { createFileRoute } from "@tanstack/react-router";
+import { Bike, Footprints } from "lucide-react";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { ChallengeEvidenceViewer } from "@/components/ChallengeEvidenceViewer";
 import { Card, DataError, Note, SectionTitle } from "@/components/ui-kit";
@@ -25,7 +25,6 @@ export const Route = createFileRoute("/_authenticated/challenge/history_/week/$w
 
 function FinalizedWeekDetail() {
   const { weekNumber: weekParam } = Route.useParams();
-  const router = useRouter();
   const { user } = useAuth();
   const weekNumber = Number(weekParam);
   const challengeQuery = useMyChallenge();
@@ -53,15 +52,10 @@ function FinalizedWeekDetail() {
 
   return (
     <AppShell>
-      <button
-        type="button"
-        onClick={() => router.history.back()}
-        className="mb-3 inline-flex min-h-11 items-center gap-2 rounded-xl px-2 text-sm font-medium text-primary"
-      >
-        <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Back to History
-      </button>
       <PageHeader
         title={Number.isInteger(weekNumber) ? `Week ${weekNumber}` : "Finalized week"}
+        backTo="/challenge/history"
+        backLabel="History"
         subtitle={
           reference
             ? `${reference.week_start} to ${reference.week_end} · Finalized and read-only`

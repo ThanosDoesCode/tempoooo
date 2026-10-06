@@ -1,3 +1,4 @@
+import { TempoDatePicker } from "@/components/TempoDateTimePicker";
 import { NativeSelect } from "@/components/ui/native-select";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { addDays, format, parseISO } from "date-fns";
@@ -718,11 +719,11 @@ function WeightEditor({
             </label>
             <label className="text-xs text-muted-foreground">
               Date
-              <input
-                type="date"
+              <TempoDatePicker
+                label="Weight date"
                 max={today}
                 value={date}
-                onChange={(event) => setDate(event.target.value)}
+                onChange={setDate}
                 className="mt-1 min-h-11 w-full rounded-xl border border-input bg-elevated px-3 text-base text-foreground outline-none focus:border-ring"
               />
             </label>
@@ -819,12 +820,11 @@ function ProgressPhotos({
           onChange={(event) => setFile(event.target.files?.[0] ?? null)}
           className="col-span-2 min-h-11 text-sm file:mr-2 file:min-h-11 file:rounded-lg file:border-0 file:bg-elevated file:px-3 file:text-foreground"
         />
-        <input
+        <TempoDatePicker
           aria-label="Photo date"
-          type="date"
           max={today}
           value={date}
-          onChange={(event) => setDate(event.target.value)}
+          onChange={setDate}
           className="min-h-11 rounded-xl border border-input bg-elevated px-2 text-base"
         />
         <NativeSelect

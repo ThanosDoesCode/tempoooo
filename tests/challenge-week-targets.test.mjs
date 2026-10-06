@@ -72,7 +72,9 @@ test("finalized History links to a read-only member-scoped week view", async () 
   assert.match(detail, /Evidence expired after finalization/);
   assert.match(detail, /activity\.evidence_expired_at \?/);
   assert.match(detail, /ChallengeEvidenceViewer paths=\{evidencePaths\}/);
-  assert.match(detail, /router\.history\.back\(\)/);
+  assert.match(detail, /backTo="\/challenge\/history"/);
+  assert.match(detail, /backLabel="History"/);
+  assert.doesNotMatch(detail, /router\.history\.back\(\)/);
   assert.doesNotMatch(detail, /\.insert\(|\.update\(|\.delete\(|window\.location/);
   assert.match(router, /scrollRestoration: true/);
 });

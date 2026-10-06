@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { addDays, format, parseISO } from "date-fns";
+import { TempoDatePicker } from "@/components/TempoDateTimePicker";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useState } from "react";
 import { AppShell, PageHeader } from "@/components/AppShell";
@@ -61,11 +62,10 @@ function MealsHistoryPage() {
         >
           <ChevronLeft className="control-chevron" aria-hidden="true" />
         </button>
-        <input
-          type="date"
+        <TempoDatePicker
           value={date}
           max={today}
-          onChange={(event) => event.target.value && setDate(event.target.value)}
+          onChange={(value) => value && setDate(value)}
           aria-label="Nutrition history date"
           className="min-h-11 min-w-0 rounded-xl border border-input bg-card px-3 text-center text-base outline-none focus:border-ring"
         />

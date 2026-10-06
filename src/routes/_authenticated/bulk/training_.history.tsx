@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link, useNavigate, useRouter } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMemo, useRef, useState } from "react";
 import { z } from "zod";
 import { AppShell, PageHeader } from "@/components/AppShell";
@@ -31,7 +31,6 @@ import { developmentErrorDiagnostic, userFacingError } from "@/lib/network-error
 import { refreshBulk, useActions, useAppData, useBulkMeta } from "@/lib/store";
 import { useActiveTrainingPlan } from "@/lib/training-plans-query";
 import { bulkPlanModeFor, useMemberships } from "@/lib/bulk-access";
-import { backWithinApp, inAppBackPath } from "@/lib/in-app-back";
 import { resolveWeeklyWorkoutTarget } from "@/lib/goal-metrics";
 import { useAuth } from "@/lib/auth";
 
@@ -60,7 +59,6 @@ function TrainingHistoryPage() {
   const { saveWorkout } = useActions();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const router = useRouter();
   const search = Route.useSearch();
   const [pending, setPending] = useState(false);
   const busy = useRef(false);
@@ -113,20 +111,15 @@ function TrainingHistoryPage() {
       await navigate({ to: "/bulk/training/history", search: { legacy: date }, replace: true });
     return ok;
   };
-  const detailBack = () => {
-    if (inAppBackPath(router.history) === "/bulk/training/history" && backWithinApp(router.history))
-      return;
-    void navigate({ to: "/bulk/training/history", search: {}, replace: true });
-  };
   return (
     <AppShell>
       {hasSelection ? (
-        <button
-          className="mb-2 inline-flex min-h-11 items-center gap-2 text-sm text-muted-foreground"
-          onClick={detailBack}
-        >
-          ‹ History
-        </button>
+        <HistoryBackLink
+          fallback="/bulk/training/history"
+          fallbackLabel="History"
+          parentPath="/bulk/training/history"
+          fallbackSearch={{}}
+        />
       ) : (
         <HistoryBackLink
           fallback="/bulk/training"

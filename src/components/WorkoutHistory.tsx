@@ -5,6 +5,7 @@ import { useState, type ReactNode } from "react";
 import { Button } from "./ui/button";
 import { Card, PendingLabel } from "./ui-kit";
 import { DecimalInput } from "./DecimalInput";
+import { TempoDatePicker, TempoDateTimePicker } from "./TempoDateTimePicker";
 import { NativeSelect } from "./ui/native-select";
 import {
   DropdownMenu,
@@ -33,6 +34,7 @@ import {
 import {
   groupWorkoutWeeks,
   historyDuration,
+  workoutDetailDuration,
   localTimestampInput,
   validateWorkoutTimes,
   legacyRecordSetKey,
@@ -227,10 +229,7 @@ export function WorkoutDetail({
           <h1 className="mt-1 text-2xl font-semibold tracking-tight">{row.name}</h1>
           <p className="mt-1 text-xs text-muted-foreground">
             {format(parseISO(row.date), "EEEE d MMM")}
-            {(session?.startedAt ?? row.legacy?.startedAt) &&
-            (session?.completedAt ?? row.legacy?.completedAt)
-              ? ` · ${format(new Date(session?.startedAt ?? row.legacy!.startedAt!), "HH:mm")} to ${format(new Date(session?.completedAt ?? row.legacy!.completedAt!), "HH:mm")}`
-              : ""}
+            {` · ${workoutDetailDuration(row)}`}
           </p>
         </div>
         <DropdownMenu>
@@ -577,46 +576,46 @@ export function WorkoutTimeDialog({
           }}
         >
           <label className="block text-sm">
-            Workout date
-            <input
-              required
-              type="date"
+            Date
+            <TempoDatePicker
+              label="Workout date"
               value={date}
-              onChange={(e) => {
-                const shift = e.target.value
-                  ? differenceInCalendarDays(parseISO(e.target.value), parseISO(date || row.date))
+              disabled={pending}
+              onChange={(value) => {
+                const shift = value
+                  ? differenceInCalendarDays(parseISO(value), parseISO(date || row.date))
                   : 0;
-                setDate(e.target.value);
-                if (start && e.target.value)
+                setDate(value);
+                if (start && value)
                   setStart(localTimestampInput(addDays(new Date(start), shift).toISOString()));
-                if (end && e.target.value)
+                if (end && value)
                   setEnd(localTimestampInput(addDays(new Date(end), shift).toISOString()));
               }}
-              className="mt-1 h-11 w-full min-w-0 rounded-xl bg-elevated px-3"
+              className="mt-1"
             />
           </label>
-          <label className="block text-sm">
-            Start
-            <input
-              required
-              type="datetime-local"
+          <div className="grid grid-cols-2 gap-3">
+            <TempoDateTimePicker
+              label="Start time"
+              dateFallback={date}
               value={start}
-              onChange={(e) => setStart(e.target.value)}
-              className="mt-1 h-11 w-full min-w-0 rounded-xl bg-elevated px-3"
+              onChange={setStart}
+              disabled={pending}
+              aria-describedby={validation || error ? "workout-time-error" : undefined}
+              aria-invalid={!!validation}
             />
-          </label>
-          <label className="block text-sm">
-            End
-            <input
-              required
-              type="datetime-local"
+            <TempoDateTimePicker
+              label="End time"
+              dateFallback={date}
               value={end}
-              onChange={(e) => setEnd(e.target.value)}
-              className="mt-1 h-11 w-full min-w-0 rounded-xl bg-elevated px-3"
+              onChange={setEnd}
+              disabled={pending}
+              aria-describedby={validation || error ? "workout-time-error" : undefined}
+              aria-invalid={!!validation}
             />
-          </label>
+          </div>
           {validation || error ? (
-            <p role="alert" className="text-sm text-danger">
+            <p id="workout-time-error" role="alert" className="text-sm text-danger">
               {validation ?? error}
             </p>
           ) : null}

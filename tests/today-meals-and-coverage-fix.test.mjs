@@ -31,8 +31,8 @@ test("Today uses the target-based meals completion, not meal-logged, for the vis
     today,
     /mealsComplete =\s*mealTarget > 0 && nutritionMacroStatus\(totals\.calories, mealTarget\)\.status !== "under"/,
   );
-  // habits[3] (and the Meals row + "N of 4 done") now uses mealsComplete, not "any meal logged".
-  assert.match(today, /workoutDone \|\| rest,\s*mealsComplete,\s*\]/);
+  // Meals remains a separate visual habit after Morning check-in combines weight/sleep.
+  assert.match(today, /workoutDone \|\| rest,\s*mealsComplete,?\s*\]/);
   assert.doesNotMatch(
     today,
     /\(nutrition\.data\?\.entries\.length \?\? 0\) > 0 \|\| day\?\.calories != null/,

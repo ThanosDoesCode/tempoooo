@@ -72,11 +72,14 @@ test("Phase 5 PR/history/library use shared history-aware links with safe Traini
   const link = await read("src/components/HistoryBackLink.tsx");
   const router = await read("src/router.tsx");
   assert.match(shell, /HistoryBackLink\s+fallback=\{backTo\}/);
-  assert.match(link, /backWithinApp\(router.history\)/);
+  assert.match(link, /backWithinApp\(router.history, parentPath\)/);
   assert.match(link, /event\.metaKey.*event\.ctrlKey.*event\.shiftKey.*event\.altKey/);
   assert.match(link, /to=\{previous \?\? fallback\}/);
   assert.match(router, /trackInAppHistory\(router.history\)/);
-  assert.doesNotMatch(link, /location\.(reload|href|assign)/);
+  assert.doesNotMatch(
+    link,
+    /(?:window|document)\.location|location\.(reload|assign)\(|location\.href\s*=/,
+  );
 });
 
 test("Phase 5 workout polish keeps fields/drawers and constrains discard to a compact modal", async () => {

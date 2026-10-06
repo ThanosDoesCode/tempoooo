@@ -13,6 +13,8 @@ export function presentationComponent(file, modules = {}, globals = {}) {
     require(name) {
       if (modules[name]) return modules[name];
       if (name === "@/lib/utils") return presentationComponent("src/lib/utils.ts");
+      if (name === "./BackControl" || name === "@/components/BackControl")
+        return presentationComponent("src/components/BackControl.tsx", modules, globals);
       return require(name);
     },
   };

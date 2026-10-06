@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { AppShell } from "@/components/AppShell";
+import { AppShell, PageHeader } from "@/components/AppShell";
 import { BulkNutritionLog } from "@/components/BulkNutritionLog";
 import { PageSkeleton } from "@/components/PageSkeleton";
 import { useAppData, useBulkMeta } from "@/lib/store";
@@ -26,16 +26,12 @@ function AddMealPage() {
   const mode = bulkPlanModeFor(memberships.data, bulkId);
   return (
     <AppShell>
-      <header className="mb-5">
-        <Link
-          to="/bulk/meals"
-          search={{ date: selectedDate }}
-          className="mb-2 inline-flex min-h-11 items-center text-sm font-semibold text-muted-foreground"
-        >
-          ‹ Meals
-        </Link>
-        <h1 className="text-3xl font-semibold tracking-tight">Add meal</h1>
-      </header>
+      <PageHeader
+        title="Add meal"
+        backTo="/bulk/meals"
+        backLabel="Meals"
+        backSearch={{ date: selectedDate }}
+      />
       {!data || !bulkId || mode === "none" ? (
         <PageSkeleton />
       ) : mode === "public" ? (

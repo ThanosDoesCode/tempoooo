@@ -201,6 +201,10 @@ const modules = {
     PendingLabel: ({ children }) => children,
   },
   "./DecimalInput": { DecimalInput: () => React.createElement("input") },
+  "./TempoDateTimePicker": {
+    TempoDatePicker: "TempoDatePicker",
+    TempoDateTimePicker: "TempoDateTimePicker",
+  },
   "./ui/native-select": {
     NativeSelect: ({ children, ...props }) => React.createElement("select", props, children),
   },
@@ -276,10 +280,107 @@ test("detail shows plan/day, real timestamps/metrics/BW, W/F/D/RPE/record, repea
   ])
     assert.ok(output.includes(text), text);
 });
+for (const [minutes, label] of [
+  [5, "5 min"],
+  [52, "52 min"],
+  [72, "1 h 12 min"],
+]) {
+  test(`workout detail primary header displays the real ${label} duration, not a timestamp range`, () => {
+    const source = session("duration", "2026-10-05");
+    source.startedAt = new Date("2026-10-05T14:21").toISOString();
+    source.completedAt = new Date(+new Date(source.startedAt) + minutes * 60_000).toISOString();
+    const row = workoutHistory([source], null)[0];
+    // An unrelated/stale display value cannot override the immutable timestamps.
+    row.seconds = 900;
+    assert.equal(history.workoutDetailDuration(row), label);
+    const output = html(components.WorkoutDetail, {
+      row,
+      previous: null,
+      pending: false,
+      error: null,
+      onRepeat() {},
+      onDelete() {},
+      onSaveSet: async () => true,
+      onSaveTime: async () => true,
+    });
+    assert.ok(output.includes(`Monday 5 Oct · ${label}`));
+    assert.doesNotMatch(output, /14:21 to 14:26/);
+  });
+}
+
+test("workout detail only switches to hours once the real duration reaches an hour", () => {
+  for (const [seconds, expected] of [
+    [3599, "60 min"],
+    [3600, "1 h 0 min"],
+  ]) {
+    const start = "2026-10-05T14:21:00Z";
+    assert.equal(
+      history.workoutDetailDuration({
+        legacy: {
+          startedAt: start,
+          completedAt: new Date(+new Date(start) + seconds * 1000).toISOString(),
+        },
+      }),
+      expected,
+    );
+  }
+});
+
+test("workout detail uses the existing safe duration fallback for missing, reversed or invalid timestamps", () => {
+  for (const [start, end] of [
+    [undefined, undefined],
+    ["invalid", "invalid"],
+    ["2026-10-05T14:26Z", "2026-10-05T14:21Z"],
+  ]) {
+    const row = { date: "2026-10-05", legacy: { startedAt: start, completedAt: end } };
+    assert.equal(history.workoutDetailDuration(row), "Time unavailable");
+  }
+  assert.equal(
+    history.workoutDetailDuration({
+      legacy: { startedAt: "2026-10-05T14:21Z", completedAt: "2026-10-05T14:26Z" },
+    }),
+    "5 min",
+  );
+});
+
+test("unavailable timestamps cannot crash the detail or hidden time editor", () => {
+  const row = workoutHistory([session("missing-time", "2026-10-05")], null)[0];
+  row.session.startedAt = "invalid";
+  row.session.completedAt = undefined;
+  assert.equal(history.localTimestampInput("invalid"), "");
+  assert.equal(history.localTimestampInput(undefined), "");
+  const output = html(components.WorkoutDetail, {
+    row,
+    previous: null,
+    pending: false,
+    error: null,
+    onRepeat() {},
+    onDelete() {},
+    onSaveSet: async () => true,
+    onSaveTime: async () => true,
+  });
+  assert.ok(output.includes("Monday 5 Oct · Time unavailable"));
+});
+
+test("historical correction keeps shared picker strings and the existing RPC/time validation path", async () => {
+  const source = await read("src/components/WorkoutHistory.tsx");
+  const route = await read("src/routes/_authenticated/bulk/training_.history.tsx");
+  assert.match(source, /TempoDatePicker/);
+  assert.match(source, /TempoDateTimePicker/);
+  assert.match(source, /label="Start time"/);
+  assert.match(source, /label="End time"/);
+  assert.match(source, /validateWorkoutTimes\(date, start, end\)/);
+  assert.match(route, /correctCompletedBulkTrainingTime/);
+  const query = await read("src/lib/bulk-training-sessions.ts");
+  assert.match(query, /new Date\(start\)\.toISOString\(\)/);
+  assert.match(query, /new Date\(end\)\.toISOString\(\)/);
+  assert.doesNotMatch(source, /type="date"|type="datetime-local"/);
+});
+
 test("history route preserves contextual Back and uses shared invalidations for every action", async () => {
   const source = await read("src/routes/_authenticated/bulk/training_.history.tsx");
   assert.match(source, /HistoryBackLink/);
-  assert.match(source, /backWithinApp/);
+  assert.match(source, /parentPath="\/bulk\/training\/history"/);
   assert.match(source, /search:\s*\{\}/);
   assert.match(source, /workoutHistoryInvalidationKeys/);
   assert.match(source, /correctCompletedBulkTrainingSet/);
@@ -572,10 +673,8 @@ test("time editor preserves overnight calendar offsets when changing workout dat
     index = 0;
     return component.WorkoutTimeDialog(props);
   };
-  find(render(), (n) => n.type === "input" && n.props.type === "date")[0].props.onChange({
-    target: { value: "2026-10-05" },
-  });
-  const inputs = find(render(), (n) => n.type === "input" && n.props.type === "datetime-local");
+  find(render(), (n) => n.type === "TempoDatePicker")[0].props.onChange("2026-10-05");
+  const inputs = find(render(), (n) => n.type === "TempoDateTimePicker");
   assert.equal(inputs[0].props.value, "2026-10-05T23:45");
   assert.equal(inputs[1].props.value, "2026-10-06T00:15");
   find(render(), (n) => n.type === "form")[0].props.onSubmit({ preventDefault() {} });

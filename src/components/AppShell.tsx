@@ -1,5 +1,5 @@
 import { Link, useLocation, useRouterState } from "@tanstack/react-router";
-import { ArrowLeft, Home, LineChart, Plus, Trophy, User, type LucideIcon } from "lucide-react";
+import { Home, LineChart, Plus, Trophy, User, type LucideIcon } from "lucide-react";
 
 import { createContext, useContext, useState, type ReactNode } from "react";
 import { preferredBulkMembership, useMemberships } from "@/lib/bulk-access";
@@ -177,37 +177,32 @@ export function PageHeader({
   backTo,
   backLabel = "Back",
   backParams,
-  historyBack = false,
   backOriginLabels,
+  backSearch,
 }: {
   title: string;
   subtitle?: string;
-  /** Parent route for the shared "‹ Parent" back link. Its label should name that parent. */
+  /** Safe direct-entry fallback; an observed in-app origin takes precedence. */
   backTo?: string;
   backLabel?: string;
   /** Path params when backTo is a parameterised route (e.g. /challenge/activity/$activityId). */
   backParams?: Record<string, string>;
-  /** Use the actual in-app history; backTo is only the safe deep-link fallback. */
+  /** Compatibility prop: all PageHeader Back links now use contextual history. */
   historyBack?: boolean;
+  backSearch?: Record<string, unknown>;
   /** Optional labels for known origins when this page is shared by multiple areas. */
   backOriginLabels?: Readonly<Record<string, string>>;
 }) {
   return (
     <header className="fade-up mb-5">
-      {backTo && historyBack ? (
+      {backTo ? (
         <HistoryBackLink
           fallback={backTo}
           fallbackLabel={backLabel}
+          {...(backParams ? { fallbackParams: backParams } : {})}
+          {...(backSearch ? { fallbackSearch: backSearch } : {})}
           {...(backOriginLabels ? { originLabels: backOriginLabels } : {})}
         />
-      ) : backTo ? (
-        <Link
-          to={backTo}
-          {...(backParams ? { params: backParams } : {})}
-          className="mb-2 inline-flex min-h-11 items-center gap-2 rounded-xl pr-3 text-sm font-semibold text-muted-foreground active:bg-elevated"
-        >
-          <ArrowLeft className="h-4 w-4" aria-hidden="true" /> {backLabel}
-        </Link>
       ) : null}
       <h1 className="text-3xl font-semibold tracking-tight">{title}</h1>
       {subtitle ? <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p> : null}

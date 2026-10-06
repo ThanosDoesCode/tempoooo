@@ -1,8 +1,9 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Trophy } from "lucide-react";
+import { Trophy } from "lucide-react";
 import { z } from "zod";
 import { AppShell, PageHeader } from "@/components/AppShell";
+import { HistoryBackLink } from "@/components/HistoryBackLink";
 import { Card, DataError, SectionTitle } from "@/components/ui-kit";
 import { useAppData, useBulkMeta } from "@/lib/store";
 import { fetchRecentCompletedBulkTrainingSessions } from "@/lib/bulk-training-sessions";
@@ -28,7 +29,6 @@ function PersonalRecordsPage() {
   const data = useAppData();
   const { bulkId } = useBulkMeta();
   const memberships = useMemberships();
-  const navigate = useNavigate();
   const { record: selectedKey } = Route.useSearch();
   const planMode = bulkPlanModeFor(memberships.data, bulkId);
   const isPublic = planMode === "public";
@@ -54,10 +54,7 @@ function PersonalRecordsPage() {
   return (
     <AppShell>
       {selected ? (
-        <RecordDetail
-          record={selected}
-          onBack={() => void navigate({ to: "/bulk/prs", search: {}, replace: true })}
-        />
+        <RecordDetail record={selected} />
       ) : (
         <>
           <PageHeader
@@ -65,7 +62,7 @@ function PersonalRecordsPage() {
             subtitle="Your strongest completed performances."
             historyBack
             backTo="/bulk/training"
-            backLabel="Back"
+            backLabel="Training"
           />
           {sessions.error && isPublic ? (
             <DataError
@@ -109,16 +106,15 @@ function PersonalRecordsPage() {
   );
 }
 
-function RecordDetail({ record, onBack }: { record: PersonalRecord; onBack: () => void }) {
+function RecordDetail({ record }: { record: PersonalRecord }) {
   return (
     <>
-      <button
-        type="button"
-        onClick={onBack}
-        className="mb-2 inline-flex min-h-11 items-center gap-2 rounded-xl pr-3 text-sm font-semibold text-muted-foreground"
-      >
-        <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Personal Records
-      </button>
+      <HistoryBackLink
+        fallback="/bulk/prs"
+        fallbackLabel="Personal records"
+        parentPath="/bulk/prs"
+        fallbackSearch={{}}
+      />
       <PageHeader
         title={record.name}
         subtitle={record.side ? `${record.side} side` : "Completed history"}

@@ -218,8 +218,19 @@ export function historyDuration(seconds: number | null) {
   return minutes >= 60 ? `${Math.floor(minutes / 60)} h ${minutes % 60} m` : `${minutes} min`;
 }
 
+/** Header presentation only; read the actual saved timestamps, including legacy sessions. */
+export function workoutDetailDuration(row: HistoryWorkout) {
+  const start = row.session?.startedAt ?? row.legacy?.startedAt;
+  const end = row.session?.completedAt ?? row.legacy?.completedAt;
+  const seconds = start && end ? (+new Date(end) - +new Date(start)) / 1000 : null;
+  if (seconds == null || !Number.isFinite(seconds) || seconds <= 0) return historyDuration(null);
+  const minutes = Math.max(1, Math.round(seconds / 60));
+  return seconds < 3600 ? `${minutes} min` : `${Math.floor(minutes / 60)} h ${minutes % 60} min`;
+}
+
 export function localTimestampInput(timestamp: string) {
-  return format(new Date(timestamp), "yyyy-MM-dd'T'HH:mm");
+  const date = new Date(timestamp);
+  return timestamp && Number.isFinite(+date) ? format(date, "yyyy-MM-dd'T'HH:mm") : "";
 }
 
 export function validateWorkoutTimes(date: string, start: string, end: string) {

@@ -3,8 +3,10 @@ import assert from "node:assert/strict";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createMemoryHistory } from "@tanstack/history";
+import { defaultParseSearch } from "@tanstack/react-router";
 import { presentationComponent } from "./presentation-component-fixture.mjs";
-import { backWithinApp, inAppBackPath, trackInAppHistory } from "../src/lib/in-app-back.ts";
+import * as contextualBack from "../src/lib/in-app-back.ts";
+const { inAppBackPath, trackInAppHistory } = contextualBack;
 import { iso } from "../src/lib/calc.ts";
 
 const historyPath = "/bulk/meals/history";
@@ -15,9 +17,12 @@ function nutritionHistoryLink(history, mode = "public") {
   const { HistoryBackLink } = presentationComponent("src/components/HistoryBackLink.tsx", {
     "@tanstack/react-router": {
       useRouter: () => ({ history }),
-      Link: ({ to, preload, ...props }) => React.createElement("a", { ...props, href: to }),
+      useRouterState: () => history.location.href,
+      defaultParseSearch,
+      Link: ({ to, preload, search, hash, params, ...props }) =>
+        React.createElement("a", { ...props, href: to }),
     },
-    "@/lib/in-app-back": { backWithinApp, inAppBackPath },
+    "@/lib/in-app-back": contextualBack,
   });
   const { PageHeader } = presentationComponent("src/components/AppShell.tsx", {
     "@tanstack/react-router": { Link: "a" },
@@ -31,6 +36,7 @@ function nutritionHistoryLink(history, mode = "public") {
     "./HistoryBackLink": { HistoryBackLink },
   });
   const { Route } = presentationComponent("src/routes/_authenticated/bulk/meals_.history.tsx", {
+    "@/components/TempoDateTimePicker": { TempoDatePicker: "TempoDatePicker" },
     react: {
       ...React,
       useState: (initial) => [typeof initial === "function" ? initial() : initial, () => {}],
@@ -142,12 +148,12 @@ test("Nutrition history parent label follows Back/Forward and a new Meals origin
 });
 
 test("unknown in-app origins keep generic Back; auth/onboarding use the safe Meals fallback", () => {
-  for (const origin of ["/bulk/check-in", "/auth", "/onboarding"]) {
+  for (const origin of ["/unknown-shared-route", "/auth", "/onboarding"]) {
     const history = createMemoryHistory({ initialEntries: [origin] });
     trackInAppHistory(history);
     history.push(historyPath);
     const link = nutritionHistoryLink(history);
-    if (origin === "/bulk/check-in") {
+    if (origin === "/unknown-shared-route") {
       assert.match(renderToStaticMarkup(link), /Back/);
       assert.equal(click(link, history).defaultPrevented, true);
       assert.equal(history.location.pathname, origin);

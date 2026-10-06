@@ -3,7 +3,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { addDays, format, parseISO, startOfWeek } from "date-fns";
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft } from "lucide-react";
+import { BackButton } from "@/components/BackControl";
 import { AppShell } from "@/components/AppShell";
 import { PendingLabel } from "@/components/ui-kit";
 import { randomToken, sha256Hex, useAuth } from "@/lib/auth";
@@ -202,13 +202,7 @@ function NewChallenge() {
               Cancel
             </button>
           ) : (
-            <button
-              type="button"
-              onClick={() => goStep((step - 1) as 1 | 2 | 3)}
-              className="flex h-11 items-center gap-1 text-[15px] text-muted-foreground"
-            >
-              <ArrowLeft className="h-[18px] w-[18px]" aria-hidden="true" /> Back
-            </button>
+            <BackButton onClick={() => goStep((step - 1) as 1 | 2 | 3)}>Back</BackButton>
           )}
           <span className="text-sm text-muted-foreground">Step {step} of 3</span>
         </div>

@@ -1,5 +1,6 @@
 import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { addDays, format, parseISO } from "date-fns";
+import { TempoDatePicker } from "@/components/TempoDateTimePicker";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useState } from "react";
 import { AppShell, PageHeader } from "@/components/AppShell";
@@ -77,7 +78,12 @@ function BulkHistoryPage() {
 
   return (
     <AppShell>
-      <PageHeader title="History" subtitle={format(parseISO(date), "EEEE, d MMMM yyyy")} />
+      <PageHeader
+        title="History"
+        subtitle={format(parseISO(date), "EEEE, d MMMM yyyy")}
+        backTo="/profile"
+        backLabel="You"
+      />
 
       <div className="mb-3 grid grid-cols-[44px_1fr_44px] items-center gap-2" data-no-pull>
         <button
@@ -88,11 +94,10 @@ function BulkHistoryPage() {
         >
           <ChevronLeft aria-hidden="true" className="control-chevron" />
         </button>
-        <input
-          type="date"
+        <TempoDatePicker
           value={date}
           max={today}
-          onChange={(event) => event.target.value && setDate(event.target.value)}
+          onChange={(value) => value && setDate(value)}
           className="min-h-11 min-w-0 rounded-xl border border-input bg-elevated px-3 text-center text-base outline-none focus:border-ring"
           aria-label="History date"
         />
