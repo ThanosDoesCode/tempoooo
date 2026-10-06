@@ -2007,23 +2007,38 @@ export type Database = {
         Returns: string
       }
       correct_completed_bulk_training_set: {
-        Args: { _session: string; _set: string; _bilateral_weight: number | null; _bilateral_reps: number | null; _left_weight: number | null; _left_reps: number | null; _right_weight: number | null; _right_reps: number | null; _set_type: string; _rpe: number | null }
+        Args: {
+          _bilateral_reps: number
+          _bilateral_weight: number
+          _left_reps: number
+          _left_weight: number
+          _right_reps: number
+          _right_weight: number
+          _rpe: number
+          _session: string
+          _set: string
+          _set_type: string
+        }
         Returns: string
       }
       correct_completed_bulk_training_time: {
-        Args: { _session: string; _workout_date: string; _started_at: string; _completed_at: string; _timezone: string }
+        Args: {
+          _completed_at: string
+          _session: string
+          _started_at: string
+          _timezone: string
+          _workout_date: string
+        }
         Returns: string
       }
       correct_legacy_bulk_workout_time: {
-        Args: { _day: string; _workout_date: string; _started_at: string; _completed_at: string; _timezone: string }
-        Returns: string
-      }
-      repeat_completed_bulk_training_session: {
-        Args: { _session: string; _workout_date: string }
-        Returns: string
-      }
-      repeat_legacy_bulk_workout: {
-        Args: { _day: string; _workout_date: string }
+        Args: {
+          _completed_at: string
+          _day: string
+          _started_at: string
+          _timezone: string
+          _workout_date: string
+        }
         Returns: string
       }
       create_bulk_meal_preset: {
@@ -2213,16 +2228,6 @@ export type Database = {
           weekly_target_km: number
         }[]
       }
-      save_bulk_weight_for_local_day: {
-        Args: {
-          _profile: string
-          _log_date: string
-          _weight_kg: number
-          _note: string | null
-          _timezone: string
-        }
-        Returns: undefined
-      }
       refresh_active_bulk_training_bodyweight: {
         Args: { _profile: string }
         Returns: number
@@ -2247,6 +2252,14 @@ export type Database = {
       remove_bulk_training_session_set: {
         Args: { _session: string; _set: string }
         Returns: boolean
+      }
+      repeat_completed_bulk_training_session: {
+        Args: { _session: string; _workout_date: string }
+        Returns: string
+      }
+      repeat_legacy_bulk_workout: {
+        Args: { _day: string; _workout_date: string }
+        Returns: string
       }
       safe_uuid: { Args: { _t: string }; Returns: string }
       save_bulk_training_plan: {
@@ -2285,6 +2298,16 @@ export type Database = {
           _set_type: string
         }
         Returns: string
+      }
+      save_bulk_weight_for_local_day: {
+        Args: {
+          _log_date: string
+          _note: string
+          _profile: string
+          _timezone: string
+          _weight_kg: number
+        }
+        Returns: undefined
       }
       search_challenge_invite_users: {
         Args: { _caller: string; _challenge: string; _query: string }
