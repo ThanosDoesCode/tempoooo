@@ -2,6 +2,7 @@ import { queryOptions, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { readRetryDelay, shouldRetryRead } from "./network-errors";
 import type { BulkMealInput, BulkMealPreset, BulkMealUnit } from "./bulk-meal-presets";
+import { QUERY_ID_BATCH_SIZE, QUERY_PAGE_SIZE, readAllByKey } from "./query-pagination";
 
 type MealRow = {
   id: string;
@@ -37,41 +38,67 @@ export const bulkMealPresetsQueryOptions = (bulkProfileId: string) =>
   queryOptions({
     queryKey: bulkMealPresetsQueryKey(bulkProfileId),
     queryFn: async (): Promise<BulkMealPreset[]> => {
-      const [meals, ingredients] = await Promise.all([
-        supabase
-          .from("bulk_meal_presets")
-          .select("*")
-          .eq("bulk_profile_id", bulkProfileId)
-          .order("sort_order"),
-        supabase.from("bulk_meal_preset_ingredients").select("*").order("sort_order"),
-      ]);
-      if (meals.error) throw meals.error;
-      if (ingredients.error) throw ingredients.error;
-      const ingredientRows = (ingredients.data ?? []) as IngredientRow[];
-      return ((meals.data ?? []) as MealRow[]).map((meal) => ({
-        id: meal.id,
-        bulkProfileId: meal.bulk_profile_id,
-        name: meal.name,
-        description: meal.description,
-        sortOrder: meal.sort_order,
-        calories: Number(meal.calories),
-        protein: Number(meal.protein_g),
-        carbs: Number(meal.carbs_g),
-        fat: Number(meal.fat_g),
-        createdAt: meal.created_at,
-        updatedAt: meal.updated_at,
-        sourceKey: meal.source_key,
-        showInQuickAdd: meal.show_in_quick_add,
-        ingredients: ingredientRows
-          .filter((ingredient) => ingredient.meal_preset_id === meal.id)
-          .map((ingredient) => ({
-            id: ingredient.id,
-            name: ingredient.name,
-            quantity: Number(ingredient.quantity),
-            unit: ingredient.unit as BulkMealUnit,
-            sortOrder: ingredient.sort_order,
-          })),
-      }));
+      const meals = await readAllByKey<MealRow>(
+        (cursor) => {
+          let query = supabase
+            .from("bulk_meal_presets")
+            .select("*")
+            .eq("bulk_profile_id", bulkProfileId)
+            .order("id")
+            .limit(QUERY_PAGE_SIZE);
+          if (cursor) query = query.gt("id", cursor);
+          return query;
+        },
+        (row) => row.id,
+      );
+      const byMeal = new Map<string, IngredientRow[]>();
+      for (let offset = 0; offset < meals.length; offset += QUERY_ID_BATCH_SIZE) {
+        const ids = meals.slice(offset, offset + QUERY_ID_BATCH_SIZE).map((meal) => meal.id);
+        const rows = await readAllByKey<IngredientRow>(
+          (cursor) => {
+            let query = supabase
+              .from("bulk_meal_preset_ingredients")
+              .select("*")
+              .in("meal_preset_id", ids)
+              .order("id")
+              .limit(QUERY_PAGE_SIZE);
+            if (cursor) query = query.gt("id", cursor);
+            return query;
+          },
+          (row) => row.id,
+        );
+        for (const row of rows) {
+          const own = byMeal.get(row.meal_preset_id) ?? [];
+          own.push(row);
+          byMeal.set(row.meal_preset_id, own);
+        }
+      }
+      return meals
+        .sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id))
+        .map((meal) => ({
+          id: meal.id,
+          bulkProfileId: meal.bulk_profile_id,
+          name: meal.name,
+          description: meal.description,
+          sortOrder: meal.sort_order,
+          calories: Number(meal.calories),
+          protein: Number(meal.protein_g),
+          carbs: Number(meal.carbs_g),
+          fat: Number(meal.fat_g),
+          createdAt: meal.created_at,
+          updatedAt: meal.updated_at,
+          sourceKey: meal.source_key,
+          showInQuickAdd: meal.show_in_quick_add,
+          ingredients: (byMeal.get(meal.id) ?? [])
+            .sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id))
+            .map((ingredient) => ({
+              id: ingredient.id,
+              name: ingredient.name,
+              quantity: Number(ingredient.quantity),
+              unit: ingredient.unit as BulkMealUnit,
+              sortOrder: ingredient.sort_order,
+            })),
+        }));
     },
     enabled: !!bulkProfileId,
     staleTime: 60_000,

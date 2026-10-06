@@ -132,9 +132,9 @@ test("Sharing is absent while personal Bulk activation guards remain", async () 
   assert.match(guard, /bulk-onboarding/);
   assert.match(profile, /<SectionTitle>Fitness tools<\/SectionTitle>/);
   assert.match(profile, /Set up fitness tools/);
-  assert.match(profile, /ownedPlan \? \([\s\S]*<SectionTitle>Goal<\/SectionTitle>/);
+  assert.match(profile, /ownedPlan[\s\S]*label: "Goal settings"/);
   assert.doesNotMatch(profile, /productMode === "legacy"|productMode === "public"/);
-  assert.match(profile, /Open Goal/);
+  assert.match(profile, /to: "\/bulk\/more"/);
   assert.doesNotMatch(profile, /My Bulk|Open My Bulk/);
   assert.match(profile, /bulkAccessLoading/);
   assert.match(profile, /Loading plan/);

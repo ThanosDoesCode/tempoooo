@@ -3,8 +3,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { Check, Dumbbell } from "lucide-react";
 import { BackButton } from "@/components/BackControl";
-import { AppShell, PageHeader } from "@/components/AppShell";
-import { Card, PendingLabel } from "@/components/ui-kit";
+import { AppShell } from "@/components/AppShell";
+import { HistoryBackLink } from "@/components/HistoryBackLink";
+import { PendingLabel } from "@/components/ui-kit";
 import { activeBulkMemberships, bulkOwnerQueryOptions } from "@/lib/bulk-access";
 import {
   DEFAULT_NUTRITION_TARGETS,
@@ -242,84 +243,81 @@ function BulkOnboarding() {
 
   return (
     <AppShell>
-      <PageHeader
-        title="Create My Goal Plan"
-        subtitle={`Step ${step} of 5`}
-        {...(step === 1 ? { backTo: "/profile", backLabel: "Profile" } : {})}
-      />
-      <div className="mb-4 h-1.5 overflow-hidden rounded-full bg-secondary" aria-hidden="true">
-        <div
-          className="h-full rounded-full bg-primary transition-all"
-          style={{ width: `${step * 20}%` }}
-        />
-      </div>
-      <Card>
-        {step === 1 ? <GoalStep form={form} update={update} errors={visibleErrors} /> : null}
-        {step === 2 ? <TrainingStep form={form} update={update} errors={visibleErrors} /> : null}
-        {step === 3 ? (
-          <PreferenceStep
-            form={form}
-            update={update}
-            error={visibleErrors.trainingSetupPreference}
-          />
-        ) : null}
-        {step === 4 ? (
-          <NutritionStep
-            form={form}
-            recommendation={nutritionRecommendation}
-            manuallyAdjusted={nutritionManuallyAdjusted}
-            update={updateNutrition}
-            useRecommendation={useRecommendation}
-            onAdjustManually={() => setNutritionManuallyAdjusted(true)}
-            errors={visibleErrors}
-          />
-        ) : null}
-        {step === 5 ? <ReviewStep values={values} /> : null}
-        {submitError ? (
-          <p role="alert" className="mt-4 text-sm text-danger">
-            {submitError}
-          </p>
-        ) : null}
-        <div className="mt-4 grid grid-cols-2 gap-2">
-          {step > 1 ? (
-            <BackButton
-              disabled={busy}
-              onClick={() => setStep((step - 1) as Step)}
-              className="justify-center"
-            >
-              Back
-            </BackButton>
+      <div className="mx-auto max-w-md">
+        <div className="mb-4 flex min-h-11 items-center justify-between gap-3">
+          {step === 1 ? (
+            <HistoryBackLink fallback="/profile" fallbackLabel="You" />
           ) : (
-            <button
-              type="button"
-              onClick={() => void navigate({ to: "/profile" })}
-              className="h-11 rounded-xl border border-border px-3 text-sm font-medium"
-            >
-              Cancel
-            </button>
+            <BackButton disabled={busy} onClick={() => setStep((step - 1) as Step)} />
           )}
-          {step < 5 ? (
-            <button
-              type="button"
-              onClick={next}
-              className="h-11 rounded-xl bg-primary px-3 text-sm font-semibold text-primary-foreground active:scale-[0.98]"
-            >
-              {step === 4 && form.experienceLevel === "beginner" && !nutritionManuallyAdjusted
-                ? "Use these targets"
-                : "Continue"}
-            </button>
-          ) : (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void submit()}
-              className="flex min-h-11 items-center justify-center rounded-xl bg-primary px-2 py-2 text-xs font-semibold text-primary-foreground active:scale-[0.98] disabled:opacity-60 min-[360px]:h-11 min-[360px]:py-0 min-[360px]:text-sm"
-            >
-              {busy ? <PendingLabel>Creating My Goal Plan...</PendingLabel> : "Create My Goal Plan"}
-            </button>
-          )}
+          <p className="text-[13px] text-muted-foreground">Fitness setup · {step} of 5</p>
         </div>
-      </Card>
+        <div
+          role="progressbar"
+          aria-label="Goal setup progress"
+          aria-valuenow={step}
+          aria-valuemin={1}
+          aria-valuemax={5}
+          className="mb-6 flex gap-1.5"
+        >
+          {[1, 2, 3, 4, 5].map((part) => (
+            <span
+              key={part}
+              className={`h-1 flex-1 rounded-full ${part <= step ? "bg-primary" : "bg-secondary"}`}
+            />
+          ))}
+        </div>
+        <section>
+          {step === 1 ? <GoalStep form={form} update={update} errors={visibleErrors} /> : null}
+          {step === 2 ? <TrainingStep form={form} update={update} errors={visibleErrors} /> : null}
+          {step === 3 ? (
+            <PreferenceStep
+              form={form}
+              update={update}
+              error={visibleErrors.trainingSetupPreference}
+            />
+          ) : null}
+          {step === 4 ? (
+            <NutritionStep
+              form={form}
+              recommendation={nutritionRecommendation}
+              manuallyAdjusted={nutritionManuallyAdjusted}
+              update={updateNutrition}
+              useRecommendation={useRecommendation}
+              onAdjustManually={() => setNutritionManuallyAdjusted(true)}
+              errors={visibleErrors}
+            />
+          ) : null}
+          {step === 5 ? <ReviewStep values={values} /> : null}
+          {submitError ? (
+            <p role="alert" className="mt-4 text-sm text-warn">
+              {submitError}
+            </p>
+          ) : null}
+          <div className="sticky bottom-0 mt-6 bg-background pb-[max(1rem,env(safe-area-inset-bottom))] pt-3">
+            {step < 5 ? (
+              <button type="button" onClick={next} className="account-primary">
+                {step === 4 && form.experienceLevel === "beginner" && !nutritionManuallyAdjusted
+                  ? "Use these targets"
+                  : "Continue"}
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void submit()}
+                className="account-primary"
+              >
+                {busy ? (
+                  <PendingLabel>Creating your goal plan…</PendingLabel>
+                ) : (
+                  "Create my goal plan"
+                )}
+              </button>
+            )}
+          </div>
+        </section>
+      </div>
     </AppShell>
   );
 }
@@ -334,7 +332,7 @@ function Heading({ icon = false, title, copy }: { icon?: boolean; title: string;
           <Dumbbell className="h-5 w-5" aria-hidden="true" />
         </span>
       ) : null}
-      <h1 className="text-xl font-semibold">{title}</h1>
+      <h1 className="text-[30px] font-semibold leading-tight tracking-tight">{title}</h1>
       <p className="mt-1 text-sm leading-6 text-muted-foreground">{copy}</p>
     </div>
   );
@@ -357,19 +355,19 @@ function TextNumber({
 }) {
   return (
     <label className="block">
-      <span className="text-xs font-medium text-muted-foreground">{label}</span>
+      <span className="text-[13px] font-medium text-muted-foreground">{label}</span>
       <div className="mt-1 flex items-center rounded-xl border border-input bg-elevated focus-within:border-ring">
         <input
           value={value}
           onChange={(event) => onChange(event.target.value)}
           inputMode={integer ? "numeric" : "decimal"}
           aria-invalid={!!error}
-          className="num min-h-11 min-w-0 flex-1 bg-transparent px-3 py-2.5 text-lg font-semibold outline-none"
+          className="num min-h-12 min-w-0 flex-1 bg-transparent px-3 py-2.5 text-base font-semibold outline-none"
         />
         <span className="pr-3 text-xs text-muted-foreground">{suffix}</span>
       </div>
       {error ? (
-        <span role="alert" className="mt-1 block text-xs text-danger">
+        <span role="alert" className="mt-1 block text-xs text-warn">
           {error}
         </span>
       ) : null}
@@ -396,10 +394,10 @@ function Choice({
       aria-pressed={selected}
       disabled={disabled}
       onClick={onClick}
-      className={`flex min-h-11 items-center justify-between rounded-xl border px-3 ${compact ? "py-2" : "py-2.5"} text-left text-sm font-medium transition-colors disabled:opacity-60 ${selected ? "border-primary bg-primary/10 text-primary" : "border-border bg-elevated text-foreground"}`}
+      className={`flex min-h-11 items-center justify-between gap-2 rounded-[14px] border px-3 ${compact ? "py-2" : "py-2.5"} text-left text-sm font-medium transition-colors active:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 ${selected ? "border-primary bg-primary/10 text-primary" : "border-border bg-elevated text-foreground"}`}
     >
-      <span>{children}</span>
-      {selected ? <Check className="h-4 w-4" aria-hidden="true" /> : null}
+      <span className="min-w-0 flex-1">{children}</span>
+      {selected ? <Check className="h-4 w-4 shrink-0" aria-hidden="true" /> : null}
     </button>
   );
 }
@@ -422,8 +420,8 @@ function GoalStep({
       />
       <div className="space-y-4">
         <div>
-          <p className="text-xs font-medium text-muted-foreground">Physique goal</p>
-          <div className="mt-2 grid gap-2">
+          <p className="text-[13px] font-medium text-muted-foreground">Physique goal</p>
+          <div className="mt-2 grid grid-cols-2 gap-2">
             {PHYSIQUE_GOALS.map((option) => (
               <Choice
                 key={option.value}
@@ -435,34 +433,36 @@ function GoalStep({
             ))}
           </div>
           {errors.goal ? (
-            <p role="alert" className="mt-1 text-xs text-danger">
+            <p role="alert" className="mt-1 text-xs text-warn">
               {errors.goal}
             </p>
           ) : null}
         </div>
-        <TextNumber
-          label="Current weight"
-          value={form.currentWeightKg}
-          onChange={(value) => update("currentWeightKg", value)}
-          suffix="kg"
-          error={errors.currentWeightKg}
-        />
-        <TextNumber
-          label="Target weight"
-          value={form.targetWeightKg}
-          onChange={(value) => update("targetWeightKg", value)}
-          suffix="kg"
-          error={errors.targetWeightKg}
-        />
+        <div className="grid grid-cols-2 gap-3">
+          <TextNumber
+            label="Current weight"
+            value={form.currentWeightKg}
+            onChange={(value) => update("currentWeightKg", value)}
+            suffix="kg"
+            error={errors.currentWeightKg}
+          />
+          <TextNumber
+            label="Target weight"
+            value={form.targetWeightKg}
+            onChange={(value) => update("targetWeightKg", value)}
+            suffix="kg"
+            error={errors.targetWeightKg}
+          />
+        </div>
         <div>
-          <p className="text-xs font-medium text-muted-foreground">
+          <p className="text-[13px] font-medium text-muted-foreground">
             {form.goal === "cut"
               ? "Target weekly weight loss"
               : form.goal === "maintain"
                 ? "Weekly weight direction"
                 : "Target weekly weight gain"}
           </p>
-          <p className="mt-1 text-[11px] text-muted-foreground">
+          <p className="mt-1 text-[13px] leading-5 text-muted-foreground">
             {form.goal === "cut"
               ? "Tempo uses a moderate rate of loss and avoids extreme deficits."
               : form.goal === "maintain"
@@ -506,7 +506,7 @@ function GoalStep({
               />
             </div>
           ) : errors.targetWeeklyGainKg ? (
-            <p role="alert" className="mt-1 text-xs text-danger">
+            <p role="alert" className="mt-1 text-xs text-warn">
               {errors.targetWeeklyGainKg}
             </p>
           ) : null}
@@ -548,7 +548,7 @@ function TrainingStep({
       />
       <div className="space-y-5">
         <div>
-          <p className="text-xs font-medium text-muted-foreground">Experience level</p>
+          <p className="text-[13px] font-medium text-muted-foreground">Experience level</p>
           <div className="mt-2 grid gap-2">
             {EXPERIENCE_LEVELS.map((option) => (
               <Choice
@@ -561,13 +561,13 @@ function TrainingStep({
             ))}
           </div>
           {errors.experienceLevel ? (
-            <p role="alert" className="mt-1 text-xs text-danger">
+            <p role="alert" className="mt-1 text-xs text-warn">
               {errors.experienceLevel}
             </p>
           ) : null}
         </div>
         <div>
-          <p className="text-xs font-medium text-muted-foreground">Training days per week</p>
+          <p className="text-[13px] font-medium text-muted-foreground">Training days per week</p>
           <div className="mt-2 grid grid-cols-5 gap-2">
             {TRAINING_DAY_OPTIONS.map((days) => (
               <Choice
@@ -580,17 +580,17 @@ function TrainingStep({
             ))}
           </div>
           {errors.trainingDaysPerWeek ? (
-            <p role="alert" className="mt-1 text-xs text-danger">
+            <p role="alert" className="mt-1 text-xs text-warn">
               {errors.trainingDaysPerWeek}
             </p>
           ) : null}
         </div>
         <div>
-          <p className="text-xs font-medium text-muted-foreground">Available equipment</p>
-          <p className="mt-1 text-[11px] text-muted-foreground">
+          <p className="text-[13px] font-medium text-muted-foreground">Available equipment</p>
+          <p className="mt-1 text-[13px] leading-5 text-muted-foreground">
             Choose every option you can reliably use. You can combine equipment freely.
           </p>
-          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+          <div className="mt-2 grid grid-cols-2 gap-2">
             {EQUIPMENT_OPTIONS.map((option) => (
               <Choice
                 key={option.value}
@@ -601,13 +601,13 @@ function TrainingStep({
               </Choice>
             ))}
           </div>
-          <p className="mt-2 rounded-xl bg-elevated/70 p-3 text-[11px] leading-5 text-muted-foreground">
+          <p className="mt-2 text-[13px] leading-5 text-muted-foreground">
             Full/commercial gym covers broad gym equipment, including bodyweight stations.
             Bodyweight only is for training without equipment. Selecting either replaces individual
             equipment choices.
           </p>
           {errors.availableEquipment ? (
-            <p role="alert" className="mt-1 text-xs text-danger">
+            <p role="alert" className="mt-1 text-xs text-warn">
               {errors.availableEquipment}
             </p>
           ) : null}
@@ -650,7 +650,7 @@ function PreferenceStep({
         ))}
       </div>
       {error ? (
-        <p role="alert" className="mt-2 text-xs text-danger">
+        <p role="alert" className="mt-2 text-xs text-warn">
           {error}
         </p>
       ) : null}
@@ -701,9 +701,7 @@ function NutritionStep({
           <dl className="grid grid-cols-2 gap-2">
             {recommendationRows.map(([label, value]) => (
               <div key={label} className="rounded-xl bg-elevated p-3">
-                <dt className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                  {label}
-                </dt>
+                <dt className="text-[13px] text-muted-foreground">{label}</dt>
                 <dd className="num mt-1 text-lg font-semibold">{value}</dd>
               </div>
             ))}
@@ -803,10 +801,10 @@ function ReviewStep({ values }: { values: BulkOnboardingValues }) {
         title="Review your Goal plan"
         copy="Check your setup before creating your private Goal space."
       />
-      <dl className="divide-y divide-border rounded-xl bg-elevated/60 px-3">
+      <dl className="divide-y divide-border rounded-[20px] bg-card px-4">
         {rows.map(([label, value]) => (
           <div key={label} className="py-3">
-            <dt className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</dt>
+            <dt className="text-[13px] text-muted-foreground">{label}</dt>
             <dd className="mt-0.5 text-sm font-medium">{value}</dd>
           </div>
         ))}

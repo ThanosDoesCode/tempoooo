@@ -59,9 +59,9 @@ function PublicPhotosSection({ profileId }: { profileId: string }) {
   const { role } = useBulkMeta();
   const owner = role === "owner";
   const client = useQueryClient();
-  const photosQuery = useBulkProgressPhotos(profileId);
   const fileRef = useRef<HTMLInputElement>(null);
   const [angle, setAngle] = useState<Angle>("front");
+  const photosQuery = useBulkProgressPhotos(profileId, angle);
   const [phase, setPhase] = useState<"optimizing" | "uploading" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
@@ -188,6 +188,35 @@ function PublicPhotosSection({ profileId }: { profileId: string }) {
           ))}
         </div>
       )}
+
+      {photosQuery.error ? (
+        <div role="alert" className="rounded-xl border border-danger/30 bg-danger/5 p-3">
+          <p className="text-xs text-danger">
+            Photos could not load. Your saved photos are unchanged.
+          </p>
+          <button
+            type="button"
+            className="min-h-11 text-sm text-primary"
+            onClick={() =>
+              void (photosQuery.isFetchNextPageError
+                ? photosQuery.fetchNextPage()
+                : photosQuery.refetch())
+            }
+          >
+            Retry
+          </button>
+        </div>
+      ) : null}
+      {photosQuery.hasNextPage ? (
+        <button
+          type="button"
+          disabled={photosQuery.isFetching}
+          onClick={() => void photosQuery.fetchNextPage()}
+          className="min-h-11 w-full rounded-xl border border-border text-sm text-primary disabled:opacity-60"
+        >
+          {photosQuery.isFetchingNextPage ? "Loading older photos…" : "Load older photos"}
+        </button>
+      ) : null}
 
       <button
         onClick={() => fileRef.current?.click()}

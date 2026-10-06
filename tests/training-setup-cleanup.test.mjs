@@ -169,9 +169,9 @@ test("onboarding shows the same three compact setup choices with AI disabled and
   const onboarding = await read("src/routes/_authenticated/bulk-onboarding.tsx");
   assert.match(onboarding, /disabled=\{option\.comingSoon\}/);
   assert.match(onboarding, /Coming soon/);
-  assert.match(onboarding, /mt-4 grid grid-cols-2 gap-2/);
+  assert.match(onboarding, /role="progressbar"/);
   assert.match(onboarding, /<BackButton/);
-  assert.match(onboarding, /className="justify-center"/);
+  assert.match(onboarding, /account-primary/);
   assert.doesNotMatch(onboarding, /training plans arrive|later rollout segments/);
   assert.match(source, /disclosure-summary min-h-11/);
   assert.doesNotMatch(source, /Templates, generated or custom/);

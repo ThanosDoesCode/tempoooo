@@ -356,7 +356,9 @@ test("Profile loads the moved Phase 2 components without a blocking data depende
   // The CSV export and notifications moved here; both are present and self-contained.
   assert.match(profile, /import \{ ChallengeDataExport \}/);
   assert.match(profile, /<ChallengeDataExport \/>/);
-  assert.match(profile, /<ChallengeNotifications userId=\{user\.id\}/);
+  assert.match(profile, /to: "\/profile\/notifications"/);
+  const notifications = await read("src/routes/_authenticated/profile_.notifications.tsx");
+  assert.match(notifications, /<ChallengeNotifications userId=\{user\.id\} expanded/);
   const exportCard = await read("src/components/ChallengeDataExport.tsx");
   // No challenge → render nothing (never blocks Profile), and the heavy history read is on demand.
   assert.match(exportCard, /if \(!challenge\) return null/);

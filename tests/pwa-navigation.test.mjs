@@ -322,7 +322,7 @@ test("Tempo navigation exposes optional fitness areas only after persisted activ
   assert.match(guard, /redirect\(\{ to: "\/bulk-onboarding", replace: true \}\)/);
   const onboarding = await read("src/routes/_authenticated/bulk-onboarding.tsx");
   assert.match(onboarding, /supabase\.rpc\("complete_goal_onboarding"/);
-  assert.match(onboarding, /Create My Goal Plan/);
+  assert.match(onboarding, /Create my goal plan/);
   assert.match(onboarding, /bulkOwnerQueryOptions/);
   const denied = await read("src/routes/_authenticated/bulk-access-denied.tsx");
   assert.match(denied, /Goal plan required/);
@@ -353,7 +353,7 @@ test("product areas expose distinct contextual destinations and preserve legacy/
   // Progress is a bottom tab; its sub-screens are reached from Progress's in-page rows.
   assert.match(nav, /to: "\/bulk\/progress"/);
   assert.match(progress, /to="\/bulk\/check-in"/);
-  assert.match(profile, /to="\/bulk\/more"/);
+  assert.match(profile, /to: "\/bulk\/more"/);
   assert.match(productNavigation, /pathname\.startsWith\("\/bulk\/prs"\)/);
   assert.doesNotMatch(shell, /location\.reload/);
   assert.doesNotMatch(shell, /hash: "(?:plan|presets)"/);

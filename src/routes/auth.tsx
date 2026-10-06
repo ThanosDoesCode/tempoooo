@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { HistoryBackLink } from "@/components/HistoryBackLink";
 import { useEffect, useState } from "react";
 import { lovable } from "@/integrations/lovable";
 import { supabase } from "@/integrations/supabase/client";
@@ -138,18 +139,24 @@ function AuthPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+    <main className="flex min-h-svh items-center justify-center bg-background px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[max(1.5rem,env(safe-area-inset-top))]">
       <div className="w-full max-w-sm">
-        <h1 className="text-2xl font-semibold tracking-tight">Tempo</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Build consistency through a focused 52-week running and cycling challenge.
+        <HistoryBackLink fallback="/" fallbackLabel="Tempo" />
+        <p className="mt-4 text-sm font-semibold text-primary">Tempo</p>
+        <h1 className="mt-2 text-[30px] font-semibold tracking-tight">
+          {mode === "signin" ? "Welcome back" : "Create your account"}
+        </h1>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">
+          {mode === "signin"
+            ? "Sign in to pick up where you left off."
+            : "Start with a Challenge. Add fitness tools when you're ready."}
         </p>
 
         <button
           type="button"
           onClick={() => void continueWithGoogle()}
           disabled={pending !== null}
-          className="mt-5 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-border bg-elevated px-3 text-sm font-semibold text-foreground outline-none transition-colors hover:bg-card focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60"
+          className="account-secondary mt-6"
         >
           <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5">
             <path
@@ -175,9 +182,9 @@ function AuthPage() {
           {pending === "google" ? "Connecting to Google…" : "Continue with Google"}
         </button>
 
-        <div className="my-4 flex items-center gap-3 text-[11px] uppercase tracking-wider text-muted-foreground">
+        <div className="my-5 flex items-center gap-3 text-[13px] text-muted-foreground">
           <span className="h-px flex-1 bg-border" />
-          <span>or use email</span>
+          <span>Or use email</span>
           <span className="h-px flex-1 bg-border" />
         </div>
 
@@ -194,7 +201,7 @@ function AuthPage() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="Email"
-            className="w-full rounded-xl border border-border bg-elevated px-3 py-3 text-base outline-none"
+            className="account-input"
           />
           <label htmlFor="auth-password" className="sr-only">
             Password
@@ -209,12 +216,9 @@ function AuthPage() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Password"
-            className="w-full rounded-xl border border-border bg-elevated px-3 py-3 text-base outline-none"
+            className="account-input"
           />
-          <button
-            disabled={pending !== null}
-            className="min-h-11 w-full rounded-xl bg-primary px-3 text-sm font-semibold text-primary-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-60"
-          >
+          <button disabled={pending !== null} className="account-primary">
             {pending === "password"
               ? mode === "signin"
                 ? "Signing in…"
@@ -254,6 +258,6 @@ function AuthPage() {
           {mode === "signin" ? "No account? Create one" : "Already have an account? Sign in"}
         </button>
       </div>
-    </div>
+    </main>
   );
 }

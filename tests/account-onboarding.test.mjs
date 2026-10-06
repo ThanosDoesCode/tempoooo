@@ -6,13 +6,12 @@ const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
 test("unauthenticated home is a compact Tempo welcome with signup and sign-in paths", async () => {
   const home = await read("src/routes/index.tsx");
-  assert.match(home, /Build consistency\. See progress\./);
-  assert.match(home, /Set a shared weekly target/);
-  assert.match(home, /Track qualifying runs and rides/);
-  assert.match(home, /Add optional fitness tools whenever you want/);
-  assert.match(home, /Get started/);
+  assert.match(home, /Keep each other moving\./);
+  assert.match(home, /A weekly running and cycling challenge with a friend/);
+  assert.match(home, /workouts, meals and weight too, if you want/);
+  assert.match(home, /Create account/);
   assert.match(home, /search=\{\{ mode: "signup" \}\}/);
-  assert.match(home, /Sign in/);
+  assert.match(home, /I already have an account/);
   assert.doesNotMatch(home, /data\.session \? "\/challenge" : "\/auth"/);
 });
 
@@ -25,7 +24,7 @@ test("new account onboarding ends with a one-time Tempo intro and keeps Goal opt
   assert.match(route, /!profile\?\.account_onboarded_at \|\| !profile\.username/);
   assert.match(route, /location\.pathname !== "\/onboarding"/);
   assert.match(onboarding, /Welcome to Tempo/);
-  assert.match(onboarding, /Choose your username/);
+  assert.match(onboarding, /Pick a username/);
   assert.match(onboarding, /Stay consistent with someone else/);
   assert.match(onboarding, /Build consistency across your training, nutrition and challenges/);
   for (const feature of ["Challenge", "Training", "Meals", "Goal"])

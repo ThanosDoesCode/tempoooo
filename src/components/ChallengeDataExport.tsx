@@ -54,21 +54,20 @@ export function ChallengeDataExport() {
   return (
     <Card className="mt-3">
       <SectionTitle>Your data</SectionTitle>
-      <p className="text-sm leading-6 text-muted-foreground">
-        Every activity, stored pace and speed, qualifying distance, finalized penalties and travel
-        pauses for both players.
-      </p>
       <button
         type="button"
         disabled={exporting || !members}
         onClick={() => void exportCsv()}
-        className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-border py-2.5 text-sm font-semibold disabled:opacity-60"
+        className="flex min-h-11 w-full items-center gap-3 rounded-xl text-left text-[15px] font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
       >
         <Download className="h-4 w-4" aria-hidden="true" />
         {exporting ? "Preparing challenge data…" : "Download challenge data (CSV)"}
       </button>
+      <p className="mt-1 text-[13px] leading-5 text-muted-foreground">
+        Full activity history, weekly outcomes, payments and travel pauses for both players.
+      </p>
       {error ? (
-        <p role="alert" className="mt-2 text-xs text-danger">
+        <p role="alert" className="mt-2 text-xs text-warn">
           {error} Try the download again.
         </p>
       ) : null}

@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { bulkPlanModeFor, useMemberships, type BulkPlanMode } from "./bulk-access.ts";
 import {
   useBulkProgressNutrition,
-  useBulkProgressPhotos,
+  useBulkProgressPhotoCount,
   useBulkWeights,
 } from "./bulk-progress-query.ts";
 import {
@@ -37,14 +37,14 @@ export function useProgressMode() {
 }
 
 /**
- * Mode-aware progress-photo count, from the same sources the Photos screen uses: normalized
- * progress photos (private, signed) in public mode, legacy photo sets otherwise.
+ * Mode-aware total count. Public counts metadata without fetching/signing gallery pages;
+ * legacy counts the exhaustively loaded photo sets.
  */
 export function usePhotoCount(): number {
   const data = useAppData();
   const { mode, publicId } = useProgressMode();
-  const photos = useBulkProgressPhotos(publicId);
-  return resolvePhotoCount(mode, photos.data?.length ?? 0, data?.photos.length ?? 0);
+  const photos = useBulkProgressPhotoCount(publicId);
+  return resolvePhotoCount(mode, photos.data ?? 0, data?.photos.length ?? 0);
 }
 
 /**

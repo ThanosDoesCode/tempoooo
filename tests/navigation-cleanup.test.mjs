@@ -50,7 +50,7 @@ test("diagnostics belongs to You/Profile and retains both admin boundaries", asy
     read("src/lib/privileged-rpcs.server.ts"),
   ]);
   assert.doesNotMatch(progress, /Production diagnostics|\/bulk\/diagnostics/);
-  assert.match(profile, /\{isAdmin \? \([\s\S]*to="\/bulk\/diagnostics"/);
+  assert.match(profile, /\{isAdmin \? \([\s\S]*to: "\/bulk\/diagnostics"/);
   assert.equal(productAreaForPath("/bulk/diagnostics"), "profile");
   assert.match(route, /if \(!isAdmin\) throw redirect/);
   assert.match(server, /\.from\("bulk_admins"\)[\s\S]*\.eq\("user_id", caller\)/);

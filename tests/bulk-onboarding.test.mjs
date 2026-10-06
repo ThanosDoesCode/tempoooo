@@ -268,7 +268,7 @@ test("the five-step UI submits one atomic RPC while optional Goal remains discov
   }
   assert.match(onboarding, /complete_goal_onboarding/);
   assert.doesNotMatch(onboarding, /activate_my_bulk/);
-  assert.match(onboarding, /Creating My Goal/);
+  assert.match(onboarding, /Creating your goal plan/);
   assert.match(onboarding, /bulkOwnerQueryOptions/);
   assert.match(profile, /Set up fitness tools/);
   assert.match(guard, /redirect\(\{ to: "\/bulk-onboarding", replace: true \}\)/);

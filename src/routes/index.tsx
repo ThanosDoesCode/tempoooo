@@ -27,41 +27,23 @@ export const Route = createFileRoute("/")({
 
 function WelcomePage() {
   return (
-    <main className="flex min-h-screen items-center bg-background px-5 py-10">
-      <div className="mx-auto w-full max-w-md">
-        <p className="text-sm font-bold tracking-tight text-primary">Tempo</p>
-        <h1 className="mt-5 text-4xl font-semibold leading-tight tracking-tight">
-          Build consistency. See progress.
-        </h1>
-        <p className="mt-4 text-base leading-7 text-muted-foreground">
-          Create a running or cycling Challenge with someone else, track each week and keep each
-          other accountable.
-        </p>
-        <ul className="mt-7 space-y-3 text-sm text-foreground">
-          {[
-            "Set a shared weekly target",
-            "Track qualifying runs and rides",
-            "Stay accountable with clear weekly outcomes",
-            "Add optional fitness tools whenever you want",
-          ].map((item) => (
-            <li key={item} className="rounded-xl border border-border bg-card px-4 py-3">
-              {item}
-            </li>
-          ))}
-        </ul>
-        <Link
-          to="/auth"
-          search={{ mode: "signup" }}
-          className="mt-8 flex min-h-11 w-full items-center justify-center rounded-xl bg-primary px-4 font-semibold text-primary-foreground"
-        >
-          Get started
+    <main className="min-h-svh bg-background px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[max(2rem,env(safe-area-inset-top))]">
+      <div className="mx-auto flex min-h-[calc(100svh-5rem)] w-full max-w-md flex-col">
+        <p className="text-2xl font-semibold tracking-tight text-primary">Tempo</p>
+        <div className="my-auto py-12">
+          <h1 className="text-[40px] font-semibold leading-[1.08] tracking-tight sm:text-5xl">
+            Keep each other moving.
+          </h1>
+          <p className="mt-4 text-base leading-7 text-muted-foreground">
+            A weekly running and cycling challenge with a friend, with something at stake. Track
+            workouts, meals and weight too, if you want.
+          </p>
+        </div>
+        <Link to="/auth" search={{ mode: "signup" }} className="account-primary">
+          Create account
         </Link>
-        <Link
-          to="/auth"
-          search={{ mode: "signin" }}
-          className="mt-2 flex min-h-11 w-full items-center justify-center rounded-xl text-sm font-semibold text-muted-foreground"
-        >
-          Sign in
+        <Link to="/auth" search={{ mode: "signin" }} className="account-secondary mt-3">
+          I already have an account
         </Link>
       </div>
     </main>

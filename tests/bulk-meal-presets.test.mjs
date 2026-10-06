@@ -92,7 +92,9 @@ test("public meal UI uses explicit saves, local errors and mobile-safe controls"
   assert.match(component, /This cannot be undone/);
   assert.match(route, /BulkMealPresets/);
   assert.match(shell, /<LogSheet/); // Meals is reached from the shared Log sheet
-  assert.match(query, /Promise\.all/);
+  // Ingredient reads now depend on the exhaustively loaded, profile-scoped preset IDs.
+  assert.match(query, /readAllByKey/);
+  assert.match(query, /\.in\("meal_preset_id", ids\)/);
   assert.match(query, /bulkMealPresetsQueryKey\(bulkProfileId\)/);
   assert.match(cache, /"bulk-meal-presets"/);
   assert.match(legacy, /id: "salmon"/);

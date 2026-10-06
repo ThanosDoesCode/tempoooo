@@ -9,6 +9,7 @@ import { userFacingError } from "@/lib/network-errors";
 import { clearBulk, useAppData, useBulkMeta } from "@/lib/store";
 import { NutritionTargetsEditor } from "@/components/NutritionTargetsEditor";
 import { WeeklyWorkoutGoalEditor } from "@/components/WeeklyWorkoutGoalEditor";
+import { UnsavedSettingsDialog } from "@/components/UnsavedSettingsDialog";
 
 export const Route = createFileRoute("/_authenticated/bulk/more")({
   head: () => ({ meta: [{ title: "Tempo" }] }),
@@ -25,6 +26,8 @@ function BulkMorePage() {
   const [confirming, setConfirming] = useState(false);
   const [switching, setSwitching] = useState(false);
   const [switchError, setSwitchError] = useState<string | null>(null);
+  const [nutritionDirty, setNutritionDirty] = useState(false);
+  const [weeklyDirty, setWeeklyDirty] = useState(false);
   const currentGoal =
     data?.targets.goal === "cut" ? "Cut" : data?.targets.goal === "maintain" ? "Maintain" : "Bulk";
 
@@ -55,15 +58,32 @@ function BulkMorePage() {
     <AppShell>
       <PageHeader
         title="Goal settings"
-        subtitle="Configure your Goal and daily targets."
+        subtitle="Your goal, daily targets and weekly workouts."
         backTo="/profile"
         backLabel="You"
       />
+      <UnsavedSettingsDialog dirty={(nutritionDirty || weeklyDirty) && !switching} />
       <div className="space-y-3">
         {planMode === "public" ? (
           <Card>
             <SectionTitle>Current goal</SectionTitle>
             <p className="text-lg font-semibold">{currentGoal}</p>
+            <dl className="mt-3 space-y-2 text-[13px]">
+              {data?.targets.targetWeight != null ? (
+                <div className="flex justify-between gap-3">
+                  <dt className="text-muted-foreground">Target weight</dt>
+                  <dd>{data.targets.targetWeight} kg</dd>
+                </div>
+              ) : null}
+              {data?.targets.targetWeeklyGainKg != null ? (
+                <div className="flex justify-between gap-3">
+                  <dt className="text-muted-foreground">
+                    Weekly {currentGoal === "Cut" ? "loss" : "change"}
+                  </dt>
+                  <dd>{data.targets.targetWeeklyGainKg} kg</dd>
+                </div>
+              ) : null}
+            </dl>
             {!confirming ? (
               <button
                 type="button"
@@ -74,12 +94,17 @@ function BulkMorePage() {
               </button>
             ) : (
               <div className="mt-4">
+                {nutritionDirty || weeklyDirty ? (
+                  <p className="mb-2 text-sm text-warn">
+                    Unsaved target edits will also be discarded.
+                  </p>
+                ) : null}
                 <Note>
                   Changing goal resets your current calorie, macro, weight-target and active plan
                   setup. Your meal presets, completed history, account and Challenge data stay safe.
                 </Note>
                 {switchError ? (
-                  <p role="alert" className="mt-3 text-sm text-danger">
+                  <p role="alert" className="mt-3 text-sm text-warn">
                     {switchError}
                   </p>
                 ) : null}
@@ -112,8 +137,10 @@ function BulkMorePage() {
             )}
           </Card>
         ) : null}
-        {planMode === "public" ? <WeeklyWorkoutGoalEditor /> : null}
-        {planMode === "public" || planMode === "legacy" ? <NutritionTargetsEditor /> : null}
+        {planMode === "public" ? <WeeklyWorkoutGoalEditor onDirtyChange={setWeeklyDirty} /> : null}
+        {planMode === "public" || planMode === "legacy" ? (
+          <NutritionTargetsEditor onDirtyChange={setNutritionDirty} />
+        ) : null}
       </div>
     </AppShell>
   );

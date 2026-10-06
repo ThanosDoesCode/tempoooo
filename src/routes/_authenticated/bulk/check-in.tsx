@@ -70,7 +70,14 @@ function CheckInPage() {
   const publicId = bulkPlanModeFor(memberships.data, bulkId) === "public" ? bulkId : null;
   const sessions = useCompletedSessionDates(publicId, "2000-01-01", "2999-12-31");
   const activePlan = useActiveTrainingPlan(publicId);
-  const publicWeights = useBulkWeights(publicId, "2000-01-01");
+  // Status needs the selected week and the two prior weeks, not lifetime history.
+  const weightWeek = mode === "weekly" ? weekStart : weekStartOf(new Date());
+  const weightEnd = iso(addDays(weightWeek, 6));
+  const publicWeights = useBulkWeights(
+    publicId,
+    iso(addDays(weightWeek, -14)),
+    weightEnd < iso(new Date()) ? weightEnd : iso(new Date()),
+  );
   // Same weight source and rules as Goal Today, so the badge never disagrees.
   const statusWeights = useMemo(
     () => (publicId ? (publicWeights.data ?? []) : data ? legacyDayWeights(data.days) : []),

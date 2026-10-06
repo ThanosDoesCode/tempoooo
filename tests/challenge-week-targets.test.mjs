@@ -94,9 +94,9 @@ test("public Goal migration defaults existing public plans while leaving legacy 
   assert.match(migration, /payload->>'goal' IN \('gain', 'cut', 'maintain'\)/);
   assert.match(shell, /MAIN_TABS/); // Today (the daily/goal screen) is a bottom tab
   assert.doesNotMatch(shell, /label: "Bulk"/);
-  assert.match(profile, /ownedPlan \? \(/);
+  assert.match(profile, /ownedPlan/);
   assert.doesNotMatch(profile, /productMode === "public"|productMode === "legacy"/);
-  assert.match(profile, /<SectionTitle>Goal<\/SectionTitle>/);
+  assert.match(profile, /label: "Goal settings"/);
   assert.doesNotMatch(profile, /My Bulk Plan|Open My Bulk/);
   assert.match(onboarding, /Review your Goal plan/);
   assert.doesNotMatch(onboarding, /Review your Bulk plan/);

@@ -5,6 +5,7 @@ import vm from "node:vm";
 import ts from "typescript";
 import { DEFAULT_DATA } from "../src/lib/types.ts";
 import { createSaveQueue } from "../src/lib/workout-save.ts";
+import * as pagination from "../src/lib/query-pagination.ts";
 const compiled = ts.transpileModule(
   await readFile(new URL("../src/lib/store.ts", import.meta.url), "utf8"),
   { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } },
@@ -25,6 +26,9 @@ async function fixture() {
           return this;
         },
         order() {
+          return this;
+        },
+        limit() {
           return this;
         },
         maybeSingle: async () => ({ data: null, error: null }),
@@ -51,6 +55,7 @@ async function fixture() {
           inspectPrivateImage: async () => ({ mimeType: "image/jpeg", extension: "jpg" }),
         };
       if (name === "./workout-save") return { createSaveQueue };
+      if (name === "./query-pagination") return pagination;
       if (name === "./types") return { DEFAULT_DATA };
       throw new Error(name);
     },

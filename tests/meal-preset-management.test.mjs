@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { presentationComponent } from "./presentation-component-fixture.mjs";
 import * as meals from "../src/lib/bulk-meal-presets.ts";
+import * as pagination from "../src/lib/query-pagination.ts";
 
 const jsx = (type, props) => ({ type, props });
 const preset = (changes = {}) => ({
@@ -272,17 +273,29 @@ test("query maps visibility/source metadata while retaining all owned presets fo
   const query = presentationComponent("src/lib/bulk-meal-presets-query.ts", {
     "@tanstack/react-query": { queryOptions: (options) => options },
     "./network-errors": {},
+    "./query-pagination": pagination,
     "@/integrations/supabase/client": {
       supabase: {
         from(table) {
+          let cursor;
           const request = {
             select: () => request,
             eq: (column, value) => {
               calls.push([column, value]);
               return request;
             },
-            order: () =>
-              Promise.resolve({ data: table === "bulk_meal_presets" ? [row] : [], error: null }),
+            order: () => request,
+            limit: () => request,
+            in: () => request,
+            gt: (_, value) => {
+              cursor = value;
+              return request;
+            },
+            then: (resolve, reject) =>
+              Promise.resolve({
+                data: table === "bulk_meal_presets" && !cursor ? [row] : [],
+                error: null,
+              }).then(resolve, reject),
           };
           return request;
         },
@@ -299,7 +312,7 @@ test("query maps visibility/source metadata while retaining all owned presets fo
   assert.equal(presets[0].showInQuickAdd, false);
   assert.deepEqual(calls[0], ["bulk_profile_id", "profile-a"]);
   await query.setBulkMealPresetQuickAddVisibility("meal", true);
-  assert.deepEqual(JSON.parse(JSON.stringify(calls[1])), [
+  assert.deepEqual(JSON.parse(JSON.stringify(calls.at(-1))), [
     "set_bulk_meal_preset_quick_add_visibility",
     { _meal: "meal", _visible: true },
   ]);

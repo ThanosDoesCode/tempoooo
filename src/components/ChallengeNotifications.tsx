@@ -10,7 +10,13 @@ import {
   type PushSdk,
 } from "@/lib/challenge-push";
 
-export function ChallengeNotifications({ userId }: { userId: string }) {
+export function ChallengeNotifications({
+  userId,
+  expanded = false,
+}: {
+  userId: string;
+  expanded?: boolean;
+}) {
   const [sdk, setSdk] = useState<PushSdk | null>(null);
   const [on, setOn] = useState(false);
   const [serviceState, setServiceState] = useState<
@@ -154,8 +160,8 @@ export function ChallengeNotifications({ userId }: { userId: string }) {
     typeof Notification !== "undefined" && Notification.permission === "denied";
   return (
     <div className="card-surface overflow-hidden">
-      <details className="group">
-        <summary className="disclosure-summary px-4 py-2.5">
+      <details className="group" open={expanded || undefined}>
+        <summary className="disclosure-summary min-h-14 px-4 py-3">
           <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-elevated text-muted-foreground">
             <Bell className="h-4 w-4" aria-hidden="true" />
           </span>
@@ -163,11 +169,7 @@ export function ChallengeNotifications({ userId }: { userId: string }) {
           <span
             role="status"
             className={`ml-auto min-w-0 text-right text-xs ${
-              feedback?.tone === "error"
-                ? "text-danger"
-                : on
-                  ? "text-good"
-                  : "text-muted-foreground"
+              feedback?.tone === "error" ? "text-warn" : on ? "text-good" : "text-muted-foreground"
             }`}
           >
             {phase === "checking"
@@ -197,8 +199,38 @@ export function ChallengeNotifications({ userId }: { userId: string }) {
 
           <ChevronDown className="disclosure-chevron text-muted-foreground" aria-hidden="true" />
         </summary>
-        <div className="border-t border-border px-3 pb-3 pt-2.5">
-          <p className="text-[11px] leading-relaxed text-muted-foreground">
+        <div className="border-t border-border p-4">
+          <dl className="mb-4 space-y-2 text-[13px]">
+            <div className="flex items-center justify-between gap-3">
+              <dt className="text-muted-foreground">Browser permission</dt>
+              <dd>
+                {typeof Notification === "undefined"
+                  ? "Unavailable"
+                  : permissionDenied
+                    ? "Denied"
+                    : permissionMissing
+                      ? "Not requested"
+                      : "Granted"}
+              </dd>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <dt className="text-muted-foreground">Tempo notifications</dt>
+              <dd className={on ? "text-good" : "text-muted-foreground"}>
+                {phase
+                  ? phase === "enabling"
+                    ? "Enabling…"
+                    : phase === "disabling"
+                      ? "Disabling…"
+                      : "Checking status"
+                  : serviceState !== "ready"
+                    ? "Unavailable"
+                    : on
+                      ? "On"
+                      : "Off"}
+              </dd>
+            </div>
+          </dl>
+          <p className="text-[13px] leading-relaxed text-muted-foreground">
             Get updates when your opponent logs activity, completes the week, or changes a payment.
           </p>
           {!on &&
@@ -206,13 +238,13 @@ export function ChallengeNotifications({ userId }: { userId: string }) {
           phase === null &&
           permissionMissing &&
           feedback?.tone !== "error" ? (
-            <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+            <p className="mt-2 text-[13px] leading-relaxed text-muted-foreground">
               Notification permission has not been granted on this device. Tempo asks only after you
               tap Enable notifications.
             </p>
           ) : null}
           {!on && serviceState === "ready" && phase === null && permissionDenied ? (
-            <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+            <p className="mt-2 text-[13px] leading-relaxed text-muted-foreground">
               Notification permission is denied on this device. You can allow Tempo in your browser
               or iPhone notification settings.
             </p>
@@ -223,7 +255,7 @@ export function ChallengeNotifications({ userId }: { userId: string }) {
                 type="button"
                 disabled={!sdk || phase !== null || permissionDenied}
                 onClick={() => void enable()}
-                className="rounded-lg bg-primary px-3 py-2 font-semibold text-primary-foreground disabled:opacity-50"
+                className="account-primary text-sm"
               >
                 {phase === "checking" ? (
                   <PendingLabel>Checking notifications…</PendingLabel>
@@ -238,7 +270,7 @@ export function ChallengeNotifications({ userId }: { userId: string }) {
               type="button"
               disabled={phase !== null}
               onClick={() => void disable()}
-              className="rounded-lg border border-border px-3 py-2 disabled:opacity-50"
+              className="account-secondary"
             >
               {phase === "disabling" ? (
                 <PendingLabel>Disabling notifications…</PendingLabel>
@@ -262,16 +294,16 @@ export function ChallengeNotifications({ userId }: { userId: string }) {
       {feedback?.tone === "error" ? (
         <div
           role="alert"
-          className="flex items-start gap-2 border-t border-danger/20 bg-danger/5 px-3 py-2 text-[11px] leading-relaxed text-danger"
+          className="flex flex-wrap items-center gap-2 border-t border-warn/20 bg-warn/5 px-4 py-3 text-[13px] leading-relaxed text-warn"
         >
-          <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          <TriangleAlert className="h-4 w-4 shrink-0" aria-hidden="true" />
           <span className="min-w-0 flex-1">{feedback.text}</span>
           {serviceState === "temporary-failure" ? (
             <button
               type="button"
               disabled={phase !== null}
               onClick={() => setRetryKey((key) => key + 1)}
-              className="min-h-11 shrink-0 rounded-lg border border-danger/40 px-3 py-2 font-semibold disabled:opacity-50"
+              className="min-h-11 shrink-0 rounded-xl border border-warn/40 px-3 py-2 font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
             >
               Retry notifications
             </button>

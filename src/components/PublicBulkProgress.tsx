@@ -861,7 +861,7 @@ function ProgressPhotos({
           {error}
         </p>
       ) : null}
-      {query.error ? (
+      {query.error && !query.data?.length ? (
         <div className="mt-3">
           <DataError
             message={userFacingError(query.error, "load progress photos")}
@@ -915,6 +915,23 @@ function ProgressPhotos({
       ) : (
         <p className="mt-3 text-sm text-muted-foreground">No progress photos yet.</p>
       )}
+      {query.isFetchNextPageError ? (
+        <DataError
+          message="Older photos could not load. Your saved photos are unchanged."
+          onRetry={() => void query.fetchNextPage()}
+        />
+      ) : null}
+      {query.hasNextPage ? (
+        <Button
+          type="button"
+          variant="outline"
+          className="mt-3 min-h-11 w-full"
+          disabled={query.isFetching}
+          onClick={() => void query.fetchNextPage()}
+        >
+          {query.isFetchingNextPage ? "Loading older photos…" : "Load older photos"}
+        </Button>
+      ) : null}
     </Card>
   );
 }

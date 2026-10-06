@@ -242,6 +242,19 @@ html[data-tempo-ready="true"] .tempo-startup {
   will-change: transform;
 }
 
+/* Phase 7 account controls share sizing, keyboard focus and restrained tap feedback. */
+.account-primary {
+  @apply flex min-h-13 w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 text-base font-semibold text-primary-foreground transition-opacity hover:opacity-90 active:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-50;
+}
+
+.account-secondary {
+  @apply flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl border border-border bg-elevated px-4 text-sm font-semibold text-foreground transition-colors hover:bg-card active:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50;
+}
+
+.account-input {
+  @apply min-h-12 w-full min-w-0 rounded-[14px] border border-input bg-elevated px-4 py-3 text-base text-foreground outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 disabled:opacity-60;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

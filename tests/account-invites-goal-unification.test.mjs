@@ -21,8 +21,10 @@ test("account deletion is authenticated, deletes only context.userId and release
   assert.match(server, /auth\.admin\.deleteUser\(caller\)/);
   assert.match(migration, /profiles_auth_user_fkey[\s\S]*ON DELETE CASCADE/);
   assert.match(migration, /bulk_profiles_owner_profile_fkey[\s\S]*ON DELETE CASCADE/);
-  assert.match(profile, /Delete account[\s\S]*Delete my account/);
-  assert.match(profile, /confirmation: "Delete my account"/);
+  assert.match(profile, /<DeleteAccountDialog/);
+  const dialog = await read("src/components/DeleteAccountDialog.tsx");
+  assert.match(dialog, /Delete account[\s\S]*Delete my account/);
+  assert.match(dialog, /confirmation: "Delete my account"/);
 });
 
 test("in-app Challenge invitations expose no secret or email and stay service-role only", async () => {

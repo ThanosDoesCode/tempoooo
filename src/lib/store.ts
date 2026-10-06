@@ -2,6 +2,7 @@ import { useCallback, useSyncExternalStore } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { inspectPrivateImage } from "@/lib/private-image-upload";
 import { createSaveQueue } from "./workout-save";
+import { QUERY_PAGE_SIZE, readAllByKey } from "./query-pagination";
 import {
   DEFAULT_DATA,
   type AppData,
@@ -84,10 +85,10 @@ async function signPhotos(rows: PhotoRow[]): Promise<PhotoSet[]> {
     [r.front_path, r.side_path, r.back_path].filter((p): p is string => !!p),
   );
   const map = new Map<string, string>();
-  if (paths.length) {
+  for (let offset = 0; offset < paths.length; offset += QUERY_PAGE_SIZE) {
     const { data } = await supabase.storage
       .from("bulk-progress-photos")
-      .createSignedUrls(paths, 60 * 60);
+      .createSignedUrls(paths.slice(offset, offset + QUERY_PAGE_SIZE), 60 * 60);
     data?.forEach((s) => {
       if (s.path && s.signedUrl) map.set(s.path, s.signedUrl);
     });
@@ -120,37 +121,78 @@ type PhotoRow = {
 async function fetchBulkSnapshot(id: string): Promise<AppData> {
   const [targets, days, workouts, notes, photos] = await Promise.all([
     supabase.from("bulk_targets").select("payload").eq("bulk_profile_id", id).maybeSingle(),
-    supabase.from("bulk_days").select("day,payload").eq("bulk_profile_id", id),
-    supabase.from("bulk_workouts").select("day,payload").eq("bulk_profile_id", id),
-    supabase.from("bulk_week_notes").select("week_start,note").eq("bulk_profile_id", id),
-    supabase
-      .from("bulk_photos")
-      .select("id,taken_on,weight,front_path,side_path,back_path")
-      .eq("bulk_profile_id", id)
-      .order("taken_on"),
+    readAllByKey(
+      (cursor) => {
+        let query = supabase
+          .from("bulk_days")
+          .select("day,payload")
+          .eq("bulk_profile_id", id)
+          .order("day")
+          .limit(QUERY_PAGE_SIZE);
+        if (cursor) query = query.gt("day", cursor);
+        return query;
+      },
+      (row) => row.day,
+    ),
+    readAllByKey(
+      (cursor) => {
+        let query = supabase
+          .from("bulk_workouts")
+          .select("day,payload")
+          .eq("bulk_profile_id", id)
+          .order("day")
+          .limit(QUERY_PAGE_SIZE);
+        if (cursor) query = query.gt("day", cursor);
+        return query;
+      },
+      (row) => row.day,
+    ),
+    readAllByKey(
+      (cursor) => {
+        let query = supabase
+          .from("bulk_week_notes")
+          .select("week_start,note")
+          .eq("bulk_profile_id", id)
+          .order("week_start")
+          .limit(QUERY_PAGE_SIZE);
+        if (cursor) query = query.gt("week_start", cursor);
+        return query;
+      },
+      (row) => row.week_start,
+    ),
+    readAllByKey(
+      (cursor) => {
+        let query = supabase
+          .from("bulk_photos")
+          .select("id,taken_on,weight,front_path,side_path,back_path")
+          .eq("bulk_profile_id", id)
+          .order("id")
+          .limit(QUERY_PAGE_SIZE);
+        if (cursor) query = query.gt("id", cursor);
+        return query;
+      },
+      (row) => row.id,
+    ),
   ]);
 
-  const failed = [targets.error, days.error, workouts.error, notes.error, photos.error].find(
-    (error) => error !== null,
-  );
-  if (failed) {
-    throw new Error(failed.message);
-  }
+  if (targets.error) throw new Error(targets.error.message);
 
   const next: AppData = {
     days: {},
     workouts: {},
     weekNotes: {},
-    photos: await signPhotos((photos.data ?? []) as PhotoRow[]),
+    photos: await signPhotos(
+      photos.sort((a, b) => a.taken_on.localeCompare(b.taken_on) || a.id.localeCompare(b.id)),
+    ),
     targets: { ...DEFAULT_DATA.targets, ...((targets.data?.payload ?? {}) as Partial<Targets>) },
   };
-  (days.data ?? []).forEach((row) => {
+  days.forEach((row) => {
     next.days[row.day] = { ...(row.payload as DailyLog), date: row.day };
   });
-  (workouts.data ?? []).forEach((row) => {
+  workouts.forEach((row) => {
     next.workouts[row.day] = row.payload as Workout;
   });
-  (notes.data ?? []).forEach((row) => {
+  notes.forEach((row) => {
     next.weekNotes[row.week_start] = row.note;
   });
 

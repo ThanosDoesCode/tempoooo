@@ -62,8 +62,10 @@ test("authentication fields are labelled and use iOS-safe text sizing", async ()
   const auth = await read("src/routes/auth.tsx");
   assert.match(auth, /htmlFor="auth-email"[\s\S]*id="auth-email"/);
   assert.match(auth, /htmlFor="auth-password"[\s\S]*id="auth-password"/);
-  assert.match(auth, /id="auth-email"[\s\S]*text-base/);
-  assert.match(auth, /id="auth-password"[\s\S]*text-base/);
+  assert.match(auth, /id="auth-email"[\s\S]*account-input/);
+  assert.match(auth, /id="auth-password"[\s\S]*account-input/);
+  const styles = await read("src/styles.css");
+  assert.match(styles, /\.account-input[\s\S]*text-base/);
 });
 
 test("legacy Bulk date, photo and backup actions meet the mobile touch target", async () => {

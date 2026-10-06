@@ -42,6 +42,7 @@ import { Route as AuthenticatedChallengePaymentsRouteImport } from './routes/_au
 import { Route as AuthenticatedChallengeRulesRouteImport } from './routes/_authenticated/challenge/rules'
 import { Route as AuthenticatedChallengeTargetsRouteImport } from './routes/_authenticated/challenge/targets'
 import { Route as AuthenticatedChallengeTermsRouteImport } from './routes/_authenticated/challenge/terms'
+import { Route as AuthenticatedProfileNotificationsRouteImport } from './routes/_authenticated/profile_.notifications'
 import { Route as AuthenticatedBulkMealsAddRouteImport } from './routes/_authenticated/bulk/meals_.add'
 import { Route as AuthenticatedBulkMealsHistoryRouteImport } from './routes/_authenticated/bulk/meals_.history'
 import { Route as AuthenticatedBulkMealsMoreRouteImport } from './routes/_authenticated/bulk/meals_.more'
@@ -245,6 +246,12 @@ const AuthenticatedChallengeTermsRoute =
     path: '/challenge/terms',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedProfileNotificationsRoute =
+  AuthenticatedProfileNotificationsRouteImport.update({
+    id: '/profile_/notifications',
+    path: '/profile/notifications',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedBulkMealsAddRoute =
   AuthenticatedBulkMealsAddRouteImport.update({
     id: '/meals_/add',
@@ -385,6 +392,7 @@ export interface FileRoutesByFullPath {
   '/challenge/rules': typeof AuthenticatedChallengeRulesRoute
   '/challenge/targets': typeof AuthenticatedChallengeTargetsRoute
   '/challenge/terms': typeof AuthenticatedChallengeTermsRoute
+  '/profile/notifications': typeof AuthenticatedProfileNotificationsRoute
   '/bulk/': typeof AuthenticatedBulkIndexRoute
   '/challenge/': typeof AuthenticatedChallengeIndexRoute
   '/bulk/meals/add': typeof AuthenticatedBulkMealsAddRoute
@@ -436,6 +444,7 @@ export interface FileRoutesByTo {
   '/challenge/rules': typeof AuthenticatedChallengeRulesRoute
   '/challenge/targets': typeof AuthenticatedChallengeTargetsRoute
   '/challenge/terms': typeof AuthenticatedChallengeTermsRoute
+  '/profile/notifications': typeof AuthenticatedProfileNotificationsRoute
   '/bulk': typeof AuthenticatedBulkIndexRoute
   '/challenge': typeof AuthenticatedChallengeIndexRoute
   '/bulk/meals/add': typeof AuthenticatedBulkMealsAddRoute
@@ -490,6 +499,7 @@ export interface FileRoutesById {
   '/_authenticated/challenge/rules': typeof AuthenticatedChallengeRulesRoute
   '/_authenticated/challenge/targets': typeof AuthenticatedChallengeTargetsRoute
   '/_authenticated/challenge/terms': typeof AuthenticatedChallengeTermsRoute
+  '/_authenticated/profile_/notifications': typeof AuthenticatedProfileNotificationsRoute
   '/_authenticated/bulk/': typeof AuthenticatedBulkIndexRoute
   '/_authenticated/challenge/': typeof AuthenticatedChallengeIndexRoute
   '/_authenticated/bulk/meals_/add': typeof AuthenticatedBulkMealsAddRoute
@@ -544,6 +554,7 @@ export interface FileRouteTypes {
     | '/challenge/rules'
     | '/challenge/targets'
     | '/challenge/terms'
+    | '/profile/notifications'
     | '/bulk/'
     | '/challenge/'
     | '/bulk/meals/add'
@@ -595,6 +606,7 @@ export interface FileRouteTypes {
     | '/challenge/rules'
     | '/challenge/targets'
     | '/challenge/terms'
+    | '/profile/notifications'
     | '/bulk'
     | '/challenge'
     | '/bulk/meals/add'
@@ -648,6 +660,7 @@ export interface FileRouteTypes {
     | '/_authenticated/challenge/rules'
     | '/_authenticated/challenge/targets'
     | '/_authenticated/challenge/terms'
+    | '/_authenticated/profile_/notifications'
     | '/_authenticated/bulk/'
     | '/_authenticated/challenge/'
     | '/_authenticated/bulk/meals_/add'
@@ -909,6 +922,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedChallengeTermsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/profile_/notifications': {
+      id: '/_authenticated/profile_/notifications'
+      path: '/profile/notifications'
+      fullPath: '/profile/notifications'
+      preLoaderRoute: typeof AuthenticatedProfileNotificationsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/bulk/meals_/add': {
       id: '/_authenticated/bulk/meals_/add'
       path: '/meals/add'
@@ -1124,6 +1144,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedChallengeRulesRoute: typeof AuthenticatedChallengeRulesRoute
   AuthenticatedChallengeTargetsRoute: typeof AuthenticatedChallengeTargetsRoute
   AuthenticatedChallengeTermsRoute: typeof AuthenticatedChallengeTermsRoute
+  AuthenticatedProfileNotificationsRoute: typeof AuthenticatedProfileNotificationsRoute
   AuthenticatedChallengeIndexRoute: typeof AuthenticatedChallengeIndexRoute
   AuthenticatedChallengeActivityActivityIdRoute: typeof AuthenticatedChallengeActivityActivityIdRoute
   AuthenticatedChallengeTermsOverrideRoute: typeof AuthenticatedChallengeTermsOverrideRoute
@@ -1150,6 +1171,8 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedChallengeRulesRoute: AuthenticatedChallengeRulesRoute,
   AuthenticatedChallengeTargetsRoute: AuthenticatedChallengeTargetsRoute,
   AuthenticatedChallengeTermsRoute: AuthenticatedChallengeTermsRoute,
+  AuthenticatedProfileNotificationsRoute:
+    AuthenticatedProfileNotificationsRoute,
   AuthenticatedChallengeIndexRoute: AuthenticatedChallengeIndexRoute,
   AuthenticatedChallengeActivityActivityIdRoute:
     AuthenticatedChallengeActivityActivityIdRoute,

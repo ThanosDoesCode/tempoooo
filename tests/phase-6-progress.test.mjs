@@ -565,11 +565,11 @@ test("Body & food photo count is mode-aware (normalized for public, legacy other
     read("src/lib/progress-model.ts"),
   ]);
   assert.match(body, /const photoCount = usePhotoCount\(\)/);
-  // The hook draws on the same authoritative sources as the Photos screen, signed/private.
-  assert.match(model, /useBulkProgressPhotos\(publicId\)/);
+  // Count is owner-scoped metadata, independent of bounded signed gallery pages.
+  assert.match(model, /useBulkProgressPhotoCount\(publicId\)/);
   assert.match(
     model,
-    /resolvePhotoCount\(mode, photos\.data\?\.length \?\? 0, data\?\.photos\.length \?\? 0\)/,
+    /resolvePhotoCount\(mode, photos\.data \?\? 0, data\?\.photos\.length \?\? 0\)/,
   );
 });
 

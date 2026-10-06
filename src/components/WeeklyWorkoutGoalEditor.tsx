@@ -11,7 +11,9 @@ const MAX = 14;
  * plan can carry a 5-workout weekly goal. Only weeklyWorkoutGoal changes here; the plan,
  * its days and history are untouched.
  */
-export function WeeklyWorkoutGoalEditor() {
+export function WeeklyWorkoutGoalEditor({
+  onDirtyChange,
+}: { onDirtyChange?: (dirty: boolean) => void } = {}) {
   const data = useAppData();
   const { role } = useBulkMeta();
   const canEdit = role !== "viewer";
@@ -20,14 +22,30 @@ export function WeeklyWorkoutGoalEditor() {
   const [draft, setDraft] = useState("");
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
+  const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
-    if (targets?.weeklyWorkoutGoal != null) setDraft(String(targets.weeklyWorkoutGoal));
-  }, [targets?.weeklyWorkoutGoal]);
+    // Keep the draft when the existing optimistic store rolls back a failed save.
+    if (status === "saving" || status === "error") return;
+    if (targets?.weeklyWorkoutGoal != null) {
+      setDraft(String(targets.weeklyWorkoutGoal));
+      setInitialized(true);
+    }
+  }, [targets?.weeklyWorkoutGoal]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const dirty =
+    !!targets &&
+    canEdit &&
+    initialized &&
+    Number(draft.replace(",", ".")) !== targets.weeklyWorkoutGoal;
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
 
   if (!targets) return null;
 
   const save = async () => {
+    if (!dirty || status === "saving") return;
     const value = Number(draft.replace(",", "."));
     if (!Number.isInteger(value) || value < MIN || value > MAX) {
       setStatus("error");
@@ -48,18 +66,18 @@ export function WeeklyWorkoutGoalEditor() {
   return (
     <Card>
       <SectionTitle>Weekly workout goal</SectionTitle>
-      <label className="block text-xs text-muted-foreground">
+      <label className="block text-[13px] text-muted-foreground">
         Completed workouts per week
         <input
           inputMode="numeric"
-          disabled={!canEdit}
+          disabled={!canEdit || status === "saving"}
           value={draft}
           onChange={(event) => {
             setDraft(event.target.value);
             setStatus("idle");
           }}
           aria-label="Weekly workout goal"
-          className="num mt-1 w-full rounded-xl border border-input bg-elevated px-3 py-2.5 text-lg font-semibold text-foreground outline-none focus:border-ring disabled:opacity-60"
+          className="account-input num mt-2 font-semibold"
         />
       </label>
       <div className="mt-3">
@@ -69,15 +87,16 @@ export function WeeklyWorkoutGoalEditor() {
         </Note>
       </div>
       {error ? (
-        <p role="alert" className="mt-3 text-sm text-danger">
+        <p role="alert" className="mt-3 text-sm text-warn">
           {error}
         </p>
       ) : null}
       <button
         type="button"
-        disabled={!canEdit || status === "saving"}
+        disabled={!canEdit || !dirty || status === "saving"}
         onClick={() => void save()}
-        className="mt-4 flex min-h-11 w-full items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+        aria-live="polite"
+        className="account-primary mt-4"
       >
         {status === "saving" ? (
           <PendingLabel>Saving goal...</PendingLabel>

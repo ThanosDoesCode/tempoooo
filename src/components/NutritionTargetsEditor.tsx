@@ -15,7 +15,9 @@ const FIELDS: Array<{ key: Field; label: string; unit: string; min: number; max:
  * mutation. Only these four fields change; goal, weights, training preferences and
  * plans are untouched. Past nutrition days keep their own target snapshots.
  */
-export function NutritionTargetsEditor() {
+export function NutritionTargetsEditor({
+  onDirtyChange,
+}: { onDirtyChange?: (dirty: boolean) => void } = {}) {
   const data = useAppData();
   const { role } = useBulkMeta();
   const canEdit = role !== "viewer";
@@ -29,8 +31,12 @@ export function NutritionTargetsEditor() {
   });
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
+  const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
+    // The existing store updates optimistically and rolls back on failure. Keep the
+    // editable draft through both emissions so a failed save can be retried.
+    if (status === "saving" || status === "error") return;
     if (!targets) return;
     setDraft({
       calories: String(targets.calories),
@@ -38,11 +44,22 @@ export function NutritionTargetsEditor() {
       carbs: String(targets.carbs),
       fat: String(targets.fat),
     });
+    setInitialized(true);
   }, [targets?.calories, targets?.protein, targets?.carbs, targets?.fat]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const dirty =
+    !!targets &&
+    canEdit &&
+    initialized &&
+    FIELDS.some(({ key }) => Math.round(Number(draft[key].replace(",", "."))) !== targets[key]);
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
 
   if (!targets) return null;
 
   const save = async () => {
+    if (!dirty || status === "saving") return;
     const next: Partial<Record<Field, number>> = {};
     for (const field of FIELDS) {
       const value = Number(draft[field.key].replace(",", "."));
@@ -69,17 +86,17 @@ export function NutritionTargetsEditor() {
       <SectionTitle>Daily nutrition targets</SectionTitle>
       <div className="grid grid-cols-2 gap-3">
         {FIELDS.map((field) => (
-          <label key={field.key} className="block text-xs text-muted-foreground">
+          <label key={field.key} className="block text-[13px] text-muted-foreground">
             {field.label} ({field.unit})
             <input
               inputMode="numeric"
-              disabled={!canEdit}
+              disabled={!canEdit || status === "saving"}
               value={draft[field.key]}
               onChange={(event) => {
                 setDraft((current) => ({ ...current, [field.key]: event.target.value }));
                 setStatus("idle");
               }}
-              className="num mt-1 w-full rounded-xl border border-input bg-elevated px-3 py-2.5 text-lg font-semibold text-foreground outline-none focus:border-ring disabled:opacity-60"
+              className="account-input num mt-2 font-semibold"
             />
           </label>
         ))}
@@ -91,15 +108,16 @@ export function NutritionTargetsEditor() {
         </Note>
       </div>
       {error ? (
-        <p role="alert" className="mt-3 text-sm text-danger">
+        <p role="alert" className="mt-3 text-sm text-warn">
           {error}
         </p>
       ) : null}
       <button
         type="button"
-        disabled={!canEdit || status === "saving"}
+        disabled={!canEdit || !dirty || status === "saving"}
         onClick={() => void save()}
-        className="mt-4 flex min-h-11 w-full items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+        aria-live="polite"
+        className="account-primary mt-4"
       >
         {status === "saving" ? (
           <PendingLabel>Saving targets...</PendingLabel>

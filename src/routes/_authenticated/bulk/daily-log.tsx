@@ -1,11 +1,11 @@
 import { PageSkeleton } from "@/components/PageSkeleton";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { format } from "date-fns";
+import { addDays, format } from "date-fns";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { Bar, Card, Chip, Field, Note, NumInput, SectionTitle } from "@/components/ui-kit";
-import { dayCompletion, fmt, iso, signed } from "@/lib/calc";
+import { dayCompletion, fmt, iso, signed, weekStartOf } from "@/lib/calc";
 import { MEAL_PLANS, mealPlan, mealPlanSnapshot } from "@/lib/meals";
 import { useActions, useAppData, useBulkMeta } from "@/lib/store";
 import { RANGES, type MealPlanId, type WorkoutType } from "@/lib/types";
@@ -56,7 +56,11 @@ function TodayPage() {
   const targets = data?.targets;
   const planMode = bulkPlanModeFor(memberships.data, bulkId);
   const isPublicGoal = planMode === "public";
-  const goalWeights = useBulkWeights(isPublicGoal ? bulkId : null, "2000-01-01");
+  const goalWeights = useBulkWeights(
+    isPublicGoal ? bulkId : null,
+    iso(addDays(weekStartOf(new Date()), -14)),
+    today,
+  );
   const todayGoalWeight = goalWeights.data?.find((entry) => entry.logDate === today);
   const nutritionToday = useBulkNutritionDay(isPublicGoal ? bulkId : null, today);
   const completedSessionsToday = useCompletedSessionDates(

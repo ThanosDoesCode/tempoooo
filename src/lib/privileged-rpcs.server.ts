@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { QUERY_PAGE_SIZE, readAllByKey } from "./query-pagination";
 
 type RelatedProfile = { id: string; display_name: string | null };
 
@@ -278,28 +279,80 @@ export async function deleteTempoAccountFor(caller: string) {
     .maybeSingle();
   if (profile.error) throw new Error("account_deletion_failed");
   if (profile.data?.id) {
-    const [legacyPhotos, progressPhotos] = await Promise.all([
-      supabaseAdmin
-        .from("bulk_photos")
-        .select("front_path,side_path,back_path")
-        .eq("bulk_profile_id", profile.data.id),
-      supabaseAdmin
-        .from("bulk_progress_photos")
-        .select("storage_path")
-        .eq("bulk_profile_id", profile.data.id),
-    ]);
-    if (legacyPhotos.error || progressPhotos.error) throw new Error("account_deletion_failed");
-    const paths = [
-      ...(legacyPhotos.data ?? []).flatMap((photo) => [
-        photo.front_path,
-        photo.side_path,
-        photo.back_path,
-      ]),
-      ...(progressPhotos.data ?? []).map((photo) => photo.storage_path),
-    ].filter((path): path is string => Boolean(path));
-    if (paths.length) {
-      const removed = await supabaseAdmin.storage.from("bulk-progress-photos").remove(paths);
-      if (removed.error) throw new Error("account_deletion_failed");
+    const profileId = profile.data.id;
+    let paths: string[];
+    try {
+      // Drain both sources before removing anything. Short PostgREST pages are not
+      // proof of completion; readAllByKey requires an empty page and a moving cursor.
+      const [legacyPhotos, progressPhotos] = await Promise.all([
+        readAllByKey(
+          (cursor) => {
+            let query = supabaseAdmin
+              .from("bulk_photos")
+              .select("id,front_path,side_path,back_path")
+              .eq("bulk_profile_id", profileId)
+              .order("id", { ascending: true })
+              .limit(QUERY_PAGE_SIZE);
+            if (cursor) query = query.gt("id", cursor);
+            return query;
+          },
+          (photo) => photo.id,
+        ),
+        readAllByKey(
+          (cursor) => {
+            let query = supabaseAdmin
+              .from("bulk_progress_photos")
+              .select("id,storage_path")
+              .eq("bulk_profile_id", profileId)
+              .order("id", { ascending: true })
+              .limit(QUERY_PAGE_SIZE);
+            if (cursor) query = query.gt("id", cursor);
+            return query;
+          },
+          (photo) => photo.id,
+        ),
+      ]);
+      paths = [
+        ...new Set(
+          [
+            ...legacyPhotos.flatMap((photo) => [
+              photo.front_path,
+              photo.side_path,
+              photo.back_path,
+            ]),
+            ...progressPhotos.map((photo) => photo.storage_path),
+          ].filter((path): path is string => Boolean(path)),
+        ),
+      ].sort();
+      // The admin client bypasses Storage RLS. Never follow a corrupt legacy
+      // reference into a different profile's folder, even from an owned row.
+      if (
+        paths.some(
+          (path) =>
+            !path.startsWith(`${profileId}/`) ||
+            path.includes("\\") ||
+            path.split("/").some((segment) => !segment || segment === "." || segment === ".."),
+        )
+      )
+        throw new Error("Invalid owned photo path");
+    } catch {
+      throw new Error(
+        "account_deletion_photo_discovery_failed: Could not load all owned private photos. Your account has not been deleted. Please retry.",
+      );
+    }
+    try {
+      const bucket = supabaseAdmin.storage.from("bulk-progress-photos");
+      const batchSize = 100;
+      for (let start = 0; start < paths.length; start += batchSize) {
+        const removed = await bucket.remove(paths.slice(start, start + batchSize));
+        if (removed.error) throw removed.error;
+      }
+    } catch {
+      // Keep all DB references and the auth user. Already removed objects stay
+      // removed; Storage remove tolerates missing paths when the user retries.
+      throw new Error(
+        "account_deletion_photo_cleanup_failed: Could not finish private photo cleanup. Your account has not been deleted. Some photos may already have been removed. Please retry.",
+      );
     }
   }
   const { error } = await supabaseAdmin.auth.admin.deleteUser(caller);
