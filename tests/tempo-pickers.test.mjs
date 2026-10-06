@@ -44,6 +44,7 @@ function fixture(name, props) {
     },
     "react/jsx-runtime": { jsx, jsxs: jsx },
     "@/lib/tempo-picker": values,
+    "./TempoTimeWheel": { TimeWheel: "TimeWheel" },
     "./ui/calendar": { Calendar: "Calendar" },
     "./ui/dialog": Object.fromEntries(
       [
@@ -188,55 +189,65 @@ test("24-hour time choices keep every minute and exclude invalid values", () => 
     onChange: (v) => (saved = v),
   });
   nodes(f.render(), "Dialog")[0].props.onOpenChange(true);
-  const options = nodes(f.render(), "button").filter((n) => n.props["aria-pressed"] != null);
-  assert.equal(options.length, 84);
-  assert.equal(options.filter((n) => n.props["aria-pressed"]).length, 2);
+  const wheels = nodes(f.render(), "TimeWheel");
+  assert.deepEqual(
+    wheels.map((n) => n.props.max),
+    [23, 59],
+  );
+  assert.deepEqual(
+    wheels.map((n) => n.props.value),
+    [14, 21],
+  );
+  assert.equal(text(nodes(f.render(), "DialogDescription")[0]), "24-hour time");
   for (const [hour, minute] of [
     [23, 59],
     [0, 0],
   ]) {
     for (const [part, n] of [
-      ["Hour", hour],
-      ["Minute", minute],
+      ["Hours", hour],
+      ["Minutes", minute],
     ])
-      nodes(f.render(), "button")
-        .find((button) => button.props["aria-label"] === `${part} ${String(n).padStart(2, "0")}`)
-        .props.onClick();
+      nodes(f.render(), "TimeWheel")
+        .find((wheel) => wheel.props.ariaLabel === part)
+        .props.onChange(n);
     f.button("Use time").props.onClick();
     assert.equal(saved, values.pickerTimeValue(hour, minute));
     assert.equal(nodes(f.render(), "Dialog")[0].props.open, false);
   }
 });
 
-test("time keyboard navigation uses two tab stops, arrow keys and Home/End without invalid values", () => {
-  const f = fixture("TempoTimePicker", { value: "14:21", onChange() {} });
-  const choice = (label) =>
-    nodes(f.render(), "button").find((n) => n.props["aria-label"] === label);
-  let focused,
-    prevented = 0;
-  const event = (key) => ({
-    key,
-    preventDefault: () => prevented++,
-    currentTarget: {
-      parentElement: {
-        querySelectorAll: () =>
-          Array.from({ length: 60 }, (_, i) => ({ focus: () => (focused = i) })),
-      },
-    },
-  });
-  assert.equal(nodes(f.render(), "button").filter((n) => n.props.tabIndex === 0).length, 2);
-  choice("Hour 14").props.onKeyDown(event("ArrowDown"));
-  assert.equal(focused, 16);
-  assert.equal(choice("Hour 16").props["aria-pressed"], true);
-  choice("Hour 16").props.onKeyDown(event("End"));
-  assert.equal(focused, 23);
-  choice("Hour 23").props.onKeyDown(event("ArrowRight"));
-  assert.equal(focused, 23);
-  choice("Minute 21").props.onKeyDown(event("Home"));
-  assert.equal(focused, 0);
-  choice("Minute 00").props.onKeyDown(event("ArrowLeft"));
-  assert.equal(focused, 0);
-  assert.equal(prevented, 5);
+test("reopening the time picker restores saved time and discards uncommitted wheel changes", () => {
+  const props = { value: "14:21", onChange() {} };
+  const f = fixture("TempoTimePicker", props);
+  const dialog = () => nodes(f.render(), "Dialog")[0];
+  const wheels = () => nodes(f.render(), "TimeWheel");
+  dialog().props.onOpenChange(true);
+  wheels()[0].props.onChange(23);
+  wheels()[1].props.onChange(59);
+  assert.deepEqual(
+    wheels().map((n) => n.props.value),
+    [23, 59],
+  );
+  dialog().props.onOpenChange(false);
+  dialog().props.onOpenChange(true);
+  assert.deepEqual(
+    wheels().map((n) => n.props.value),
+    [14, 21],
+  );
+  props.value = "00:00";
+  dialog().props.onOpenChange(false);
+  dialog().props.onOpenChange(true);
+  assert.deepEqual(
+    wheels().map((n) => n.props.value),
+    [0, 0],
+  );
+  props.value = "23:59";
+  dialog().props.onOpenChange(false);
+  dialog().props.onOpenChange(true);
+  assert.deepEqual(
+    wheels().map((n) => n.props.value),
+    [23, 59],
+  );
 });
 
 test("datetime composition preserves independent start/end calendar dates and minute precision", () => {

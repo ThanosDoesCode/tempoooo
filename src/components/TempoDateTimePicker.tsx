@@ -10,6 +10,7 @@ import {
   pickerTimeValue,
 } from "@/lib/tempo-picker";
 import { Calendar } from "./ui/calendar";
+import { TimeWheel } from "./TempoTimeWheel";
 import {
   Dialog,
   DialogContent,
@@ -156,68 +157,22 @@ export function TempoTimePicker({
       <DialogContent className={panelClass} data-no-pull>
         <DialogHeader className="pr-8 text-left">
           <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>
-            24-hour time · {pickerTimeValue(draft.hour, draft.minute)}
-          </DialogDescription>
+          <DialogDescription>24-hour time</DialogDescription>
         </DialogHeader>
         <div className="grid min-w-0 grid-cols-2 gap-3">
           {(["hour", "minute"] as const).map((part) => (
-            <fieldset key={part} className="min-w-0">
-              <legend className="mb-2 text-sm font-medium text-muted-foreground">
-                {part === "hour" ? "Hours" : "Minutes"}
-              </legend>
-              <div
-                className="grid max-h-[min(280px,45dvh)] grid-cols-2 gap-1 overflow-y-auto rounded-xl bg-background p-1"
-                role="group"
-                aria-label={part === "hour" ? "Hours" : "Minutes"}
-              >
-                {Array.from({ length: part === "hour" ? 24 : 60 }, (_, number) => (
-                  <button
-                    key={number}
-                    type="button"
-                    aria-label={`${part === "hour" ? "Hour" : "Minute"} ${String(number).padStart(2, "0")}`}
-                    aria-pressed={draft[part] === number}
-                    tabIndex={draft[part] === number ? 0 : -1}
-                    onClick={() => setDraft((current) => ({ ...current, [part]: number }))}
-                    onKeyDown={(event) => {
-                      const last = part === "hour" ? 23 : 59;
-                      const offset = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -2, ArrowDown: 2 }[
-                        event.key
-                      ];
-                      const next =
-                        event.key === "Home"
-                          ? 0
-                          : event.key === "End"
-                            ? last
-                            : offset != null
-                              ? Math.max(0, Math.min(last, number + offset))
-                              : undefined;
-                      if (next == null) return;
-                      event.preventDefault();
-                      setDraft((current) => ({ ...current, [part]: next }));
-                      event.currentTarget.parentElement?.querySelectorAll("button")[next]?.focus();
-                    }}
-                    className={cn(
-                      "min-h-11 min-w-0 rounded-lg text-sm font-semibold tabular-nums hover:bg-elevated focus-visible:ring-2 focus-visible:ring-ring",
-                      draft[part] === number
-                        ? "bg-primary/15 text-primary ring-1 ring-inset ring-primary/40"
-                        : "text-muted-foreground",
-                    )}
-                    ref={(element) => {
-                      if (open && draft[part] === number)
-                        element?.scrollIntoView({ block: "nearest" });
-                    }}
-                  >
-                    {String(number).padStart(2, "0")}
-                  </button>
-                ))}
-              </div>
-            </fieldset>
+            <TimeWheel
+              key={part}
+              max={part === "hour" ? 23 : 59}
+              value={draft[part]}
+              ariaLabel={part === "hour" ? "Hours" : "Minutes"}
+              onChange={(number) => setDraft((current) => ({ ...current, [part]: number }))}
+            />
           ))}
         </div>
         <button
           type="button"
-          className="min-h-11 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+          className="h-12 w-full rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
           onClick={() => {
             onChange(pickerTimeValue(draft.hour, draft.minute));
             setOpen(false);
