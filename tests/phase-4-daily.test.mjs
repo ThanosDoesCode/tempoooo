@@ -602,7 +602,8 @@ test("Phase 4 Today renders persisted habits and invitation, then skeleton/error
           useActiveBulkTrainingSession: () => q(null),
         },
         "@/lib/training-plans-query": {
-          useActiveTrainingPlan: () => q({ name: "My actual plan", trainingDaysPerWeek: 3 }),
+          useActiveTrainingPlan: () =>
+            q({ name: "My actual plan", trainingDaysPerWeek: 3, days: [] }),
         },
         "@/lib/goal-metrics": {
           collectCompletedWorkouts: () => [],
@@ -653,13 +654,24 @@ function todayFixture({
   weight = 81.6,
   sleep = 8,
   quality = 4,
+  weeklyGoal = 6,
+  plan = {
+    id: "plan",
+    name: "Original Tempo program",
+    trainingDaysPerWeek: 3,
+    days: [
+      { id: "chest", name: "Chest & Back", order: 1 },
+      { id: "legs", name: "Legs", order: 2 },
+      { id: "arms", name: "Arms", order: 3 },
+    ],
+  },
 } = {}) {
   const today = iso(new Date());
   const q = (data) => ({ data, isLoading: false, error: null });
   const data = {
     days: { [today]: { weight, sleepHours: sleep, sleepQuality: quality, restDay } },
     workouts: {},
-    targets: { ...mealProps.currentTargets, weeklyWorkoutGoal: 6, trainingDaysPerWeek: 3 },
+    targets: { ...mealProps.currentTargets, weeklyWorkoutGoal: weeklyGoal, trainingDaysPerWeek: 3 },
   };
   const writes = [];
   const f = fixture(
@@ -700,8 +712,7 @@ function todayFixture({
           useActiveBulkTrainingSession: () => q(publicGoal ? active : null),
         },
         "@/lib/training-plans-query": {
-          useActiveTrainingPlan: () =>
-            q(publicGoal ? { name: "Original Tempo program", trainingDaysPerWeek: 3 } : null),
+          useActiveTrainingPlan: () => q(publicGoal ? plan : null),
         },
         "@/lib/goal-metrics": goalMetrics,
       },
@@ -737,8 +748,8 @@ test("Phase 4.1 weekly goal stays independent of plan frequency and inside Worko
     ],
   });
   const tree = f.render();
-  assert.match(texts(workoutGroup(tree)), /2 of 6 workouts this week/);
-  assert.equal((texts(tree).match(/2 of 6 workouts this week/g) ?? []).length, 1);
+  assert.match(texts(workoutGroup(tree)), /2 of 6 this week/);
+  assert.equal((texts(tree).match(/2 of 6 this week/g) ?? []).length, 1);
   assert.equal(nodes(tree, (n) => n.props?.["aria-label"] === "Complete").length, 2);
   assert.match(texts(tree), /2\s+of\s+3\s+done/);
   assert.equal(restButton(tree), undefined); // Actual completed workout takes precedence over rest controls.
@@ -746,10 +757,7 @@ test("Phase 4.1 weekly goal stays independent of plan frequency and inside Worko
   legacy.data.workouts[legacy.today] = { date: legacy.today, status: "completed" };
   // Reaching the 2,500 kcal target is what completes the Meals habit (logging alone is not enough).
   legacy.data.days[legacy.today].calories = 2500;
-  assert.match(
-    texts(workoutGroup(legacy.render())),
-    /Workout completed\s+1 of 6 workouts this week/,
-  );
+  assert.match(texts(workoutGroup(legacy.render())), /Workout completed · 1 of 6 this week/);
   assert.match(texts(legacy.render()), /3\s+of\s+3\s+done/);
 });
 
@@ -760,7 +768,7 @@ test("Phase 4.1 rest day and Undo retain existing persisted field and completion
   restButton(f.render()).props.onClick();
   await settle();
   assert.deepEqual(f.writes, [[f.today, { restDay: true }]]);
-  assert.match(texts(workoutGroup(f.render())), /Rest day\s+0 of 6 workouts this week/);
+  assert.match(texts(workoutGroup(f.render())), /Workout\s+Rest day\s+Undo/);
   assert.equal(texts(restButton(f.render())), "Undo");
   assert.doesNotMatch(texts(workoutGroup(f.render())), /Start/);
   assert.match(texts(f.render()), /2\s+of\s+3\s+done/);
@@ -783,7 +791,7 @@ test("Phase 4.1 rest writes block duplicate taps, show pending and preserve stat
   tap();
   assert.equal(f.writes.length, 1);
   assert.equal(restButton(f.render()).props.disabled, true);
-  assert.equal(texts(restButton(f.render())), "Saving rest day…");
+  assert.equal(texts(restButton(f.render())), "Saving…");
   assert.match(texts(f.render()), /1\s+of\s+3\s+done/);
   reject(new Error("offline"));
   await settle();
@@ -796,7 +804,7 @@ test("Phase 4.1 active workout shows actual name and Resume even with persisted 
   for (const restDay of [false, true]) {
     const f = todayFixture({ restDay, active: { id: "session", workoutDayName: "Chest & Back" } });
     const group = workoutGroup(f.render());
-    assert.match(texts(group), /Chest & Back · In progress\s+0 of 6 workouts this week/);
+    assert.match(texts(group), /Chest & Back · 0 of 6 this week/);
     assert.match(texts(group), /Resume/);
     assert.equal(nodes(group, (n) => n.type === "Link")[0].props.to, "/bulk/training");
     assert.equal(
@@ -804,6 +812,70 @@ test("Phase 4.1 active workout shows actual name and Resume even with persisted 
       restDay ? 2 : 1,
     );
   }
+});
+
+test("Today Workout uses the real next day and one compact weekly subtitle with Start and muted Rest day", () => {
+  const f = todayFixture({ weeklyGoal: 5 });
+  const group = workoutGroup(f.render());
+  assert.match(texts(group), /Workout\s+Chest & Back · 0 of 5 this week\s+Start\s+Rest day/);
+  assert.doesNotMatch(
+    texts(group),
+    /Original Tempo program|My Training Plan|Taking a rest day|In progress/,
+  );
+  const links = nodes(group, (n) => n.type === "Link");
+  assert.ok(links.every((link) => link.props.to === "/bulk/training"));
+  assert.ok(links.every((link) => link.props.className.includes("min-h-11")));
+  assert.match(restButton(f.render()).props.className, /min-h-11.*text-muted-foreground/);
+  assert.equal(f.writes.length, 0);
+});
+
+test("Today Workout next-day display follows Training's first unfinished day without changing the plan or starting a session", () => {
+  const yesterday = iso(require("date-fns").addDays(new Date(), -1));
+  const f = todayFixture({
+    sessions: [{ id: "earlier", status: "completed", planDayId: "chest", workoutDate: yesterday }],
+  });
+  assert.match(texts(workoutGroup(f.render())), /Legs · \d of 6 this week/);
+  assert.equal(f.writes.length, 0);
+  assert.deepEqual(f.destinations, []);
+});
+
+test("Today Workout completed state retains the completed plan-day name, green check and no Start", () => {
+  const f = todayFixture({
+    weeklyGoal: 5,
+    sessions: [{ id: "finished", status: "completed", planDayId: "chest" }],
+  });
+  const group = workoutGroup(f.render());
+  assert.match(texts(group), /Chest & Back · 1 of 5 this week\s+Workout completed/);
+  assert.doesNotMatch(texts(group), /Start|Resume|Rest day|Legs/);
+  const check = nodes(group, (n) => n.props?.["aria-label"] === "Complete")[0];
+  assert.match(check.props.className, /bg-primary/);
+});
+
+test("Today Workout active state shows the real session day and only Resume, not rest prompts", () => {
+  const group = workoutGroup(
+    todayFixture({ active: { id: "active", workoutDayName: "Arms" }, weeklyGoal: 5 }).render(),
+  );
+  assert.match(texts(group), /Arms · 0 of 5 this week\s+Resume/);
+  assert.doesNotMatch(texts(group), /Start|Rest day|Taking a rest day|Chest & Back/);
+});
+
+test("Today Workout no-plan state links to the existing setup destination without inventing a workout", () => {
+  const f = todayFixture({ plan: null });
+  const group = workoutGroup(f.render());
+  assert.match(texts(group), /Workout\s+Choose a training plan\s+Choose plan/);
+  assert.doesNotMatch(texts(group), /Chest & Back|Legs|Arms|My Training Plan|Start/);
+  assert.ok(
+    nodes(group, (n) => n.type === "Link").every((link) => link.props.to === "/bulk/training"),
+  );
+  assert.equal(f.writes.length, 0);
+});
+
+test("Today Workout only falls back to the actual program name when no day name is available", () => {
+  const f = todayFixture({ plan: { name: "My Training Plan", trainingDaysPerWeek: 3, days: [] } });
+  assert.match(texts(workoutGroup(f.render())), /My Training Plan · 0 of 6 this week/);
+  const legacy = todayFixture({ publicGoal: false });
+  legacy.data.workouts[legacy.today] = { date: legacy.today, status: "completed", type: "Legs" };
+  assert.match(texts(workoutGroup(legacy.render())), /Legs · 1 of 6 this week\s+Workout completed/);
 });
 
 for (const publicGoal of [true, false]) {
