@@ -12,6 +12,7 @@ const a = randomUUID(),
   d = randomUUID();
 const x = randomUUID(),
   y = randomUUID();
+const historicalInvitationChallenge = randomUUID();
 const root = new URL("../supabase/migrations/", import.meta.url);
 const platformSchema = `SET TIME ZONE 'UTC';
     CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role BYPASSRLS;
@@ -40,6 +41,20 @@ before(async () => {
   await db.exec(platformSchema);
   for (const file of (await readdir(root)).filter((f) => f.endsWith(".sql")).sort()) {
     try {
+      if (file === "20261007130000_challenge_invitation_notifications.sql") {
+        const sender = randomUUID(),
+          recipient = randomUUID();
+        await db.query("INSERT INTO auth.users VALUES ($1),($2)", [sender, recipient]);
+        await db.query("INSERT INTO public.profiles(id) VALUES ($1),($2)", [sender, recipient]);
+        await db.query(
+          "INSERT INTO public.challenges(id,created_by,name,start_date) VALUES ($1,$2,'Historical invitations',CURRENT_DATE)",
+          [historicalInvitationChallenge, sender],
+        );
+        await db.query(
+          "INSERT INTO public.challenge_invitations(challenge_id,created_by,invited_user_id,invited_username_snapshot,token_hash,expires_at,accepted_at,revoked_at) VALUES ($1,$2,$3,'historical_user','historical-pending',now()+interval '1 day',NULL,NULL),($1,$2,$3,'historical_user','historical-accepted',now()+interval '1 day',now(),NULL),($1,$2,$3,'historical_user','historical-revoked',now()+interval '1 day',NULL,now())",
+          [historicalInvitationChallenge, sender, recipient],
+        );
+      }
       await db.exec(await readFile(new URL(file, root), "utf8"));
     } catch (error) {
       throw new Error(`Migration failed: ${file}`, { cause: error });
@@ -5126,4 +5141,352 @@ test("paginated activity projection selects only columns in the accumulated chal
   assert.equal(result.rows.length, 1);
   assert.equal(result.rows[0].evidence_path, "private-test-evidence");
   assert.equal(Number(result.rows[0].qualifying_equivalent_km), 5);
+});
+
+async function invitationNotificationFixture() {
+  const owner = randomUUID(),
+    recipient = randomUUID(),
+    stranger = randomUUID(),
+    challenge = randomUUID();
+  const usernames = [
+    "sender_" + owner.slice(0, 8),
+    "receiver_" + recipient.slice(0, 8),
+    "outsider_" + stranger.slice(0, 8),
+  ];
+  for (const [index, uid] of [owner, recipient, stranger].entries()) {
+    await db.query("INSERT INTO auth.users VALUES ($1)", [uid]);
+    await db.query("INSERT INTO public.profiles(id,username) VALUES ($1,$2)", [
+      uid,
+      usernames[index],
+    ]);
+  }
+  await db.query(
+    "INSERT INTO public.challenges(id,created_by,name,start_date,timezone) VALUES ($1,$2,'Invitation events',CURRENT_DATE,'UTC')",
+    [challenge, owner],
+  );
+  await db.query("INSERT INTO public.challenge_members(challenge_id,user_id) VALUES ($1,$2)", [
+    challenge,
+    owner,
+  ]);
+  const sent = await asService(() =>
+    db.query("SELECT public.send_challenge_username_invitation($1,$2,$3) AS id", [
+      owner,
+      challenge,
+      usernames[1],
+    ]),
+  );
+  return { owner, recipient, stranger, challenge, invitation: sent.rows[0].id };
+}
+async function inboxEvents(invitation) {
+  return (
+    await db.query(
+      "SELECT * FROM public.account_notification_events WHERE invitation_id=$1 ORDER BY event_type",
+      [invitation],
+    )
+  ).rows;
+}
+
+test("invitation sent and accepted events are transactional, sender/recipient-derived and retry-deduplicated", async () => {
+  const f = await invitationNotificationFixture();
+  let rows = await inboxEvents(f.invitation);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].event_type, "challenge_invitation_received");
+  assert.equal(rows[0].actor_user_id, f.owner);
+  assert.equal(rows[0].recipient_user_id, f.recipient);
+  await assert.rejects(
+    asService(() =>
+      db.query("SELECT public.accept_challenge_invitation_by_id($1,$2)", [
+        f.stranger,
+        f.invitation,
+      ]),
+    ),
+    /Invitation not found/,
+  );
+  assert.equal((await inboxEvents(f.invitation)).length, 1);
+  await asService(() =>
+    db.query("SELECT public.accept_challenge_invitation_by_id($1,$2)", [f.recipient, f.invitation]),
+  );
+  rows = await inboxEvents(f.invitation);
+  const response = rows.find((row) => row.event_type === "challenge_invitation_accepted");
+  assert.equal(response.actor_user_id, f.recipient);
+  assert.equal(response.recipient_user_id, f.owner);
+  assert.ok(rows.find((row) => row.event_type === "challenge_invitation_received").read_at);
+  assert.equal(
+    (
+      await db.query(
+        "SELECT count(*)::int AS n FROM public.challenge_members WHERE challenge_id=$1 AND user_id=$2",
+        [f.challenge, f.recipient],
+      )
+    ).rows[0].n,
+    1,
+  );
+  await assert.rejects(
+    asService(() =>
+      db.query("SELECT public.accept_challenge_invitation_by_id($1,$2)", [
+        f.recipient,
+        f.invitation,
+      ]),
+    ),
+    /no longer valid/,
+  );
+  assert.equal((await inboxEvents(f.invitation)).length, 2);
+  const pushes = (
+    await db.query(
+      "SELECT * FROM public.challenge_notification_events WHERE challenge_id=$1 ORDER BY kind",
+      [f.challenge],
+    )
+  ).rows;
+  assert.equal(pushes.length, 2);
+  assert.equal(
+    pushes.find((row) => row.kind === "challenge_invitation_accepted").recipient_user_id,
+    f.owner,
+  );
+  assert.ok(
+    pushes.every(
+      (row) =>
+        row.actor_membership_id === null &&
+        row.opponent_membership_id === null &&
+        row.account_notification_id,
+    ),
+  );
+});
+
+test("decline emits one sender event; failed, expired and sender-revoked responses emit none", async () => {
+  const f = await invitationNotificationFixture();
+  await assert.rejects(
+    asService(() =>
+      db.query("SELECT public.decline_challenge_invitation($1,$2)", [f.stranger, f.invitation]),
+    ),
+    /Invitation not found/,
+  );
+  assert.equal((await inboxEvents(f.invitation)).length, 1);
+  await asService(() =>
+    db.query("SELECT public.decline_challenge_invitation($1,$2)", [f.recipient, f.invitation]),
+  );
+  let rows = await inboxEvents(f.invitation);
+  assert.equal(rows.length, 2);
+  const declined = rows.find((row) => row.event_type === "challenge_invitation_declined");
+  assert.equal(declined.actor_user_id, f.recipient);
+  assert.equal(declined.recipient_user_id, f.owner);
+  await assert.rejects(
+    asService(() =>
+      db.query("SELECT public.decline_challenge_invitation($1,$2)", [f.recipient, f.invitation]),
+    ),
+    /Invitation not found/,
+  );
+  assert.equal((await inboxEvents(f.invitation)).length, 2);
+  const expired = await invitationNotificationFixture();
+  await db.query(
+    "UPDATE public.challenge_invitations SET expires_at=now()-interval '1 second' WHERE id=$1",
+    [expired.invitation],
+  );
+  await assert.rejects(
+    asService(() =>
+      db.query("SELECT public.accept_challenge_invitation_by_id($1,$2)", [
+        expired.recipient,
+        expired.invitation,
+      ]),
+    ),
+    /no longer valid/,
+  );
+  await asService(() =>
+    db.query("SELECT public.decline_challenge_invitation($1,$2)", [
+      expired.recipient,
+      expired.invitation,
+    ]),
+  );
+  assert.equal((await inboxEvents(expired.invitation)).length, 1);
+  const revoked = await invitationNotificationFixture();
+  await asUser(revoked.owner, () =>
+    db.query("UPDATE public.challenge_invitations SET revoked_at=now() WHERE id=$1", [
+      revoked.invitation,
+    ]),
+  );
+  assert.equal((await inboxEvents(revoked.invitation)).length, 1);
+});
+
+test("notification RLS, read receipts and grants deny forgery and cross-user access", async () => {
+  const f = await invitationNotificationFixture();
+  const event = (await inboxEvents(f.invitation))[0];
+  for (const uid of [f.owner, f.stranger]) {
+    await asUser(uid, async () => {
+      assert.deepEqual(
+        (await db.query("SELECT * FROM public.account_notification_events WHERE id=$1", [event.id]))
+          .rows,
+        [],
+      );
+      assert.equal(
+        (await db.query("SELECT public.mark_account_notification_read($1) AS ok", [event.id]))
+          .rows[0].ok,
+        false,
+      );
+    });
+  }
+  await asUser(f.recipient, async () => {
+    assert.equal(
+      (await db.query("SELECT id FROM public.account_notification_events WHERE id=$1", [event.id]))
+        .rows.length,
+      1,
+    );
+    await assert.rejects(
+      db.query(
+        "INSERT INTO public.account_notification_events SELECT * FROM public.account_notification_events WHERE id=$1",
+        [event.id],
+      ),
+      /permission denied/,
+    );
+    await assert.rejects(
+      db.query("UPDATE public.account_notification_events SET recipient_user_id=$1 WHERE id=$2", [
+        f.stranger,
+        event.id,
+      ]),
+      /permission denied/,
+    );
+    await assert.rejects(
+      db.query(
+        "SELECT private.enqueue_invitation_notification($1,$2,'challenge_invitation_declined')",
+        [f.invitation, f.recipient],
+      ),
+      /permission denied/,
+    );
+    await assert.rejects(
+      db.query("SELECT public.decline_challenge_invitation($1,$2)", [f.recipient, f.invitation]),
+      /permission denied/,
+    );
+    assert.equal(
+      (await db.query("SELECT public.mark_account_notification_read($1) AS ok", [event.id])).rows[0]
+        .ok,
+      true,
+    );
+    assert.equal(
+      (await db.query("SELECT public.mark_account_notification_read($1) AS ok", [event.id])).rows[0]
+        .ok,
+      true,
+    );
+  });
+  const readAt = (await inboxEvents(f.invitation))[0].read_at;
+  await asUser(f.recipient, () =>
+    db.query("SELECT public.mark_account_notification_read($1)", [event.id]),
+  );
+  assert.equal((await inboxEvents(f.invitation))[0].read_at.getTime(), readAt.getTime());
+  await asAnon(() =>
+    assert.rejects(
+      db.query("SELECT public.mark_account_notification_read($1)", [event.id]),
+      /permission denied/,
+    ),
+  );
+  await asAnon(() =>
+    assert.rejects(
+      db.query("SELECT * FROM public.account_notification_events"),
+      /permission denied/,
+    ),
+  );
+});
+
+test("failed membership insertion rolls back response event and invitation outcome", async () => {
+  const f = await invitationNotificationFixture();
+  await db.query("INSERT INTO public.challenge_members(challenge_id,user_id) VALUES ($1,$2)", [
+    f.challenge,
+    f.stranger,
+  ]);
+  await assert.rejects(
+    asService(() =>
+      db.query("SELECT public.accept_challenge_invitation_by_id($1,$2)", [
+        f.recipient,
+        f.invitation,
+      ]),
+    ),
+    /already full/,
+  );
+  assert.equal((await inboxEvents(f.invitation)).length, 1);
+  assert.equal(
+    (
+      await db.query("SELECT accepted_at FROM public.challenge_invitations WHERE id=$1", [
+        f.invitation,
+      ])
+    ).rows[0].accepted_at,
+    null,
+  );
+});
+
+test("migration never fabricates historical invitation notifications", async () => {
+  assert.equal(
+    (
+      await db.query(
+        "SELECT count(*)::int AS n FROM public.account_notification_events WHERE challenge_id=$1",
+        [historicalInvitationChallenge],
+      )
+    ).rows[0].n,
+    0,
+  );
+});
+
+test("failure enqueueing a response rolls back membership, invitation and inbox writes together", async () => {
+  const f = await invitationNotificationFixture();
+  await db.exec(`CREATE FUNCTION public.test_fail_invitation_push() RETURNS trigger LANGUAGE plpgsql AS $$
+    BEGIN IF NEW.kind='challenge_invitation_accepted' THEN RAISE EXCEPTION 'Simulated enqueue failure'; END IF; RETURN NEW; END $$;
+    CREATE TRIGGER test_fail_invitation_push BEFORE INSERT ON public.challenge_notification_events
+      FOR EACH ROW EXECUTE FUNCTION public.test_fail_invitation_push();`);
+  try {
+    await assert.rejects(
+      asService(() =>
+        db.query("SELECT public.accept_challenge_invitation_by_id($1,$2)", [
+          f.recipient,
+          f.invitation,
+        ]),
+      ),
+      /Simulated enqueue failure/,
+    );
+    assert.equal((await inboxEvents(f.invitation)).length, 1);
+    assert.equal(
+      (
+        await db.query("SELECT accepted_at FROM public.challenge_invitations WHERE id=$1", [
+          f.invitation,
+        ])
+      ).rows[0].accepted_at,
+      null,
+    );
+    assert.equal(
+      (
+        await db.query(
+          "SELECT count(*)::int AS n FROM public.challenge_members WHERE challenge_id=$1 AND user_id=$2",
+          [f.challenge, f.recipient],
+        )
+      ).rows[0].n,
+      0,
+    );
+  } finally {
+    await db.exec(
+      "DROP TRIGGER test_fail_invitation_push ON public.challenge_notification_events; DROP FUNCTION public.test_fail_invitation_push()",
+    );
+  }
+  await asService(() =>
+    db.query("SELECT public.accept_challenge_invitation_by_id($1,$2)", [f.recipient, f.invitation]),
+  );
+  assert.equal((await inboxEvents(f.invitation)).length, 2);
+});
+
+test("invitation push shape preserves required membership snapshots for activity/payment events", async () => {
+  const f = await invitationNotificationFixture();
+  await assert.rejects(
+    db.query(
+      "INSERT INTO public.challenge_notification_events(challenge_id,actor_id,kind,dedupe_key,facts) VALUES ($1,$2,'payment_paid','invalid-memberships','{}')",
+      [f.challenge, f.owner],
+    ),
+    /challenge_notification_audience_ck/,
+  );
+  const metadata = (
+    await db.query(
+      "SELECT p.prosecdef, p.proconfig, has_function_privilege('anon',p.oid,'EXECUTE') AS anon_exec FROM pg_proc p WHERE p.oid='public.mark_account_notification_read(uuid)'::regprocedure",
+    )
+  ).rows[0];
+  assert.equal(metadata.prosecdef, false);
+  assert.equal(metadata.anon_exec, false);
+  assert.ok(metadata.proconfig.includes('search_path=""'));
+  await asUser("", () =>
+    assert.rejects(
+      db.query("SELECT public.mark_account_notification_read($1)", [randomUUID()]),
+      /Not authenticated/,
+    ),
+  );
 });

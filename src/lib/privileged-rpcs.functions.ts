@@ -197,3 +197,10 @@ export const setChallengeWeekTarget = createServerFn({ method: "POST" })
     const { setChallengeWeekTargetFor } = await import("./privileged-rpcs.server");
     return setChallengeWeekTargetFor(context.userId, data);
   });
+
+export const listAccountNotifications = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { listAccountNotificationsFor } = await import("./privileged-rpcs.server");
+    return listAccountNotificationsFor(context.userId);
+  });

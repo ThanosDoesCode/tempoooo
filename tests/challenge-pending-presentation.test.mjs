@@ -131,7 +131,7 @@ const baseModules = {
   "@tanstack/react-router": {
     Link: "Link",
     useNavigate: () => async () => {},
-    createFileRoute: () => (config) => config,
+    createFileRoute: () => (config) => ({ ...config, useSearch: () => ({}) }),
   },
   "./ChallengeShareInvite": { ChallengeShareInvite: "ChallengeShareInvite" },
 };

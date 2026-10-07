@@ -69,7 +69,9 @@ function inboxFixture({ fail = false, pending = null } = {}) {
 function bellFixture(pathname, query) {
   return accountUI("src/components/NotificationBell.tsx", "NotificationBell", {
     "@tanstack/react-router": { Link: "Link", useLocation: () => ({ pathname }) },
-    "@/lib/challenge-invitations": { useChallengeInvitations: () => query },
+    "@/lib/account-notifications": {
+      useNotificationInbox: () => ({ badgeCount: query.data?.length ?? 0 }),
+    },
   });
 }
 
@@ -135,8 +137,9 @@ test("Accept preserves RPC -> cache refresh -> Challenge navigation and clears t
   assert.deepEqual(plain(calls[0]), ["accept", { data: { invitationId: "invite" } }]);
   assert.deepEqual(plain(calls.filter(([name]) => name === "invalidate").map(([, key]) => key)), [
     ["challenge-invitations", "mine"],
-    ["challenge", "mine"],
+    ["challenge"],
     ["challenge-members"],
+    ["account-notifications"],
   ]);
   assert.deepEqual(plain(calls.at(-1)), ["navigate", { to: "/challenge" }]);
   assert.equal(bell.find("span").length, 0);
@@ -258,14 +261,16 @@ test("invitation details preserve the real immutable terms and expose no managem
 
 test("inbox uses shared contextual Back, while Profile retains a separate push-settings route", () => {
   const ui = accountUI("src/routes/_authenticated/notifications.tsx", "Route", {
-    "@/components/ChallengeInvitations": { ChallengeInvitations: "ChallengeInvitations" },
+    "@/components/AccountNotificationInbox": {
+      AccountNotificationInbox: "AccountNotificationInbox",
+    },
   });
   assert.deepEqual(plain(ui.find("PageHeader")[0].props), {
     title: "Notifications",
     backTo: "/bulk",
     backLabel: "Today",
   });
-  assert.equal(ui.find("ChallengeInvitations")[0].props.inbox, true);
+  assert.equal(ui.find("AccountNotificationInbox").length, 1);
   const profile = read("src/routes/_authenticated/profile.tsx");
   assert.doesNotMatch(profile, /ChallengeInvitations|Compatibility tools/);
   assert.match(profile, /to: "\/profile\/notifications"[\s\S]*label: "Notification settings"/);

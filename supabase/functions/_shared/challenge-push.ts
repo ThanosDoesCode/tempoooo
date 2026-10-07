@@ -4,13 +4,40 @@ export type PushEvent = {
   id: string;
   challenge_id: string;
   actor_id: string;
-  actor_membership_id: string;
-  opponent_membership_id: string;
-  kind: "activity_posted" | "target_reached" | "week_penalty" | "payment_paid";
+  actor_membership_id: string | null;
+  opponent_membership_id: string | null;
+  kind: "activity_posted" | "target_reached" | "week_penalty" | "payment_paid" | InvitationPushKind;
+  account_notification_id?: string | null;
+  recipient_user_id?: string | null;
   facts: Record<string, unknown>;
   attempts: number;
   lease_token: string;
   subscription_ids: string[] | null;
+};
+export type InvitationPushKind =
+  | "challenge_invitation_received"
+  | "challenge_invitation_accepted"
+  | "challenge_invitation_declined";
+export type InvitationAudience = {
+  notification: {
+    id: string;
+    event_type: string;
+    actor_user_id: string;
+    recipient_user_id: string;
+    challenge_id: string;
+    invitation_id: string;
+    created_at: string;
+    actor_username: string | null;
+  };
+  invitation: {
+    id: string;
+    challenge_id: string;
+    created_by: string;
+    invited_user_id: string | null;
+    accepted_at: string | null;
+    revoked_at: string | null;
+    expires_at: string;
+  };
 };
 export type Member = { id: string; user_id: string; challenge_id: string };
 export type PushUser = { user_id: string; external_id: string; enabled: boolean };
@@ -20,6 +47,7 @@ export type Audience = {
   user: PushUser | null;
   devices: Device[];
   name: string | null;
+  invitation?: InvitationAudience | null;
 };
 export type Outcome = "sent" | "skipped" | "pending" | "failed";
 export interface PushStore {
@@ -39,6 +67,67 @@ export function opponent(event: PushEvent, members: Member[]): Member | undefine
   return members.find((m) => m.id === event.opponent_membership_id && m.user_id !== event.actor_id);
 }
 
+export function isInvitationPush(event: PushEvent): boolean {
+  return [
+    "challenge_invitation_received",
+    "challenge_invitation_accepted",
+    "challenge_invitation_declined",
+  ].includes(event.kind);
+}
+
+/** No membership shortcut: verify the queue against both the stored event and invitation. */
+export function invitationRecipient(
+  event: PushEvent,
+  snapshot: InvitationAudience | null | undefined,
+  now = Date.now(),
+): string | undefined {
+  if (
+    !isInvitationPush(event) ||
+    !snapshot ||
+    event.actor_membership_id !== null ||
+    event.opponent_membership_id !== null
+  )
+    return;
+  const { notification: n, invitation: i } = snapshot;
+  if (
+    event.account_notification_id !== n.id ||
+    event.kind !== n.event_type ||
+    event.actor_id !== n.actor_user_id ||
+    event.recipient_user_id !== n.recipient_user_id ||
+    event.challenge_id !== n.challenge_id ||
+    n.invitation_id !== i.id ||
+    n.challenge_id !== i.challenge_id ||
+    n.actor_user_id === n.recipient_user_id
+  )
+    return;
+  const expiry = Date.parse(i.expires_at),
+    created = Date.parse(n.created_at);
+  if (!Number.isFinite(expiry) || !Number.isFinite(created) || created >= expiry) return;
+  if (event.kind === "challenge_invitation_received") {
+    if (
+      n.actor_user_id !== i.created_by ||
+      n.recipient_user_id !== i.invited_user_id ||
+      i.accepted_at ||
+      i.revoked_at ||
+      now >= expiry
+    )
+      return;
+  } else {
+    if (n.actor_user_id !== i.invited_user_id || n.recipient_user_id !== i.created_by) return;
+    if (
+      event.kind === "challenge_invitation_accepted"
+        ? !i.accepted_at
+        : !i.revoked_at || !!i.accepted_at
+    )
+      return;
+    const responded = Date.parse(
+      event.kind === "challenge_invitation_accepted" ? i.accepted_at! : i.revoked_at!,
+    );
+    if (!Number.isFinite(responded) || responded >= expiry || responded !== created) return;
+  }
+  return n.recipient_user_id;
+}
+
 function number(facts: Record<string, unknown>, key: string): string {
   const n = Number(facts[key]);
   if (!Number.isFinite(n) || n < 0) throw new Error("invalid_event");
@@ -53,8 +142,22 @@ export function notificationText(event: PushEvent, displayName: string | null) {
       .trim()
       .split(/\s+/)[0]
       ?.slice(0, 40) || "Your opponent";
+  const username =
+    displayName && /^[a-z0-9_]{3,20}$/i.test(displayName) ? `@${displayName}` : "A Tempo user";
   const facts = event.facts;
   switch (event.kind) {
+    case "challenge_invitation_received":
+      return { title: "Challenge invitation", body: `${username} invited you to a Challenge.` };
+    case "challenge_invitation_accepted":
+      return {
+        title: "Invitation accepted",
+        body: `${username} accepted your challenge invitation.`,
+      };
+    case "challenge_invitation_declined":
+      return {
+        title: "Invitation declined",
+        body: `${username} declined your challenge invitation.`,
+      };
     case "activity_posted":
       return {
         title: "New challenge activity 🏃",
@@ -139,7 +242,14 @@ export class OneSignal {
         target_channel: "push",
         headings: { en: text.title },
         contents: { en: text.body },
-        url: new URL("/challenge", this.siteUrl).href,
+        url: new URL(
+          event.kind === "challenge_invitation_received"
+            ? "/notifications"
+            : isInvitationPush(event)
+              ? `/challenge?challenge=${encodeURIComponent(event.challenge_id)}`
+              : "/challenge",
+          this.siteUrl,
+        ).href,
         chrome_web_icon: new URL("/icons/challenge-notification.png", this.siteUrl).href,
         idempotency_key: event.id,
         // Limit lock-screen exposure and stale delivery after membership changes.
@@ -154,12 +264,14 @@ export class OneSignal {
 }
 
 function allowedDevices(event: PushEvent, audience: Audience): string[] {
-  const other = opponent(event, audience.members);
-  if (!other || !audience.user?.enabled || audience.user.user_id !== other.user_id) return [];
+  const recipient = isInvitationPush(event)
+    ? invitationRecipient(event, audience.invitation)
+    : opponent(event, audience.members)?.user_id;
+  if (!recipient || !audience.user?.enabled || audience.user.user_id !== recipient) return [];
   return audience.devices
     .filter(
       (d) =>
-        d.user_id === other.user_id &&
+        d.user_id === recipient &&
         d.is_active &&
         (!event.subscription_ids || event.subscription_ids.includes(d.subscription_id)),
     )

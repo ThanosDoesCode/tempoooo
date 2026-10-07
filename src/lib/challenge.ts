@@ -318,21 +318,23 @@ export function hoursLeft(challenge: Challenge, weekNumber: number) {
 }
 
 /** Only challenges the signed-in user is still a member of. Leaving frees them to start a new one. */
-export const myChallengeQueryOptions = () =>
+export const myChallengeQueryOptions = (challengeId?: string) =>
   queryOptions({
-    queryKey: ["challenge"],
+    queryKey: challengeId ? ["challenge", challengeId] : ["challenge"],
     staleTime: 5 * 60_000,
     queryFn: async () => {
       // The session lookup is local; RLS still authenticates the joined database read.
       const { data: auth } = await supabase.auth.getSession();
       const uid = auth.session?.user.id;
       if (!uid) return null;
-      const { data, error } = await supabase
+      let query = supabase
         .from("challenge_members")
         .select(
           "joined_at, challenges!inner(id, created_by, name, start_date, duration_weeks, timezone, weekly_target_km, penalty_mode, penalty_high_eur, penalty_medium_eur, penalty_low_eur, penalty_high_custom, penalty_medium_custom, penalty_low_custom, legacy_photo_owed, travel_pause_enabled, travel_pause_home_countries, running_ratio, cycling_ratio, max_members, status)",
         )
-        .eq("user_id", uid)
+        .eq("user_id", uid);
+      if (challengeId) query = query.eq("challenge_id", challengeId);
+      const { data, error } = await query
         .order("joined_at", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -343,8 +345,8 @@ export const myChallengeQueryOptions = () =>
     },
   });
 
-export function useMyChallenge() {
-  return useQuery(myChallengeQueryOptions());
+export function useMyChallenge(challengeId?: string) {
+  return useQuery(myChallengeQueryOptions(challengeId));
 }
 
 /** Removes the signed-in user from a challenge. Their logged activities stay in the record. */

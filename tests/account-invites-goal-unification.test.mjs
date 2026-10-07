@@ -62,7 +62,7 @@ test("in-app Challenge invitations expose no secret or email and stay service-ro
   assert.match(functions, /declineChallengeInvitation[\s\S]*context\.userId/);
   assert.match(component, /Accept/);
   assert.match(component, /Decline/);
-  assert.match(bell, /invitations\.data\?\.length/);
+  assert.match(bell, /badgeCount: count[\s\S]*useNotificationInbox\(\)/);
   assert.match(bell, /Notifications, \$\{count\} unread/);
 });
 

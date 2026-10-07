@@ -43,6 +43,13 @@ import { NotificationBell } from "@/components/NotificationBell";
 import { ChallengeInvitations } from "@/components/ChallengeInvitations";
 
 export const Route = createFileRoute("/_authenticated/challenge/")({
+  validateSearch: (search: Record<string, unknown>): { challenge?: string | undefined } => ({
+    challenge:
+      typeof search["challenge"] === "string" &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(search["challenge"])
+        ? search["challenge"]
+        : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "Tempo" },
@@ -64,7 +71,8 @@ export const Route = createFileRoute("/_authenticated/challenge/")({
 function ChallengeHome() {
   const { user } = useAuth();
   const qc = useQueryClient();
-  const challengeQuery = useMyChallenge();
+  const { challenge: challengeId } = Route.useSearch();
+  const challengeQuery = useMyChallenge(challengeId);
   const { data: challenge, isLoading, error: challengeError } = challengeQuery;
   const membersQuery = useChallengeMembers(challenge?.id);
   const { data: members, isLoading: membersLoading, error: membersError } = membersQuery;

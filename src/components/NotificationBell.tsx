@@ -1,6 +1,6 @@
 import { Link, useLocation } from "@tanstack/react-router";
 import { Bell } from "lucide-react";
-import { useChallengeInvitations } from "@/lib/challenge-invitations";
+import { useNotificationInbox } from "@/lib/account-notifications";
 
 const MAIN_HEADERS = new Set([
   "/bulk",
@@ -15,9 +15,8 @@ const MAIN_HEADERS = new Set([
 /** Actionable account events, separate from browser/push notification settings. */
 export function NotificationBell() {
   const { pathname } = useLocation();
-  const invitations = useChallengeInvitations();
+  const { badgeCount: count } = useNotificationInbox();
   if (!MAIN_HEADERS.has(pathname.replace(/\/$/, ""))) return null;
-  const count = invitations.data?.length ?? 0;
   return (
     <Link
       to="/notifications"

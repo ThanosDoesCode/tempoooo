@@ -1,6 +1,8 @@
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { QUERY_PAGE_SIZE, readAllByKey } from "./query-pagination";
 
+import type { AccountNotification, InvitationEventType } from "./account-notification-model";
+
 type RelatedProfile = { id: string; display_name: string | null };
 
 async function rpc<T>(name: string, params: Record<string, unknown>): Promise<T> {
@@ -372,3 +374,30 @@ export const setChallengeWeekTargetFor = (
     _week: input.weekNumber,
     _target: input.targetKm,
   });
+
+/** Authenticated server context supplies caller; the browser cannot select another inbox. */
+export async function listAccountNotificationsFor(caller: string): Promise<AccountNotification[]> {
+  const rows = await readAllByKey(
+    (cursor) => {
+      let query = supabaseAdmin
+        .from("account_notification_events")
+        .select(
+          "id,recipient_user_id,actor_user_id,actor_username,event_type,challenge_id,invitation_id,created_at,read_at,challenge_invitations(expires_at,accepted_at,revoked_at)",
+        )
+        .eq("recipient_user_id", caller)
+        .order("id", { ascending: true })
+        .limit(QUERY_PAGE_SIZE);
+      if (cursor) query = query.gt("id", cursor);
+      return query;
+    },
+    (row) => row.id,
+  );
+  return rows
+    .map(({ challenge_invitations: invitation, ...event }) => ({
+      ...event,
+      event_type: event.event_type as InvitationEventType,
+      invitation_expires_at: invitation?.expires_at ?? "",
+      invitation_pending: !!invitation && !invitation.accepted_at && !invitation.revoked_at,
+    }))
+    .sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id));
+}

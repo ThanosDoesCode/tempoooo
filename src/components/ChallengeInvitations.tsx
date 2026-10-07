@@ -20,8 +20,9 @@ export function ChallengeInvitations({ inbox = false }: { inbox?: boolean }) {
   const refresh = async () =>
     Promise.all([
       queryClient.invalidateQueries({ queryKey: ["challenge-invitations", "mine"] }),
-      queryClient.invalidateQueries({ queryKey: ["challenge", "mine"] }),
+      queryClient.invalidateQueries({ queryKey: ["challenge"] }),
       queryClient.invalidateQueries({ queryKey: ["challenge-members"] }),
+      queryClient.invalidateQueries({ queryKey: ["account-notifications"] }),
     ]);
 
   const accept = async (invitationId: string) => {

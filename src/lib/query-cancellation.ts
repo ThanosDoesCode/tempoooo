@@ -28,6 +28,7 @@ const USER_SCOPED_QUERY_ROOTS = new Set([
   "challenge-weeks",
   "challenge-payments",
   "challenge-invitations",
+  "account-notifications",
 ]);
 
 export function isExpectedQueryCancellation(error: unknown): boolean {

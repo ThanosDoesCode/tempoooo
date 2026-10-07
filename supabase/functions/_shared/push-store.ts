@@ -2,6 +2,9 @@ import { createClient } from "npm:@supabase/supabase-js@2.112.3";
 import {
   OneSignal,
   opponent,
+  isInvitationPush,
+  invitationRecipient,
+  type InvitationAudience,
   type PushEvent,
   type PushStore,
   type Outcome,
@@ -30,6 +33,49 @@ export function oneSignal() {
 export function databaseStore(db: ReturnType<typeof adminClient>): PushStore {
   return {
     async audience(event) {
+      if (isInvitationPush(event)) {
+        const notification = await db
+          .from("account_notification_events")
+          .select(
+            "id,event_type,actor_user_id,recipient_user_id,challenge_id,invitation_id,created_at,actor_username",
+          )
+          .eq("id", event.account_notification_id)
+          .maybeSingle();
+        if (notification.error) throw new Error("database_failed");
+        if (!notification.data) return { members: [], user: null, devices: [], name: null };
+        const invitation = await db
+          .from("challenge_invitations")
+          .select("id,challenge_id,created_by,invited_user_id,accepted_at,revoked_at,expires_at")
+          .eq("id", notification.data.invitation_id)
+          .maybeSingle();
+        if (invitation.error) throw new Error("database_failed");
+        const snapshot: InvitationAudience | null = invitation.data
+          ? { notification: notification.data, invitation: invitation.data }
+          : null;
+        const recipient = invitationRecipient(event, snapshot);
+        if (!recipient) return { members: [], user: null, devices: [], name: null };
+        const [user, devices] = await Promise.all([
+          db
+            .from("challenge_push_users")
+            .select("user_id,external_id,enabled")
+            .eq("user_id", recipient)
+            .maybeSingle(),
+          db
+            .from("push_subscriptions")
+            .select("user_id,subscription_id,is_active")
+            .eq("user_id", recipient)
+            .eq("provider", "onesignal")
+            .eq("is_active", true),
+        ]);
+        if (user.error || devices.error) throw new Error("database_failed");
+        return {
+          members: [],
+          user: user.data,
+          devices: devices.data ?? [],
+          name: notification.data.actor_username,
+          invitation: snapshot,
+        };
+      }
       const members = await db
         .from("challenge_members")
         .select("id,user_id,challenge_id")
