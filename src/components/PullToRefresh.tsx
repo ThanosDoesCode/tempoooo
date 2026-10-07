@@ -121,7 +121,8 @@ export function PullToRefresh({ children }: { children: ReactNode }) {
   const visible = status !== "idle";
   const progress = Math.min(1, distance / PULL_REFRESH_THRESHOLD);
   return (
-    <div className="relative min-h-screen overscroll-y-contain">
+    // Clip the pulled-down surface so the pull never makes the page taller (which flashed the scrollbar).
+    <div className="relative min-h-screen overflow-y-clip overscroll-y-contain">
       <div
         aria-hidden="true"
         className="pointer-events-none fixed inset-x-0 top-[max(0.5rem,env(safe-area-inset-top))] z-30 flex justify-center transition-[opacity,transform] duration-150 ease-out"
