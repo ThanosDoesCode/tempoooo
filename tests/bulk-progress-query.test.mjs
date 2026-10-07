@@ -120,3 +120,36 @@ test("weight writes invalidate every date range for that profile without invalid
     client.clear();
   }
 });
+
+test("weight save preserves null, text and empty notes at the RPC boundary without changing generated types", async () => {
+  const calls = [];
+  const refreshed = [];
+  const queries = presentationComponent("src/lib/bulk-progress-query.ts", {
+    "@tanstack/react-query": { queryOptions },
+    "@/integrations/supabase/client": {
+      supabase: {
+        async rpc(name, args) {
+          calls.push({ name, args: JSON.parse(JSON.stringify(args)) });
+          return { error: null };
+        },
+      },
+    },
+    "./network-errors": {},
+    "./private-image-upload": {},
+    "./bulk-training-sessions": {
+      refreshActiveBulkTrainingBodyweight: async (profileId) => refreshed.push(profileId),
+    },
+    "./query-pagination": pagination,
+  });
+  for (const note of [null, "text", ""]) {
+    await queries.saveBulkWeight("owner", { logDate: "2026-10-07", weightKg: 71.5, note });
+    const { name, args } = calls.at(-1);
+    assert.equal(name, "save_bulk_weight_for_local_day");
+    assert.equal(args._note, note, "the serialized RPC argument must preserve the original note");
+    assert.equal(args._profile, "owner");
+    assert.equal(args._log_date, "2026-10-07");
+    assert.equal(args._weight_kg, 71.5);
+  }
+  assert.equal(calls.length, 3);
+  assert.deepEqual(refreshed, ["owner", "owner", "owner"]);
+});

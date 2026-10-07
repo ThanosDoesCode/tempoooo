@@ -242,7 +242,9 @@ export async function saveBulkWeight(
     _profile: profileId,
     _log_date: input.logDate,
     _weight_kg: input.weightKg,
-    _note: input.note,
+    // Postgres accepts NULL, but generated Supabase RPC types omit nullable args.
+    // This compile-time cast preserves the runtime null unchanged.
+    _note: input.note as string,
     _timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
   });
   if (error) throw error;
