@@ -277,7 +277,7 @@ test("Tempo navigation exposes optional fitness areas only after persisted activ
   const manifest = JSON.parse(await read("public/manifest.webmanifest"));
   assert.equal(manifest.name, "Tempo");
   assert.equal(manifest.short_name, "Tempo");
-  assert.equal(manifest.start_url, "/challenge");
+  assert.equal(manifest.start_url, "/today");
   assert.equal(manifest.display, "standalone");
   assert.deepEqual(
     manifest.icons.map(({ src, sizes }) => ({ src, sizes })),
