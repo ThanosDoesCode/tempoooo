@@ -95,6 +95,15 @@
     -webkit-tap-highlight-color: transparent;
   }
 
+  /* Hide scrollbars on every screen while keeping scrolling. */
+  * {
+    scrollbar-width: none;
+  }
+
+  *::-webkit-scrollbar {
+    display: none;
+  }
+
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
