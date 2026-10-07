@@ -74,6 +74,7 @@ function fixture(distance, duration = "", type = "run", storageThrows = false) {
         return {
           createFileRoute: () => (v) => ({ ...v, useSearch: () => ({}), useParams: () => ({}) }),
           useNavigate: () => () => {},
+          useBlocker: () => ({ status: "idle" }),
         };
       if (name === "@tanstack/react-query")
         return { useQueryClient: () => ({ invalidateQueries: async () => {} }) };

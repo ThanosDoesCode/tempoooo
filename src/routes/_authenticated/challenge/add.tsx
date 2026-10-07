@@ -1,11 +1,21 @@
 import { TempoDatePicker } from "@/components/TempoDateTimePicker";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useBlocker, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, ImageUp } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { DataError, Note, PendingLabel } from "@/components/ui-kit";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { normalizeDecimal, parseDecimal } from "@/lib/numeric";
@@ -76,6 +86,9 @@ function AddActivity() {
   const [requestError, setRequestError] = useState<string | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
   const [draftReady, setDraftReady] = useState<string | null>(null);
+  const [discardRequested, setDiscardRequested] = useState(false);
+  const discardHandled = useRef(false);
+  const discardReturnFocus = useRef<HTMLElement | null>(null);
   const hydratedContext = useRef<string | null>(null);
   const draftClosed = useRef(false);
   const hydratedDraftKey = useRef<string | null>(null);
@@ -86,6 +99,40 @@ function AddActivity() {
       ? `challenge-activity-draft:${user.id}:${challenge.id}${editing ? `:edit:${editId}` : ""}`
       : null;
   const draftContext = draftKey ? `${draftKey}:${searchType ?? ""}` : null;
+  const lockedForEdit =
+    editing &&
+    !!editQuery.data &&
+    !!challenge &&
+    !isActivityEditable(challenge, editQuery.data, user?.id);
+  const original = editing ? editQuery.data : null;
+  const unsaved =
+    files.length > 0 ||
+    type !== (original?.activity_type ?? searchType ?? "run") ||
+    distance !== (original ? String(Number(original.distance_km)) : "") ||
+    duration !== (original?.duration_seconds ? formatClock(original.duration_seconds) : "") ||
+    date !== (original?.activity_date ?? today) ||
+    url !== (original?.external_activity_url ?? "") ||
+    note !== (original?.note ?? "");
+  const blocker = useBlocker({
+    shouldBlockFn: ({ current, next }) =>
+      !draftClosed.current && unsaved && current.pathname !== next.pathname,
+    disabled:
+      !draftContext ||
+      draftReady !== draftContext ||
+      challengeLoading ||
+      (editing && (editQuery.isLoading || !original)) ||
+      lockedForEdit ||
+      busy ||
+      !unsaved,
+    // Reloads retain the existing draft recovery without a native browser prompt.
+    enableBeforeUnload: false,
+    withResolver: true,
+  });
+  const discardOpen = discardRequested || blocker.status === "blocked";
+
+  useEffect(() => {
+    if (discardOpen) discardHandled.current = false;
+  }, [discardOpen]);
 
   useEffect(() => {
     if (files.length === 0) {
@@ -168,6 +215,27 @@ function AddActivity() {
     setMoreOpen(false);
     setValidationError(null);
     setRequestError(null);
+  };
+
+  const keepEditing = () => {
+    if (discardHandled.current) return;
+    discardHandled.current = true;
+    setDiscardRequested(false);
+    blocker.reset?.();
+  };
+
+  const discard = () => {
+    if (discardHandled.current) return;
+    discardHandled.current = true;
+    clearDraft();
+    setDiscardRequested(false);
+    if (blocker.status === "blocked") blocker.proceed();
+    else if (editing)
+      void navigate({
+        to: "/challenge/activity/$activityId",
+        params: { activityId: editId! },
+      });
+    else void navigate({ to: "/challenge" });
   };
 
   useEffect(() => {
@@ -344,11 +412,6 @@ function AddActivity() {
   };
 
   const noun = type === "run" ? "run" : "ride";
-  const lockedForEdit =
-    editing &&
-    !!editQuery.data &&
-    !!challenge &&
-    !isActivityEditable(challenge, editQuery.data, user?.id);
 
   if (challengeLoading || (editing && editQuery.isLoading)) {
     return (
@@ -696,14 +759,8 @@ function AddActivity() {
           type="button"
           disabled={busy}
           onClick={() => {
-            if (!window.confirm("Discard your unsaved activity changes?")) return;
-            clearDraft();
-            if (editing)
-              void navigate({
-                to: "/challenge/activity/$activityId",
-                params: { activityId: editId! },
-              });
-            else void navigate({ to: "/challenge" });
+            discardHandled.current = false;
+            setDiscardRequested(true);
           }}
           className="min-h-11 w-full rounded-xl px-3 text-sm text-muted-foreground disabled:opacity-60"
         >
@@ -714,6 +771,45 @@ function AddActivity() {
           below 7:00 min/km; a ride counts 3:1 from 18 km/h. The rules live in Terms.
         </Note>
       </div>
+      <AlertDialog
+        open={discardOpen}
+        onOpenChange={(open) => {
+          if (!open) keepEditing();
+        }}
+      >
+        <AlertDialogContent
+          onOpenAutoFocus={() => {
+            discardReturnFocus.current =
+              document.activeElement instanceof HTMLElement ? document.activeElement : null;
+          }}
+          onCloseAutoFocus={(event) => {
+            if (discardReturnFocus.current?.isConnected) {
+              event.preventDefault();
+              discardReturnFocus.current.focus();
+            }
+          }}
+          className="w-[calc(100%-2.5rem)] max-w-sm gap-4 rounded-[20px] border-border bg-card p-5 sm:rounded-[20px] motion-reduce:animate-none"
+        >
+          <AlertDialogHeader className="space-y-1 text-left">
+            <AlertDialogTitle className="text-lg">Discard unsaved changes?</AlertDialogTitle>
+            <AlertDialogDescription>Your run details haven’t been saved.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="grid grid-cols-2 gap-2 sm:space-x-0">
+            <AlertDialogCancel
+              onClick={keepEditing}
+              className="mt-0 h-12 min-w-0 rounded-xl border-border bg-elevated px-2 text-sm"
+            >
+              Keep editing
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={discard}
+              className="h-12 min-w-0 rounded-xl bg-danger px-2 text-sm text-white hover:bg-danger/90"
+            >
+              Discard
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppShell>
   );
 }
