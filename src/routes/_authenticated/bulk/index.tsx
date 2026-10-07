@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { format, startOfWeek } from "date-fns";
+import { startOfWeek } from "date-fns";
 import { Check, ChevronRight } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { PageSkeleton } from "@/components/PageSkeleton";
@@ -169,7 +169,7 @@ function TodayPage() {
   return (
     <AppShell>
       <div className="space-y-[14px]">
-        <MainPageHeader title="Today" eyebrow={format(new Date(), "EEEE, d MMMM")} />
+        <MainPageHeader title="Today" />
         {memberships.isLoading ? (
           <PageSkeleton />
         ) : !owner ? (

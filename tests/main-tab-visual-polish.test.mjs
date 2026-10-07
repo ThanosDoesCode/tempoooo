@@ -21,14 +21,13 @@ const { ChallengeParticipantHeading, ChallengeStatus } = presentationComponent(
 );
 const html = (component, props) => renderToStaticMarkup(React.createElement(component, props));
 
-test("all main headings use the same metadata slot, title baseline and one unmodified bell destination", () => {
+test("all main headings use a compact first-row title/bell baseline without a metadata slot", () => {
   for (const title of ["Today", "Challenge", "Progress", "You"]) {
     const markup = html(MainPageHeader, {
       title,
-      eyebrow: title === "Today" ? "Thursday, 8 October" : undefined,
     });
-    assert.match(markup, /min-h-5/);
-    assert.match(markup, /row-start-2[^>]*text-\[30px\][^>]*leading-9/);
+    assert.doesNotMatch(markup, /min-h-5|Thursday|text-muted-foreground/);
+    assert.match(markup, /row-start-1[^>]*text-\[30px\][^>]*leading-9/);
     assert.equal((markup.match(/href="\/notifications"/g) ?? []).length, 1);
     assert.match(markup, /h-11 w-11/);
     assert.doesNotMatch(markup, /pt-6|pt-\[/);
@@ -42,6 +41,12 @@ test("all main headings use the same metadata slot, title baseline and one unmod
   ])
     assert.match(read(file), /<MainPageHeader/);
   const shell = read("src/components/AppShell.tsx");
+  assert.match(
+    shell,
+    /MAIN_TAB_PATHS = new Set\(\["\/bulk", "\/challenge", "\/bulk\/progress", "\/profile"\]\)/,
+  );
+  assert.match(shell, /MAIN_TAB_PATHS\.has\(pathname\.replace/);
+  assert.match(shell, /pt-\[max\(1rem,env\(safe-area-inset-top\)\)\]/);
   assert.match(shell, /pt-\[max\(1.5rem,env\(safe-area-inset-top\)\)\]/);
   const wide = shell.slice(
     shell.indexOf("const widerDailyLayout"),
@@ -60,9 +65,24 @@ test("Progress header places the period control on a separate narrow-screen row 
       React.createElement("option", {}, "Last 3 months"),
     ),
   });
-  assert.match(markup, /col-start-2 row-start-2 min-\[400px\]:col-start-3/);
-  assert.match(markup, /row-start-3.*min-\[400px\]:row-start-2/);
+  assert.match(markup, /col-start-2 row-start-1 min-\[400px\]:col-start-3/);
+  assert.match(markup, /row-start-2.*min-\[400px\]:row-start-1/);
   assert.equal((markup.match(/<select/g) ?? []).length, 1);
+});
+
+test("main-tab contextual information stays in content, never above the title or duplicated", () => {
+  const today = read("src/routes/_authenticated/bulk/index.tsx");
+  assert.match(today, /<MainPageHeader title="Today" \/>/);
+  assert.doesNotMatch(today, /EEEE, d MMMM|eyebrow=/);
+  const challenge = read("src/routes/_authenticated/challenge/index.tsx");
+  assert.doesNotMatch(challenge, /eyebrow=/);
+  assert.equal(
+    (challenge.match(/Week \{week\?\.n\} of \{challenge\.duration_weeks\}/g) ?? []).length,
+    1,
+  );
+  assert.ok(challenge.indexOf('title="This week"') < challenge.indexOf("Week {week?.n}"));
+  assert.match(challenge, /label=\{opponent\?\.name \?\? "Opponent"\}/);
+  assert.doesNotMatch(read("src/components/ChallengeWaiting.tsx"), /eyebrow=/);
 });
 
 test("participant rows preserve exact names and displayed km while sharing value hierarchy", () => {

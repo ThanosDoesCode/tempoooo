@@ -19,6 +19,7 @@ const TAB_ICONS: Record<MainTab, LucideIcon> = {
 };
 
 const AppShellMountedContext = createContext(false);
+const MAIN_TAB_PATHS = new Set(["/bulk", "/challenge", "/bulk/progress", "/profile"]);
 
 export function AppShell({ children }: { children: ReactNode }) {
   const shellMounted = useContext(AppShellMountedContext);
@@ -36,6 +37,10 @@ function AppChrome({ children }: { children: ReactNode }) {
   const navigationPending = useRouterState({ select: (router) => router.status === "pending" });
   const isAccountOnboarding = pathname === "/onboarding";
   const focusScreen = isFocusScreen(pathname);
+  const mainTabPage = MAIN_TAB_PATHS.has(pathname.replace(/\/$/, ""));
+  const topSpacing = mainTabPage
+    ? "pt-[max(1rem,env(safe-area-inset-top))]"
+    : "pt-[max(1.5rem,env(safe-area-inset-top))]";
   const { data: memberships } = useMemberships();
   const goalDiscovery = useGoalDiscovery();
   const [logOpen, setLogOpen] = useState(false);
@@ -55,7 +60,7 @@ function AppChrome({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-background">
       <PullToRefresh>
         <main
-          className={`mx-auto w-full ${widerDailyLayout ? "max-w-2xl" : "max-w-lg"} px-5 ${isAccountOnboarding ? "pb-6 pt-0" : `${focusScreen ? "pb-10" : "pb-28"} pt-[max(1.5rem,env(safe-area-inset-top))]`}`}
+          className={`mx-auto w-full ${widerDailyLayout ? "max-w-2xl" : "max-w-lg"} px-5 ${isAccountOnboarding ? "pb-6 pt-0" : `${focusScreen ? "pb-10" : "pb-28"} ${topSpacing}`}`}
         >
           <div key={pathname} className="tempo-route-content">
             {children}

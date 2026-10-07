@@ -54,10 +54,7 @@ export function ChallengeWaiting({
 
   return (
     <div className="space-y-3.5">
-      <MainPageHeader
-        title={`Waiting for ${atUser}`}
-        eyebrow={`${challenge.duration_weeks}-week challenge`}
-      />
+      <MainPageHeader title={`Waiting for ${atUser}`} />
 
       <Card className="space-y-3.5 rounded-[20px] p-5">
         <div className="flex items-center justify-between gap-3">

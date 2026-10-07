@@ -268,10 +268,7 @@ test("Waiting screen shows real terms/expiry, neutral pending, share and confirm
     "@/lib/challenge": { km: (km) => `${km} km` },
   });
   let tree = f.render("ChallengeWaiting", { challenge, invitation });
-  assert.match(
-    text(tree),
-    /12\s*-week challenge.*Waiting for\s+@alex.*Invite sent.*Pending.*Expires in.*18 Oct/s,
-  );
+  assert.match(text(tree), /Waiting for\s+@alex.*Invite sent.*Pending.*Expires in.*18 Oct/s);
   assert.match(text(tree), /Starts.*12 Oct.*15 km\s+a week.*12.*weeks/s);
   assert.equal(nodes(tree, (n) => n.type === "ChallengeShareInvite").length, 1);
   assert.doesNotMatch(text(tree), /week ended|penalty|0.0|opponent km/);
@@ -500,6 +497,13 @@ test("actual Challenge route transitions Waiting to active after acceptance with
   tree = f.render("Route");
   assert.equal(nodes(tree, (n) => n.type === "ChallengeWaiting").length, 0);
   assert.match(text(tree), /This week/);
+  const header = nodes(tree, (n) => n.type === "header")[0];
+  assert.match(text(header), /This week/);
+  assert.doesNotMatch(text(header), /Alex|Week 1 of 12/);
+  const summaryCard = nodes(tree, (n) => n.type === "Card")[0];
+  assert.match(text(summaryCard), /Week\s+1\s+of\s+12/);
+  assert.equal(nodes(summaryCard, (n) => n.type?.name === "ParticipantBar")[1].props.label, "Alex");
+  assert.equal((text(tree).match(/Week\s+1\s+of\s+12/g) ?? []).length, 1);
   assert.equal(nodes(tree, (n) => n.type?.name === "ParticipantBar").length, 2);
   challengeQuery.data = null;
   assert.match(text(f.render("Route")), /Create a challenge/);

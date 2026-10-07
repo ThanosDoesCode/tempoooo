@@ -261,17 +261,13 @@ function ChallengeHome() {
   if (preStart) {
     return (
       <AppShell>
-        <MainPageHeader
-          title="Starts soon"
-          eyebrow={
-            <>
-              {opponent ? `With ${opponent.name} · ` : ""}
-              {challenge.duration_weeks}-week challenge
-            </>
-          }
-        />
+        <MainPageHeader title="Starts soon" />
         <ChallengeInvitations />
         <Card className="space-y-1 p-5">
+          <p className="break-words text-sm text-muted-foreground">
+            {opponent ? `With ${opponent.name} · ` : ""}
+            {challenge.duration_weeks}-week challenge
+          </p>
           <p className="text-base font-medium">
             Starts {format(parseISO(challenge.start_date), "EEEE d MMM")}
           </p>
@@ -293,14 +289,7 @@ function ChallengeHome() {
 
   return (
     <AppShell>
-      <MainPageHeader
-        title="This week"
-        eyebrow={
-          <>
-            {opponent ? `With ${opponent.name} · ` : ""}Week {week?.n} of {challenge.duration_weeks}
-          </>
-        }
-      />
+      <MainPageHeader title="This week" />
       <ChallengeInvitations />
 
       {membersError || activitiesError || summaryQuery.error || pausesError || weekTargetsError ? (
@@ -322,13 +311,18 @@ function ChallengeHome() {
       ) : null}
 
       <Card className="space-y-3.5 p-5">
-        <div className="flex items-center justify-between text-[13px] text-muted-foreground">
-          <span>
-            {week
-              ? `${format(parseISO(week.start), "EEE d")} – ${format(parseISO(week.end), "EEE d MMM")}`
-              : ""}
-          </span>
-          <span>{daysLeft(week?.hours ?? 0)}</span>
+        <div className="flex items-start justify-between gap-3 text-[13px] text-muted-foreground">
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-foreground">
+              Week {week?.n} of {challenge.duration_weeks}
+            </p>
+            <p className="mt-1">
+              {week
+                ? `${format(parseISO(week.start), "EEE d")} – ${format(parseISO(week.end), "EEE d MMM")}`
+                : ""}
+            </p>
+          </div>
+          <span className="shrink-0">{daysLeft(week?.hours ?? 0)}</span>
         </div>
 
         <ParticipantBar
