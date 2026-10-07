@@ -48,6 +48,7 @@ function controls(history) {
     "./PullToRefresh": {},
     "./LogSheet": {},
     "./HistoryBackLink": { HistoryBackLink },
+    "./NotificationBell": { NotificationBell: () => null },
   });
   const href = (link) =>
     router.buildLocation({
@@ -243,9 +244,12 @@ const flows = [
   ],
   ["/profile", "/bulk/more", "bulk/more.tsx", "/profile", "You"],
   ["/profile", "/bulk/diagnostics", "bulk/diagnostics.tsx", "/profile", "You"],
-  ["/profile", "/bulk/daily-log", "bulk/daily-log.tsx", "/bulk", "You"],
   ["/profile", "/bulk/history", "bulk/history.tsx", "/profile", "You"],
   ["/bulk", "/bulk/morning", "bulk/morning.tsx", "/bulk", "Today"],
+  ["/bulk", "/notifications", "notifications.tsx", "/bulk", "Today"],
+  ["/challenge", "/notifications", "notifications.tsx", "/bulk", "Challenge"],
+  ["/bulk/progress", "/notifications", "notifications.tsx", "/bulk", "Progress"],
+  ["/profile", "/notifications", "notifications.tsx", "/bulk", "You"],
 ];
 
 for (const [origin, destination, route, fallback, label] of flows) {

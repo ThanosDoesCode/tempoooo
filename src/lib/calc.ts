@@ -546,23 +546,6 @@ export function compactStrengthPerformance(entry: ExerciseEntry, reps: number) {
   return added != null && added > 0 ? `BW + ${metricNumber(added)} kg × ${reps}` : `BW × ${reps}`;
 }
 
-/* ---------------- Day completion ---------------- */
-
-/** Only the things that actually matter count towards completion. */
-export function dayCompletion(d: DailyLog | undefined, hasWorkout = false) {
-  if (!d) return 0;
-  const scheduled = d.workoutType != null && d.workoutType !== "Rest";
-  const checks: boolean[] = [
-    d.weight != null,
-    d.calories != null && d.protein != null,
-    d.creatine != null,
-    d.steps != null || (d.cyclingKm ?? 0) > 0 || (d.runningKm ?? 0) > 0 || (d.cardioMin ?? 0) > 0,
-    d.sleepHours != null,
-  ];
-  if (scheduled) checks.push(hasWorkout);
-  return Math.round((checks.filter(Boolean).length / checks.length) * 100);
-}
-
 export const fmt = (v: number | null | undefined, digits = 1, suffix = "") =>
   v == null || Number.isNaN(v) ? "—" : `${v.toFixed(digits)}${suffix}`;
 

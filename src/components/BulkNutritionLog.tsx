@@ -247,14 +247,6 @@ export function BulkNutritionLog({
             {legacyOnly ? (
               <p className="mt-2 text-sm text-muted-foreground">
                 Saved daily totals from your earlier log; individual meals were not recorded.
-                {selectedDate === today ? (
-                  <Link
-                    to="/bulk/daily-log"
-                    className="ml-1 inline-flex min-h-11 items-center text-primary"
-                  >
-                    Open daily log
-                  </Link>
-                ) : null}
               </p>
             ) : null}
           </>

@@ -76,7 +76,7 @@ function BulkMealsPage() {
             Meal plan: <span className="text-foreground">{legacyPlan?.name ?? "Not selected"}</span>
           </p>
           <Button asChild className="mt-4 min-h-11 w-full">
-            <Link to="/bulk/daily-log">Open daily log</Link>
+            <Link to="/bulk/meals/history">View nutrition history</Link>
           </Button>
         </Card>
       )}

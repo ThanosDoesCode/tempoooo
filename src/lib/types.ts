@@ -114,15 +114,6 @@ export type AppData = {
   targets: Targets;
 };
 
-/** Acceptable daily ranges, shown instead of a single hard number. */
-export const RANGES = {
-  calories: [2800, 3000] as const,
-  protein: [125, 140] as const,
-  carbs: [350, 410] as const,
-  fat: [80, 90] as const,
-  water: [3, 4] as const,
-};
-
 export type ExerciseDef = {
   name: string;
   min: number;

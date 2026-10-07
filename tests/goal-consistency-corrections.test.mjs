@@ -10,16 +10,11 @@ import {
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
-test("Compatibility daily log and weekly Check-In preserve the Goal status calculation and weight source", async () => {
-  const [today, checkIn] = await Promise.all([
-    read("src/routes/_authenticated/bulk/daily-log.tsx"),
-    read("src/routes/_authenticated/bulk/check-in.tsx"),
-  ]);
-  for (const src of [today, checkIn]) {
-    assert.match(src, /goalWeightStatus/);
-    assert.match(src, /legacyDayWeights\(data\.days\)/);
-    assert.match(src, /useBulkWeights\(/);
-  }
+test("weekly Check-In preserves the Goal status calculation and legacy/public weight sources", async () => {
+  const checkIn = await read("src/routes/_authenticated/bulk/check-in.tsx");
+  assert.match(checkIn, /goalWeightStatus/);
+  assert.match(checkIn, /legacyDayWeights\(data\.days\)/);
+  assert.match(checkIn, /useBulkWeights\(/);
   assert.doesNotMatch(checkIn, /bulkStatus\(data, addDays/);
   assert.doesNotMatch(checkIn, /status: data\.targets\.goal\s*\?\s*bulkStatus/);
 });

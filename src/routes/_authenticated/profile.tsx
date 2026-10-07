@@ -8,7 +8,6 @@ import { DeleteAccountDialog } from "@/components/DeleteAccountDialog";
 import { NavRows } from "@/components/NavRows";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { Card, SectionTitle } from "@/components/ui-kit";
-import { ChallengeInvitations } from "@/components/ChallengeInvitations";
 import { ChallengeDataExport } from "@/components/ChallengeDataExport";
 import { clearDeletedAccountSession, useAuth, signOut } from "@/lib/auth";
 import { preferredBulkMembership, useBulkAdmin, useMemberships } from "@/lib/bulk-access";
@@ -127,7 +126,6 @@ function ProfilePage() {
         </div>
       </div>
 
-      <ChallengeInvitations />
       <section className="mt-4">
         {bulkAccessLoading ? (
           <PageSkeleton label="Loading plan" />
@@ -171,7 +169,7 @@ function ProfilePage() {
                   ]),
               {
                 to: "/profile/notifications",
-                label: "Notifications",
+                label: "Notification settings",
                 hint: "Browser permission and Challenge updates",
               },
             ]}
@@ -296,20 +294,6 @@ function ProfilePage() {
       </section>
 
       <ChallengeDataExport />
-      {ownedPlan ? (
-        <div className="mt-4">
-          <NavRows
-            title="Compatibility tools"
-            rows={[
-              {
-                to: "/bulk/daily-log",
-                label: "Daily log",
-                hint: "Legacy nutrition and daily records",
-              },
-            ]}
-          />
-        </div>
-      ) : null}
       {isAdmin ? (
         <div className="mt-4">
           <NavRows

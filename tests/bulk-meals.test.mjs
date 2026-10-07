@@ -114,20 +114,19 @@ test("Bulk History treats saved preset macros as authoritative full-day totals",
   assert.match(history, /nutrition\.extras/);
 });
 
-test("Compatibility daily logging and export consume the canonical Salmon snapshot", async () => {
-  const [today, progress] = await Promise.all([
-    readFile(new URL("../src/routes/_authenticated/bulk/daily-log.tsx", import.meta.url), "utf8"),
+test("legacy nutrition history and export retain canonical meal snapshots without the daily editor", async () => {
+  const [history, progress] = await Promise.all([
+    readFile(new URL("../src/routes/_authenticated/bulk/history.tsx", import.meta.url), "utf8"),
     readFile(
       new URL("../src/routes/_authenticated/bulk/progress_.photos.tsx", import.meta.url),
       "utf8",
     ),
   ]);
-  assert.match(today, /mealPlan\(id\)/);
-  assert.match(today, /mealPlanSnapshot\(plan\)/);
-  assert.match(today, /mealSnapshot/);
-  assert.match(today, /plan\.extras/);
+  assert.match(history, /mealPlan\(day\?\.mealPlan\)/);
+  assert.match(history, /day\?\.mealSnapshot \?\? configuredPlan/);
+  assert.match(history, /nutrition\.extras/);
   assert.match(progress, /JSON\.stringify\(data\)/);
-  assert.doesNotMatch(today + progress, /150 g dry Ben|300 g dry Ben|Nature Valley Oats/);
+  assert.doesNotMatch(history + progress, /150 g dry Ben|300 g dry Ben|Nature Valley Oats/);
 });
 
 test("the optional repair changes only positively identified untouched preset nutrition", async () => {

@@ -421,19 +421,18 @@ function profileFixture({
   });
 }
 
-test("Phase 7 Profile is owner-aware, with direct Goal/Training/Notifications and preserved admin/compatibility entries", () => {
+test("Phase 7 Profile is owner-aware, with direct Goal/Training/Notifications and admin access but no legacy daily-log tool", () => {
   const ui = profileFixture({ admin: true });
   assert.match(ui.text(), /@alice/);
   assert.deepEqual(
     ui.find("Link").map((node) => node.props.to),
-    [
-      "/bulk/more",
-      "/bulk/training",
-      "/profile/notifications",
-      "/bulk/daily-log",
-      "/bulk/diagnostics",
-    ],
+    ["/bulk/more", "/bulk/training", "/profile/notifications", "/bulk/diagnostics"],
   );
+  assert.doesNotMatch(ui.text(), /Compatibility tools|Daily log|Legacy Today/);
+  assert.equal(ui.find("ChallengeInvitations").length, 0);
+  assert.match(ui.text(), /Notification settings/);
+  const owner = profileFixture();
+  assert.doesNotMatch(owner.text(), /Compatibility tools|Daily log|Production diagnostics/);
   const core = profileFixture({ owned: false });
   assert.deepEqual(
     core.find("Link").map((node) => node.props.to),

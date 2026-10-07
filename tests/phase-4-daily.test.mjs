@@ -78,6 +78,7 @@ function fixture(source, exportName, props, options = {}) {
     "@/lib/challenge-invitations": {
       useChallengeInvitations: () => ({ data: [], isLoading: false }),
     },
+    "@/components/NotificationBell": { NotificationBell: "NotificationBell" },
     "@/lib/daily-check-in": { checkInDraft, validateCheckIn },
     "@/lib/calc": { iso },
     "@/lib/store": { useActions: () => ({ saveDay: (...a) => record("saveDay", ...a) }) },
@@ -472,6 +473,10 @@ test("Phase 4 real nutrition totals remain central, target snapshots win, no pre
   assert.equal(find(f.render(), "NutritionOverview").props.summary.calories.consumed, 3000);
   assert.match(texts(f.render()), /individual meals were not recorded/);
   assert.match(texts(f.render()), /No meal presets yet/);
+  assert.doesNotMatch(texts(f.render()), /Open daily log/);
+  assert.ok(
+    nodes(f.render(), (n) => n.type === "Link").every((n) => n.props.to !== "/bulk/daily-log"),
+  );
 });
 
 test("Quick Add exposes Manage and filters visibility without changing preset order", () => {
@@ -536,7 +541,7 @@ test("hidden Quick Add presets remain selectable through the normal Add meal flo
   assert.equal(f.calls.find(([name]) => name === "logPreset")[1], "preset");
 });
 
-test("Phase 4 routes retain Today, invitation, local calendar, native Back and unchanged workout entry", async () => {
+test("Phase 4 routes retain Today habits, inbox discovery, local calendar, Back and unchanged workout entry", async () => {
   const actions = Object.fromEntries(LOG_ACTIONS.map((a) => [a.key, a.to]));
   assert.equal(actions["weigh-in"], "/bulk/morning");
   assert.equal(actions.meal, "/bulk/meals/add");
@@ -551,7 +556,8 @@ test("Phase 4 routes retain Today, invitation, local calendar, native Back and u
     read("src/lib/use-local-day.ts"),
     read("src/routes/_authenticated/bulk/route.tsx"),
   ]);
-  assert.match(today, /<ChallengeInviteReceiver \/>/);
+  assert.match(today, /<NotificationBell \/>/);
+  assert.doesNotMatch(today, /ChallengeInviteReceiver/);
   assert.match(today, /useBulkNutritionDay\(publicGoal \? id : null, today\)/);
   assert.match(today, /collectCompletedWorkouts/);
   assert.match(today, /restDay: !rest/);
@@ -571,7 +577,7 @@ test("Phase 4 routes retain Today, invitation, local calendar, native Back and u
   assert.equal(iso(after), "2026-10-04");
 });
 
-test("Phase 4 Today renders persisted habits and invitation, then skeleton/error instead of false empty state", async () => {
+test("Phase 4 Today renders persisted habits and bell, then skeleton/error instead of false empty state", async () => {
   const source = await read("src/routes/_authenticated/bulk/index.tsx");
   const q = (data) => ({ data, isLoading: false, error: null });
   const weight = q([{ logDate: "2026-10-03", weightKg: 81.6 }]);
@@ -586,9 +592,6 @@ test("Phase 4 Today renders persisted habits and invitation, then skeleton/error
         "@/components/AppShell": { AppShell: "AppShell" },
         "@/components/PageSkeleton": { PageSkeleton: "PageSkeleton" },
         "@/components/TodayChallenge": { TodayChallenge: "TodayChallenge" },
-        "@/components/ChallengeInviteReceiver": {
-          ChallengeInviteReceiver: "ChallengeInviteReceiver",
-        },
         "@/lib/use-local-day": { useLocalDay: () => "2026-10-03" },
         "@/lib/bulk-access": {
           preferredBulkMembership: () => ({ is_public: true }),
@@ -626,7 +629,8 @@ test("Phase 4 Today renders persisted habits and invitation, then skeleton/error
   assert.match(texts(tree), /7.25 h sleep/);
   assert.match(texts(tree), /200 of 2500 kcal/);
   assert.match(texts(tree), /My actual plan/);
-  assert.ok(find(tree, "ChallengeInviteReceiver"));
+  assert.ok(find(tree, "NotificationBell"));
+  assert.equal(find(tree, "ChallengeInviteReceiver"), undefined);
   weight.isLoading = true;
   assert.ok(find(f.render(), "PageSkeleton"));
   assert.doesNotMatch(texts(f.render()), /Add today's weight|200 of 2500 kcal/);
@@ -691,9 +695,6 @@ function todayFixture({
         "@/components/AppShell": { AppShell: "AppShell" },
         "@/components/PageSkeleton": { PageSkeleton: "PageSkeleton" },
         "@/components/TodayChallenge": { TodayChallenge: "TodayChallenge" },
-        "@/components/ChallengeInviteReceiver": {
-          ChallengeInviteReceiver: "ChallengeInviteReceiver",
-        },
         "@/lib/challenge-invitations": { useChallengeInvitations: () => q(invites) },
         "@/lib/use-local-day": { useLocalDay: () => today },
         "@/lib/bulk-access": {
@@ -733,14 +734,14 @@ const workoutGroup = (tree) =>
 const restButton = (tree) => nodes(workoutGroup(tree), (n) => n.type === "button")[0];
 const settle = () => new Promise((r) => setImmediate(r));
 
-test("Phase 4.1 invitation precedes habits; compact Challenge follows, with no duplicate discovery", () => {
+test("Phase 4.1 incoming invitations do not displace habits; current Challenge follows with no duplicate discovery", () => {
   for (const invites of [[], [{ id: "pending" }]]) {
     const f = todayFixture({ invites });
     const tree = f.render();
-    const receiver = find(tree, "ChallengeInviteReceiver");
     const summary = find(tree, "TodayChallenge");
     const ordered = nodes(tree, () => true);
-    assert.ok(ordered.indexOf(receiver) < ordered.indexOf(workoutGroup(tree)));
+    assert.equal(find(tree, "ChallengeInviteReceiver"), undefined);
+    assert.ok(find(tree, "NotificationBell"));
     assert.ok(ordered.indexOf(workoutGroup(tree)) < ordered.indexOf(summary));
     assert.equal(summary.props.hideDiscovery, invites.length > 0);
     assert.doesNotMatch(texts(tree), /Daily log & legacy nutrition|Mark rest day/);
@@ -1010,15 +1011,14 @@ test("Phase 4.1 no-Challenge discovery is one persistent row; pending invitation
   assert.equal(challengeFixture({ loading: true }).render().type.name, "SummarySkeleton");
 });
 
-test("Phase 4.1 legacy Daily Log remains accessible from owner Profile, not Today", async () => {
+test("obsolete Daily Log is absent from Profile/Today and its bookmark redirects to current Today", async () => {
   const profile = await read("src/routes/_authenticated/profile.tsx");
   const route = await read("src/routes/_authenticated/bulk/daily-log.tsx");
   const shell = await read("src/components/AppShell.tsx");
   assert.doesNotMatch(todaySource, /Daily log|\/bulk\/daily-log/);
-  assert.match(
-    profile,
-    /ownedPlan \? \([\s\S]*title="Compatibility tools"[\s\S]*to: "\/bulk\/daily-log"/,
-  );
+  assert.doesNotMatch(profile, /Compatibility tools|Daily log|\/bulk\/daily-log/);
   assert.match(route, /createFileRoute\("\/_authenticated\/bulk\/daily-log"\)/);
+  assert.match(route, /redirect\(\{ to: "\/bulk", replace: true \}\)/);
+  assert.doesNotMatch(route, /component:|useAppData|saveDay|MEAL_PLANS/);
   assert.match(shell, /pathname === "\/bulk"[\s\S]*max-w-2xl/);
 });

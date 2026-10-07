@@ -46,13 +46,13 @@ function AddMealPage() {
       ) : (
         <div className="card-surface p-[18px]">
           <p className="text-sm text-muted-foreground">
-            Your legacy daily meal plan uses the existing daily log.
+            Your earlier daily meal totals are available in nutrition history.
           </p>
           <Link
-            to="/bulk/daily-log"
+            to="/bulk/meals/history"
             className="mt-3 inline-flex min-h-11 items-center text-primary"
           >
-            Open daily log
+            View nutrition history
           </Link>
         </div>
       )}
