@@ -1,3 +1,4 @@
+import { presentationComponent } from "./presentation-component-fixture.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -17,7 +18,10 @@ const mealSource = await read("src/components/BulkNutritionLog.tsx");
 const todaySource = await read("src/routes/_authenticated/bulk/index.tsx");
 const challengeSource = await read("src/components/TodayChallenge.tsx");
 const iso = (d) => require("date-fns").format(d, "yyyy-MM-dd");
-const jsx = (type, props) => ({ type, props });
+const jsx = (type, props) =>
+  ["MainPageHeader", "ChallengeParticipantHeading", "ChallengeStatus"].includes(type?.name)
+    ? type(props)
+    : { type, props };
 function nodes(tree, predicate) {
   if (!tree || typeof tree !== "object") return [];
   if (Array.isArray(tree)) return tree.flatMap((child) => nodes(child, predicate));
@@ -112,6 +116,15 @@ function fixture(source, exportName, props, options = {}) {
       if (name === "date-fns") return require(name);
       if (name.includes("ui") || name === "lucide-react" || name.endsWith("TempoDateTimePicker"))
         return new Proxy({}, { get: (_, key) => String(key) });
+      if (name.endsWith("/MainPageHeader") || name === "./MainPageHeader")
+        return presentationComponent("src/components/MainPageHeader.tsx", {
+          "react/jsx-runtime": { jsx, jsxs: jsx, Fragment: "fragment" },
+          "./NotificationBell": { NotificationBell: "NotificationBell" },
+        });
+      if (name.endsWith("/ChallengeParticipant") || name === "./ChallengeParticipant")
+        return presentationComponent("src/components/ChallengeParticipant.tsx", {
+          "react/jsx-runtime": { jsx, jsxs: jsx, Fragment: "fragment" },
+        });
       throw new Error(`Unexpected module ${name}`);
     },
   };
@@ -556,7 +569,7 @@ test("Phase 4 routes retain Today habits, inbox discovery, local calendar, Back 
     read("src/lib/use-local-day.ts"),
     read("src/routes/_authenticated/bulk/route.tsx"),
   ]);
-  assert.match(today, /<NotificationBell \/>/);
+  assert.match(today, /<MainPageHeader title="Today"/);
   assert.doesNotMatch(today, /ChallengeInviteReceiver/);
   assert.match(today, /useBulkNutritionDay\(publicGoal \? id : null, today\)/);
   assert.match(today, /collectCompletedWorkouts/);
@@ -987,7 +1000,7 @@ test("Today active Challenge uses handoff hierarchy, real progress and routes to
   assert.equal(progress.props["aria-valuenow"], 12.4);
   assert.equal(progress.props["aria-valuemax"], 15);
   assert.equal(progress.props.children.props.style.width, `${(12.4 / 15) * 100}%`);
-  assert.match(challengeSource, /text-\[52px\]/);
+  assert.match(challengeSource, /<ChallengeParticipantHeading\s+label="You"/);
   assert.match(texts(tree), /Alex\s+0.0\s+km/);
   const paused = challengeFixture({ target: 0 }).render();
   assert.match(texts(paused), /Week paused · no penalty/);
@@ -1020,5 +1033,6 @@ test("obsolete Daily Log is absent from Profile/Today and its bookmark redirects
   assert.match(route, /createFileRoute\("\/_authenticated\/bulk\/daily-log"\)/);
   assert.match(route, /redirect\(\{ to: "\/bulk", replace: true \}\)/);
   assert.doesNotMatch(route, /component:|useAppData|saveDay|MEAL_PLANS/);
-  assert.match(shell, /pathname === "\/bulk"[\s\S]*max-w-2xl/);
+  assert.match(shell, /pathname.startsWith\("\/bulk\/training"\)/);
+  assert.match(shell, /widerDailyLayout \? "max-w-2xl" : "max-w-lg"/);
 });

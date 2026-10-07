@@ -6,7 +6,8 @@ import { LogOut, ChevronRight } from "lucide-react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { DeleteAccountDialog } from "@/components/DeleteAccountDialog";
 import { NavRows } from "@/components/NavRows";
-import { AppShell, PageHeader } from "@/components/AppShell";
+import { AppShell } from "@/components/AppShell";
+import { MainPageHeader } from "@/components/MainPageHeader";
 import { Card, SectionTitle } from "@/components/ui-kit";
 import { ChallengeDataExport } from "@/components/ChallengeDataExport";
 import { clearDeletedAccountSession, useAuth, signOut } from "@/lib/auth";
@@ -112,7 +113,7 @@ function ProfilePage() {
 
   return (
     <AppShell>
-      <PageHeader title="You" />
+      <MainPageHeader title="You" />
       <div className="mb-6 flex items-center gap-3">
         <span
           aria-hidden="true"

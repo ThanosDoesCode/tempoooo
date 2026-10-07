@@ -19,6 +19,7 @@ import {
 import { challengeParticipation, usePendingChallengeRefresh } from "@/lib/challenge-participation";
 import { ChallengeShareInvite } from "./ChallengeShareInvite";
 import { DataError } from "./ui-kit";
+import { ChallengeParticipantHeading, ChallengeStatus } from "./ChallengeParticipant";
 
 function SummarySkeleton({ label }: { label: string }) {
   return (
@@ -177,36 +178,37 @@ export function TodayChallenge({ hideDiscovery = false }: { hideDiscovery?: bool
           {Math.max(0, Math.ceil(hoursLeft(challenge, n) / 24))} days left
         </span>
       </div>
-      <p className="num">
-        <span className="text-[52px] font-semibold leading-none tracking-tight">
-          {myKm.toFixed(1)}
-        </span>
-        <span className="text-xl text-muted-foreground"> / {target} km</span>
-      </p>
-      <div
-        className="h-1.5 overflow-hidden rounded-full bg-secondary"
-        role="progressbar"
-        aria-label="Your weekly challenge progress"
-        aria-valuemin={0}
-        aria-valuemax={target > 0 ? target : 1}
-        aria-valuenow={Math.min(Math.max(0, myKm), target > 0 ? target : 1)}
-        aria-valuetext={`${myKm.toFixed(1)} of ${target} challenge km${target === 0 ? ", week paused" : ""}`}
-      >
-        <div
-          className="h-full rounded-full bg-primary"
-          style={{ width: `${target > 0 ? Math.min(100, (myKm / target) * 100) : 0}%` }}
+      <div className="space-y-2.5">
+        <ChallengeParticipantHeading
+          label="You"
+          value={myKm.toFixed(1)}
+          suffix={`/ ${target} km`}
         />
+        <div
+          className="h-2 overflow-hidden rounded-full bg-elevated"
+          role="progressbar"
+          aria-label="Your weekly challenge progress"
+          aria-valuemin={0}
+          aria-valuemax={target > 0 ? target : 1}
+          aria-valuenow={Math.min(Math.max(0, myKm), target > 0 ? target : 1)}
+          aria-valuetext={`${myKm.toFixed(1)} of ${target} challenge km${target === 0 ? ", week paused" : ""}`}
+        >
+          <div
+            className="h-full rounded-full bg-primary"
+            style={{ width: `${target > 0 ? Math.min(100, (myKm / target) * 100) : 0}%` }}
+          />
+        </div>
       </div>
-      <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1 text-sm leading-relaxed">
-        <span className={penalty.atRisk ? "text-warn" : "text-muted-foreground"}>
-          {penalty.line}
-        </span>
-        {opponent ? (
-          <span className="text-muted-foreground">
-            {opponentLabel} {opponentKm.toFixed(1)} km
-          </span>
-        ) : null}
-      </div>
+      {opponent ? (
+        <div className="border-t border-border pt-3.5">
+          <ChallengeParticipantHeading
+            label={opponentLabel ?? ""}
+            value={opponentKm.toFixed(1)}
+            suffix="km"
+          />
+        </div>
+      ) : null}
+      <ChallengeStatus atRisk={penalty.atRisk}>{penalty.line}</ChallengeStatus>
     </Link>
   );
 }

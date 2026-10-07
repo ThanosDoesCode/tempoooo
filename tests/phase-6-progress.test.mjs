@@ -735,6 +735,8 @@ async function progressFixture(options = {}) {
         if (name === "@/lib/progress-view") return cache["src/lib/progress-view.ts"];
         if (name === "@/components/ProgressChrome")
           return cache["src/components/ProgressChrome.tsx"];
+        if (name === "./MainPageHeader")
+          return presentationComponent("src/components/MainPageHeader.tsx", modules);
         if (name === "@/components/ui/native-select")
           return presentationComponent("src/components/ui/native-select.tsx");
         if (name === "date-fns" || name === "lucide-react") return require(name);
@@ -904,11 +906,11 @@ test("measured Endurance and Strength still use real summaries, trends and suppo
 test("Progress controls retain equal-width centered segments and a single explicit select chevron", async () => {
   const fixture = await progressFixture();
   const nav = fixture.nav("body");
-  assert.match(nav, /grid auto-cols-fr grid-flow-col/);
+  assert.match(nav, /flex gap-1/);
   const links = [...nav.matchAll(/<a\b[^>]*>/g)].map((match) => match[0]);
   assert.equal(links.length, 4);
   for (const link of links) {
-    assert.match(link, /min-h-11 min-w-0/);
+    assert.match(link, /min-h-11 min-w-0 flex-1 basis-0/);
     assert.match(link, /justify-center/);
     assert.match(link, /px-1/);
     assert.match(link, /focus-visible:ring-inset/);
@@ -938,7 +940,8 @@ test("Today, Progress and Challenge share the safe-area-aware shell inset and 14
   assert.match(today, /space-y-\[14px\]/);
   const fixture = await progressFixture();
   const html = await fixture.render(overviewPath);
-  assert.match(html, /<header class="mb-3.5[^"]*pt-6">/);
+  assert.match(html, /<header class="[^"]*grid grid-cols-\[minmax\(0,1fr\)_auto\]/);
+  assert.doesNotMatch(html, /<header[^>]*pt-6/);
   const tiles = tileMarkup(html);
   assert.equal(tiles.length, 4);
   assert.match(tiles[0], /No data yet.*Log a run or ride/s);

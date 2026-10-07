@@ -212,7 +212,7 @@ test("Waiting replaces Week 0 and offers share + creator-only cancel", async () 
     read("src/routes/_authenticated/challenge/index.tsx"),
     read("src/components/ChallengeShareInvite.tsx"),
   ]);
-  assert.match(waiting, /Waiting for \{atUser\}/);
+  assert.match(waiting, /title=\{`Waiting for \$\{atUser\}`\}/);
   assert.match(share, /h-\[52px\] w-full/); // Share is a full-width primary button
   assert.match(share, /navigator\.share/);
   assert.match(share, /navigator\.clipboard\.writeText/);
@@ -291,7 +291,7 @@ test("Received invitation lives in the inbox with Accept/Decline and read-only f
   assert.match(card, /acceptChallengeInvitationById\(\{ data: \{ invitationId \} \}\)/);
   assert.match(card, /declineChallengeInvitation\(\{ data: \{ invitationId \} \}\)/);
   assert.doesNotMatch(today, /ChallengeInviteReceiver/);
-  assert.match(today, /<NotificationBell \/>/);
+  assert.match(today, /<MainPageHeader title="Today"/);
   // The shared Terms view hides manage controls unless manage is set.
   assert.match(terms, /manage \? \(/);
 });

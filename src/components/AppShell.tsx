@@ -44,7 +44,6 @@ function AppChrome({ children }: { children: ReactNode }) {
   const hasFitnessTools = owner !== null;
   const activeTab = mainTabForPath(pathname);
   const widerDailyLayout =
-    pathname === "/bulk" ||
     pathname.startsWith("/bulk/training") ||
     pathname.startsWith("/bulk/workout/") ||
     pathname.startsWith("/bulk/exercises");

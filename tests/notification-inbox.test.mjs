@@ -283,12 +283,13 @@ test("inbox uses shared contextual Back, while Profile retains a separate push-s
 test("Today has no incoming takeover and keeps habits/current Challenge; Challenge retains direct acceptance", () => {
   const today = read("src/routes/_authenticated/bulk/index.tsx");
   assert.doesNotMatch(today, /ChallengeInviteReceiver|New invitation|wants a challenge/);
-  assert.match(today, /<NotificationBell \/>/);
+  assert.match(today, /<MainPageHeader title="Today"/);
   for (const label of ["Morning check-in", "Workout", "Meals"]) assert.ok(today.includes(label));
   assert.match(today, /<TodayChallenge/);
   assert.match(read("src/routes/_authenticated/challenge/index.tsx"), /<ChallengeInvitations \/>/);
   assert.match(read("src/components/AppShell.tsx"), /<NotificationBell \/>/);
-  assert.match(read("src/components/ProgressChrome.tsx"), /<NotificationBell \/>/);
+  assert.match(read("src/components/ProgressChrome.tsx"), /<MainPageHeader title="Progress"/);
+  assert.match(read("src/components/MainPageHeader.tsx"), /<NotificationBell \/>/);
 });
 
 for (const width of [320, 375, 390]) {

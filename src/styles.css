@@ -42,6 +42,7 @@
   --color-ring: var(--ring);
   --color-good: var(--good);
   --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
   --color-danger: var(--danger);
   --color-elevated: var(--elevated);
   --color-chart-1: var(--chart-1);
@@ -74,6 +75,7 @@
   --destructive-foreground: oklch(0.98 0.004 260);
   --good: oklch(0.8 0.17 150);
   --warn: oklch(0.82 0.14 82);
+  --warn-soft: oklch(0.8 0.065 82);
   --danger: oklch(0.68 0.18 25);
   --border: oklch(0.3 0.01 260);
   --input: oklch(0.3 0.01 260);

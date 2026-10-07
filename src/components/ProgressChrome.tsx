@@ -2,7 +2,7 @@ import { NativeSelect } from "@/components/ui/native-select";
 import { Link } from "@tanstack/react-router";
 import { ChevronRight } from "lucide-react";
 import { type ReactNode } from "react";
-import { NotificationBell } from "./NotificationBell";
+import { MainPageHeader } from "./MainPageHeader";
 
 import { PERIOD_OPTIONS, useProgressSections, type ProgressSection } from "@/lib/progress-view";
 
@@ -19,10 +19,7 @@ const NAV: Record<ProgressSection, { label: string; to: string }> = {
 export function ProgressNav({ active }: { active: ProgressSection }) {
   const { sections } = useProgressSections();
   return (
-    <nav
-      aria-label="Progress view"
-      className="mb-3.5 grid auto-cols-fr grid-flow-col rounded-[13px] bg-card p-1"
-    >
+    <nav aria-label="Progress view" className="mb-3.5 flex gap-1 rounded-[13px] bg-card p-1">
       {sections.map((section) => {
         const { label, to } = NAV[section];
         const on = section === active;
@@ -32,7 +29,7 @@ export function ProgressNav({ active }: { active: ProgressSection }) {
             to={to}
             preload="intent"
             aria-current={on ? "page" : undefined}
-            className={`flex min-h-11 min-w-0 items-center justify-center whitespace-nowrap rounded-[10px] px-1 text-[11px] min-[360px]:text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
+            className={`flex min-h-11 min-w-0 flex-1 basis-0 items-center justify-center whitespace-nowrap rounded-[10px] px-1 text-[11px] min-[360px]:text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
               on ? "bg-elevated font-semibold text-foreground" : "font-medium text-muted-foreground"
             }`}
           >
@@ -44,21 +41,9 @@ export function ProgressNav({ active }: { active: ProgressSection }) {
   );
 }
 
-/** Align the title with Today's heading below its leading metadata line. */
+/** Main-tab spacing is shared with Today, Challenge and You. */
 export function ProgressHeader({ children }: { children?: ReactNode }) {
-  return (
-    <header className="mb-3.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 pt-6">
-      <h1 className="fade-up order-1 text-3xl font-semibold tracking-tight">Progress</h1>
-      <div className="order-2 ml-auto min-[400px]:order-3">
-        <NotificationBell />
-      </div>
-      {children ? (
-        <div className="order-3 ml-auto flex min-w-0 basis-full justify-end min-[400px]:order-2 min-[400px]:basis-auto">
-          {children}
-        </div>
-      ) : null}
-    </header>
-  );
+  return <MainPageHeader title="Progress">{children}</MainPageHeader>;
 }
 
 export function PeriodPicker({

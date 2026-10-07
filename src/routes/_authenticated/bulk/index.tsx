@@ -5,7 +5,7 @@ import { AppShell } from "@/components/AppShell";
 import { PageSkeleton } from "@/components/PageSkeleton";
 import { DataError } from "@/components/ui-kit";
 import { TodayChallenge } from "@/components/TodayChallenge";
-import { NotificationBell } from "@/components/NotificationBell";
+import { MainPageHeader } from "@/components/MainPageHeader";
 import { iso } from "@/lib/calc";
 import { useAppData, useActions, useBulkMeta } from "@/lib/store";
 import { preferredBulkMembership, useMemberships } from "@/lib/bulk-access";
@@ -169,13 +169,7 @@ function TodayPage() {
   return (
     <AppShell>
       <div className="space-y-[14px]">
-        <header className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-sm text-muted-foreground">{format(new Date(), "EEEE, d MMMM")}</p>
-            <h1 className="mt-1 text-[30px] font-semibold tracking-tight">Today</h1>
-          </div>
-          <NotificationBell />
-        </header>
+        <MainPageHeader title="Today" eyebrow={format(new Date(), "EEEE, d MMMM")} />
         {memberships.isLoading ? (
           <PageSkeleton />
         ) : !owner ? (

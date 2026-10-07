@@ -1,3 +1,4 @@
+import { presentationComponent } from "./presentation-component-fixture.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -9,7 +10,10 @@ import { challengeParticipation } from "../src/lib/challenge-participation.ts";
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 const require = createRequire(import.meta.url);
-const jsx = (type, props) => ({ type, props });
+const jsx = (type, props) =>
+  ["MainPageHeader", "ChallengeParticipantHeading", "ChallengeStatus"].includes(type?.name)
+    ? type(props)
+    : { type, props };
 const q = (data) => ({ data, isLoading: false, error: null, refetch: async () => {} });
 const challenge = {
   id: "challenge",
@@ -84,6 +88,15 @@ function load(source, modules = {}, globals = {}) {
         return { ChallengeInvitations: "ChallengeInvitations" };
       if (name.includes("ui-kit") || name === "lucide-react")
         return new Proxy({}, { get: (_, key) => String(key) });
+      if (name.endsWith("/MainPageHeader") || name === "./MainPageHeader")
+        return presentationComponent("src/components/MainPageHeader.tsx", {
+          "react/jsx-runtime": { jsx, jsxs: jsx, Fragment: "fragment" },
+          "./NotificationBell": { NotificationBell: "NotificationBell" },
+        });
+      if (name.endsWith("/ChallengeParticipant") || name === "./ChallengeParticipant")
+        return presentationComponent("src/components/ChallengeParticipant.tsx", {
+          "react/jsx-runtime": { jsx, jsxs: jsx, Fragment: "fragment" },
+        });
       throw new Error(`Unexpected import: ${name}`);
     },
     ...globals,
@@ -216,7 +229,7 @@ test("pending Today becomes active from refreshed membership; real opponent prog
   assert.doesNotMatch(text(tree), /Pending|Waiting for them to accept/);
   assert.match(
     text(tree),
-    /Challenge with @alex.*2\s+days left.*6.5\s+\/\s+15\s+km.*€10.*@alex\s+9.2\s+km/s,
+    /Challenge with @alex.*2\s+days left.*You.*6.5\s+\/\s+15\s+km.*@alex\s+9.2\s+km.*€10/s,
   );
   assert.equal(nodes(tree, (n) => n.props?.role === "progressbar")[0].props["aria-valuenow"], 6.5);
 });

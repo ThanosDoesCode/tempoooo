@@ -15,6 +15,17 @@ export function presentationComponent(file, modules = {}, globals = {}) {
       if (name === "@/lib/utils") return presentationComponent("src/lib/utils.ts");
       if (name === "./BackControl" || name === "@/components/BackControl")
         return presentationComponent("src/components/BackControl.tsx", modules, globals);
+      if (name === "./MainPageHeader" || name === "@/components/MainPageHeader")
+        return presentationComponent(
+          "src/components/MainPageHeader.tsx",
+          {
+            "./NotificationBell": { NotificationBell: "NotificationBell" },
+            ...modules,
+          },
+          globals,
+        );
+      if (name === "./ChallengeParticipant" || name === "@/components/ChallengeParticipant")
+        return presentationComponent("src/components/ChallengeParticipant.tsx", modules, globals);
       return require(name);
     },
   };

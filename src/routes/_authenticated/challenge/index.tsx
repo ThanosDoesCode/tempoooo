@@ -39,7 +39,8 @@ import {
 import { ChallengeInviteCard } from "@/components/ChallengeInvite";
 import { challengeParticipation, usePendingChallengeRefresh } from "@/lib/challenge-participation";
 import { ChallengeWaiting } from "@/components/ChallengeWaiting";
-import { NotificationBell } from "@/components/NotificationBell";
+import { MainPageHeader } from "@/components/MainPageHeader";
+import { ChallengeParticipantHeading, ChallengeStatus } from "@/components/ChallengeParticipant";
 import { ChallengeInvitations } from "@/components/ChallengeInvitations";
 
 export const Route = createFileRoute("/_authenticated/challenge/")({
@@ -260,16 +261,15 @@ function ChallengeHome() {
   if (preStart) {
     return (
       <AppShell>
-        <header className="fade-up mb-3.5 flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-sm text-muted-foreground">
+        <MainPageHeader
+          title="Starts soon"
+          eyebrow={
+            <>
               {opponent ? `With ${opponent.name} · ` : ""}
               {challenge.duration_weeks}-week challenge
-            </p>
-            <h1 className="mt-1 text-3xl font-semibold tracking-tight">Starts soon</h1>
-          </div>
-          <NotificationBell />
-        </header>
+            </>
+          }
+        />
         <ChallengeInvitations />
         <Card className="space-y-1 p-5">
           <p className="text-base font-medium">
@@ -293,15 +293,14 @@ function ChallengeHome() {
 
   return (
     <AppShell>
-      <header className="fade-up mb-3.5 flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-sm text-muted-foreground">
+      <MainPageHeader
+        title="This week"
+        eyebrow={
+          <>
             {opponent ? `With ${opponent.name} · ` : ""}Week {week?.n} of {challenge.duration_weeks}
-          </p>
-          <h1 className="mt-1 text-3xl font-semibold tracking-tight">This week</h1>
-        </div>
-        <NotificationBell />
-      </header>
+          </>
+        }
+      />
       <ChallengeInvitations />
 
       {membersError || activitiesError || summaryQuery.error || pausesError || weekTargetsError ? (
@@ -322,7 +321,7 @@ function ChallengeHome() {
         </div>
       ) : null}
 
-      <Card className="space-y-4 p-[18px]">
+      <Card className="space-y-3.5 p-5">
         <div className="flex items-center justify-between text-[13px] text-muted-foreground">
           <span>
             {week
@@ -340,20 +339,20 @@ function ChallengeHome() {
           barClass="bg-primary"
           loading={progressLoading}
         />
-        <ParticipantBar
-          label={opponent?.name ?? "Opponent"}
-          totals={opponentTotals}
-          target={opponentTarget}
-          paused={opponentPaused}
-          barClass="bg-chart-2"
-          loading={progressLoading}
-          missing={!opponent}
-        />
+        <div className="border-t border-border pt-3.5">
+          <ParticipantBar
+            label={opponent?.name ?? "Opponent"}
+            totals={opponentTotals}
+            target={opponentTarget}
+            paused={opponentPaused}
+            barClass="bg-chart-2"
+            loading={progressLoading}
+            missing={!opponent}
+          />
+        </div>
 
         {!progressLoading ? (
-          <p className={`text-sm ${penalty.atRisk ? "text-warn" : "text-muted-foreground"}`}>
-            {penalty.line}
-          </p>
+          <ChallengeStatus atRisk={penalty.atRisk}>{penalty.line}</ChallengeStatus>
         ) : null}
       </Card>
 
@@ -431,13 +430,10 @@ type ProgressTotals = { running: number; cycling: number; equivalent: number };
 
 function ChallengeHeader({ subtitle }: { subtitle?: string }) {
   return (
-    <header className="fade-up mb-3.5 flex items-center justify-between gap-3">
-      <div className="min-w-0">
-        <h1 className="text-3xl font-semibold tracking-tight">Challenge</h1>
-        {subtitle ? <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p> : null}
-      </div>
-      <NotificationBell />
-    </header>
+    <>
+      <MainPageHeader title="Challenge" />
+      {subtitle ? <p className="mb-3.5 text-sm text-muted-foreground">{subtitle}</p> : null}
+    </>
   );
 }
 
@@ -468,33 +464,23 @@ function ParticipantBar({
   }
   if (missing || !totals) {
     return (
-      <div>
-        <div className="mb-2 flex items-baseline justify-between">
-          <span className="text-[15px] font-medium">{label}</span>
-        </div>
+      <div className="space-y-2.5">
+        <ChallengeParticipantHeading label={label} />
         <div className="h-2 rounded-full bg-elevated" />
-        <p className="mt-2 text-[13px] text-muted-foreground">Hasn’t joined yet</p>
+        <p className="text-[13px] text-muted-foreground">Hasn’t joined yet</p>
       </div>
     );
   }
   const equivalent = totals.equivalent;
   const pct = target > 0 ? Math.min(100, (equivalent / target) * 100) : 0;
   return (
-    <div>
-      <div className="mb-2 flex items-baseline justify-between">
-        <span className="text-[15px] font-medium">{label}</span>
-        {paused ? (
-          <span className="text-[15px] font-medium text-muted-foreground">Paused</span>
-        ) : (
-          <span className="num">
-            <b className="text-[22px] font-semibold">{equivalent.toFixed(1)}</b>
-            <span className="text-muted-foreground">
-              {" "}
-              / {target.toFixed(target % 1 === 0 ? 0 : 1)} km
-            </span>
-          </span>
-        )}
-      </div>
+    <div className="space-y-2.5">
+      <ChallengeParticipantHeading
+        label={label}
+        status={paused ? "Paused" : undefined}
+        value={equivalent.toFixed(1)}
+        suffix={`/ ${target.toFixed(target % 1 === 0 ? 0 : 1)} km`}
+      />
       <div className="h-2 overflow-hidden rounded-full bg-elevated">
         <div
           className={`h-full rounded-full transition-all duration-500 ${barClass}`}
@@ -569,7 +555,7 @@ function DestinationRow({
     >
       <span className="flex-1 text-[15px] font-medium">{label}</span>
       <span
-        className={`text-[13px] ${hintTone === "warn" ? "text-warn" : "text-muted-foreground"}`}
+        className={`text-[13px] ${hintTone === "warn" ? "text-warn-soft" : "text-muted-foreground"}`}
       >
         {hint}
       </span>
