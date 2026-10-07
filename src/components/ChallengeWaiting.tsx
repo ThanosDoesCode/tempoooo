@@ -7,6 +7,7 @@ import { userFacingError } from "@/lib/network-errors";
 import { cancelPendingChallenge } from "@/lib/privileged-rpcs.functions";
 import { ChallengeShareInvite } from "./ChallengeShareInvite";
 import { ChallengeInviteCard } from "./ChallengeInvite";
+import { NotificationBell } from "./NotificationBell";
 import { km, type Challenge, type OutgoingInvitation } from "@/lib/challenge";
 
 /**
@@ -53,11 +54,14 @@ export function ChallengeWaiting({
 
   return (
     <div className="space-y-3.5">
-      <header className="fade-up">
-        <p className="text-sm text-muted-foreground">{challenge.duration_weeks}-week challenge</p>
-        <h1 className="mt-1 break-words text-3xl font-semibold tracking-tight">
-          Waiting for {atUser}
-        </h1>
+      <header className="fade-up flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm text-muted-foreground">{challenge.duration_weeks}-week challenge</p>
+          <h1 className="mt-1 break-words text-3xl font-semibold tracking-tight">
+            Waiting for {atUser}
+          </h1>
+        </div>
+        <NotificationBell />
       </header>
 
       <Card className="space-y-3.5 rounded-[20px] p-5">

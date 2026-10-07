@@ -28,11 +28,11 @@ test("account deletion is authenticated, deletes only context.userId and release
 });
 
 test("in-app Challenge invitations expose no secret or email and stay service-role only", async () => {
-  const [migration, functions, component, shell] = await Promise.all([
+  const [migration, functions, component, bell] = await Promise.all([
     read("supabase/migrations/20260919120000_account_deletion_and_in_app_challenge_invites.sql"),
     read("src/lib/privileged-rpcs.functions.ts"),
     read("src/components/ChallengeInvitations.tsx"),
-    read("src/components/AppShell.tsx"),
+    read("src/components/NotificationBell.tsx"),
   ]);
   const listing =
     migration.match(
@@ -62,8 +62,8 @@ test("in-app Challenge invitations expose no secret or email and stay service-ro
   assert.match(functions, /declineChallengeInvitation[\s\S]*context\.userId/);
   assert.match(component, /Accept/);
   assert.match(component, /Decline/);
-  assert.match(shell, /pendingInvitations\.data\?\.length/);
-  assert.match(shell, /pending Challenge invitations/);
+  assert.match(bell, /invitations\.data\?\.length/);
+  assert.match(bell, /Notifications, \$\{count\} unread/);
 });
 
 test("legacy owner Goal conversion preserves source data and seeds owned presets once", async () => {

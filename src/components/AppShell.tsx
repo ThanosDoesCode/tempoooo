@@ -7,9 +7,9 @@ import { prefetchBulk } from "@/lib/store";
 import { useGoalDiscovery } from "@/lib/goal-discovery";
 import { isFocusScreen, mainTabForPath, MAIN_TABS, type MainTab } from "@/lib/main-navigation";
 import { PullToRefresh } from "./PullToRefresh";
-import { useChallengeInvitations } from "@/lib/challenge-invitations";
 import { LogSheet } from "./LogSheet";
 import { HistoryBackLink } from "./HistoryBackLink";
+import { NotificationBell } from "./NotificationBell";
 
 const TAB_ICONS: Record<MainTab, LucideIcon> = {
   today: Home,
@@ -38,7 +38,6 @@ function AppChrome({ children }: { children: ReactNode }) {
   const focusScreen = isFocusScreen(pathname);
   const { data: memberships } = useMemberships();
   const goalDiscovery = useGoalDiscovery();
-  const pendingInvitations = useChallengeInvitations();
   const [logOpen, setLogOpen] = useState(false);
 
   const owner = preferredBulkMembership(memberships);
@@ -117,16 +116,6 @@ function AppChrome({ children }: { children: ReactNode }) {
                             className="absolute right-[28%] top-1 h-2 w-2 rounded-full bg-primary ring-2 ring-background"
                           />
                         ) : null}
-                        {(pendingInvitations.data?.length ?? 0) > 0 ? (
-                          <span
-                            aria-label={`${pendingInvitations.data!.length} pending Challenge invitations`}
-                            className="absolute right-[22%] top-0 grid min-h-4 min-w-4 place-items-center rounded-full bg-danger px-1 text-[9px] font-bold text-white ring-2 ring-background"
-                          >
-                            {pendingInvitations.data!.length > 9
-                              ? "9+"
-                              : pendingInvitations.data!.length}
-                          </span>
-                        ) : null}
                       </>
                     ) : null
                   }
@@ -204,7 +193,10 @@ export function PageHeader({
           {...(backOriginLabels ? { originLabels: backOriginLabels } : {})}
         />
       ) : null}
-      <h1 className="text-3xl font-semibold tracking-tight">{title}</h1>
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="min-w-0 text-3xl font-semibold tracking-tight">{title}</h1>
+        <NotificationBell />
+      </div>
       {subtitle ? <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p> : null}
     </header>
   );

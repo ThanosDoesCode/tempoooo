@@ -15,6 +15,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedBulkRouteRouteImport } from './routes/_authenticated/bulk/route'
 import { Route as AuthenticatedBulkAccessDeniedRouteImport } from './routes/_authenticated/bulk-access-denied'
 import { Route as AuthenticatedBulkOnboardingRouteImport } from './routes/_authenticated/bulk-onboarding'
+import { Route as AuthenticatedNotificationsRouteImport } from './routes/_authenticated/notifications'
 import { Route as AuthenticatedOnboardingRouteImport } from './routes/_authenticated/onboarding'
 import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated/profile'
 import { Route as AuthenticatedProgressRouteImport } from './routes/_authenticated/progress'
@@ -91,6 +92,12 @@ const AuthenticatedBulkOnboardingRoute =
   AuthenticatedBulkOnboardingRouteImport.update({
     id: '/bulk-onboarding',
     path: '/bulk-onboarding',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedNotificationsRoute =
+  AuthenticatedNotificationsRouteImport.update({
+    id: '/notifications',
+    path: '/notifications',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedOnboardingRoute = AuthenticatedOnboardingRouteImport.update({
@@ -367,6 +374,7 @@ export interface FileRoutesByFullPath {
   '/bulk': typeof AuthenticatedBulkRouteRouteWithChildren
   '/bulk-access-denied': typeof AuthenticatedBulkAccessDeniedRoute
   '/bulk-onboarding': typeof AuthenticatedBulkOnboardingRoute
+  '/notifications': typeof AuthenticatedNotificationsRoute
   '/onboarding': typeof AuthenticatedOnboardingRoute
   '/profile': typeof AuthenticatedProfileRoute
   '/progress': typeof AuthenticatedProgressRoute
@@ -419,6 +427,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/bulk-access-denied': typeof AuthenticatedBulkAccessDeniedRoute
   '/bulk-onboarding': typeof AuthenticatedBulkOnboardingRoute
+  '/notifications': typeof AuthenticatedNotificationsRoute
   '/onboarding': typeof AuthenticatedOnboardingRoute
   '/profile': typeof AuthenticatedProfileRoute
   '/progress': typeof AuthenticatedProgressRoute
@@ -474,6 +483,7 @@ export interface FileRoutesById {
   '/_authenticated/bulk': typeof AuthenticatedBulkRouteRouteWithChildren
   '/_authenticated/bulk-access-denied': typeof AuthenticatedBulkAccessDeniedRoute
   '/_authenticated/bulk-onboarding': typeof AuthenticatedBulkOnboardingRoute
+  '/_authenticated/notifications': typeof AuthenticatedNotificationsRoute
   '/_authenticated/onboarding': typeof AuthenticatedOnboardingRoute
   '/_authenticated/profile': typeof AuthenticatedProfileRoute
   '/_authenticated/progress': typeof AuthenticatedProgressRoute
@@ -529,6 +539,7 @@ export interface FileRouteTypes {
     | '/bulk'
     | '/bulk-access-denied'
     | '/bulk-onboarding'
+    | '/notifications'
     | '/onboarding'
     | '/profile'
     | '/progress'
@@ -581,6 +592,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/bulk-access-denied'
     | '/bulk-onboarding'
+    | '/notifications'
     | '/onboarding'
     | '/profile'
     | '/progress'
@@ -635,6 +647,7 @@ export interface FileRouteTypes {
     | '/_authenticated/bulk'
     | '/_authenticated/bulk-access-denied'
     | '/_authenticated/bulk-onboarding'
+    | '/_authenticated/notifications'
     | '/_authenticated/onboarding'
     | '/_authenticated/profile'
     | '/_authenticated/progress'
@@ -731,6 +744,13 @@ declare module '@tanstack/react-router' {
       path: '/bulk-onboarding'
       fullPath: '/bulk-onboarding'
       preLoaderRoute: typeof AuthenticatedBulkOnboardingRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/notifications': {
+      id: '/_authenticated/notifications'
+      path: '/notifications'
+      fullPath: '/notifications'
+      preLoaderRoute: typeof AuthenticatedNotificationsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/onboarding': {
@@ -1130,6 +1150,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedBulkRouteRoute: typeof AuthenticatedBulkRouteRouteWithChildren
   AuthenticatedBulkAccessDeniedRoute: typeof AuthenticatedBulkAccessDeniedRoute
   AuthenticatedBulkOnboardingRoute: typeof AuthenticatedBulkOnboardingRoute
+  AuthenticatedNotificationsRoute: typeof AuthenticatedNotificationsRoute
   AuthenticatedOnboardingRoute: typeof AuthenticatedOnboardingRoute
   AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute
   AuthenticatedProgressRoute: typeof AuthenticatedProgressRoute
@@ -1157,6 +1178,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedBulkRouteRoute: AuthenticatedBulkRouteRouteWithChildren,
   AuthenticatedBulkAccessDeniedRoute: AuthenticatedBulkAccessDeniedRoute,
   AuthenticatedBulkOnboardingRoute: AuthenticatedBulkOnboardingRoute,
+  AuthenticatedNotificationsRoute: AuthenticatedNotificationsRoute,
   AuthenticatedOnboardingRoute: AuthenticatedOnboardingRoute,
   AuthenticatedProfileRoute: AuthenticatedProfileRoute,
   AuthenticatedProgressRoute: AuthenticatedProgressRoute,

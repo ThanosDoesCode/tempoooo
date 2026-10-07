@@ -12,7 +12,7 @@ function NotificationsPage() {
   const { user } = useAuth();
   return (
     <AppShell>
-      <PageHeader title="Notifications" backTo="/profile" backLabel="You" />
+      <PageHeader title="Notification settings" backTo="/profile" backLabel="You" />
       {user ? <ChallengeNotifications userId={user.id} expanded /> : null}
       <p className="mt-4 text-[13px] leading-5 text-muted-foreground">
         Tempo only asks for browser permission when you choose Enable notifications. Disable on all

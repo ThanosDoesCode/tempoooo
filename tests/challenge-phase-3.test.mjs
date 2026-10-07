@@ -274,23 +274,24 @@ test("a loaded pending challenge resolves to Waiting and never the empty Create 
 });
 
 // --- Invite (receiver) + Accept/Decline ----------------------------------------------------------
-test("Received invitation shows real terms on Today with Accept/Decline and read-only terms", async () => {
-  const [card, today, terms] = await Promise.all([
-    read("src/components/ChallengeInviteReceiver.tsx"),
+test("Received invitation lives in the inbox with Accept/Decline and read-only full terms", async () => {
+  const [card, details, today, terms] = await Promise.all([
+    read("src/components/ChallengeInvitations.tsx"),
+    read("src/components/ChallengeInvitationDetails.tsx"),
     read("src/routes/_authenticated/bulk/index.tsx"),
     read("src/components/challenge-terms-view.tsx"),
   ]);
-  assert.match(card, /New invitation/);
-  assert.match(card, /@\{invitation\.inviter_username\} wants a challenge/);
+  assert.match(card, /@\{invitation\.inviter_username\} invited you/);
   assert.match(card, /invitation\.duration_weeks/);
-  assert.match(card, /invitation\.start_date/);
-  assert.match(card, /Runs 1:1 · rides 3:1/);
+  assert.match(details, /invitation\.start_date/);
+  assert.match(details, /Runs 1:1 · rides 3:1/);
   assert.match(card, /Read the full terms/);
-  assert.match(card, /<TermsCards terms=\{terms\} timezone=\{invitation\.timezone\}/); // read-only (no manage)
-  assert.match(card, /Expires \{format\(parseISO\(invitation\.expires_at\)/);
-  assert.match(card, /acceptChallengeInvitationById\(\{ data: \{ invitationId: id \} \}\)/);
-  assert.match(card, /declineChallengeInvitation\(\{ data: \{ invitationId: id \} \}\)/);
-  assert.match(today, /<ChallengeInviteReceiver \/>/);
+  assert.match(details, /<TermsCards terms=\{terms\} timezone=\{invitation\.timezone\}/); // read-only (no manage)
+  assert.match(details, /Expires \{format\(parseISO\(invitation\.expires_at\)/);
+  assert.match(card, /acceptChallengeInvitationById\(\{ data: \{ invitationId \} \}\)/);
+  assert.match(card, /declineChallengeInvitation\(\{ data: \{ invitationId \} \}\)/);
+  assert.doesNotMatch(today, /ChallengeInviteReceiver/);
+  assert.match(today, /<NotificationBell \/>/);
   // The shared Terms view hides manage controls unless manage is set.
   assert.match(terms, /manage \? \(/);
 });

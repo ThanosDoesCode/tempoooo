@@ -2,6 +2,7 @@ import { NativeSelect } from "@/components/ui/native-select";
 import { Link } from "@tanstack/react-router";
 import { ChevronRight } from "lucide-react";
 import { type ReactNode } from "react";
+import { NotificationBell } from "./NotificationBell";
 
 import { PERIOD_OPTIONS, useProgressSections, type ProgressSection } from "@/lib/progress-view";
 
@@ -44,9 +45,16 @@ export function ProgressNav({ active }: { active: ProgressSection }) {
 /** Align the title with Today's heading below its leading metadata line. */
 export function ProgressHeader({ children }: { children?: ReactNode }) {
   return (
-    <header className="mb-3.5 flex items-end justify-between gap-3 pt-6">
-      <h1 className="fade-up text-3xl font-semibold tracking-tight">Progress</h1>
-      {children}
+    <header className="mb-3.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 pt-6">
+      <h1 className="fade-up order-1 text-3xl font-semibold tracking-tight">Progress</h1>
+      <div className="order-2 ml-auto min-[400px]:order-3">
+        <NotificationBell />
+      </div>
+      {children ? (
+        <div className="order-3 ml-auto flex min-w-0 basis-full justify-end min-[400px]:order-2 min-[400px]:basis-auto">
+          {children}
+        </div>
+      ) : null}
     </header>
   );
 }

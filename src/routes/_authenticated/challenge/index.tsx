@@ -39,6 +39,8 @@ import {
 import { ChallengeInviteCard } from "@/components/ChallengeInvite";
 import { challengeParticipation, usePendingChallengeRefresh } from "@/lib/challenge-participation";
 import { ChallengeWaiting } from "@/components/ChallengeWaiting";
+import { NotificationBell } from "@/components/NotificationBell";
+import { ChallengeInvitations } from "@/components/ChallengeInvitations";
 
 export const Route = createFileRoute("/_authenticated/challenge/")({
   head: () => ({
@@ -121,6 +123,7 @@ function ChallengeHome() {
   if (isLoading) {
     return (
       <AppShell>
+        <ChallengeHeader />
         <PageSkeleton label="Loading Challenge" />
       </AppShell>
     );
@@ -129,9 +132,7 @@ function ChallengeHome() {
   if (challengeError && !challenge) {
     return (
       <AppShell>
-        <header className="fade-up mb-3.5">
-          <h1 className="text-3xl font-semibold tracking-tight">Challenge</h1>
-        </header>
+        <ChallengeHeader />
         <DataError
           message="Check your connection and try loading your challenge again."
           onRetry={() => void challengeQuery.refetch()}
@@ -143,11 +144,9 @@ function ChallengeHome() {
   if (!challenge) {
     return (
       <AppShell>
-        <header className="fade-up mb-3.5">
-          <h1 className="text-3xl font-semibold tracking-tight">Challenge</h1>
-          <p className="mt-1 text-sm text-muted-foreground">A private two-person endurance bet.</p>
-        </header>
-        <Card className="space-y-3 p-[18px]">
+        <ChallengeHeader subtitle="A private two-person endurance bet." />
+        <ChallengeInvitations />
+        <Card className="mt-3 space-y-3 p-[18px]">
           <p className="text-[15px] leading-relaxed">
             Start a private challenge with one friend: a weekly km target, running and cycling, and
             a penalty when someone falls short.
@@ -159,7 +158,8 @@ function ChallengeHome() {
             Create a challenge
           </Link>
           <Note>
-            Joining is invite-only. If a friend invited you, open the invitation on your Profile.
+            Joining is invite-only. If a friend invited you, open your notification inbox or accept
+            here.
           </Note>
         </Card>
       </AppShell>
@@ -216,6 +216,7 @@ function ChallengeHome() {
   if (membersLoading || (isCreator && outgoingQuery.isLoading)) {
     return (
       <AppShell>
+        <ChallengeHeader />
         <PageSkeleton label="Loading challenge status" />
       </AppShell>
     );
@@ -223,6 +224,7 @@ function ChallengeHome() {
   if (membersError || (isCreator && outgoingQuery.error)) {
     return (
       <AppShell>
+        <ChallengeHeader />
         <DataError
           message="Could not load challenge status."
           onRetry={() => {
@@ -241,6 +243,7 @@ function ChallengeHome() {
           invitation={outgoingQuery.data ?? null}
           expired={participation === "expired"}
         />
+        <ChallengeInvitations />
       </AppShell>
     );
   }
@@ -249,13 +252,17 @@ function ChallengeHome() {
   if (preStart) {
     return (
       <AppShell>
-        <header className="fade-up mb-3.5">
-          <p className="text-sm text-muted-foreground">
-            {opponent ? `With ${opponent.name} · ` : ""}
-            {challenge.duration_weeks}-week challenge
-          </p>
-          <h1 className="mt-1 text-3xl font-semibold tracking-tight">Starts soon</h1>
+        <header className="fade-up mb-3.5 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm text-muted-foreground">
+              {opponent ? `With ${opponent.name} · ` : ""}
+              {challenge.duration_weeks}-week challenge
+            </p>
+            <h1 className="mt-1 text-3xl font-semibold tracking-tight">Starts soon</h1>
+          </div>
+          <NotificationBell />
         </header>
+        <ChallengeInvitations />
         <Card className="space-y-1 p-5">
           <p className="text-base font-medium">
             Starts {format(parseISO(challenge.start_date), "EEEE d MMM")}
@@ -278,12 +285,16 @@ function ChallengeHome() {
 
   return (
     <AppShell>
-      <header className="fade-up mb-3.5">
-        <p className="text-sm text-muted-foreground">
-          {opponent ? `With ${opponent.name} · ` : ""}Week {week?.n} of {challenge.duration_weeks}
-        </p>
-        <h1 className="mt-1 text-3xl font-semibold tracking-tight">This week</h1>
+      <header className="fade-up mb-3.5 flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm text-muted-foreground">
+            {opponent ? `With ${opponent.name} · ` : ""}Week {week?.n} of {challenge.duration_weeks}
+          </p>
+          <h1 className="mt-1 text-3xl font-semibold tracking-tight">This week</h1>
+        </div>
+        <NotificationBell />
       </header>
+      <ChallengeInvitations />
 
       {membersError || activitiesError || summaryQuery.error || pausesError || weekTargetsError ? (
         <div className="mb-3">
@@ -409,6 +420,18 @@ function ChallengeHome() {
 }
 
 type ProgressTotals = { running: number; cycling: number; equivalent: number };
+
+function ChallengeHeader({ subtitle }: { subtitle?: string }) {
+  return (
+    <header className="fade-up mb-3.5 flex items-center justify-between gap-3">
+      <div className="min-w-0">
+        <h1 className="text-3xl font-semibold tracking-tight">Challenge</h1>
+        {subtitle ? <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p> : null}
+      </div>
+      <NotificationBell />
+    </header>
+  );
+}
 
 function ParticipantBar({
   label,

@@ -78,6 +78,10 @@ function load(source, modules = {}, globals = {}) {
           },
         };
       if (name === "date-fns") return require(name);
+      if (name === "@/components/NotificationBell" || name === "./NotificationBell")
+        return { NotificationBell: "NotificationBell" };
+      if (name === "@/components/ChallengeInvitations")
+        return { ChallengeInvitations: "ChallengeInvitations" };
       if (name.includes("ui-kit") || name === "lucide-react")
         return new Proxy({}, { get: (_, key) => String(key) });
       throw new Error(`Unexpected import: ${name}`);
@@ -431,7 +435,7 @@ test("Challenge route waiting guard precedes active/pre-start metrics; invitatio
   const [route, send, receiver] = await Promise.all([
     read("src/routes/_authenticated/challenge/index.tsx"),
     read("src/components/ChallengeInvite.tsx"),
-    read("src/components/ChallengeInviteReceiver.tsx"),
+    read("src/components/ChallengeInvitations.tsx"),
   ]);
   assert.ok(route.indexOf('participation !== "accepted"') < route.indexOf("if (preStart)"));
   assert.match(route, /expired=\{participation === "expired"\}/);
