@@ -292,9 +292,14 @@ test("active workout keeps one header Finish and a pinned rest/navigation dock w
     );
     assert.ok(find(dock, "Previous"));
     assert.ok(find(dock, "Next exercise"));
+    const navigation = nodes(dock, (n) => n.props.className?.includes("grid-cols-2"))[0];
+    assert.match(navigation.props.className, /mt-4.*gap-4/);
+    for (const label of ["Previous", "Next exercise"])
+      assert.match(find(navigation, label).props.className, /min-h-12.*min-w-0/);
+    assert.match(dock.props.className, /16px\+env\(safe-area-inset-bottom\)/);
     assert.equal(find(dock, "Finish workout"), undefined);
     assert.doesNotMatch(text(dock), /Done with set|Discard workout/);
-    assert.match(tree.props.className, /160px\+env\(safe-area-inset-bottom\)/);
+    assert.match(tree.props.className, /184px\+env\(safe-area-inset-bottom\)/);
     assert.match(text(tree), /0\s*\/\s*4\s+sets/);
     assert.match(text(tree), /0 kg volume/);
     assert.ok(nodes(tree, (n) => n.props.style?.width === "0%").length);

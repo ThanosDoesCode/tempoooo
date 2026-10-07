@@ -504,7 +504,7 @@ export function BulkWorkoutSessionView({
     }
   }
   return (
-    <div className="space-y-[14px] pb-[calc(160px+env(safe-area-inset-bottom))]">
+    <div className="space-y-[14px] pb-[calc(184px+env(safe-area-inset-bottom))]">
       <header className="sticky top-0 z-20 -mx-5 border-b border-border bg-background/95 px-5 pb-3 pt-2 backdrop-blur">
         <div className="flex min-h-11 items-center gap-2">
           <button
@@ -673,14 +673,14 @@ export function BulkWorkoutSessionView({
         ))}
       </fieldset>
       <div
-        className="fixed inset-x-0 bottom-0 z-30 my-0! border-t border-border bg-background/95 px-5 pt-3 pb-[calc(12px+env(safe-area-inset-bottom))] backdrop-blur"
+        className="fixed inset-x-0 bottom-0 z-30 my-0! border-t border-border bg-background/95 px-5 pt-4 pb-[calc(16px+env(safe-area-inset-bottom))] backdrop-blur"
         aria-label="Workout controls"
       >
         <div className="mx-auto max-w-2xl">
           {restSeconds > 0 ? (
             <>
               <div
-                className="flex min-h-11 items-center gap-3"
+                className="flex min-h-11 items-center gap-4"
                 role="timer"
                 aria-label="Rest timer"
               >
@@ -700,13 +700,13 @@ export function BulkWorkoutSessionView({
                 </button>
                 <button
                   type="button"
-                  className="min-h-11 px-2 text-sm font-medium text-primary"
+                  className="min-h-11 min-w-11 px-2 text-sm font-medium text-primary"
                   onClick={() => setRestDeadline(null)}
                 >
                   Skip
                 </button>
               </div>
-              <div className="mt-1 h-1 overflow-hidden rounded-full bg-elevated" aria-hidden="true">
+              <div className="mt-2 h-1 overflow-hidden rounded-full bg-elevated" aria-hidden="true">
                 <div
                   className="h-full rounded-full bg-primary transition-[width] duration-150 motion-reduce:transition-none"
                   style={{ width: `${Math.min(100, (restSeconds / 120) * 100)}%` }}
@@ -725,12 +725,12 @@ export function BulkWorkoutSessionView({
               Start 2:00 rest
             </button>
           )}
-          <div className="mt-3 grid grid-cols-[minmax(44px,0.4fr)_minmax(0,1fr)] gap-2">
+          <div className="mt-4 grid grid-cols-2 gap-4">
             <button
               type="button"
               disabled={activeIndex === 0}
               onClick={() => setActiveExerciseIndex(activeIndex - 1)}
-              className="flex min-h-12 items-center justify-center gap-1 rounded-2xl border border-border bg-card text-sm font-medium text-foreground disabled:opacity-30"
+              className="flex min-h-12 min-w-0 items-center justify-center gap-2 rounded-2xl border border-border bg-card px-2 text-[13px] font-medium text-foreground disabled:opacity-30 sm:px-3 sm:text-sm"
             >
               <ChevronLeft className="control-chevron" aria-hidden="true" />
               Previous
@@ -739,7 +739,7 @@ export function BulkWorkoutSessionView({
               type="button"
               disabled={activeIndex >= session.exercises.length - 1}
               onClick={() => setActiveExerciseIndex(activeIndex + 1)}
-              className="flex min-h-12 items-center justify-center gap-1 rounded-2xl border border-primary/30 bg-primary text-sm font-semibold text-primary-foreground disabled:border-border disabled:bg-card disabled:text-muted-foreground disabled:opacity-50"
+              className="flex min-h-12 min-w-0 items-center justify-center gap-2 rounded-2xl border border-primary/30 bg-primary px-2 text-[13px] font-semibold text-primary-foreground disabled:border-border disabled:bg-card disabled:text-muted-foreground disabled:opacity-50 sm:px-3 sm:text-sm"
             >
               Next exercise
               <ChevronRight className="control-chevron" aria-hidden="true" />

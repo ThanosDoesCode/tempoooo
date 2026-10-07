@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Card, Note, PendingLabel, SectionTitle } from "@/components/ui-kit";
 import { useActions, useAppData, useBulkMeta } from "@/lib/store";
+import { iso } from "@/lib/calc";
+import { refreshBulkNutritionTargets } from "@/lib/bulk-nutrition-query";
 
 type Field = "calories" | "protein" | "carbs" | "fat";
 const FIELDS: Array<{ key: Field; label: string; unit: string; min: number; max: number }> = [
@@ -19,7 +22,8 @@ export function NutritionTargetsEditor({
   onDirtyChange,
 }: { onDirtyChange?: (dirty: boolean) => void } = {}) {
   const data = useAppData();
-  const { role } = useBulkMeta();
+  const { role, bulkId } = useBulkMeta();
+  const queryClient = useQueryClient();
   const canEdit = role !== "viewer";
   const { saveTargets } = useActions();
   const targets = data?.targets;
@@ -73,7 +77,10 @@ export function NutritionTargetsEditor({
     setStatus("saving");
     setError(null);
     try {
-      await saveTargets({ ...targets, ...next });
+      const saved = { ...targets, ...next };
+      const savedDay = await saveTargets(saved);
+      if (bulkId)
+        await refreshBulkNutritionTargets(queryClient, bulkId, savedDay ?? iso(new Date()), saved);
       setStatus("saved");
     } catch {
       setStatus("error");

@@ -403,24 +403,27 @@ export function useActions() {
 
   const saveTargets = useCallback(async (targets: Targets) => {
     if (!state || !bulkId || !canWrite()) return;
+    const id = bulkId;
     const previous = state.targets;
     state.targets = targets;
     targetsPending = true;
     emit();
-    const { error } = await supabase
-      .from("bulk_targets")
-      .upsert(
-        { bulk_profile_id: bulkId, payload: json(targets) },
-        { onConflict: "bulk_profile_id" },
-      );
+    // Snapshot today's targets in the same transaction as the current settings.
+    // Older nutrition days keep their original targets.
+    const { data, error } = await supabase.rpc("save_bulk_targets_for_local_day", {
+      _profile: id,
+      _targets: json(targets),
+      _timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    });
     targetsPending = false;
     if (error) {
-      if (state) {
+      if (state && bulkId === id) {
         state.targets = previous;
         emit();
       }
       throw new Error(error.message);
     }
+    return data;
   }, []);
 
   const addPhotoSet = useCallback(async (date: string, weight?: number) => {

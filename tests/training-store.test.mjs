@@ -17,6 +17,11 @@ async function fixture() {
   const calls = [];
   const supabase = {
     auth: { getSession: async () => ({ data: { session: { user: { id: uid } } } }) },
+    async rpc(name, args) {
+      calls.push({ name, args });
+      if (gate) await gate;
+      return { data: "2026-10-07", error: fail ? { message: "offline" } : null };
+    },
     from(table) {
       return {
         select() {
@@ -141,4 +146,25 @@ test("a queued old-account save is rejected before its database write", async ()
   await assert.rejects(second, /Account or plan changed/);
   assert.equal(f.calls.length, 1);
   assert.equal(f.api.useAppData().workouts[w.date], undefined);
+});
+
+test("target save atomically sends the settings and device timezone, returning the actual effective day", async () => {
+  const f = await fixture();
+  const old = f.api.useAppData().targets;
+  const updated = { ...old, calories: 3000 };
+  assert.equal(await f.api.useActions().saveTargets(updated), "2026-10-07");
+  assert.equal(f.calls.length, 1);
+  assert.equal(f.calls[0].name, "save_bulk_targets_for_local_day");
+  assert.equal(f.calls[0].args._profile, "plan-a");
+  assert.deepEqual(JSON.parse(JSON.stringify(f.calls[0].args._targets)), updated);
+  assert.equal(f.calls[0].args._timezone, Intl.DateTimeFormat().resolvedOptions().timeZone);
+  assert.equal(f.api.useAppData().targets.calories, 3000);
+});
+
+test("failed target save rolls the store back without claiming new targets were saved", async () => {
+  const f = await fixture();
+  const old = f.api.useAppData().targets;
+  f.fail();
+  await assert.rejects(f.api.useActions().saveTargets({ ...old, calories: 3000 }), /offline/);
+  assert.equal(f.api.useAppData().targets, old);
 });

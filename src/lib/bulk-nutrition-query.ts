@@ -1,4 +1,4 @@
-import { queryOptions, useQuery } from "@tanstack/react-query";
+import { queryOptions, useQuery, type QueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 import { readRetryDelay, shouldRetryRead } from "./network-errors";
@@ -7,6 +7,7 @@ import type {
   NutritionDayData,
   NutritionEntryInput,
   NutritionIngredientSnapshot,
+  NutritionMacros,
 } from "./bulk-nutrition";
 import { iso } from "./calc";
 
@@ -46,6 +47,28 @@ export const bulkNutritionDayQueryKey = (bulkProfileId: string, logDate: string)
   bulkProfileId,
   logDate,
 ];
+
+/** Publish a confirmed target save without replacing today's entries or historical caches. */
+export async function refreshBulkNutritionTargets(
+  client: QueryClient,
+  profileId: string,
+  logDate: string,
+  targets: NutritionMacros,
+) {
+  const queryKey = bulkNutritionDayQueryKey(profileId, logDate);
+  const { calories, protein, carbs, fat } = targets;
+  client.setQueryData<NutritionDayData>(queryKey, (cached) =>
+    cached?.day
+      ? { ...cached, day: { ...cached.day, targets: { calories, protein, carbs, fat } } }
+      : cached,
+  );
+  await Promise.all([
+    client.invalidateQueries({ queryKey }),
+    client.invalidateQueries({ queryKey: ["bulk-progress-summary", "nutrition", profileId] }),
+    client.invalidateQueries({ queryKey: ["bulk-weekly-recommendation", profileId] }),
+    client.invalidateQueries({ queryKey: ["goal-settings-dashboard", profileId] }),
+  ]);
+}
 
 export const bulkNutritionDayQueryOptions = (bulkProfileId: string, logDate: string) =>
   queryOptions({

@@ -123,11 +123,13 @@ const createMeal = (id, name, ingredients = [], calories = 612.5) =>
 // only its clock expression in the isolated PostgreSQL instance. CURRENT_DATE,
 // RLS and the original table constraint are not replaced. Restore the exact RPC
 // definition even on failure; production has no caller-controlled clock.
-async function withDatabaseClock(timestamp, action) {
+async function withDatabaseClock(
+  timestamp,
+  action,
+  signature = "public.save_bulk_weight_for_local_day(uuid,date,numeric,text,text)",
+) {
   const original = (
-    await db.query(
-      "SELECT pg_get_functiondef('public.save_bulk_weight_for_local_day(uuid,date,numeric,text,text)'::regprocedure) AS definition",
-    )
+    await db.query("SELECT pg_get_functiondef($1::regprocedure) AS definition", [signature])
   ).rows[0].definition;
   const instant = new Date(timestamp).toISOString();
   assert.ok(original.includes("pg_catalog.now()"));
@@ -138,6 +140,243 @@ async function withDatabaseClock(timestamp, action) {
     await db.exec(original);
   }
 }
+
+async function nutritionTargetFixture() {
+  const user = randomUUID();
+  await db.query("INSERT INTO auth.users(id) VALUES ($1)", [user]);
+  await db.query("INSERT INTO public.profiles(id) VALUES ($1)", [user]);
+  const profile = (
+    await asUser(user, () =>
+      db.query(`SELECT public.complete_goal_onboarding(
+        'gain',70,78,0.25,'intermediate',4,ARRAY['dumbbells'],'custom',2400,140,300,80
+      ) AS id`),
+    )
+  ).rows[0].id;
+  const targets = (
+    await db.query("SELECT payload FROM public.bulk_targets WHERE bulk_profile_id=$1", [profile])
+  ).rows[0].payload;
+  const save = (payload, timezone = "Europe/Stockholm") =>
+    db.query("SELECT public.save_bulk_targets_for_local_day($1,$2::jsonb,$3)::text AS day", [
+      profile,
+      JSON.stringify(payload),
+      timezone,
+    ]);
+  return { user, profile, targets, save };
+}
+
+test("saving Goal targets updates today's snapshot, preserves meals/past days and scopes writes to the owner", async () => {
+  const f = await nutritionTargetFixture();
+  const stranger = await nutritionTargetFixture();
+  const dates = (
+    await db.query(`SELECT
+    (now() AT TIME ZONE 'Europe/Stockholm')::date::text AS today,
+    ((now() AT TIME ZONE 'Europe/Stockholm')::date-1)::text AS yesterday`)
+  ).rows[0];
+  for (const date of [dates.today, dates.yesterday]) {
+    await asUser(f.user, () =>
+      db.query(
+        "SELECT public.create_bulk_nutrition_entry($1,$2,'Preserved meal',2400,100,260,60,$3,'Keep note')",
+        [date, randomUUID(), dates.today],
+      ),
+    );
+  }
+  const readDays = () =>
+    db.query(
+      "SELECT * FROM public.bulk_nutrition_days WHERE bulk_profile_id=$1 ORDER BY log_date",
+      [f.profile],
+    );
+  const readMeals = () =>
+    db.query(
+      `SELECT entry.* FROM public.bulk_nutrition_entries entry
+    JOIN public.bulk_nutrition_days day ON day.id=entry.nutrition_day_id
+    WHERE day.bulk_profile_id=$1 ORDER BY entry.id`,
+      [f.profile],
+    );
+  const beforeDays = (await readDays()).rows;
+  const beforeMeals = (await readMeals()).rows;
+  const updated = { ...f.targets, calories: 3000, protein: 160, carbs: 380, fat: 90 };
+  const result = await asUser(f.user, () => f.save(updated));
+  assert.equal(result.rows[0].day, dates.today);
+  const afterDays = (await readDays()).rows;
+  assert.deepEqual(afterDays[0], beforeDays[0], "past snapshot and timestamps stay unchanged");
+  assert.equal(afterDays[1].id, beforeDays[1].id);
+  assert.deepEqual(afterDays[1].created_at, beforeDays[1].created_at);
+  assert.deepEqual(
+    [
+      afterDays[1].target_calories,
+      afterDays[1].target_protein_g,
+      afterDays[1].target_carbs_g,
+      afterDays[1].target_fat_g,
+    ].map(Number),
+    [3000, 160, 380, 90],
+  );
+  assert.deepEqual((await readMeals()).rows, beforeMeals, "logged intake and notes stay identical");
+  assert.deepEqual(
+    (
+      await db.query("SELECT payload FROM public.bulk_targets WHERE bulk_profile_id=$1", [
+        f.profile,
+      ])
+    ).rows[0].payload,
+    updated,
+  );
+  await assert.rejects(
+    asUser(stranger.user, () => f.save(updated)),
+    /Goal profile not found/,
+  );
+  const mismatchedOwner = randomUUID();
+  const mismatchedProfile = randomUUID();
+  await db.query("INSERT INTO auth.users(id) VALUES ($1)", [mismatchedOwner]);
+  await db.query("INSERT INTO public.profiles(id) VALUES ($1)", [mismatchedOwner]);
+  await db.query(
+    "INSERT INTO public.bulk_profiles(id,owner_id,goal_status) VALUES ($1,$2,'active')",
+    [mismatchedProfile, mismatchedOwner],
+  );
+  await db.query(
+    "INSERT INTO public.bulk_members(bulk_profile_id,user_id,role) VALUES ($1,$2,'owner')",
+    [mismatchedProfile, stranger.user],
+  );
+  await assert.rejects(
+    asUser(stranger.user, () =>
+      db.query("SELECT public.save_bulk_targets_for_local_day($1,$2::jsonb,'Europe/Stockholm')", [
+        mismatchedProfile,
+        JSON.stringify(updated),
+      ]),
+    ),
+    /Goal profile not found/,
+    "an owner membership alone cannot override the profile's actual owner",
+  );
+  await assert.rejects(
+    asUser("", () => f.save(updated)),
+    /Authentication required/,
+  );
+  await assert.rejects(
+    asAnon(() => f.save(updated)),
+    /permission denied/,
+  );
+  await assert.rejects(
+    asUser(f.user, () => f.save(updated, "not/a/timezone")),
+    /Invalid device timezone/,
+  );
+  await assert.rejects(
+    asUser(f.user, () => f.save({ ...updated, calories: -1 })),
+    /outside the allowed range/,
+  );
+  await assert.rejects(
+    asUser(f.user, () => f.save({ ...updated, protein: null })),
+    /unavailable/,
+  );
+  assert.deepEqual(
+    (
+      await db.query("SELECT payload FROM public.bulk_targets WHERE bulk_profile_id=$1", [
+        stranger.profile,
+      ])
+    ).rows[0].payload,
+    stranger.targets,
+  );
+  const privileges = (
+    await db.query(`SELECT
+    has_function_privilege('anon','public.save_bulk_targets_for_local_day(uuid,jsonb,text)','EXECUTE') AS anon,
+    has_table_privilege('authenticated','public.bulk_nutrition_days','UPDATE') AS direct_update,
+    relrowsecurity AS rls FROM pg_class WHERE oid='public.bulk_nutrition_days'::regclass`)
+  ).rows[0];
+  assert.deepEqual(privileges, { anon: false, direct_update: false, rls: true });
+});
+
+test("target saves use the current local day at midnight and never seed an empty day's history", async () => {
+  const f = await nutritionTargetFixture();
+  for (const [timezone, instant, expectedDay] of [
+    ["Europe/Stockholm", "2026-10-06T22:05:00Z", "2026-10-07"],
+    ["Pacific/Kiritimati", "2026-10-06T12:05:00Z", "2026-10-07"],
+    ["America/Los_Angeles", "2026-10-07T01:05:00Z", "2026-10-06"],
+  ]) {
+    await withDatabaseClock(
+      instant,
+      async () => {
+        const saved = await asUser(f.user, () =>
+          f.save({ ...f.targets, calories: 3000 }, timezone),
+        );
+        assert.equal(saved.rows[0].day, expectedDay);
+      },
+      "public.save_bulk_targets_for_local_day(uuid,jsonb,text)",
+    );
+  }
+  assert.equal(
+    Number(
+      (
+        await db.query(
+          "SELECT count(*) AS n FROM public.bulk_nutrition_days WHERE bulk_profile_id=$1",
+          [f.profile],
+        )
+      ).rows[0].n,
+    ),
+    0,
+  );
+  const today = (
+    await db.query("SELECT (now() AT TIME ZONE 'Europe/Stockholm')::date::text AS day")
+  ).rows[0].day;
+  await asUser(f.user, () =>
+    db.query("SELECT public.create_bulk_nutrition_entry($1,$2,'First meal',500,20,50,20,$1,NULL)", [
+      today,
+      randomUUID(),
+    ]),
+  );
+  assert.equal(
+    Number(
+      (
+        await db.query(
+          "SELECT target_calories FROM public.bulk_nutrition_days WHERE bulk_profile_id=$1 AND log_date=$2",
+          [f.profile, today],
+        )
+      ).rows[0].target_calories,
+    ),
+    3000,
+  );
+});
+
+test("snapshot update failure rolls back the target change in the same transaction", async () => {
+  const f = await nutritionTargetFixture();
+  const today = (
+    await db.query("SELECT (now() AT TIME ZONE 'Europe/Stockholm')::date::text AS day")
+  ).rows[0].day;
+  await asUser(f.user, () =>
+    db.query("SELECT public.create_bulk_nutrition_entry($1,$2,'Meal',2400,100,260,60,$1,NULL)", [
+      today,
+      randomUUID(),
+    ]),
+  );
+  await db.exec(`CREATE FUNCTION public.reject_test_nutrition_snapshot() RETURNS trigger LANGUAGE plpgsql AS $$
+    BEGIN RAISE EXCEPTION 'Snapshot write failed'; END; $$;
+    CREATE TRIGGER reject_test_nutrition_snapshot BEFORE UPDATE ON public.bulk_nutrition_days
+    FOR EACH ROW EXECUTE FUNCTION public.reject_test_nutrition_snapshot();`);
+  try {
+    await assert.rejects(
+      asUser(f.user, () => f.save({ ...f.targets, calories: 3000 })),
+      /Snapshot write failed/,
+    );
+    assert.deepEqual(
+      (
+        await db.query("SELECT payload FROM public.bulk_targets WHERE bulk_profile_id=$1", [
+          f.profile,
+        ])
+      ).rows[0].payload,
+      f.targets,
+    );
+    assert.equal(
+      Number(
+        (
+          await db.query(
+            "SELECT target_calories FROM public.bulk_nutrition_days WHERE bulk_profile_id=$1",
+            [f.profile],
+          )
+        ).rows[0].target_calories,
+      ),
+      2400,
+    );
+  } finally {
+    await db.exec(`DROP TRIGGER reject_test_nutrition_snapshot ON public.bulk_nutrition_days;
+      DROP FUNCTION public.reject_test_nutrition_snapshot();`);
+  }
+});
 
 test("public Goal starts without presets even when legacy meal data exists", async () => {
   const profile = (await db.query("SELECT id FROM public.bulk_profiles WHERE owner_id=$1", [owner]))

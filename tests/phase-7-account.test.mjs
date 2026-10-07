@@ -80,6 +80,9 @@ function editor(name, save, role = "owner") {
           },
         }),
       },
+      "@tanstack/react-query": { useQueryClient: () => queryClient },
+      "@/lib/calc": { iso: () => "2026-10-07" },
+      "@/lib/bulk-nutrition-query": { refreshBulkNutritionTargets: async () => {} },
     },
     { onDirtyChange: (value) => dirty.push(value) },
   );
