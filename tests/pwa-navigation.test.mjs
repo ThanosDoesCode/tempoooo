@@ -292,7 +292,7 @@ test("Tempo navigation exposes optional fitness areas only after persisted activ
   assert.match(root, /apple-mobile-web-app-status-bar-style", content: "black-translucent"/);
   assert.match(root, /rel: "apple-touch-icon"[\s\S]*sizes: "180x180"[\s\S]*apple-touch-icon\.png/);
   const index = await read("src/routes/index.tsx");
-  assert.match(index, /if \(data\.session\) throw redirect\(\{ to: "\/challenge" \}\)/);
+  assert.match(index, /if \(data\.session\) throw redirect\(\{ to: "\/today", replace: true \}\)/);
   assert.match(index, /component: WelcomePage/);
   assert.doesNotMatch(index, /window\.location/);
   const [shell, nav] = await Promise.all([
