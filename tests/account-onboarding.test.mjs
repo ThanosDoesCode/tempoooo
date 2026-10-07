@@ -34,7 +34,7 @@ test("new account onboarding ends with a one-time Tempo intro and keeps Goal opt
     /Choose Bulk or Cut when you&amp;apos;re ready|Choose Bulk or Cut when you/,
   );
   assert.match(onboarding, /Enter Tempo/);
-  assert.match(onboarding, /navigate\(\{ to: "\/challenge", replace: true \}\)/);
+  assert.match(onboarding, /navigate\(\{ to: "\/today", replace: true \}\)/);
   assert.doesNotMatch(onboarding, /Choose your Goal|Choose Goal/);
   assert.match(onboarding, /!completing\.current && profile\.data\?\.account_onboarded_at/);
   assert.doesNotMatch(onboarding, /complete_goal_onboarding|bulk_profiles|bulk_members/);

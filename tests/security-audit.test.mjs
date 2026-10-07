@@ -31,7 +31,7 @@ test("auth destinations, peer profiles and rendered activity links minimize sens
     read("src/lib/privileged-rpcs.server.ts"),
   ]);
   assert.doesNotMatch(auth, /post-auth-path/);
-  assert.match(auth, /navigate\(\{ to: "\/challenge", replace: true \}\)/);
+  assert.match(auth, /navigate\(\{ to: "\/today", replace: true \}\)/);
   assert.doesNotMatch(challenge, /p\.email/);
   assert.match(activity, /safeStravaUrl/);
   assert.match(serverRpc, /return profiles\.map\(\(\{ id, display_name \}\)/);

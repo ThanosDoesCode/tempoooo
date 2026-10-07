@@ -20,7 +20,7 @@ test("sign-in returns the visitor to the invitation instead of the challenge", a
   assert.match(source, /takeDestination\(search\.redirect \?\? null\)/);
   assert.match(source, /rememberDestination\(search\.redirect\)/);
   // No authenticated path may hard-code the challenge as the only destination.
-  assert.equal(source.match(/navigate\(\{ to: "\/challenge", replace: true \}\)/g)?.length ?? 0, 1);
+  assert.equal(source.match(/navigate\(\{ to: "\/today", replace: true \}\)/g)?.length ?? 0, 1);
   assert.equal(source.match(/await goAfterAuth\(\);/g).length, 3);
 });
 

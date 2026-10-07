@@ -121,7 +121,7 @@ test("Phase 7 welcome -> username -> optional intro saves the existing account b
   ui.button("Enter Tempo").props.onClick();
   await ui.flush();
   assert.deepEqual(plain(saved), [{ data: { username: "alice_1", completeOnboarding: true } }]);
-  assert.deepEqual(plain(navigation), [{ to: "/challenge", replace: true }]);
+  assert.deepEqual(plain(navigation), [{ to: "/today", replace: true }]);
 });
 
 test("Phase 7 username Back retains the typed answer and does not save prematurely", async () => {
@@ -196,13 +196,13 @@ test("Phase 7 established accounts bypass the intro and active account completio
   ui.find("form")[0].props.onSubmit(event());
   await ui.flush();
   assert.equal(saved.length, 1);
-  assert.equal(nav[0].to, "/challenge");
+  assert.equal(nav[0].to, "/today");
   const existing = [];
   onboarding({
     profile: { username: "alice", account_onboarded_at: "2026-01-01" },
     navigate: async (v) => existing.push(v),
   }).render();
-  assert.equal(existing[0].to, "/challenge");
+  assert.equal(existing[0].to, "/today");
 });
 
 test("Phase 7 nutrition editor starts clean, validates, and updates only existing target fields", async () => {
@@ -795,7 +795,7 @@ for (const flow of ["restored session", "password", "Google"]) {
         ? { href: search.redirect, replace: true }
         : flow === "password"
           ? { href: "/bulk/meals/history", replace: true }
-          : { to: "/challenge", replace: true };
+          : { to: "/today", replace: true };
     assert.deepEqual(plain(navigation), [expected]);
     assert.equal(destinations.readDestination(), null, "pending destination is consumed once");
     assert.equal(sessionReads, 1);
