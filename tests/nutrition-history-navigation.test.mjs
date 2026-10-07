@@ -42,7 +42,11 @@ function nutritionHistoryLink(history, mode = "public") {
       ...React,
       useState: (initial) => [typeof initial === "function" ? initial() : initial, () => {}],
     },
-    "@tanstack/react-router": { createFileRoute: () => (options) => options },
+    "@tanstack/react-router": {
+      createFileRoute: () => (options) => ({ ...options, useSearch: () => ({}) }),
+      useNavigate: () => () => {},
+      Link: "a",
+    },
     "@/components/AppShell": { AppShell: "main", PageHeader },
     "@/components/ui-kit": { Card: "section", DataError: "div", SectionTitle: "h2" },
     "@/lib/bulk-nutrition": {},

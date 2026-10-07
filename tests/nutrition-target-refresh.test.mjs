@@ -122,7 +122,11 @@ test("target invalidation is profile/date scoped and never invents a nutrition d
     for (const key of [...changedKeys, ...untouchedKeys]) client.setQueryData(key, day(previous));
     client.setQueryData(changedKeys[0], { day: null, entries: [] });
     await queries.refreshBulkNutritionTargets(client, "owner", today, updated);
-    assert.deepEqual(client.getQueryData(changedKeys[0]), { day: null, entries: [] });
+    assert.deepEqual(JSON.parse(JSON.stringify(client.getQueryData(changedKeys[0]))), {
+      day: null,
+      entries: [],
+      effectiveTargets: updated,
+    });
     for (const key of changedKeys) assert.equal(client.getQueryState(key).isInvalidated, true);
     for (const key of untouchedKeys) {
       assert.equal(client.getQueryState(key).isInvalidated, false);

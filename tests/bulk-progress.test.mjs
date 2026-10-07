@@ -113,6 +113,7 @@ test("nutrition summary uses logged days and their historical targets", () => {
   );
   assert.deepEqual(result, {
     loggedDays: 2,
+    targetedDays: 2,
     averageCalories: 3000,
     averageProtein: 145,
     targetCalories: 2950,

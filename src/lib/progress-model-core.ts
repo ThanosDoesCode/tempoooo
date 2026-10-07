@@ -61,7 +61,7 @@ export type NutritionDay = {
   carbs: number | null;
   fat: number | null;
   /** The target in force for this day — a historical snapshot in normalized mode. */
-  target: number;
+  target: number | null;
 };
 
 const avg = (values: number[]) =>
@@ -89,7 +89,10 @@ export function nutritionWindow(
     )
     .sort((a, b) => a.date.localeCompare(b.date));
   const onTargetDay = (d: NutritionDay) =>
-    d.calories != null && d.target > 0 && Math.abs(d.calories - d.target) <= d.target * 0.1;
+    d.calories != null &&
+    d.target != null &&
+    d.target > 0 &&
+    Math.abs(d.calories - d.target) <= d.target * 0.1;
 
   const byDate = new Map(days.map((d) => [d.date, d]));
   const week7 = Array.from({ length: 7 }, (_, i) => {
@@ -118,6 +121,7 @@ export function nutritionWindow(
   return {
     series: windowDays.map((day) => ({ ...day, onTarget: onTargetDay(day) })),
     loggedDays: windowDays.length,
+    knownTargetDays: windowDays.filter((day) => day.target != null).length,
     onTargetDays: windowDays.filter(onTargetDay).length,
     avgKcal: windowDays.length
       ? Math.round(avg(windowDays.map((d) => d.calories!)) as number)
@@ -147,4 +151,31 @@ export function weightPeriodTrend(byDate: WeightByDate, range: ProgressRange) {
     weekDeltaKg: avgKg != null && previous != null ? avgKg - previous : null,
     points: series.length,
   };
+}
+
+/** Presentation slots only: missing days stay null and never enter nutrition averages. */
+export function nutritionCalendarSlots(
+  series: (NutritionDay & { onTarget: boolean })[],
+  range: ProgressRange,
+) {
+  const byDate = new Map(series.map((day) => [day.date, day]));
+  const earliest = [...byDate.keys()].sort()[0];
+  const first = range.start ?? earliest ?? range.end;
+  const slots = [];
+  for (let cursor = parseISO(first); iso(cursor) <= range.end; cursor = addDays(cursor, 1)) {
+    const date = iso(cursor);
+    const day = byDate.get(date);
+    slots.push(
+      day ?? {
+        date,
+        calories: null,
+        protein: null,
+        carbs: null,
+        fat: null,
+        target: null,
+        onTarget: false,
+      },
+    );
+  }
+  return slots;
 }

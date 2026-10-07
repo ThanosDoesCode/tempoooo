@@ -79,7 +79,7 @@ function TodayPage() {
   // Today's Meals row shows complete only once the day's calorie target is reached — meal logging
   // on its own is not completion. The deeper Goal day-completion requirement (goal-metrics
   // `dayCompletionRequirements`, "Meal logged") is intentionally "any meal logged" and is unchanged.
-  const mealTarget = nutrition.data?.day?.targets.calories ?? data?.targets.calories ?? 0;
+  const mealTarget = nutrition.data?.day?.targets?.calories ?? data?.targets.calories ?? 0;
   const mealsComplete =
     mealTarget > 0 && nutritionMacroStatus(totals.calories, mealTarget).status !== "under";
   // Presentation only: weight and sleep remain separate persisted Goal requirements.

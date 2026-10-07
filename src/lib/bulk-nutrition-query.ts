@@ -8,19 +8,22 @@ import type {
   NutritionEntryInput,
   NutritionIngredientSnapshot,
   NutritionMacros,
+  MealCategory,
 } from "./bulk-nutrition";
 import { iso } from "./calc";
+import { readAllByKey, QUERY_PAGE_SIZE } from "./query-pagination";
 
 const localToday = () => iso(new Date());
+const localTimezone = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 type DayRow = {
   id: string;
   bulk_profile_id: string;
   log_date: string;
-  target_calories: number;
-  target_protein_g: number;
-  target_carbs_g: number;
-  target_fat_g: number;
+  target_calories: number | null;
+  target_protein_g: number | null;
+  target_carbs_g: number | null;
+  target_fat_g: number | null;
   created_at: string;
   updated_at: string;
 };
@@ -30,6 +33,7 @@ type EntryRow = {
   nutrition_day_id: string;
   source_meal_preset_id: string | null;
   source_type: string;
+  meal_category: string | null;
   name_snapshot: string;
   calories: number;
   protein_g: number;
@@ -60,7 +64,9 @@ export async function refreshBulkNutritionTargets(
   client.setQueryData<NutritionDayData>(queryKey, (cached) =>
     cached?.day
       ? { ...cached, day: { ...cached.day, targets: { calories, protein, carbs, fat } } }
-      : cached,
+      : cached
+        ? { ...cached, effectiveTargets: { calories, protein, carbs, fat } }
+        : cached,
   );
   await Promise.all([
     client.invalidateQueries({ queryKey }),
@@ -81,29 +87,54 @@ export const bulkNutritionDayQueryOptions = (bulkProfileId: string, logDate: str
         .eq("log_date", logDate)
         .maybeSingle();
       if (dayResult.error) throw dayResult.error;
-      if (!dayResult.data) return { day: null, entries: [] };
+      if (!dayResult.data) {
+        const result = await supabase.rpc("bulk_nutrition_targets_for_day", {
+          _profile: bulkProfileId,
+          _log_date: logDate,
+          _timezone: localTimezone(),
+        });
+        if (result.error) throw result.error;
+        const raw = result.data as unknown as Partial<NutritionMacros> | null;
+        return {
+          day: null,
+          entries: [],
+          effectiveTargets: raw?.calories != null ? (raw as NutritionMacros) : null,
+        };
+      }
       const row = dayResult.data as DayRow;
-      const entryResult = await supabase
-        .from("bulk_nutrition_entries")
-        .select("*")
-        .eq("nutrition_day_id", row.id)
-        .order("sort_order");
-      if (entryResult.error) throw entryResult.error;
+      const entryRows = await readAllByKey<EntryRow>(
+        (cursor) => {
+          let query = supabase
+            .from("bulk_nutrition_entries")
+            .select("*")
+            .eq("nutrition_day_id", row.id)
+            .order("id")
+            .limit(QUERY_PAGE_SIZE);
+          if (cursor) query = query.gt("id", cursor);
+          return query;
+        },
+        (entry) => entry.id,
+      );
       return {
         day: {
           id: row.id,
           bulkProfileId: row.bulk_profile_id,
           logDate: row.log_date,
-          targets: {
-            calories: Number(row.target_calories),
-            protein: Number(row.target_protein_g),
-            carbs: Number(row.target_carbs_g),
-            fat: Number(row.target_fat_g),
-          },
+          targets:
+            row.target_calories == null
+              ? null
+              : {
+                  calories: Number(row.target_calories),
+                  protein: Number(row.target_protein_g),
+                  carbs: Number(row.target_carbs_g),
+                  fat: Number(row.target_fat_g),
+                },
           createdAt: row.created_at,
           updatedAt: row.updated_at,
         },
-        entries: ((entryResult.data ?? []) as EntryRow[]).map(mapEntry),
+        entries: entryRows
+          .sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id))
+          .map(mapEntry),
       };
     },
     enabled: !!bulkProfileId && !!logDate,
@@ -119,6 +150,7 @@ function mapEntry(row: EntryRow): BulkNutritionEntry {
     nutritionDayId: row.nutrition_day_id,
     sourceMealPresetId: row.source_meal_preset_id,
     sourceType: row.source_type as "preset" | "custom",
+    mealCategory: row.meal_category as MealCategory | null,
     name: row.name_snapshot,
     calories: Number(row.calories),
     protein: Number(row.protein_g),
@@ -140,11 +172,14 @@ export async function logBulkMealPreset(
   presetId: string,
   logDate: string,
   requestId: string,
+  mealCategory: MealCategory | null = null,
 ): Promise<string> {
   const { data, error } = await supabase.rpc("log_bulk_meal_preset", {
     _preset: presetId,
     _log_date: logDate,
     _request_id: requestId,
+    _category: mealCategory,
+    _timezone: localTimezone(),
     _local_today: localToday(),
   });
   if (error) throw error;
@@ -159,6 +194,8 @@ export async function createBulkNutritionEntry(
   const { data, error } = await supabase.rpc("create_bulk_nutrition_entry", {
     _log_date: logDate,
     _request_id: requestId,
+    _category: input.mealCategory ?? null,
+    _timezone: localTimezone(),
     _name: input.name,
     _calories: input.calories,
     _protein: input.protein,
@@ -178,6 +215,8 @@ export async function updateBulkNutritionEntry(
   const { data, error } = await supabase.rpc("update_bulk_nutrition_entry", {
     _entry: entry.id,
     _expected_updated_at: entry.updatedAt,
+    _category: input.mealCategory ?? null,
+    _timezone: localTimezone(),
     _name: input.name,
     _calories: input.calories,
     _protein: input.protein,

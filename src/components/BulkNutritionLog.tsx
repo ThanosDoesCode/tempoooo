@@ -1,15 +1,15 @@
-import { TempoDatePicker } from "@/components/TempoDateTimePicker";
+import { NutritionDateStrip } from "./NutritionDateStrip";
 import { NativeSelect } from "@/components/ui/native-select";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { addDays, format, parseISO } from "date-fns";
-import { ChevronDown, ChevronLeft, ChevronRight, Pencil, Plus, Trash2 } from "lucide-react";
+import { format, parseISO } from "date-fns";
+import { ChevronDown, Pencil, Plus, Trash2 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, DataError, Field, PendingLabel } from "@/components/ui-kit";
+import { DataError, Field, PendingLabel } from "@/components/ui-kit";
 import type { BulkMealPreset } from "@/lib/bulk-meal-presets";
 import {
   createBulkMealPreset,
@@ -17,6 +17,9 @@ import {
   useBulkMealPresets,
 } from "@/lib/bulk-meal-presets-query";
 import {
+  MEAL_CATEGORIES,
+  mealCategoryLabel,
+  type MealCategory,
   emptyNutritionEntryDraft,
   isIsoLocalDay,
   nutritionEntryDraft,
@@ -56,12 +59,14 @@ export function BulkNutritionLog({
   onDateChange,
   mode = "overview",
   legacyTotals,
+  initialCategory = null,
 }: {
   bulkProfileId: string;
   selectedDate: string;
   currentTargets: NutritionMacros;
   onDateChange: (date: string) => void;
   mode?: "overview" | "add";
+  initialCategory?: MealCategory | null;
   legacyTotals?: NutritionMacros | undefined;
 }) {
   const queryClient = useQueryClient();
@@ -78,7 +83,7 @@ export function BulkNutritionLog({
   const [error, setError] = useState<string | null>(null);
   const [editor, setEditor] = useState<EntryEditor | null>(() => {
     if (mode !== "add") return null;
-    const draft = emptyNutritionEntryDraft();
+    const draft = { ...emptyNutritionEntryDraft(), mealCategory: initialCategory };
     return { entry: null, draft, initial: draftSignature(draft), requestId: crypto.randomUUID() };
   });
   const today = iso(new Date());
@@ -95,16 +100,18 @@ export function BulkNutritionLog({
     ]);
 
   const entries = dayQuery.data?.entries ?? EMPTY_ENTRIES;
-  const targets = dayQuery.data?.day?.targets ?? currentTargets;
+  const targets = dayQuery.data?.day
+    ? dayQuery.data.day.targets
+    : (dayQuery.data?.effectiveTargets ?? (selectedDate === today ? currentTargets : null));
   const legacyOnly = !dayQuery.data?.day && legacyTotals != null;
   const summary = useMemo(() => {
     if (!legacyOnly || !legacyTotals) return nutritionSummary(entries, targets);
     return {
       totals: legacyTotals,
-      calories: nutritionMacroStatus(legacyTotals.calories, targets.calories),
-      protein: nutritionMacroStatus(legacyTotals.protein, targets.protein),
-      carbs: nutritionMacroStatus(legacyTotals.carbs, targets.carbs),
-      fat: nutritionMacroStatus(legacyTotals.fat, targets.fat),
+      calories: nutritionMacroStatus(legacyTotals.calories, targets?.calories ?? null),
+      protein: nutritionMacroStatus(legacyTotals.protein, targets?.protein ?? null),
+      carbs: nutritionMacroStatus(legacyTotals.carbs, targets?.carbs ?? null),
+      fat: nutritionMacroStatus(legacyTotals.fat, targets?.fat ?? null),
     };
   }, [entries, targets, legacyOnly, legacyTotals]);
 
@@ -154,7 +161,12 @@ export function BulkNutritionLog({
     try {
       if (editor.entry) await updateBulkNutritionEntry(editor.entry, result.input);
       else if (selectedPreset.current && mode === "add")
-        await logBulkMealPreset(selectedPreset.current, selectedDate, editor.requestId);
+        await logBulkMealPreset(
+          selectedPreset.current,
+          selectedDate,
+          editor.requestId,
+          result.input.mealCategory ?? null,
+        );
       else if (saveQuick && mode === "add") {
         // Keep the created preset identity on retry; the meal-log request remains idempotent.
         if (!savedQuickPreset.current)
@@ -163,7 +175,12 @@ export function BulkNutritionLog({
             description: result.input.note,
             ingredients: [],
           });
-        await logBulkMealPreset(savedQuickPreset.current, selectedDate, editor.requestId);
+        await logBulkMealPreset(
+          savedQuickPreset.current,
+          selectedDate,
+          editor.requestId,
+          result.input.mealCategory ?? null,
+        );
         await queryClient.invalidateQueries({ queryKey: bulkMealPresetsQueryKey(bulkProfileId) });
       } else await createBulkNutritionEntry(selectedDate, editor.requestId, result.input);
       await invalidate();
@@ -215,10 +232,25 @@ export function BulkNutritionLog({
     setEditor(null);
   };
 
+  const renderEntry = (entry: BulkNutritionEntry) => (
+    <NutritionEntryCard
+      key={entry.id}
+      entry={entry}
+      disabled={!!pending || isFuture}
+      readOnly={isFuture}
+      deleting={pending === `delete:${entry.id}`}
+      onEdit={() => {
+        const draft = nutritionEntryDraft(entry);
+        setEditor({ entry, draft, initial: draftSignature(draft), requestId: crypto.randomUUID() });
+      }}
+      onDelete={() => void removeEntry(entry)}
+    />
+  );
+
   return (
     <div className="space-y-4">
       {mode === "overview" ? (
-        <DateNavigation selectedDate={selectedDate} today={today} onChange={changeDate} />
+        <NutritionDateStrip selectedDate={selectedDate} today={today} onChange={changeDate} />
       ) : (
         <p className="text-sm text-muted-foreground">
           {format(parseISO(selectedDate), "EEEE d MMM")}
@@ -252,16 +284,6 @@ export function BulkNutritionLog({
           </>
         )
       ) : null}
-      {mode === "overview" && !isFuture ? (
-        <Link
-          to="/bulk/meals/add"
-          search={{ date: selectedDate }}
-          className="flex h-[52px] items-center justify-center gap-2 rounded-[16px] bg-primary font-semibold text-primary-foreground"
-        >
-          <Plus className="h-5 w-5" />
-          Add meal
-        </Link>
-      ) : null}
       {mode === "add" && presets.data?.length ? (
         <label className="block text-[13px] text-muted-foreground">
           Use a saved meal
@@ -283,6 +305,7 @@ export function BulkNutritionLog({
                   carbs: String(preset.carbs),
                   fat: String(preset.fat),
                   note: "",
+                  mealCategory: editor.draft.mealCategory ?? null,
                 },
               });
             }}
@@ -391,7 +414,7 @@ export function BulkNutritionLog({
               ))}
             </div>
           ) : (
-            <div className="mt-2 flex items-center justify-between gap-3 rounded-xl bg-elevated px-3 py-1">
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-elevated px-3 py-1">
               <p className="text-sm text-muted-foreground">
                 {presets.data?.length ? "No presets in Quick Add" : "No meal presets yet"}
               </p>
@@ -408,89 +431,53 @@ export function BulkNutritionLog({
       ) : null}
 
       {mode === "overview" && !dayQuery.isLoading && !dayQuery.error ? (
-        <div>
-          <h2 className="px-1 text-[13px] text-muted-foreground">
-            {selectedDate === today ? "Logged today" : "Logged meals"}
-          </h2>
-          {entries.length === 0 ? (
-            <Card className="mt-2 py-7 text-center">
-              <p className="font-semibold">
-                {legacyOnly ? "Earlier daily totals preserved" : "Nothing logged for this day"}
-              </p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Add a saved meal or a one-off entry when you are ready.
-              </p>
-            </Card>
-          ) : (
-            <div className="mt-2 space-y-2">
-              {entries.map((entry) => (
-                <NutritionEntryCard
-                  key={entry.id}
-                  entry={entry}
-                  disabled={!!pending || isFuture}
-                  readOnly={isFuture}
-                  deleting={pending === `delete:${entry.id}`}
-                  onEdit={() => {
-                    const draft = nutritionEntryDraft(entry);
-                    setEditor({
-                      entry,
-                      draft,
-                      initial: draftSignature(draft),
-                      requestId: crypto.randomUUID(),
-                    });
-                  }}
-                  onDelete={() => void removeEntry(entry)}
-                />
-              ))}
-            </div>
-          )}
+        <div className="space-y-3">
+          {MEAL_CATEGORIES.map((category) => {
+            const meals = entries.filter((entry) => entry.mealCategory === category);
+            return (
+              <section key={category} className="rounded-[20px] bg-card px-4 py-3">
+                <div className="flex min-h-11 items-center justify-between gap-3">
+                  <h2 className="text-base font-semibold">{mealCategoryLabel(category)}</h2>
+                  {meals.length ? (
+                    <span className="num text-[13px] text-muted-foreground">
+                      {meals.reduce((sum, entry) => sum + entry.calories, 0).toLocaleString()} kcal
+                    </span>
+                  ) : null}
+                </div>
+                {meals.map(renderEntry)}
+                {!isFuture ? (
+                  <Link
+                    to="/bulk/meals/add"
+                    search={{ date: selectedDate, category }}
+                    preload="intent"
+                    className="flex min-h-11 items-center gap-2 rounded-xl text-sm font-medium text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:bg-elevated"
+                  >
+                    <Plus className="h-4 w-4" aria-hidden="true" /> Add {category}
+                  </Link>
+                ) : null}
+              </section>
+            );
+          })}
+          {entries.some((entry) => !entry.mealCategory) ? (
+            <section className="rounded-[20px] bg-card px-4 py-3">
+              <h2 className="py-2 text-base font-semibold">Other logged meals</h2>
+              {entries.filter((entry) => !entry.mealCategory).map(renderEntry)}
+            </section>
+          ) : null}
+          {!entries.length && legacyOnly ? (
+            <p className="text-sm text-muted-foreground">Earlier daily totals preserved</p>
+          ) : null}
         </div>
       ) : null}
-    </div>
-  );
-}
-
-function DateNavigation({
-  selectedDate,
-  today,
-  onChange,
-}: {
-  selectedDate: string;
-  today: string;
-  onChange: (date: string) => void;
-}) {
-  const move = (amount: number) => onChange(iso(addDays(parseISO(selectedDate), amount)));
-  return (
-    <div className="flex items-center justify-center gap-2">
-      <button
-        type="button"
-        aria-label="Previous day"
-        className="grid min-h-11 min-w-11 place-items-center rounded-xl active:bg-elevated"
-        onClick={() => move(-1)}
-      >
-        <ChevronLeft aria-hidden="true" className="control-chevron" />
-      </button>
-      <label className="min-w-0 text-center text-xs text-muted-foreground">
-        <span className="sr-only">Nutrition date</span>
-        <TempoDatePicker
-          label="Nutrition date"
-          className="min-h-11 rounded-[14px] text-center text-sm font-medium"
-          value={selectedDate}
-          onChange={onChange}
-        />
-      </label>
-      <button
-        type="button"
-        aria-label="Next day"
-        className="grid min-h-11 min-w-11 place-items-center rounded-xl active:bg-elevated"
-        onClick={() => move(1)}
-      >
-        <ChevronRight aria-hidden="true" className="control-chevron" />
-      </button>
-      {selectedDate !== today ? (
-        <Button variant="ghost" className="min-h-11 px-2" onClick={() => onChange(today)}>
-          Today
-        </Button>
+      {mode === "overview" && !isFuture ? (
+        <Link
+          to="/bulk/meals/add"
+          search={{ date: selectedDate, category: undefined }}
+          className="flex h-[52px] items-center justify-center gap-2 rounded-[16px] bg-primary font-semibold text-primary-foreground"
+        >
+          <Plus className="h-5 w-5" />
+          Add meal
+        </Link>
       ) : null}
     </div>
   );
@@ -498,36 +485,90 @@ function DateNavigation({
 
 function NutritionOverview({ summary }: { summary: ReturnType<typeof nutritionSummary> }) {
   const calories = summary.calories;
+  const progress =
+    calories.target != null && calories.target > 0
+      ? Math.min(100, (calories.consumed / calories.target) * 100)
+      : 0;
   return (
-    <div className="card-surface flex flex-col gap-3 p-[18px]">
-      <p className="num">
-        <span className="text-[40px] font-semibold tracking-tight">
-          {calories.delta.toLocaleString()}
-        </span>
-        <span className="text-[17px] text-muted-foreground">
-          {" "}
-          kcal {calories.status === "over" ? "over" : "left"} of {calories.target.toLocaleString()}
-        </span>
-      </p>
-      <div className="h-2 overflow-hidden rounded-full bg-secondary">
-        <div
-          className="h-full rounded-full bg-primary"
-          style={{
-            width: `${calories.target > 0 ? Math.min(100, (calories.consumed / calories.target) * 100) : 0}%`,
-          }}
-        />
+    <section className="space-y-3" aria-label="Daily nutrition summary">
+      <div className="card-surface flex items-center justify-between gap-3 p-[18px]">
+        <div className="min-w-0">
+          <p className="num text-[34px] font-semibold tracking-tight">
+            {calories.consumed.toLocaleString()}{" "}
+            <span className="text-sm font-normal text-muted-foreground">kcal</span>
+          </p>
+          {calories.target != null ? (
+            <>
+              <p className="text-sm text-muted-foreground">
+                of {calories.target.toLocaleString()} kcal
+              </p>
+              <p className="num mt-2 text-sm">
+                {calories.delta?.toLocaleString()} kcal{" "}
+                {calories.status === "over" ? "over target" : "remaining"}
+              </p>
+            </>
+          ) : (
+            <p className="mt-1 text-sm text-muted-foreground">Target unavailable for this day</p>
+          )}
+        </div>
+        {calories.target != null ? (
+          <svg
+            viewBox="0 0 80 80"
+            className="h-20 w-20 shrink-0 -rotate-90"
+            role="progressbar"
+            aria-label="Calorie target progress"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={progress}
+          >
+            <circle
+              cx="40"
+              cy="40"
+              r="32"
+              fill="none"
+              stroke="var(--color-secondary)"
+              strokeWidth="6"
+            />
+            <circle
+              cx="40"
+              cy="40"
+              r="32"
+              fill="none"
+              stroke="var(--color-primary)"
+              strokeWidth="6"
+              strokeLinecap="round"
+              pathLength="100"
+              strokeDasharray={`${progress} 100`}
+            />
+          </svg>
+        ) : null}
       </div>
-      <div className="num flex flex-wrap justify-between gap-x-2 gap-y-1 text-[13px] text-muted-foreground">
+      <div className="grid grid-cols-3 gap-2">
         {(["protein", "carbs", "fat"] as const).map((key) => (
-          <span key={key}>
-            {key[0]!.toUpperCase()}
-            {key.slice(1)}{" "}
-            <strong className="font-semibold text-foreground">{summary[key].consumed}</strong>/
-            {summary[key].target} g
-          </span>
+          <div key={key} className="min-w-0 rounded-[16px] bg-card p-3">
+            <p className="text-[12px] text-muted-foreground">
+              {key[0]!.toUpperCase()}
+              {key.slice(1)}
+            </p>
+            <p className="num mt-1 break-words text-[13px] font-semibold">
+              {summary[key].consumed}
+              <span className="font-normal text-muted-foreground">
+                {" "}
+                / {summary[key].target ?? "—"} g
+              </span>
+            </p>
+            <div className="mt-2 h-1 overflow-hidden rounded-full bg-secondary">
+              <div
+                className="h-full rounded-full bg-primary"
+                style={{
+                  width: `${summary[key].target != null && summary[key].target! > 0 ? Math.min(100, (summary[key].consumed / summary[key].target!) * 100) : 0}%`,
+                }}
+              />
+            </div>
+          </div>
         ))}
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -585,10 +626,10 @@ function NutritionEntryCard({
     .map((item) => `${item.quantity} ${item.unit} ${item.name}`)
     .join(", ");
   return (
-    <Card className="p-[14px]">
+    <div className="border-t border-border py-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[15px] font-medium">{entry.name}</p>
+          <p className="break-words text-[15px] font-medium">{entry.name}</p>
           <p className="num mt-1 text-xs text-muted-foreground">
             {entry.calories} kcal · P {entry.protein} · C {entry.carbs} · F {entry.fat}
           </p>
@@ -630,7 +671,7 @@ function NutritionEntryCard({
           </div>
         ) : null}
       </div>
-    </Card>
+    </div>
   );
 }
 
@@ -669,6 +710,25 @@ function NutritionEntryEditor({
           placeholder="Protein bar"
         />
       </Field>
+      <label className="block text-sm text-muted-foreground">
+        Meal
+        <NativeSelect
+          value={editor.draft.mealCategory ?? ""}
+          disabled={disabled}
+          onChange={(event) =>
+            patch({ mealCategory: (event.target.value || null) as MealCategory | null })
+          }
+          containerClassName="mt-1"
+          className="min-h-11 rounded-xl bg-card"
+        >
+          <option value="">Unclassified</option>
+          {MEAL_CATEGORIES.map((category) => (
+            <option key={category} value={category}>
+              {mealCategoryLabel(category)}
+            </option>
+          ))}
+        </NativeSelect>
+      </label>
       <div className="grid grid-cols-2 gap-3">
         {(["calories", "protein", "carbs", "fat"] as const).map((field) => (
           <Field
@@ -753,13 +813,7 @@ function NutritionEntryEditor({
           </Button>
         ) : null}
         <Button className="h-[54px] w-full rounded-[16px]" disabled={disabled} onClick={onSave}>
-          {disabled ? (
-            <PendingLabel>Saving...</PendingLabel>
-          ) : adding ? (
-            "Add to today"
-          ) : (
-            "Save entry"
-          )}
+          {disabled ? <PendingLabel>Saving...</PendingLabel> : adding ? "Add meal" : "Save entry"}
         </Button>
       </div>
     </div>

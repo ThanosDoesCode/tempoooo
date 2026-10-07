@@ -393,7 +393,11 @@ export function PublicBulkProgress({
             <Metric
               label="Average calories"
               value={`${Math.round(summary.averageCalories!)} kcal`}
-              hint={`target avg ${Math.round(summary.targetCalories!)} kcal`}
+              hint={
+                summary.targetCalories == null
+                  ? "Target unavailable"
+                  : `target avg ${Math.round(summary.targetCalories)} kcal`
+              }
             />
             <Metric
               label="Average protein"
@@ -402,8 +406,12 @@ export function PublicBulkProgress({
             />
             <Metric
               label="Within ±10%"
-              value={`${summary.calorieAdherentDays} / ${summary.nutritionLoggedDays}`}
-              hint="logged days"
+              value={
+                (summary.nutritionTargetedDays ?? summary.nutritionLoggedDays)
+                  ? `${summary.calorieAdherentDays} / ${summary.nutritionTargetedDays ?? summary.nutritionLoggedDays}`
+                  : "—"
+              }
+              hint="days with recorded targets"
             />
           </div>
         ) : (

@@ -122,9 +122,9 @@ export const bulkProgressNutritionQueryOptions = (
           const total = totals.get(day.id);
           return {
             logDate: day.log_date,
-            calories: total?.calories ?? 0,
-            protein: total?.protein ?? 0,
-            targetCalories: Number(day.target_calories),
+            calories: total?.calories ?? null,
+            protein: total?.protein ?? null,
+            targetCalories: day.target_calories == null ? null : Number(day.target_calories),
           };
         });
     },

@@ -142,7 +142,9 @@ function BodyPage() {
                 <div className="num mt-2 grid grid-cols-2 gap-3">
                   <div>
                     <div className="text-2xl font-semibold">
-                      {food.onTargetDays} of {food.loggedDays}
+                      {(food.knownTargetDays ?? food.loggedDays)
+                        ? `${food.onTargetDays} of ${food.knownTargetDays ?? food.loggedDays}`
+                        : "Target unavailable"}
                     </div>
                     <div className="text-[13px] text-muted-foreground">days on calorie target</div>
                   </div>

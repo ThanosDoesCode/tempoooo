@@ -1,5 +1,5 @@
 import { PageSkeleton } from "@/components/PageSkeleton";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { BulkNutritionLog } from "@/components/BulkNutritionLog";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,7 @@ import { isIsoLocalDay } from "@/lib/bulk-nutrition";
 import { mealPlan } from "@/lib/meals";
 import { useAppData, useBulkMeta } from "@/lib/store";
 import { bulkPlanModeFor, useMemberships } from "@/lib/bulk-access";
-import { useState } from "react";
+import { format, parseISO } from "date-fns";
 
 export const Route = createFileRoute("/_authenticated/bulk/meals")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -28,8 +28,8 @@ function BulkMealsPage() {
   const memberships = useMemberships();
   const today = useLocalDay();
   const { date } = Route.useSearch();
-  const [chosenDate, setSelectedDate] = useState<string | null>(date ?? null);
-  const selectedDate = chosenDate ?? today;
+  const selectedDate = date ?? today;
+  const navigate = useNavigate();
   const planMode = bulkPlanModeFor(memberships.data, bulkId);
   const publicNutrition = planMode === "public";
   const legacyDay = planMode === "legacy" ? data?.days[selectedDate] : undefined;
@@ -37,7 +37,12 @@ function BulkMealsPage() {
 
   return (
     <AppShell>
-      <PageHeader title="Meals" backTo="/bulk" backLabel="Today" />
+      <PageHeader
+        title="Meals"
+        subtitle={selectedDate === today ? "Today" : format(parseISO(selectedDate), "EEEE d MMM")}
+        backTo="/bulk"
+        backLabel="Today"
+      />
       {!bulkId || !data || planMode === "none" ? (
         <PageSkeleton label="Loading meals" />
       ) : publicNutrition ? (
@@ -55,7 +60,7 @@ function BulkMealsPage() {
               : undefined
           }
           selectedDate={selectedDate}
-          onDateChange={setSelectedDate}
+          onDateChange={(date) => void navigate({ to: "/bulk/meals", search: { date } })}
           currentTargets={{
             calories: data.targets.calories,
             protein: data.targets.protein,

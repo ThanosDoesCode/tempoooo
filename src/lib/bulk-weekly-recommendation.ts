@@ -133,7 +133,9 @@ export function recommendBulkCalories(
   const weightStrong =
     s.weightEntryCount >= RECOMMENDATION_MIN_CURRENT_WEIGH_INS &&
     s.previousWeightEntryCount >= RECOMMENDATION_MIN_PREVIOUS_WEIGH_INS;
-  const nutritionStrong = s.nutritionLoggedDays >= RECOMMENDATION_MIN_NUTRITION_DAYS;
+  const nutritionStrong =
+    s.nutritionLoggedDays >= RECOMMENDATION_MIN_NUTRITION_DAYS &&
+    (s.nutritionTargetedDays == null || s.nutritionTargetedDays === s.nutritionLoggedDays);
   const trainingContext =
     s.plannedWorkouts == null
       ? "unknown"

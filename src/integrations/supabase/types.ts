@@ -369,16 +369,55 @@ export type Database = {
           },
         ]
       }
+      bulk_nutrition_target_history: {
+        Row: {
+          bulk_profile_id: string
+          effective_from: string
+          calories: number
+          protein_g: number
+          carbs_g: number
+          fat_g: number
+          timezone: string | null
+          recorded_at: string
+        }
+        Insert: {
+          bulk_profile_id: string
+          effective_from: string
+          calories: number
+          protein_g: number
+          carbs_g: number
+          fat_g: number
+          timezone: string | null
+          recorded_at?: string
+        }
+        Update: {
+          bulk_profile_id?: string
+          effective_from?: string
+          calories?: number
+          protein_g?: number
+          carbs_g?: number
+          fat_g?: number
+          timezone?: string | null
+          recorded_at?: string
+        }
+        Relationships: [{
+          foreignKeyName: "bulk_nutrition_target_history_bulk_profile_id_fkey"
+          columns: ["bulk_profile_id"]
+          isOneToOne: false
+          referencedRelation: "bulk_profiles"
+          referencedColumns: ["id"]
+        }]
+      }
       bulk_nutrition_days: {
         Row: {
           bulk_profile_id: string
           created_at: string
           id: string
           log_date: string
-          target_calories: number
-          target_carbs_g: number
-          target_fat_g: number
-          target_protein_g: number
+          target_calories: number | null
+          target_carbs_g: number | null
+          target_fat_g: number | null
+          target_protein_g: number | null
           updated_at: string
         }
         Insert: {
@@ -386,10 +425,10 @@ export type Database = {
           created_at?: string
           id?: string
           log_date: string
-          target_calories: number
-          target_carbs_g: number
-          target_fat_g: number
-          target_protein_g: number
+          target_calories: number | null
+          target_carbs_g: number | null
+          target_fat_g: number | null
+          target_protein_g: number | null
           updated_at?: string
         }
         Update: {
@@ -397,10 +436,10 @@ export type Database = {
           created_at?: string
           id?: string
           log_date?: string
-          target_calories?: number
-          target_carbs_g?: number
-          target_fat_g?: number
-          target_protein_g?: number
+          target_calories?: number | null
+          target_carbs_g?: number | null
+          target_fat_g?: number | null
+          target_protein_g?: number | null
           updated_at?: string
         }
         Relationships: [
@@ -421,6 +460,7 @@ export type Database = {
           fat_g: number
           id: string
           ingredient_snapshot: Json
+          meal_category: string | null
           name_snapshot: string
           note: string | null
           nutrition_day_id: string
@@ -438,6 +478,7 @@ export type Database = {
           fat_g: number
           id?: string
           ingredient_snapshot?: Json
+          meal_category?: string | null
           name_snapshot: string
           note?: string | null
           nutrition_day_id: string
@@ -455,6 +496,7 @@ export type Database = {
           fat_g?: number
           id?: string
           ingredient_snapshot?: Json
+          meal_category?: string | null
           name_snapshot?: string
           note?: string | null
           nutrition_day_id?: string
@@ -1965,6 +2007,11 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      bulk_nutrition_targets_for_day: {
+        Args: { _profile: string; _log_date: string; _timezone: string }
+        Returns: Json
+      }
+
       mark_account_notification_read: {
         Args: { _notification: string }
         Returns: boolean
@@ -2132,6 +2179,8 @@ export type Database = {
               _calories: number
               _carbs: number
               _fat: number
+              _category?: string | null
+              _timezone?: string
               _local_today: string
               _log_date: string
               _name: string
@@ -2259,6 +2308,8 @@ export type Database = {
           }
         | {
             Args: {
+              _category?: string | null
+              _timezone?: string
               _local_today: string
               _log_date: string
               _preset: string
@@ -2464,6 +2515,8 @@ export type Database = {
               _entry: string
               _expected_updated_at: string
               _fat: number
+              _category?: string | null
+              _timezone?: string
               _local_today: string
               _name: string
               _note?: string

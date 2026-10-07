@@ -23,9 +23,9 @@ export type BulkProgressPhoto = {
 
 export type BulkNutritionProgressDay = {
   logDate: string;
-  calories: number;
-  protein: number;
-  targetCalories: number;
+  calories: number | null;
+  protein: number | null;
+  targetCalories: number | null;
 };
 
 export type BulkWeeklyProgressSummary = {
@@ -40,6 +40,7 @@ export type BulkWeeklyProgressSummary = {
   averageCalories: number | null;
   averageProtein: number | null;
   nutritionLoggedDays: number;
+  nutritionTargetedDays?: number;
   calorieAdherentDays: number;
   targetCalories: number | null;
   completedWorkouts: number;
@@ -114,16 +115,24 @@ export function trainingConsistency(
 
 export function nutritionWeekSummary(days: BulkNutritionProgressDay[], weekStart: string) {
   const end = localDay(addDays(parseISO(weekStart), 6));
-  const current = days.filter((day) => day.logDate >= weekStart && day.logDate <= end);
+  const current = days.filter(
+    (day) => day.logDate >= weekStart && day.logDate <= end && day.calories != null,
+  );
   return {
     loggedDays: current.length,
-    averageCalories: average(current.map((day) => day.calories)),
-    averageProtein: average(current.map((day) => day.protein)),
-    targetCalories: average(current.map((day) => day.targetCalories)),
+    targetedDays: current.filter((day) => day.targetCalories != null).length,
+    averageCalories: average(current.map((day) => day.calories!)),
+    averageProtein: average(
+      current.map((day) => day.protein).filter((value): value is number => value != null),
+    ),
+    targetCalories: average(
+      current.map((day) => day.targetCalories).filter((value): value is number => value != null),
+    ),
     calorieAdherentDays: current.filter(
       (day) =>
-        Math.abs(day.calories - day.targetCalories) <=
-        day.targetCalories * CALORIE_ADHERENCE_TOLERANCE,
+        day.targetCalories != null &&
+        Math.abs(day.calories! - day.targetCalories) <=
+          day.targetCalories * CALORIE_ADHERENCE_TOLERANCE,
     ).length,
   };
 }
@@ -162,8 +171,11 @@ export function weeklyProgressSummary(args: {
     averageCalories: nutrition.averageCalories,
     averageProtein: nutrition.averageProtein,
     nutritionLoggedDays: nutrition.loggedDays,
+    nutritionTargetedDays: nutrition.targetedDays,
     calorieAdherentDays: nutrition.calorieAdherentDays,
-    targetCalories: nutrition.targetCalories ?? args.currentTargetCalories ?? null,
+    targetCalories:
+      nutrition.targetCalories ??
+      (nutrition.loggedDays ? null : (args.currentTargetCalories ?? null)),
     completedWorkouts: training.completed,
     plannedWorkouts: training.planned,
   };

@@ -18,6 +18,7 @@ import { PeriodPicker, ProgressRow } from "@/components/ProgressChrome";
 import { chartAxis, chartTooltip, useProgressPeriod } from "@/lib/progress-view";
 import { progressRange, progressPeriodLabel } from "@/lib/progress-period";
 import { fmt0 } from "@/lib/calc";
+import { nutritionCalendarSlots } from "@/lib/progress-model-core";
 import { useFoodModel } from "@/lib/progress-model";
 
 export const Route = createFileRoute("/_authenticated/bulk/progress_/body_/food")({
@@ -28,7 +29,11 @@ export const Route = createFileRoute("/_authenticated/bulk/progress_/body_/food"
 function FoodDetailsPage() {
   const [period, setPeriod] = useProgressPeriod();
   const food = useFoodModel(progressRange(period));
-  const chart = food.series.map((day) => ({ ...day, on: day.onTarget }));
+  const chart = nutritionCalendarSlots(food.series, progressRange(period)).map((day) => ({
+    ...day,
+    plotCalories: day.calories ?? 0,
+    on: day.onTarget,
+  }));
 
   return (
     <AppShell>
@@ -49,11 +54,13 @@ function FoodDetailsPage() {
             </p>
             <p className="mt-1 text-sm text-muted-foreground">
               {progressPeriodLabel(period)} · Current target {fmt0(food.target)}
-              {food.loggedDays
-                ? ` · on target ${food.onTargetDays} of ${food.loggedDays} day${
-                    food.loggedDays === 1 ? "" : "s"
+              {(food.knownTargetDays ?? food.loggedDays)
+                ? ` · on target ${food.onTargetDays} of ${food.knownTargetDays ?? food.loggedDays} day${
+                    (food.knownTargetDays ?? food.loggedDays) === 1 ? "" : "s"
                   }`
-                : " · no days logged yet"}
+                : food.loggedDays
+                  ? " · historical targets unavailable"
+                  : " · no days logged yet"}
             </p>
             <div className="mt-3.5 h-[170px]">
               {food.loggedDays ? (
@@ -67,9 +74,13 @@ function FoodDetailsPage() {
                       minTickGap={30}
                     />
                     <YAxis {...chartAxis} />
-                    <Tooltip {...chartTooltip} content={<ProgressChartTooltip kind="food" />} />
+                    <Tooltip
+                      {...chartTooltip}
+                      filterNull={false}
+                      content={<ProgressChartTooltip kind="food" />}
+                    />
                     <Bar
-                      dataKey="calories"
+                      dataKey="plotCalories"
                       radius={[6, 6, 0, 0]}
                       name="Calories"
                       isAnimationActive={false}
@@ -109,7 +120,8 @@ function FoodDetailsPage() {
               food.past.map((d) => (
                 <Link
                   key={d.date}
-                  to="/bulk/meals/history"
+                  to="/bulk/meals"
+                  search={{ date: d.date }}
                   preload="intent"
                   className="flex min-h-[50px] items-center gap-3 border-t border-border text-[15px] first:border-t-0 active:opacity-80"
                 >

@@ -17,7 +17,7 @@ export type BulkNutritionDay = {
   id: string;
   bulkProfileId: string;
   logDate: string;
-  targets: NutritionMacros;
+  targets: NutritionMacros | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -27,6 +27,7 @@ export type BulkNutritionEntry = NutritionMacros & {
   nutritionDayId: string;
   sourceMealPresetId: string | null;
   sourceType: "preset" | "custom";
+  mealCategory: MealCategory | null;
   name: string;
   ingredients: NutritionIngredientSnapshot[];
   note: string | null;
@@ -38,13 +39,14 @@ export type BulkNutritionEntry = NutritionMacros & {
 export type NutritionDayData = {
   day: BulkNutritionDay | null;
   entries: BulkNutritionEntry[];
+  effectiveTargets?: NutritionMacros | null;
 };
 
 export type NutritionMacroStatus = {
   consumed: number;
-  target: number;
-  delta: number;
-  status: "under" | "at" | "over";
+  target: number | null;
+  delta: number | null;
+  status: "under" | "at" | "over" | "unknown";
 };
 
 export type NutritionSummary = {
@@ -62,9 +64,14 @@ export type NutritionEntryDraft = {
   carbs: string;
   fat: string;
   note: string;
+  mealCategory?: MealCategory | null;
 };
 
-export type NutritionEntryInput = NutritionMacros & { name: string; note: string | null };
+export type NutritionEntryInput = NutritionMacros & {
+  name: string;
+  note: string | null;
+  mealCategory?: MealCategory | null;
+};
 
 export const emptyNutritionEntryDraft = (): NutritionEntryDraft => ({
   name: "",
@@ -83,6 +90,7 @@ export function nutritionEntryDraft(entry: BulkNutritionEntry): NutritionEntryDr
     carbs: String(entry.carbs),
     fat: String(entry.fat),
     note: entry.note ?? "",
+    mealCategory: entry.mealCategory ?? null,
   };
 }
 
@@ -102,7 +110,12 @@ export function totalNutrition(entries: BulkNutritionEntry[]): NutritionMacros {
   );
 }
 
-export function nutritionMacroStatus(consumed: number, target: number): NutritionMacroStatus {
+export function nutritionMacroStatus(
+  consumed: number,
+  target: number | null,
+): NutritionMacroStatus {
+  if (target == null)
+    return { consumed: round(consumed), target: null, delta: null, status: "unknown" };
   const delta = round(Math.abs(target - consumed));
   return {
     consumed: round(consumed),
@@ -114,15 +127,15 @@ export function nutritionMacroStatus(consumed: number, target: number): Nutritio
 
 export function nutritionSummary(
   entries: BulkNutritionEntry[],
-  targets: NutritionMacros,
+  targets: NutritionMacros | null,
 ): NutritionSummary {
   const totals = totalNutrition(entries);
   return {
     totals,
-    calories: nutritionMacroStatus(totals.calories, targets.calories),
-    protein: nutritionMacroStatus(totals.protein, targets.protein),
-    carbs: nutritionMacroStatus(totals.carbs, targets.carbs),
-    fat: nutritionMacroStatus(totals.fat, targets.fat),
+    calories: nutritionMacroStatus(totals.calories, targets?.calories ?? null),
+    protein: nutritionMacroStatus(totals.protein, targets?.protein ?? null),
+    carbs: nutritionMacroStatus(totals.carbs, targets?.carbs ?? null),
+    fat: nutritionMacroStatus(totals.fat, targets?.fat ?? null),
   };
 }
 
@@ -143,6 +156,8 @@ export function validateNutritionEntryDraft(draft: NutritionEntryDraft): {
   errors: string[];
 } {
   const errors: string[] = [];
+  if (draft.mealCategory != null && !isMealCategory(draft.mealCategory))
+    errors.push("Choose a valid meal category.");
   const name = draft.name.trim();
   const note = draft.note.trim();
   if (name.length < 1 || name.length > 100)
@@ -154,7 +169,18 @@ export function validateNutritionEntryDraft(draft: NutritionEntryDraft): {
   const fat = decimal(draft.fat, "Fat", 2_000, errors);
   return errors.length
     ? { errors }
-    : { input: { name, note: note || null, calories, protein, carbs, fat }, errors };
+    : {
+        input: {
+          name,
+          note: note || null,
+          calories,
+          protein,
+          carbs,
+          fat,
+          ...(draft.mealCategory !== undefined ? { mealCategory: draft.mealCategory } : {}),
+        },
+        errors,
+      };
 }
 
 export function isIsoLocalDay(value: string): boolean {
@@ -162,4 +188,12 @@ export function isIsoLocalDay(value: string): boolean {
   const [year, month, day] = value.split("-").map(Number);
   const date = new Date(year!, month! - 1, day!, 12);
   return date.getFullYear() === year && date.getMonth() === month! - 1 && date.getDate() === day;
+}
+
+export const MEAL_CATEGORIES = ["breakfast", "lunch", "dinner", "snacks"] as const;
+export type MealCategory = (typeof MEAL_CATEGORIES)[number];
+export const mealCategoryLabel = (category: MealCategory) =>
+  category[0]!.toUpperCase() + category.slice(1);
+export function isMealCategory(value: unknown): value is MealCategory {
+  return MEAL_CATEGORIES.includes(value as MealCategory);
 }

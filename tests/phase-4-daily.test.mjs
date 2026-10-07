@@ -90,6 +90,7 @@ function fixture(source, exportName, props, options = {}) {
       bulkWeightQueryKey: (id) => ["bulk-weight-entries", id],
       saveBulkWeight: (...a) => record("saveWeight", ...a),
     },
+    "./NutritionDateStrip": { NutritionDateStrip: "NutritionDateStrip" },
     "@/lib/bulk-nutrition": nutrition,
     "@/lib/network-errors": { userFacingError: () => "Failed. Your entered data is still here." },
     "@/lib/bulk-nutrition-query": {

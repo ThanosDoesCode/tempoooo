@@ -181,13 +181,17 @@ function OwnProgress({ data }: { data: AppData }) {
               label="Food"
               big={
                 food.loggedDays > 0
-                  ? `${food.onTargetDays} of ${food.loggedDays}`
+                  ? (food.knownTargetDays ?? food.loggedDays)
+                    ? `${food.onTargetDays} of ${food.knownTargetDays ?? food.loggedDays}`
+                    : "Target unavailable"
                   : food.loading
                     ? "Loading progress…"
                     : "Start logging meals"
               }
               sub={
-                food.loggedDays > 0 ? "days on calorie target" : "See how meals match your targets"
+                food.loggedDays > 0
+                  ? "days with recorded targets"
+                  : "See how meals match your targets"
               }
               empty={food.loggedDays === 0}
               spark={[]}
@@ -265,7 +269,7 @@ function buildInsight({
   strengthTile: { up: number; total: number };
   toGoal: number | null;
   endurance: ReturnType<typeof enduranceSummary> | null;
-  food: { loggedDays: number; onTargetDays: number };
+  food: { loggedDays: number; onTargetDays: number; knownTargetDays?: number };
   hasChallenge: boolean;
 }): string | null {
   const parts: string[] = [];
@@ -282,9 +286,9 @@ function buildInsight({
   if (!parts.length && toGoal != null && Math.abs(toGoal) > 0) {
     parts.push(`you're ${fmt(Math.abs(toGoal), 1)} kg from your goal weight`);
   }
-  if (!parts.length && food.loggedDays > 0) {
+  if (!parts.length && (food.knownTargetDays ?? food.loggedDays) > 0) {
     parts.push(
-      `you hit your calorie target on ${food.onTargetDays} of ${food.loggedDays} logged days`,
+      `you hit your calorie target on ${food.onTargetDays} of ${food.knownTargetDays ?? food.loggedDays} logged days`,
     );
   }
   if (!parts.length) return null;

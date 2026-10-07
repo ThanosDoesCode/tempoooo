@@ -1,3 +1,4 @@
+import * as progressCore from "../src/lib/progress-model-core.ts";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -289,7 +290,7 @@ test("Food details summarises the week against the target and shows past days as
   const food = await read("src/routes/_authenticated/bulk/progress_.body_.food.tsx");
   assert.match(food, /backTo="\/bulk\/progress\/body" backLabel="Body & food"/);
   assert.match(food, /useFoodModel\(progressRange\(period\)\)/);
-  assert.match(food, /on target \$\{food\.onTargetDays\} of \$\{food\.loggedDays\}/);
+  assert.match(food, /food\.knownTargetDays \?\? food\.loggedDays/);
   assert.match(food, /food\.loggedDays \?/); // bars only when a day is logged
   assert.match(food, /food\.past\.map/); // past days as plain totals
   assert.match(food, /to="\/bulk\/meals\/history"/);
@@ -676,6 +677,7 @@ async function progressFixture(options = {}) {
     },
     "@/lib/calc": calc,
     "@/lib/progress-period": periods,
+    "@/lib/progress-model-core": progressCore,
     "@/lib/strength-progress": strengthProgressHelpers,
     "@/components/ProgressChartTooltip": presentationComponent(
       "src/components/ProgressChartTooltip.tsx",

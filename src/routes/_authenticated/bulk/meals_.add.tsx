@@ -4,10 +4,11 @@ import { BulkNutritionLog } from "@/components/BulkNutritionLog";
 import { PageSkeleton } from "@/components/PageSkeleton";
 import { useAppData, useBulkMeta } from "@/lib/store";
 import { useLocalDay } from "@/lib/use-local-day";
-import { isIsoLocalDay } from "@/lib/bulk-nutrition";
+import { isIsoLocalDay, isMealCategory } from "@/lib/bulk-nutrition";
 import { bulkPlanModeFor, useMemberships } from "@/lib/bulk-access";
 export const Route = createFileRoute("/_authenticated/bulk/meals_/add")({
   validateSearch: (search: Record<string, unknown>) => ({
+    category: isMealCategory(search["category"]) ? search["category"] : undefined,
     date:
       typeof search["date"] === "string" && isIsoLocalDay(search["date"])
         ? search["date"]
@@ -17,7 +18,7 @@ export const Route = createFileRoute("/_authenticated/bulk/meals_/add")({
   component: AddMealPage,
 });
 function AddMealPage() {
-  const { date } = Route.useSearch();
+  const { date, category } = Route.useSearch();
   const today = useLocalDay();
   const selectedDate = date ?? today;
   const data = useAppData();
@@ -38,6 +39,7 @@ function AddMealPage() {
         <BulkNutritionLog
           key={`${bulkId}:${selectedDate}`}
           mode="add"
+          initialCategory={category ?? null}
           bulkProfileId={bulkId}
           selectedDate={selectedDate}
           onDateChange={() => {}}

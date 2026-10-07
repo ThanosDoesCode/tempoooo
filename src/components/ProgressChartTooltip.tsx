@@ -38,7 +38,7 @@ export function ProgressChartTooltip({
         {kind === "food"
           ? point.calories != null
             ? `${number(point.calories)} kcal`
-            : "Not logged"
+            : "No meals logged"
           : kind === "pace"
             ? `${pace(point.pace!)} /km`
             : `${number((point.avg ?? point.value)!)} kg`}

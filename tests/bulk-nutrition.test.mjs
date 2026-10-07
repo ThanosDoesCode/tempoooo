@@ -120,9 +120,10 @@ test("nutrition UI keeps daily logging and route-backed preset management distin
   assert.doesNotMatch(presetRoute, /BulkNutritionLog/);
   assert.match(historyRoute, /useBulkNutritionDay/);
   assert.match(historyRoute, /Logged meals and entries/);
-  assert.match(component, /Previous day/);
-  assert.match(component, /Next day/);
-  assert.match(component, /\n\s*Today\n/);
+  const strip = await read("src/components/NutritionDateStrip.tsx");
+  assert.match(strip, /Previous week/);
+  assert.match(strip, /Next week/);
+  assert.match(strip, /Back to today/);
   assert.match(component, /Future days are view-only\. Come back on this date to log meals\./);
   assert.match(component, /if \(mutationBusy\.current \|\| isFuture\) return/);
   assert.match(component, /isFuture \? null : editor/);
@@ -134,7 +135,7 @@ test("nutrition UI keeps daily logging and route-backed preset management distin
   assert.match(component, /Discard the unsaved nutrition entry/);
   assert.match(component, /to="\/bulk\/meals\/add"/);
   assert.match(component, /Saved meal snapshot/);
-  assert.match(component, /Nothing logged for this day/);
+  assert.match(component, /MEAL_CATEGORIES.map/);
   assert.match(query, /bulkNutritionDayQueryKey\(bulkProfileId, logDate\)/);
   assert.match(query, /log_bulk_meal_preset/);
   assert.match(query, /_local_today: localToday\(\)/);

@@ -293,7 +293,7 @@ test("every authored date/time input was migrated; calendar paging arrows remain
   for (const file of [
     "src/components/WorkoutHistory.tsx",
     "src/components/PublicBulkProgress.tsx",
-    "src/components/BulkNutritionLog.tsx",
+    "src/components/NutritionDateStrip.tsx",
     "src/routes/_authenticated/challenge/add.tsx",
     "src/routes/_authenticated/bulk/history.tsx",
     "src/routes/_authenticated/bulk/training.tsx",

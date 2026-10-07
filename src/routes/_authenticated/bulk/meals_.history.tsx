@@ -1,11 +1,11 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { addDays, format, parseISO } from "date-fns";
 import { TempoDatePicker } from "@/components/TempoDateTimePicker";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useState } from "react";
+
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { Card, DataError, SectionTitle } from "@/components/ui-kit";
-import { nutritionSummary } from "@/lib/bulk-nutrition";
+import { nutritionSummary, isIsoLocalDay } from "@/lib/bulk-nutrition";
 import { useBulkNutritionDay } from "@/lib/bulk-nutrition-query";
 import { iso } from "@/lib/calc";
 import { userFacingError } from "@/lib/network-errors";
@@ -13,6 +13,12 @@ import { useAppData, useBulkMeta } from "@/lib/store";
 import { bulkPlanModeFor, useMemberships } from "@/lib/bulk-access";
 
 export const Route = createFileRoute("/_authenticated/bulk/meals_/history")({
+  validateSearch: (search: Record<string, unknown>): { date?: string | undefined } => ({
+    date:
+      typeof search["date"] === "string" && isIsoLocalDay(search["date"])
+        ? search["date"]
+        : undefined,
+  }),
   head: () => ({ meta: [{ title: "Tempo" }] }),
   component: MealsHistoryPage,
 });
@@ -30,7 +36,10 @@ function MealsHistoryPage() {
   const { bulkId } = useBulkMeta();
   const memberships = useMemberships();
   const today = iso(new Date());
-  const [date, setDate] = useState(() => iso(addDays(new Date(), -1)));
+  const search = Route.useSearch();
+  const date = search.date ?? iso(addDays(new Date(), -1));
+  const navigate = useNavigate();
+  const setDate = (date: string) => void navigate({ to: "/bulk/meals/history", search: { date } });
   const planMode = bulkPlanModeFor(memberships.data, bulkId);
   const isPublic = planMode === "public";
   const nutrition = useBulkNutritionDay(isPublic ? bulkId : null, date);
@@ -80,6 +89,16 @@ function MealsHistoryPage() {
         </button>
       </div>
 
+      {isPublic && date <= today ? (
+        <Link
+          to="/bulk/meals"
+          search={{ date }}
+          preload="intent"
+          className="mb-4 inline-flex min-h-11 items-center rounded-xl px-3 text-sm font-medium text-primary"
+        >
+          View / log meals for this day
+        </Link>
+      ) : null}
       {planMode === "none" ? (
         <div className="h-40 animate-pulse rounded-2xl bg-card" aria-label="Loading history" />
       ) : isPublic && nutrition.isLoading ? (
@@ -95,22 +114,38 @@ function MealsHistoryPage() {
             <HistoryMacro
               label="Calories"
               value={`${Math.round(totals.calories.consumed)} kcal`}
-              target={`${Math.round(totals.calories.target)} target`}
+              target={
+                totals.calories.target == null
+                  ? "Target unavailable"
+                  : `${Math.round(totals.calories.target)} target`
+              }
             />
             <HistoryMacro
               label="Protein"
               value={`${Math.round(totals.protein.consumed)} g`}
-              target={`${Math.round(totals.protein.target)} g target`}
+              target={
+                totals.protein.target == null
+                  ? "Target unavailable"
+                  : `${Math.round(totals.protein.target)} g target`
+              }
             />
             <HistoryMacro
               label="Carbs"
               value={`${Math.round(totals.carbs.consumed)} g`}
-              target={`${Math.round(totals.carbs.target)} g target`}
+              target={
+                totals.carbs.target == null
+                  ? "Target unavailable"
+                  : `${Math.round(totals.carbs.target)} g target`
+              }
             />
             <HistoryMacro
               label="Fat"
               value={`${Math.round(totals.fat.consumed)} g`}
-              target={`${Math.round(totals.fat.target)} g target`}
+              target={
+                totals.fat.target == null
+                  ? "Target unavailable"
+                  : `${Math.round(totals.fat.target)} g target`
+              }
             />
           </div>
           <section>
