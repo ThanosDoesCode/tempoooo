@@ -277,7 +277,7 @@ test("Tempo navigation exposes optional fitness areas only after persisted activ
   const manifest = JSON.parse(await read("public/manifest.webmanifest"));
   assert.equal(manifest.name, "Tempo");
   assert.equal(manifest.short_name, "Tempo");
-  assert.equal(manifest.start_url, "/challenge");
+  assert.equal(manifest.start_url, "/today");
   assert.equal(manifest.display, "standalone");
   assert.deepEqual(
     manifest.icons.map(({ src, sizes }) => ({ src, sizes })),
@@ -292,7 +292,7 @@ test("Tempo navigation exposes optional fitness areas only after persisted activ
   assert.match(root, /apple-mobile-web-app-status-bar-style", content: "black-translucent"/);
   assert.match(root, /rel: "apple-touch-icon"[\s\S]*sizes: "180x180"[\s\S]*apple-touch-icon\.png/);
   const index = await read("src/routes/index.tsx");
-  assert.match(index, /if \(data\.session\) throw redirect\(\{ to: "\/challenge" \}\)/);
+  assert.match(index, /if \(data\.session\) throw redirect\(\{ to: "\/today", replace: true \}\)/);
   assert.match(index, /component: WelcomePage/);
   assert.doesNotMatch(index, /window\.location/);
   const [shell, nav] = await Promise.all([

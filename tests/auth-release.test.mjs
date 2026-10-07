@@ -37,7 +37,7 @@ test("Google login uses the existing authorized wrapper and returns to Challenge
   assert.match(auth, /extraParams: \{ prompt: "select_account" \}/);
   assert.match(auth, /redirect_uri: `\$\{window\.location\.origin\}\/auth`/);
   assert.match(auth, /supabase\.auth\.getUser\(\)/);
-  assert.match(auth, /navigate\(\{ to: "\/challenge", replace: true \}\)/);
+  assert.match(auth, /navigate\(\{ to: "\/today", replace: true \}\)/);
   assert.match(auth, /continue with Google/);
   assert.match(oauth, /createLovableAuth\(\)/);
   assert.match(oauth, /await supabase\.auth\.setSession\(result\.tokens\)/);

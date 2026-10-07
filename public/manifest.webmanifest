@@ -2,7 +2,7 @@
   "id": "/challenge",
   "name": "Tempo",
   "short_name": "Tempo",
-  "start_url": "/challenge",
+  "start_url": "/today",
   "scope": "/",
   "display": "standalone",
   "background_color": "#111827",

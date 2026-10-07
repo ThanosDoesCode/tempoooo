@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { HistoryBackLink } from "@/components/HistoryBackLink";
 import { useCallback, useEffect, useState } from "react";
 import { lovable } from "@/integrations/lovable";
@@ -24,6 +24,14 @@ export const Route = createFileRoute("/auth")({
       typeof search["redirect"] === "string" ? search["redirect"] : null,
     );
     return { ...(mode ? { mode } : {}), ...(redirect ? { redirect } : {}) };
+  },
+  beforeLoad: async ({ search }) => {
+    // Signed-in visitors (including a swipe back in the installed app) never see this screen.
+    const { data } = await supabase.auth.getSession();
+    if (!data.session) return;
+    const destination = takeDestination(search.redirect ?? null);
+    if (destination) throw redirect({ href: destination, replace: true });
+    throw redirect({ to: "/today", replace: true });
   },
   head: () => ({
     meta: [
@@ -54,7 +62,7 @@ function AuthPage() {
       await navigate({ href: destination, replace: true });
       return;
     }
-    await navigate({ to: "/challenge", replace: true });
+    await navigate({ to: "/today", replace: true });
   }, [navigate, search.redirect]);
   const [mode, setMode] = useState<"signin" | "signup">(search.mode ?? "signin");
   const [email, setEmail] = useState("");

@@ -40,7 +40,7 @@ function AccountOnboarding() {
       const destination = takeDestination();
       void (destination
         ? navigate({ href: destination, replace: true })
-        : navigate({ to: "/challenge", replace: true }));
+        : navigate({ to: "/today", replace: true }));
     } else if (establishedNeedsUsername) {
       setStep(1);
     }
@@ -104,7 +104,7 @@ function AccountOnboarding() {
       if (destination) {
         await navigate({ href: destination, replace: true });
       } else {
-        await navigate({ to: "/challenge", replace: true });
+        await navigate({ to: "/today", replace: true });
       }
     } catch (cause) {
       completing.current = false;
