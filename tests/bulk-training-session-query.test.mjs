@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { presentationComponent } from "./presentation-component-fixture.mjs";
 
-function fixture({ failSets = false } = {}) {
+function fixture({ failSets = false, apiCap = 1000 } = {}) {
   const tables = {
     bulk_training_sessions: [],
     bulk_training_session_exercises: [],
@@ -107,7 +107,7 @@ function fixture({ failSets = false } = {}) {
           const rows = tables[table]
             .filter((row) => filters.every((filter) => filter(row)))
             .sort((a, b) => (ascending ? 1 : -1) * String(a[order]).localeCompare(String(b[order])))
-            .slice(0, Math.min(limit, 1000));
+            .slice(0, Math.min(limit, apiCap));
           return Promise.resolve(
             failSets && table === "bulk_training_session_sets"
               ? { data: null, error: new Error("Snapshot read failed") }
@@ -177,4 +177,23 @@ test("history reads propagate snapshot errors instead of silently returning inco
     .queryFn();
   assert.equal(other.length, 1);
   assert.equal(other[0].bulkProfileId, "other-owner");
+});
+
+test("All-time workout snapshots exhaust short server-capped pages with no fabricated start date", async () => {
+  const { api, calls } = fixture({ apiCap: 73 });
+  const rows = await api
+    .completedBulkTrainingSessionsQueryOptions("owner", null, "2027-01-01")
+    .queryFn();
+  assert.equal(rows.length, 205);
+  assert.ok(
+    rows.every(
+      (session) =>
+        session.exercises.length === 2 &&
+        session.exercises.every((exercise) => exercise.sets.length === 8),
+    ),
+  );
+  assert.equal(new Set(rows.map((row) => row.id)).size, 205);
+  assert.ok(
+    calls.filter((call) => call.table === "bulk_training_sessions" && call.limit).length >= 4,
+  );
 });

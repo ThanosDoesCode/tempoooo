@@ -1,3 +1,4 @@
+import * as progressPeriods from "../src/lib/progress-period.ts";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import React from "react";
@@ -419,6 +420,7 @@ test("tracked preference keeps the existing key, supports remove/add/reset and i
           ];
         },
       },
+      "./progress-period.ts": progressPeriods,
       "./challenge.ts": { useMyChallenge: () => ({ data: null }) },
       "./progress-sections.ts": { availableProgressSections: () => [] },
       "./progress-model.ts": {

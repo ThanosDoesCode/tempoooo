@@ -18,9 +18,12 @@ import {
   ProgressNav,
   ProgressRow,
 } from "@/components/ProgressChrome";
+import { ProgressChartTooltip } from "@/components/ProgressChartTooltip";
 import { fmt, fmt0, signed } from "@/lib/calc";
-import { chartAxis, chartTooltip, usePeriodWeeks } from "@/lib/progress-view";
+import { chartAxis, chartTooltip, useProgressPeriod } from "@/lib/progress-view";
 import { useFoodModel, usePhotoCount, useWeightModel } from "@/lib/progress-model";
+
+import { progressRange, progressPeriodLabel } from "@/lib/progress-period";
 
 export const Route = createFileRoute("/_authenticated/bulk/progress_/body")({
   head: () => ({ meta: [{ title: "Tempo" }] }),
@@ -28,15 +31,16 @@ export const Route = createFileRoute("/_authenticated/bulk/progress_/body")({
 });
 
 function BodyPage() {
-  const [weeks, setWeeks] = usePeriodWeeks();
-  const weight = useWeightModel(weeks * 7);
-  const food = useFoodModel(weeks * 7);
+  const [period, setPeriod] = useProgressPeriod();
+  const range = progressRange(period);
+  const weight = useWeightModel(range);
+  const food = useFoodModel(range);
   const photoCount = usePhotoCount();
 
   return (
     <AppShell>
       <ProgressHeader>
-        <PeriodPicker weeks={weeks} onChange={setWeeks} />
+        <PeriodPicker period={period} onChange={setPeriod} />
       </ProgressHeader>
       <ProgressNav active="body" />
 
@@ -59,7 +63,7 @@ function BodyPage() {
                   </span>
                   {weight.weekDeltaKg != null ? (
                     <span className="ml-2 text-sm font-semibold text-primary">
-                      {signed(weight.weekDeltaKg, 1)} this week
+                      {signed(weight.weekDeltaKg, 1)} vs prior 7-day average
                     </span>
                   ) : (
                     <span className="ml-2 text-sm text-muted-foreground">calibrating</span>
@@ -85,8 +89,7 @@ function BodyPage() {
                         <YAxis domain={["auto", "auto"]} {...chartAxis} />
                         <Tooltip
                           {...chartTooltip}
-                          labelFormatter={(d) => format(parseISO(String(d)), "d MMM")}
-                          formatter={(value: number) => [`${fmt(value, 1)} kg`, "7-day avg"]}
+                          content={<ProgressChartTooltip kind="weight" />}
                         />
                         <Area
                           type="monotone"
@@ -95,6 +98,7 @@ function BodyPage() {
                           strokeWidth={2.5}
                           fill="var(--color-primary)"
                           fillOpacity={0.12}
+                          isAnimationActive={false}
                           connectNulls
                         />
                       </AreaChart>
@@ -131,7 +135,7 @@ function BodyPage() {
 
           <Card className="px-[18px] py-4">
             <h2 className="text-[13px] font-medium text-muted-foreground">
-              Food · last {weeks} weeks
+              Food · {progressPeriodLabel(period)}
             </h2>
             {food.loggedDays ? (
               <>
@@ -145,7 +149,7 @@ function BodyPage() {
                   <div>
                     <div className="text-2xl font-semibold">{fmt0(food.avgKcal)}</div>
                     <div className="text-[13px] text-muted-foreground">
-                      kcal a day · target {fmt0(food.target)}
+                      kcal a day · current target {fmt0(food.target)}
                     </div>
                   </div>
                 </div>

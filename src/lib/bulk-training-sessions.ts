@@ -68,18 +68,20 @@ const HISTORY_READ_PAGE_SIZE = 200;
 async function readAllById<Row extends { id: string }>(
   page: (cursor: string | null) => PromiseLike<{ data: Row[] | null; error: unknown }>,
 ) {
-  const rows: Row[] = [];
+  const rows = new Map<string, Row>();
   let cursor: string | null = null;
-  while (true) {
+  for (let pageNumber = 0; pageNumber < 10_000; pageNumber++) {
     const result = await page(cursor);
     if (result.error) throw result.error;
     const batch = result.data ?? [];
-    rows.push(...batch);
-    if (batch.length < HISTORY_READ_PAGE_SIZE) return rows;
+    if (!batch.length) return [...rows.values()];
     const next = batch[batch.length - 1]!.id;
-    if (cursor && next <= cursor) throw new Error("Workout history cursor did not advance");
+    if (!next || (cursor && next <= cursor))
+      throw new Error("Workout history cursor did not advance");
+    for (const row of batch) rows.set(row.id, row);
     cursor = next;
   }
+  throw new Error("Workout history pagination exceeded its safety limit");
 }
 
 function mapSessions(
@@ -229,7 +231,7 @@ export const bulkTrainingSessionQueryOptions = (sessionId: string | null) =>
 
 export const completedBulkTrainingSessionsQueryOptions = (
   bulkProfileId: string | null,
-  from: string,
+  from: string | null,
   to: string,
 ) =>
   queryOptions({
@@ -243,10 +245,10 @@ export const completedBulkTrainingSessionsQueryOptions = (
           .select("*")
           .eq("bulk_profile_id", bulkProfileId)
           .eq("status", "completed")
-          .gte("completed_at", from)
           .lt("completed_at", to)
           .order("id")
           .limit(HISTORY_READ_PAGE_SIZE);
+        if (from) query = query.gte("completed_at", from);
         if (cursor) query = query.gt("id", cursor);
         return query;
       });
@@ -270,7 +272,7 @@ export function useBulkTrainingSession(sessionId: string | null) {
 
 export function useCompletedBulkTrainingSessions(
   bulkProfileId: string | null,
-  from: string,
+  from: string | null,
   to: string,
 ) {
   return useQuery(completedBulkTrainingSessionsQueryOptions(bulkProfileId, from, to));

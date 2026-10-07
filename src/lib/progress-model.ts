@@ -1,4 +1,4 @@
-import { subDays } from "date-fns";
+import { parseISO, subDays } from "date-fns";
 import { useMemo } from "react";
 
 import { bulkPlanModeFor, useMemberships, type BulkPlanMode } from "./bulk-access.ts";
@@ -7,10 +7,7 @@ import {
   useBulkProgressPhotoCount,
   useBulkWeights,
 } from "./bulk-progress-query.ts";
-import {
-  useCompletedBulkTrainingSessions,
-  useCompletedSessionDates,
-} from "./bulk-training-sessions.ts";
+import { useCompletedBulkTrainingSessions } from "./bulk-training-sessions.ts";
 import { iso } from "./calc.ts";
 import { collectCompletedWorkouts } from "./goal-metrics.ts";
 import { recordedLegacyWorkouts } from "./workout-history.ts";
@@ -24,9 +21,11 @@ import {
   nutritionWindow,
   resolvePhotoCount,
   weightTrend,
+  weightPeriodTrend,
   type NutritionDay,
   type WeightByDate,
 } from "./progress-model-core.ts";
+import { progressRangeDays, progressEndInstant, type ProgressRange } from "./progress-period.ts";
 import { useAppData, useBulkMeta } from "./store.ts";
 
 export function useProgressMode() {
@@ -52,11 +51,17 @@ export function usePhotoCount(): number {
  * normalized weight entries in public mode, or legacy day logs otherwise. One shared trend
  * computation (`weightTrend`) runs over whichever source, so the maths never forks per mode.
  */
-export function useWeightModel(spanDays: number) {
+export function useWeightModel(selection: number | ProgressRange) {
   const data = useAppData();
   const { mode, publicId } = useProgressMode();
-  const from = iso(subDays(new Date(), Math.max(spanDays, 90)));
-  const weights = useBulkWeights(publicId, from);
+  const range = typeof selection === "number" ? null : selection;
+  const spanDays = typeof selection === "number" ? selection : progressRangeDays(selection);
+  const from = range
+    ? range.start
+      ? iso(subDays(parseISO(range.start), 6))
+      : null
+    : iso(subDays(new Date(), Math.max(spanDays, 90)));
+  const weights = useBulkWeights(publicId, from, range?.end);
 
   const byDate = useMemo<WeightByDate>(() => {
     const map: WeightByDate = {};
@@ -69,7 +74,7 @@ export function useWeightModel(spanDays: number) {
     return map;
   }, [mode, weights.data, data]);
 
-  const trend = weightTrend(byDate, spanDays);
+  const trend = range ? weightPeriodTrend(byDate, range) : weightTrend(byDate, spanDays);
   const start = data?.targets.startWeight ?? 0;
   const target = data?.targets.targetWeight ?? 0;
   const latestKg = trend.latest?.weightKg ?? null;
@@ -94,11 +99,13 @@ export function useWeightModel(spanDays: number) {
  * judged against each day's own stored target snapshot (never today's target); legacy days fall
  * back to the current target. Carbs/fat exist only on the legacy path.
  */
-export function useFoodModel(spanDays: number) {
+export function useFoodModel(selection: number | ProgressRange) {
   const data = useAppData();
   const { mode, publicId } = useProgressMode();
-  const today = iso(new Date());
-  const from = iso(subDays(new Date(), Math.max(spanDays, 35)));
+  const range = typeof selection === "number" ? null : selection;
+  const spanDays = typeof selection === "number" ? selection : progressRangeDays(selection);
+  const today = range?.end ?? iso(new Date());
+  const from = range ? range.start : iso(subDays(new Date(), Math.max(spanDays, 35)));
   const nutrition = useBulkProgressNutrition(publicId, from, today);
   const currentTarget = data?.targets.calories ?? 0;
 
@@ -131,7 +138,7 @@ export function useFoodModel(spanDays: number) {
   }, [mode, nutrition.data, data, currentTarget]);
 
   return {
-    ...nutritionWindow(days, spanDays),
+    ...nutritionWindow(days, spanDays, today, range ?? undefined),
     target: currentTarget,
     usesSnapshots: mode === "public",
     loading: mode === "public" ? nutrition.isLoading : !data,
@@ -146,9 +153,8 @@ export function useFoodModel(spanDays: number) {
 export function useStrengthModel() {
   const data = useAppData();
   const { mode, publicId } = useProgressMode();
-  const today = iso(new Date());
-  const sessions = useCompletedBulkTrainingSessions(publicId, "2000-01-01", "2999-12-31");
-  const dates = useCompletedSessionDates(publicId, "2000-01-01", today);
+  const sessions = useCompletedBulkTrainingSessions(publicId, null, progressEndInstant());
+  // Reuse the hydrated complete sessions rather than fetching their dates again.
 
   const records = useMemo<PersonalRecord[]>(() => {
     if (!data || mode === "none") return [];
@@ -163,15 +169,17 @@ export function useStrengthModel() {
   const workoutRecords = useMemo(
     () =>
       collectCompletedWorkouts({
-        sessions: dates.data ?? [],
+        sessions: sessions.data ?? [],
         legacyWorkouts: recordedLegacyWorkouts(data),
       }),
-    [dates.data, data],
+    [sessions.data, data],
   );
 
   return {
     records,
     workoutRecords,
+    error: sessions.error,
+    refetch: sessions.refetch,
     loading: mode === "public" ? sessions.isLoading : !data,
   };
 }

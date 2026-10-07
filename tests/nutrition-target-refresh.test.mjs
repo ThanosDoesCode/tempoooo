@@ -66,7 +66,7 @@ test("saving targets updates Today immediately without a reload, preserving inta
     "@/lib/goal-metrics": metrics,
     "@/components/PageSkeleton": { PageSkeleton: "PageSkeleton" },
     "@/components/TodayChallenge": { TodayChallenge: "TodayChallenge" },
-    "@/components/ChallengeInviteReceiver": { ChallengeInviteReceiver: "Invitations" },
+    "@/components/NotificationBell": { NotificationBell: "NotificationBell" },
   });
   const editor = accountUI("src/components/NutritionTargetsEditor.tsx", "NutritionTargetsEditor", {
     "@/lib/store": store,

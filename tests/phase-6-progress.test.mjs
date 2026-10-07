@@ -23,12 +23,15 @@ import {
   paceTrend,
   periodRange,
   rivalComparison,
+  runningPeriodStats,
 } from "../src/lib/endurance-progress.ts";
 import {
   availableProgressSections,
   hasBodyFoodData,
   hasStrengthData,
 } from "../src/lib/progress-sections.ts";
+import * as periods from "../src/lib/progress-period.ts";
+import * as strengthProgressHelpers from "../src/lib/strength-progress.ts";
 import { activityPage, collectActivityPages } from "../src/lib/challenge-activity-data.ts";
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
@@ -76,6 +79,8 @@ test("endurance summary reuses settled week rows: paused/hit/missed, streak, ave
     {
       user_id: "me",
       week_number: 1,
+      week_start: "2026-10-01",
+      week_end: "2026-10-07",
       equivalent_km: 0,
       target_km: 15,
       paused: true,
@@ -228,7 +233,7 @@ test("Endurance uses existing challenge data only and reuses challenge helpers",
   assert.match(endurance, /useMyChallenge\(\)/);
   assert.match(endurance, /enduranceSummary\(/);
   assert.match(endurance, /rivalComparison\(/);
-  assert.match(endurance, /paceTrend\(/);
+  assert.match(endurance, /runningPeriodStats\(/);
   // Money comes from the stored payment rows, not a re-derivation.
   assert.match(endurance, /usePayments\(challengeId\)/);
   // Deep-link safe empty state when there is no challenge.
@@ -237,24 +242,24 @@ test("Endurance uses existing challenge data only and reuses challenge helpers",
 
 // --------------------------------------------------------------- Strength
 
-test("Strength shows Epley estimated max per tracked lift with an Edit control and records/history", async () => {
+test("Strength shows real working performance with secondary Epley, period, Edit and records/history", async () => {
   const strength = await read("src/routes/_authenticated/bulk/progress_.strength.tsx");
   assert.match(strength, /useTrackedLifts\(data\)/);
-  assert.match(strength, /liftEstimate\(record, BULK_START\)/);
-  assert.match(strength, /tracked lifts up since/);
+  assert.match(strength, /strengthProgress\(record, range\)/);
+  assert.match(strength, /comparable tracked lifts improved/);
   assert.match(strength, /aria-expanded=\{editing\}/); // Edit toggle
   assert.match(strength, /to="\/bulk\/progress\/strength\/\$lift"/);
   assert.match(strength, /to="\/bulk\/prs"/);
   assert.match(strength, /to="\/bulk\/training\/history"/);
   // Plan-start comparison is period-independent (no period picker on this view).
-  assert.doesNotMatch(strength, /PeriodPicker/);
+  assert.match(strength, /PeriodPicker/);
 });
 
 test("Lift detail charts per-session estimated max, marks the record, and reuses progression for advice", async () => {
   const lift = await read("src/routes/_authenticated/bulk/progress_.strength_.$lift.tsx");
   assert.match(lift, /backTo="\/bulk\/progress\/strength"/);
   assert.match(lift, /backLabel="Strength"/);
-  assert.match(lift, /liftEstimate\(record, BULK_START\)/);
+  assert.match(lift, /strengthProgress\(record, progressRange\(period\)\)/);
   assert.match(lift, /chart\.length >= 2 \?/); // 0/1-point safe
   assert.match(lift, /Record/);
   // Next-session advice reuses the existing own-mode progression verdict, never a new engine.
@@ -270,7 +275,7 @@ test("Body & food reuses the shared 7-day-average model and goal math and links 
     read("src/lib/progress-model-core.ts"),
   ]);
   // The weight model drives it; the authoritative 7-day average is one shared trailing computation.
-  assert.match(body, /useWeightModel\(weeks \* 7\)/);
+  assert.match(body, /useWeightModel\(range\)/);
   assert.match(core, /export function trailingAvg/);
   assert.match(core, /export function weightTrend/);
   assert.match(body, /weight\.points >= 2 \?/); // chart guard
@@ -283,7 +288,7 @@ test("Body & food reuses the shared 7-day-average model and goal math and links 
 test("Food details summarises the week against the target and shows past days as totals only", async () => {
   const food = await read("src/routes/_authenticated/bulk/progress_.body_.food.tsx");
   assert.match(food, /backTo="\/bulk\/progress\/body" backLabel="Body & food"/);
-  assert.match(food, /useFoodModel\(7\)/);
+  assert.match(food, /useFoodModel\(progressRange\(period\)\)/);
   assert.match(food, /on target \$\{food\.onTargetDays\} of \$\{food\.loggedDays\}/);
   assert.match(food, /food\.loggedDays \?/); // bars only when a day is logged
   assert.match(food, /food\.past\.map/); // past days as plain totals
@@ -415,7 +420,7 @@ test("endurance period metrics cover all qualifying activities in the period, no
 test("endurance route loads the full-period activity query, not the recent feed", async () => {
   const endurance = await read("src/routes/_authenticated/bulk/progress_.endurance.tsx");
   assert.match(endurance, /useEnduranceActivities\(challengeId, range\)/);
-  assert.match(endurance, /periodRange\(weekRows\.data, user\.id, weeks\)/);
+  assert.match(endurance, /previousProgressRange\(period\)/);
   assert.doesNotMatch(endurance, /useActivities\(/); // no bounded recent-feed fallback
 });
 
@@ -624,6 +629,8 @@ async function progressFixture(options = {}) {
     onTargetDays: 0,
     loading: false,
     week7: [],
+    series: [],
+    past: [],
     avgKcal: null,
     target: 2500,
   };
@@ -631,10 +638,15 @@ async function progressFixture(options = {}) {
   const data = appData({ targets: { calories: 2500, weeklyWorkoutGoal: 4 } });
   const modules = {
     react: React,
+    "./NotificationBell": { NotificationBell: () => null },
     "react/jsx-runtime": require("react/jsx-runtime"),
     "@tanstack/react-router": {
       Link: ({ to, preload, params, ...props }) => React.createElement("a", { ...props, href: to }),
-      createFileRoute: () => (config) => config,
+      createFileRoute: () => (config) => ({
+        ...config,
+        useParams: () => ({ lift: options.lift ?? "Incline Dumbbell Press" }),
+        useSearch: () => ({}),
+      }),
     },
     "@/components/AppShell": {
       AppShell: ({ children }) => React.createElement("main", {}, children),
@@ -663,6 +675,13 @@ async function progressFixture(options = {}) {
       useStrengthModel: () => strength,
     },
     "@/lib/calc": calc,
+    "@/lib/progress-period": periods,
+    "@/lib/strength-progress": strengthProgressHelpers,
+    "@/components/ProgressChartTooltip": presentationComponent(
+      "src/components/ProgressChartTooltip.tsx",
+    ),
+    "@/components/ui/native-select": presentationComponent("src/components/ui/native-select.tsx"),
+    recharts: require("recharts"),
     "@/lib/strength-estimates": {
       epleyEstimatedMax,
       liftEstimate,
@@ -673,19 +692,27 @@ async function progressFixture(options = {}) {
     "@/lib/training-plans-query": {
       useActiveTrainingPlan: () =>
         q(
-          options.plan ?? {
-            id: "plan",
-            days: defaultTrackedLifts(data).map((name, order) => ({
-              order,
-              exercises: [{ name, order: 0, isBodyweight: false, repMin: 8, repMax: 12 }],
-            })),
-          },
+          Object.hasOwn(options, "plan")
+            ? options.plan
+            : {
+                id: "plan",
+                days: defaultTrackedLifts(data).map((name, order) => ({
+                  order,
+                  exercises: [{ name, order: 0, isBodyweight: false, repMin: 8, repMax: 12 }],
+                })),
+              },
         ),
     },
     "@/lib/types": types,
     "@/lib/goal-metrics": require("../src/lib/goal-metrics.ts"),
     "@/lib/progress-sections": { availableProgressSections },
-    "@/lib/endurance-progress": { enduranceSummary, paceTrend, periodRange, rivalComparison },
+    "@/lib/endurance-progress": {
+      enduranceSummary,
+      paceTrend,
+      periodRange,
+      rivalComparison,
+      runningPeriodStats,
+    },
   };
   const cache = {};
   async function prepare(file) {
@@ -698,6 +725,7 @@ async function progressFixture(options = {}) {
       exports: {},
       require(name) {
         if (modules[name]) return modules[name];
+        if (name === "./progress-period.ts") return periods;
         if (name === "./challenge.ts") return modules["@/lib/challenge"];
         if (name === "./progress-model.ts") return modules["@/lib/progress-model"];
         if (name === "./progress-sections.ts") return modules["@/lib/progress-sections"];
@@ -733,10 +761,10 @@ async function progressFixture(options = {}) {
       await prepare(file);
       return renderToStaticMarkup(React.createElement(cache[file].Route.component));
     },
-    picker(weeks) {
+    picker(period) {
       return renderToStaticMarkup(
         React.createElement(cache["src/components/ProgressChrome.tsx"].PeriodPicker, {
-          weeks,
+          period,
           onChange() {},
         }),
       );
@@ -840,6 +868,8 @@ test("measured Endurance and Strength still use real summaries, trends and suppo
       {
         user_id: "me",
         week_number: 1,
+        week_start: "2026-10-01",
+        week_end: "2026-10-07",
         equivalent_km: 16,
         target_km: 15,
         paused: false,
@@ -864,7 +894,7 @@ test("measured Endurance and Strength still use real summaries, trends and suppo
   const html = await fixture.render(overviewPath);
   const tiles = tileMarkup(html);
   assert.equal(tiles.length, 4);
-  assert.match(tiles[0], /16.0 km.*a week · target 15/s);
+  assert.match(tiles[0], /16.0 km.*a week · latest target 15/s);
   assert.match(tiles[1], /1 of 1.*tracked lifts up/s);
   const insight = html.match(/<p class="[^"]*bg-primary\/10[^"]*">([\s\S]*?)<\/p>/)?.[1];
   assert.match(insight, /endurance target in 1 of 1 active week/);
@@ -884,14 +914,14 @@ test("Progress controls retain equal-width centered segments and a single explic
     assert.match(link, /focus-visible:ring-inset/);
   }
   assert.equal((nav.match(/aria-current="page"/g) ?? []).length, 1);
-  const picker = fixture.picker(4);
+  const picker = fixture.picker("3");
   assert.match(picker, /<select[^>]*appearance-none[^>]*bg-none/);
   assert.match(picker, /min-h-11/);
   assert.equal((picker.match(/<svg/g) ?? []).length, 1);
   assert.match(picker, /lucide-chevron-down/);
   assert.doesNotMatch(picker, /rotate-90/);
   assert.match(picker, /<span class="sr-only">Period<\/span>/);
-  assert.match(picker, /value="4" selected="">Last 4 weeks/);
+  assert.match(picker, /value="3" selected="">Last 3 months/);
 });
 
 test("Today, Progress and Challenge share the safe-area-aware shell inset and 14px header rhythm", async () => {
@@ -915,4 +945,61 @@ test("Today, Progress and Challenge share the safe-area-aware shell inset and 14
   assert.match(tiles[1], /No data yet.*Complete a workout/s);
   assert.match(tiles[1], /text-\[11px\] tracking-tight min-\[360px\]:text-\[13px\]/);
   assert.doesNotMatch(tiles[0] + tiles[1], /<svg|Not enough data|build your trends|start tracking/);
+});
+
+test("Strength with no active public plan never invents planned-workout adherence", async () => {
+  const fixture = await progressFixture({ plan: null });
+  const html = await fixture.render("src/routes/_authenticated/bulk/progress_.strength.tsx");
+  assert.match(html, /completed workouts/);
+  assert.doesNotMatch(html, /training adherence|of \d+ planned workouts/);
+  assert.match(html, /Choose a training plan and weekly workout goal/);
+});
+
+test("one working Strength session renders actual load before secondary estimated 1RM and no fake change", async () => {
+  const record = {
+    key: "press",
+    name: "Incline Dumbbell Press",
+    side: null,
+    exerciseId: "press",
+    isBodyweight: false,
+    performances: [
+      { date: "2026-09-01", load: 24, reps: 10, repCount: 10, repLoad: 24, volume: 240 },
+    ],
+    bestWeight: null,
+    bestReps: null,
+    bestVolume: null,
+  };
+  const fixture = await progressFixture({
+    strength: { records: [record], workoutRecords: [], loading: false },
+  });
+  const html = await fixture.render("src/routes/_authenticated/bulk/progress_.strength.tsx");
+  assert.match(html, /24 kg × 10/);
+  assert.match(html, /One session/);
+  assert.match(html, /Estimated 1RM 32.0 kg/);
+  assert.ok(html.indexOf("24 kg × 10") < html.indexOf("Estimated 1RM 32.0"));
+  assert.doesNotMatch(html, /vs start of period|Estimated 1RM[^<]*%/);
+});
+
+test("bodyweight-only lift detail preserves actual reps even without an estimated-max load", async () => {
+  const fixture = await progressFixture({
+    lift: "Pull Up",
+    strength: {
+      records: [
+        {
+          key: "pull",
+          name: "Pull Up",
+          isBodyweight: true,
+          side: null,
+          performances: [{ date: "2026-09-01", load: null, reps: 10 }],
+          bestWeight: null,
+        },
+      ],
+      workoutRecords: [],
+      loading: false,
+    },
+  });
+  const html = await fixture.render("src/routes/_authenticated/bulk/progress_.strength_.$lift.tsx");
+  assert.match(html, /Bodyweight × 10/);
+  assert.match(html, /One session/);
+  assert.doesNotMatch(html, /Not enough data yet|Estimated 1RM — kg/);
 });

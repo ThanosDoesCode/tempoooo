@@ -1,23 +1,21 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { format, parseISO } from "date-fns";
 import { Trophy } from "lucide-react";
 import { z } from "zod";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { HistoryBackLink } from "@/components/HistoryBackLink";
 import { Card, DataError, SectionTitle } from "@/components/ui-kit";
-import { useAppData, useBulkMeta } from "@/lib/store";
-import { fetchRecentCompletedBulkTrainingSessions } from "@/lib/bulk-training-sessions";
-import { readRetryDelay, shouldRetryRead, userFacingError } from "@/lib/network-errors";
-import {
-  deriveLegacyPersonalRecords,
-  derivePublicPersonalRecords,
-  mergePersonalRecords,
-  type PersonalRecord,
-} from "@/lib/personal-records";
-import { bulkPlanModeFor, useMemberships } from "@/lib/bulk-access";
+import { useStrengthModel } from "@/lib/progress-model";
+import { progressRange, recordsPeriodTitle, PROGRESS_PERIODS } from "@/lib/progress-period";
+import { progressRecordEvents, workingPerformanceLabel } from "@/lib/strength-progress";
+import { userFacingError } from "@/lib/network-errors";
+import type { PersonalRecord } from "@/lib/personal-records";
 
 export const Route = createFileRoute("/_authenticated/bulk/prs")({
-  validateSearch: z.object({ record: z.string().optional() }),
+  validateSearch: z.object({
+    record: z.string().optional(),
+    period: z.enum(PROGRESS_PERIODS).optional(),
+  }),
   head: () => ({ meta: [{ title: "Tempo" }] }),
   component: PersonalRecordsPage,
 });
@@ -26,29 +24,9 @@ const number = (value: number | null) =>
   value == null ? "—" : value.toLocaleString("en-GB", { maximumFractionDigits: 1 });
 
 function PersonalRecordsPage() {
-  const data = useAppData();
-  const { bulkId } = useBulkMeta();
-  const memberships = useMemberships();
-  const { record: selectedKey } = Route.useSearch();
-  const planMode = bulkPlanModeFor(memberships.data, bulkId);
-  const isPublic = planMode === "public";
-  const sessions = useQuery({
-    queryKey: ["bulk-personal-records", bulkId],
-    enabled: isPublic && !!bulkId,
-    queryFn: () => fetchRecentCompletedBulkTrainingSessions(bulkId!, 500),
-    staleTime: 60_000,
-    retry: shouldRetryRead,
-    retryDelay: readRetryDelay,
-  });
-  const records =
-    data && planMode !== "none"
-      ? isPublic
-        ? mergePersonalRecords(
-            derivePublicPersonalRecords(sessions.data ?? []),
-            deriveLegacyPersonalRecords(data),
-          )
-        : deriveLegacyPersonalRecords(data)
-      : [];
+  const { record: selectedKey, period } = Route.useSearch();
+  const { records, loading, error, refetch } = useStrengthModel();
+  const events = period ? progressRecordEvents(records, progressRange(period)) : [];
   const selected = records.find((item) => item.key === selectedKey);
 
   return (
@@ -58,19 +36,65 @@ function PersonalRecordsPage() {
       ) : (
         <>
           <PageHeader
-            title="Personal records"
-            subtitle="Your strongest completed performances."
+            title={period ? recordsPeriodTitle(period) : "Personal records"}
+            subtitle={
+              period
+                ? "Each record-setting performance, newest first."
+                : "Your strongest completed performances."
+            }
             historyBack
             backTo="/bulk/training"
             backLabel="Training"
           />
-          {sessions.error && isPublic ? (
+          {error ? (
             <DataError
-              message={userFacingError(sessions.error, "load your personal records")}
-              onRetry={() => void sessions.refetch()}
+              message={userFacingError(error, "load your personal records")}
+              onRetry={() => void refetch()}
             />
-          ) : sessions.isLoading && isPublic ? (
+          ) : loading ? (
             <div className="h-40 animate-pulse rounded-2xl bg-card" />
+          ) : period ? (
+            <div className="space-y-2">
+              {events.length ? (
+                events.map((event) => (
+                  <Link
+                    key={event.id}
+                    to="/bulk/prs"
+                    search={{ record: event.record.key }}
+                    preload="intent"
+                    className="card-surface block min-h-16 p-4 active:opacity-80"
+                  >
+                    <p className="break-words font-semibold">
+                      {event.record.name}
+                      {event.record.side ? ` · ${event.record.side}` : ""}
+                    </p>
+                    <p className="num mt-1 text-sm">
+                      {event.kind === "volume"
+                        ? `${number(event.performance.volume)} kg volume`
+                        : event.kind === "reps"
+                          ? `${event.performance.repCount} reps${event.performance.repLoad != null ? ` @ ${number(event.performance.repLoad)} kg` : ""}`
+                          : workingPerformanceLabel(event.record, event.performance)}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {format(parseISO(event.performance.date), "d MMM yyyy")} ·{" "}
+                      {event.kind === "weight"
+                        ? "Weight PR"
+                        : event.kind === "reps"
+                          ? "Rep PR"
+                          : "Volume PR"}{" "}
+                      · Open exercise history
+                    </p>
+                  </Link>
+                ))
+              ) : (
+                <Card>
+                  <p className="font-semibold">No records in this period</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Recorded workouts are still available in workout history.
+                  </p>
+                </Card>
+              )}
+            </div>
           ) : records.length ? (
             <div className="space-y-2">
               {records.map((record) => (

@@ -13,8 +13,10 @@ import {
 
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { Card } from "@/components/ui-kit";
-import { ProgressRow } from "@/components/ProgressChrome";
-import { chartAxis, chartTooltip } from "@/lib/progress-view";
+import { ProgressChartTooltip } from "@/components/ProgressChartTooltip";
+import { PeriodPicker, ProgressRow } from "@/components/ProgressChrome";
+import { chartAxis, chartTooltip, useProgressPeriod } from "@/lib/progress-view";
+import { progressRange, progressPeriodLabel } from "@/lib/progress-period";
 import { fmt0 } from "@/lib/calc";
 import { useFoodModel } from "@/lib/progress-model";
 
@@ -24,16 +26,16 @@ export const Route = createFileRoute("/_authenticated/bulk/progress_/body_/food"
 });
 
 function FoodDetailsPage() {
-  const food = useFoodModel(7);
-  const chart = food.week7.map((d) => ({
-    label: format(parseISO(d.date), "EEE"),
-    calories: d.calories ?? 0,
-    on: d.onTarget,
-  }));
+  const [period, setPeriod] = useProgressPeriod();
+  const food = useFoodModel(progressRange(period));
+  const chart = food.series.map((day) => ({ ...day, on: day.onTarget }));
 
   return (
     <AppShell>
       <PageHeader title="Food details" backTo="/bulk/progress/body" backLabel="Body & food" />
+      <div className="mb-3 flex justify-end">
+        <PeriodPicker period={period} onChange={setPeriod} />
+      </div>
       {food.loading ? (
         <div className="h-48 animate-pulse rounded-[20px] bg-card" aria-label="Loading food" />
       ) : (
@@ -46,25 +48,35 @@ function FoodDetailsPage() {
               <span className="text-base text-muted-foreground"> kcal a day on average</span>
             </p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Target {fmt0(food.target)}
+              {progressPeriodLabel(period)} · Current target {fmt0(food.target)}
               {food.loggedDays
                 ? ` · on target ${food.onTargetDays} of ${food.loggedDays} day${
                     food.loggedDays === 1 ? "" : "s"
                   }`
                 : " · no days logged yet"}
             </p>
-            <div className="mt-3.5 h-[110px]">
+            <div className="mt-3.5 h-[170px]">
               {food.loggedDays ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={chart} margin={{ top: 8, right: 6, left: -24, bottom: 0 }}>
                     <CartesianGrid stroke="var(--color-border)" vertical={false} />
-                    <XAxis dataKey="label" {...chartAxis} />
+                    <XAxis
+                      dataKey="date"
+                      tickFormatter={(date: string) => format(parseISO(date), "d MMM")}
+                      {...chartAxis}
+                      minTickGap={30}
+                    />
                     <YAxis {...chartAxis} />
-                    <Tooltip {...chartTooltip} />
-                    <Bar dataKey="calories" radius={[6, 6, 0, 0]} name="kcal">
+                    <Tooltip {...chartTooltip} content={<ProgressChartTooltip kind="food" />} />
+                    <Bar
+                      dataKey="calories"
+                      radius={[6, 6, 0, 0]}
+                      name="Calories"
+                      isAnimationActive={false}
+                    >
                       {chart.map((d) => (
                         <Cell
-                          key={d.label}
+                          key={d.date}
                           fill={d.on ? "var(--color-primary)" : "var(--color-muted)"}
                         />
                       ))}
@@ -73,13 +85,13 @@ function FoodDetailsPage() {
                 </ResponsiveContainer>
               ) : (
                 <div className="grid h-full place-items-center rounded-[14px] bg-elevated text-center text-[13px] text-muted-foreground">
-                  Log meals to see your week against the target.
+                  Log meals to see this period against your daily targets.
                 </div>
               )}
             </div>
           </Card>
 
-          <Card className="num flex justify-between p-[18px] text-sm text-muted-foreground">
+          <Card className="num grid grid-cols-1 gap-2 p-[18px] text-sm text-muted-foreground min-[360px]:grid-cols-3">
             <span>
               Protein <b className="text-foreground">{food.protein ?? "—"}</b> g
             </span>

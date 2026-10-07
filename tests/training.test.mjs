@@ -431,12 +431,12 @@ test("strength trend keeps the existing volume calculation and formats change di
   );
 });
 
-test("Progress Strength lists tracked lifts by estimated max with sign formatting and an insufficient-data state", async () => {
+test("Progress Strength leads with actual working performance and keeps secondary estimates", async () => {
   const strength = await read("src/routes/_authenticated/bulk/progress_.strength.tsx");
-  assert.match(strength, /liftEstimate\(record, BULK_START\)/);
+  assert.match(strength, /strengthProgress\(record, range\)/);
   assert.match(strength, /useTrackedLifts\(data\)/);
   assert.match(strength, /No data yet/);
-  assert.match(strength, /estimate\.changePct >= 0 \? "\+" : ""/);
+  assert.match(strength, /signed\(progress\.estimate\.changePct, 0\)/);
   // An Edit control lets the user choose which lifts to track (default: first lift of each day).
   assert.match(strength, /editing \? "Done" : "Edit"/);
 });

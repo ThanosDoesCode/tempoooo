@@ -1,5 +1,7 @@
 import { addDays, parseISO } from "date-fns";
 
+import { inProgressRange, type ProgressRange } from "./progress-period.ts";
+
 import { iso } from "./calc.ts";
 
 /**
@@ -70,13 +72,22 @@ const avg = (values: number[]) =>
  * (a historical snapshot in normalized mode), never against today's target. `week7` is the trailing
  * seven days for the bar chart; `past` is the most recent logged days as plain totals.
  */
-export function nutritionWindow(days: NutritionDay[], spanDays: number) {
-  const today = parseISO(iso(new Date()));
+export function nutritionWindow(
+  days: NutritionDay[],
+  spanDays: number,
+  todayISO = iso(new Date()),
+  range?: ProgressRange,
+) {
+  const today = parseISO(todayISO);
   const within = (d: NutritionDay, span: number) => {
     const diff = Math.round((today.getTime() - parseISO(d.date).getTime()) / 86_400_000);
     return diff >= 0 && diff < span;
   };
-  const windowDays = days.filter((d) => within(d, spanDays) && d.calories != null);
+  const windowDays = days
+    .filter(
+      (d) => (range ? inProgressRange(d.date, range) : within(d, spanDays)) && d.calories != null,
+    )
+    .sort((a, b) => a.date.localeCompare(b.date));
   const onTargetDay = (d: NutritionDay) =>
     d.calories != null && d.target > 0 && Math.abs(d.calories - d.target) <= d.target * 0.1;
 
@@ -88,6 +99,7 @@ export function nutritionWindow(days: NutritionDay[], spanDays: number) {
       date,
       calories: day?.calories ?? null,
       onTarget: day ? onTargetDay(day) : false,
+      target: day?.target ?? null,
     };
   });
 
@@ -96,7 +108,7 @@ export function nutritionWindow(days: NutritionDay[], spanDays: number) {
     return vals.length ? Math.round(avg(vals) as number) : null;
   };
 
-  const past = [...days]
+  const past = [...windowDays]
     .filter((d) => d.calories != null)
     .sort((a, b) => a.date.localeCompare(b.date))
     .slice(-5)
@@ -104,6 +116,7 @@ export function nutritionWindow(days: NutritionDay[], spanDays: number) {
     .map((d) => ({ date: d.date, calories: d.calories as number }));
 
   return {
+    series: windowDays.map((day) => ({ ...day, onTarget: onTargetDay(day) })),
     loggedDays: windowDays.length,
     onTargetDays: windowDays.filter(onTargetDay).length,
     avgKcal: windowDays.length
@@ -114,5 +127,24 @@ export function nutritionWindow(days: NutritionDay[], spanDays: number) {
     fat: macro("fat"),
     week7,
     past,
+  };
+}
+
+/** Selected-range charts use observed dates for All time, not an arbitrary calendar start. */
+export function weightPeriodTrend(byDate: WeightByDate, range: ProgressRange) {
+  const visible = Object.keys(byDate)
+    .filter((date) => inProgressRange(date, range))
+    .sort();
+  const latestDate = visible.at(-1);
+  const latest = latestDate ? { date: latestDate, weightKg: byDate[latestDate]! } : null;
+  const series = visible.map((date) => ({ date, avg: trailingAvg(byDate, date) }));
+  const avgKg = latest ? trailingAvg(byDate, latest.date) : null;
+  const previous = latest ? trailingAvg(byDate, iso(addDays(parseISO(latest.date), -7))) : null;
+  return {
+    latest,
+    series,
+    avgKg,
+    weekDeltaKg: avgKg != null && previous != null ? avgKg - previous : null,
+    points: series.length,
   };
 }

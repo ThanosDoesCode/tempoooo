@@ -16,10 +16,14 @@ export const bulkWeightQueryKey = (profileId: string) =>
   ["bulk-weight-entries", profileId] as const;
 export const bulkPhotoQueryKey = (profileId: string) =>
   ["bulk-progress-photos", profileId] as const;
-export const bulkProgressNutritionQueryKey = (profileId: string, from: string, to: string) =>
+export const bulkProgressNutritionQueryKey = (profileId: string, from: string | null, to: string) =>
   ["bulk-progress-summary", "nutrition", profileId, from, to] as const;
 
-export const bulkWeightQueryOptions = (profileId: string | null, from: string, to?: string) =>
+export const bulkWeightQueryOptions = (
+  profileId: string | null,
+  from: string | null,
+  to?: string,
+) =>
   queryOptions({
     // Today and Progress read different ranges. Keep the profile prefix for
     // write invalidation, but never share a partial range as complete history.
@@ -33,9 +37,9 @@ export const bulkWeightQueryOptions = (profileId: string | null, from: string, t
             .from("bulk_weight_entries")
             .select("*")
             .eq("bulk_profile_id", profileId)
-            .gte("log_date", from)
             .order("log_date")
             .limit(QUERY_PAGE_SIZE);
+          if (from) query = query.gte("log_date", from);
           if (to) query = query.lte("log_date", to);
           if (cursor) query = query.gt("log_date", cursor);
           return query;
@@ -59,7 +63,7 @@ export const bulkWeightQueryOptions = (profileId: string | null, from: string, t
 
 export const bulkProgressNutritionQueryOptions = (
   profileId: string | null,
-  from: string,
+  from: string | null,
   to: string,
 ) =>
   queryOptions({
@@ -75,10 +79,10 @@ export const bulkProgressNutritionQueryOptions = (
             .from("bulk_nutrition_days")
             .select("id,log_date,target_calories")
             .eq("bulk_profile_id", profileId)
-            .gte("log_date", from)
             .lte("log_date", to)
             .order("id")
             .limit(QUERY_PAGE_SIZE);
+          if (from) query = query.gte("log_date", from);
           if (cursor) query = query.gt("id", cursor);
           return query;
         },
@@ -223,10 +227,13 @@ export const bulkPhotoQueryOptions = (
     retryDelay: readRetryDelay,
   });
 
-export const useBulkWeights = (profileId: string | null, from: string, to?: string) =>
+export const useBulkWeights = (profileId: string | null, from: string | null, to?: string) =>
   useQuery(bulkWeightQueryOptions(profileId, from, to));
-export const useBulkProgressNutrition = (profileId: string | null, from: string, to: string) =>
-  useQuery(bulkProgressNutritionQueryOptions(profileId, from, to));
+export const useBulkProgressNutrition = (
+  profileId: string | null,
+  from: string | null,
+  to: string,
+) => useQuery(bulkProgressNutritionQueryOptions(profileId, from, to));
 export const useBulkProgressPhotos = (
   profileId: string | null,
   angle?: BulkProgressPhoto["viewType"],

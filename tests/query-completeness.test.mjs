@@ -590,3 +590,42 @@ test("Weekly Review uses selected-week bounds, while existing photo comparison a
   assert.match(photosRoute, /const owner = role === "owner"/);
   assert.doesNotMatch(photosRoute, /getPublicUrl/);
 });
+
+test("All-time nutrition and weight omit a made-up start and exhaust capped owner-scoped reads", async () => {
+  const weights = Array.from({ length: 1001 }, (_, i) => ({
+    id: id(i),
+    bulk_profile_id: "owner",
+    log_date: day(i),
+    weight_kg: 70,
+    note: null,
+  }));
+  const days = weights.map((w, i) => ({
+    id: id(i),
+    bulk_profile_id: "owner",
+    log_date: w.log_date,
+    target_calories: 2000 + i,
+  }));
+  const entries = days.map((d, i) => ({
+    id: id(2000 + i),
+    nutrition_day_id: d.id,
+    calories: 2000 + i,
+    protein_g: 100,
+  }));
+  weights.push({ ...weights[0], id: id(9999), bulk_profile_id: "other-owner" });
+  days.push({ ...days[0], id: id(9999), bulk_profile_id: "other-owner" });
+  const f = fixture({
+    bulk_weight_entries: weights,
+    bulk_nutrition_days: days,
+    bulk_nutrition_entries: entries,
+  });
+  const allWeights = await f.progress.bulkWeightQueryOptions("owner", null, day(1000)).queryFn();
+  const allFood = await f.progress
+    .bulkProgressNutritionQueryOptions("owner", null, day(1000))
+    .queryFn();
+  assert.equal(allWeights.length, 1001);
+  assert.equal(allFood.length, 1001);
+  assert.equal(allFood[0].targetCalories, 2000);
+  assert.equal(allFood.at(-1).targetCalories, 3000);
+  assert.ok(allWeights.every((entry) => entry.bulkProfileId === "owner"));
+  assert.ok(f.calls.every((call) => call.limit <= pagination.QUERY_PAGE_SIZE));
+});

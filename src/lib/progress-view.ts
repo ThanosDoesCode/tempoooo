@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useSyncExternalStore, useState } from "react";
 
 import { useMyChallenge } from "./challenge.ts";
 import { availableProgressSections, type ProgressSection } from "./progress-sections.ts";
@@ -23,34 +23,46 @@ export function useProgressSections(): { sections: ProgressSection[]; hasChallen
   };
 }
 
-const PERIOD_KEY = "tempo:progress-period-weeks";
-export const PERIOD_OPTIONS = [4, 8, 12] as const;
-
-function readPeriod(): number {
+export { PROGRESS_PERIODS as PERIOD_OPTIONS } from "./progress-period.ts";
+import {
+  DEFAULT_PROGRESS_PERIOD,
+  PROGRESS_PERIOD_KEY,
+  isProgressPeriod,
+  type ProgressPeriod,
+} from "./progress-period.ts";
+let memoryPeriod: ProgressPeriod = DEFAULT_PROGRESS_PERIOD;
+const periodListeners = new Set<() => void>();
+function readPeriod(): ProgressPeriod {
   try {
-    const raw = Number(localStorage.getItem(PERIOD_KEY));
-    if (PERIOD_OPTIONS.includes(raw as (typeof PERIOD_OPTIONS)[number])) return raw;
+    const raw = localStorage.getItem(PROGRESS_PERIOD_KEY);
+    if (isProgressPeriod(raw)) return raw;
   } catch {
-    /* storage may be unavailable */
+    /* unavailable storage */
   }
-  return 4;
+  return memoryPeriod;
 }
-
-/**
- * The period selection shared across Progress views. A per-viewer UI preference, so it lives in
- * localStorage (no migration needed) and reads back to 4 weeks when storage is unavailable.
- */
-export function usePeriodWeeks(): [number, (weeks: number) => void] {
-  const [weeks, setWeeks] = useState(readPeriod);
-  const update = (next: number) => {
-    setWeeks(next);
-    try {
-      localStorage.setItem(PERIOD_KEY, String(next));
-    } catch {
-      /* ignore */
-    }
+function subscribePeriod(listener: () => void) {
+  periodListeners.add(listener);
+  if (typeof window !== "undefined") window.addEventListener("storage", listener);
+  return () => {
+    periodListeners.delete(listener);
+    if (typeof window !== "undefined") window.removeEventListener("storage", listener);
   };
-  return [weeks, update];
+}
+/** Shared presentation preference; stable SSR default, no account data stored here. */
+export function useProgressPeriod(): [ProgressPeriod, (period: ProgressPeriod) => void] {
+  const period = useSyncExternalStore(subscribePeriod, readPeriod, () => DEFAULT_PROGRESS_PERIOD);
+  const update = useCallback((next: ProgressPeriod) => {
+    if (!isProgressPeriod(next)) return;
+    memoryPeriod = next;
+    try {
+      localStorage.setItem(PROGRESS_PERIOD_KEY, next);
+    } catch {
+      /* unavailable storage */
+    }
+    periodListeners.forEach((listener) => listener());
+  }, []);
+  return [period, update];
 }
 
 const TRACKED_KEY = "tempo:progress-tracked-lifts";
@@ -122,10 +134,16 @@ export const chartAxis = {
 } as const;
 
 export const chartTooltip = {
+  itemStyle: { color: "var(--color-foreground)" },
+  labelStyle: { color: "var(--color-foreground)", fontWeight: 600 },
+  allowEscapeViewBox: { x: false, y: false },
+  isAnimationActive: false,
   contentStyle: {
     background: "var(--color-card)",
     border: "1px solid var(--color-border)",
     borderRadius: 12,
     fontSize: 12,
+    color: "var(--color-foreground)",
+    maxWidth: "min(240px, calc(100vw - 56px))",
   },
 } as const;

@@ -1,16 +1,31 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { format, parseISO, subDays } from "date-fns";
 import { useMemo, useState } from "react";
 
 import { AppShell } from "@/components/AppShell";
-import { Card } from "@/components/ui-kit";
-import { ProgressHeader, ProgressNav, ProgressRow, Sparkline } from "@/components/ProgressChrome";
-import { useTrackedLifts } from "@/lib/progress-view";
-import { useStrengthModel } from "@/lib/progress-model";
-import { BULK_START, fmt, iso } from "@/lib/calc";
+import { Card, DataError } from "@/components/ui-kit";
+import {
+  ProgressHeader,
+  ProgressNav,
+  ProgressRow,
+  PeriodPicker,
+} from "@/components/ProgressChrome";
+import { useProgressPeriod, useTrackedLifts } from "@/lib/progress-view";
+import { useActiveTrainingPlan } from "@/lib/training-plans-query";
+import { useProgressMode, useStrengthModel } from "@/lib/progress-model";
+import { fmt, signed } from "@/lib/calc";
 import { useAppData } from "@/lib/store";
-import { countWorkoutsInRange } from "@/lib/goal-metrics";
-import { liftEstimate } from "@/lib/strength-estimates";
+import {
+  progressRange,
+  progressPeriodLabel,
+  recordsPeriodTitle,
+  type ProgressPeriod,
+} from "@/lib/progress-period";
+import {
+  strengthProgress,
+  workingPerformanceLabel,
+  progressRecordEvents,
+  trainingAdherence,
+} from "@/lib/strength-progress";
 import { exerciseLabel, type AppData } from "@/lib/types";
 
 export const Route = createFileRoute("/_authenticated/bulk/progress_/strength")({
@@ -20,12 +35,15 @@ export const Route = createFileRoute("/_authenticated/bulk/progress_/strength")(
 
 function StrengthPage() {
   const data = useAppData();
+  const [period, setPeriod] = useProgressPeriod();
   return (
     <AppShell>
-      <ProgressHeader />
+      <ProgressHeader>
+        <PeriodPicker period={period} onChange={setPeriod} />
+      </ProgressHeader>
       <ProgressNav active="strength" />
       {data ? (
-        <StrengthBody data={data} />
+        <StrengthBody data={data} period={period} />
       ) : (
         <div className="h-48 animate-pulse rounded-[20px] bg-card" aria-label="Loading strength" />
       )}
@@ -33,72 +51,87 @@ function StrengthPage() {
   );
 }
 
-function StrengthBody({ data }: { data: AppData }) {
-  const today = iso(new Date());
-  const { records, workoutRecords, loading } = useStrengthModel();
+function StrengthBody({ data, period }: { data: AppData; period: ProgressPeriod }) {
+  const range = progressRange(period);
+  const { mode, publicId } = useProgressMode();
+  const plan = useActiveTrainingPlan(publicId);
+  const { records, workoutRecords, loading, error, refetch } = useStrengthModel();
   const [trackedNames, setTrackedNames, resetTrackedNames, candidates, planLoading] =
     useTrackedLifts(data);
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState(false);
 
-  const estimates = useMemo(
-    () =>
-      trackedNames.flatMap((name) => {
-        const record = records.find((r) => r.name === name);
-        return [{ name, estimate: record ? liftEstimate(record, BULK_START) : null }];
-      }),
-    [records, trackedNames],
+  const estimates = trackedNames.flatMap<{
+    name: string;
+    key: string;
+    record: import("@/lib/personal-records").PersonalRecord | null;
+    progress: ReturnType<typeof strengthProgress> | null;
+  }>((name) => {
+    const matching = records.filter((r) => r.name === name);
+    return matching.length
+      ? matching.map((record) => ({
+          name,
+          key: record.key,
+          record,
+          progress: strengthProgress(record, range),
+        }))
+      : [{ name, key: name, record: null, progress: null }];
+  });
+  const measured = estimates.flatMap(({ progress }) =>
+    progress?.changeKg != null ? [progress] : [],
   );
-  const measured = estimates.flatMap(({ estimate }) =>
-    estimate && estimate.trend !== "insufficient" ? [estimate] : [],
+  const up = measured.filter((p) => p.improved).length;
+  const adherence = trainingAdherence(
+    workoutRecords,
+    range,
+    mode === "public" && !plan.data ? null : (data.targets.weeklyWorkoutGoal ?? null),
   );
-  const up = measured.filter((e) => e.trend === "up").length;
+  const events = useMemo(
+    () => progressRecordEvents(records, progressRange(period)),
+    [records, period],
+  );
+  const latestRecord = events[0];
 
-  // Planned workouts: a fixed four-week window (plan-start comparisons stay period-independent).
-  const monthAgo = iso(subDays(parseISO(today), 27));
-  const workoutsDone = countWorkoutsInRange(workoutRecords, monthAgo, today);
-  const workoutTarget = (data.targets.weeklyWorkoutGoal ?? 0) * 4;
-
-  const recordsThisMonth = useMemo(
-    () =>
-      records.filter((record) => (record.bestWeight?.date ?? "") >= monthAgo && record.bestWeight)
-        .length,
-    [records, monthAgo],
-  );
-  const latestRecord = useMemo(
-    () =>
-      [...records]
-        .filter((r) => r.bestWeight)
-        .sort((a, b) => (b.bestWeight!.date ?? "").localeCompare(a.bestWeight!.date ?? ""))[0],
-    [records],
-  );
+  if (error)
+    return (
+      <DataError
+        message="Could not load your training history. Please retry."
+        onRetry={() => void refetch()}
+      />
+    );
 
   return (
     <div className="space-y-3">
-      <Card className="grid grid-cols-2 gap-3 px-[18px] py-4">
-        <div>
-          <div className="num text-[26px] font-semibold">
-            {measured.length ? `${up} of ${measured.length}` : "—"}
-          </div>
-          <div className="text-[13px] text-muted-foreground">
-            {measured.length
-              ? `tracked lifts up since ${format(parseISO(BULK_START), "d MMM")}`
-              : loading
-                ? "Loading strength…"
-                : "No data yet"}
-          </div>
+      <Card className="space-y-2 px-[18px] py-4">
+        <div className="num text-[30px] font-semibold">
+          {adherence.percentage != null ? `${adherence.percentage}%` : adherence.completed}
         </div>
-        <div>
-          <div className="num text-[26px] font-semibold">
-            {workoutsDone}
-            {workoutTarget ? ` of ${workoutTarget}` : ""}
-          </div>
-          <div className="text-[13px] text-muted-foreground">planned workouts done</div>
+        <div className="text-[13px] text-muted-foreground">
+          {adherence.percentage != null ? "training adherence" : "completed workouts"}
         </div>
+        <p className="text-sm text-muted-foreground">
+          {adherence.completed}
+          {adherence.planned != null
+            ? ` of ${adherence.planned} planned workouts`
+            : " completed workouts"}{" "}
+          · {progressPeriodLabel(period)}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          {adherence.planned != null
+            ? "Planned count uses your current weekly workout goal across this period."
+            : period === "all"
+              ? "Historical weekly goals aren't recorded, so no adherence percentage is estimated."
+              : "Choose a training plan and weekly workout goal to track adherence."}
+        </p>
+        {measured.length ? (
+          <p className="text-sm text-primary">
+            {up} of {measured.length} comparable tracked lifts improved this period.
+          </p>
+        ) : null}
       </Card>
 
       <div className="mx-1 flex items-center justify-between text-[13px] font-medium text-muted-foreground">
-        <span>Tracked lifts · estimated max</span>
+        <span>Tracked lifts</span>
         <button
           type="button"
           onClick={() => setEditing((value) => !value)}
@@ -178,51 +211,40 @@ function StrengthBody({ data }: { data: AppData }) {
         <>
           <div className="rounded-[20px] bg-card px-4">
             {estimates.length ? (
-              estimates.map(({ name, estimate }) => (
+              estimates.map(({ name, key, record, progress }) => (
                 <Link
-                  key={name}
+                  key={key}
                   to="/bulk/progress/strength/$lift"
                   params={{ lift: name }}
                   preload="intent"
-                  className="flex min-h-[62px] items-center gap-3 border-t border-border first:border-t-0 active:opacity-80"
+                  className="block min-h-[88px] border-t border-border py-3 first:border-t-0 active:opacity-80"
                 >
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[15px] font-medium">{exerciseLabel(name)}</p>
-                    <p className="num text-[13px] text-muted-foreground">
-                      {estimate?.current != null
-                        ? `${fmt(estimate.current, 1)} kg${
-                            estimate?.changeKg != null
-                              ? ` · was ${fmt(estimate.baseline, 1)} kg`
-                              : estimate?.series.length === 1
-                                ? " · one session"
-                                : ""
-                          }`
-                        : "No data yet"}
+                  <p className="break-words text-[15px] font-medium">
+                    {exerciseLabel(name)}
+                    {record?.side ? ` · ${record.side}` : ""}
+                  </p>
+                  <p className="num mt-1 text-lg font-semibold">
+                    {record
+                      ? workingPerformanceLabel(record, progress?.latest ?? null)
+                      : "No data yet"}
+                  </p>
+                  <p className="mt-0.5 text-sm text-muted-foreground">
+                    {progress?.changeKg != null
+                      ? `${signed(progress.changeKg, 1)} kg vs start of period · same ${progress.latest!.reps} reps`
+                      : progress?.sessions === 1
+                        ? "One session"
+                        : progress?.latest
+                          ? "No comparable previous session yet"
+                          : "Complete a workout to start tracking"}
+                  </p>
+                  {progress?.estimate.current != null ? (
+                    <p className="num mt-1 text-xs text-muted-foreground">
+                      Estimated 1RM {fmt(progress.estimate.current, 1)} kg
+                      {progress.estimate.changePct != null
+                        ? ` · ${signed(progress.estimate.changePct, 0)}%`
+                        : ""}
                     </p>
-                  </div>
-                  <Sparkline
-                    points={
-                      estimate?.series.length && estimate.series.length >= 2
-                        ? estimate.series.map((p) => p.value)
-                        : []
-                    }
-                    width={56}
-                    height={22}
-                    tone={
-                      estimate?.trend === "up"
-                        ? "var(--color-primary)"
-                        : "var(--color-muted-foreground)"
-                    }
-                  />
-                  <span
-                    className={`num w-11 text-right text-[13px] font-semibold ${
-                      estimate?.trend === "up" ? "text-primary" : "text-muted-foreground"
-                    }`}
-                  >
-                    {estimate?.changePct != null
-                      ? `${estimate.changePct >= 0 ? "+" : ""}${estimate.changePct.toFixed(0)}%`
-                      : "—"}
-                  </span>
+                  ) : null}
                 </Link>
               ))
             ) : (
@@ -233,8 +255,7 @@ function StrengthBody({ data }: { data: AppData }) {
             )}
           </div>
           <p className="mx-1 text-[12px] text-muted-foreground">
-            Estimated max is the most you could lift once, worked out from the weight and reps you
-            log.
+            Estimated 1RM uses your logged weight and reps to estimate a one-rep maximum.
           </p>
         </>
       )}
@@ -244,19 +265,22 @@ function StrengthBody({ data }: { data: AppData }) {
           {records.length ? (
             <Link
               to="/bulk/prs"
+              search={{ period }}
               preload="intent"
               className="flex min-h-[62px] items-center gap-3 border-t border-border first:border-t-0 active:opacity-80"
             >
               <div className="min-w-0 flex-1">
-                <p className="text-[15px] font-medium">Records this month</p>
-                {latestRecord?.bestWeight ? (
+                <p className="text-[15px] font-medium">{recordsPeriodTitle(period)}</p>
+                {latestRecord ? (
                   <p className="num text-[13px] text-muted-foreground">
-                    Latest: {exerciseLabel(latestRecord.name)}{" "}
-                    {fmt(latestRecord.bestWeight.load, 1)} kg × {latestRecord.bestWeight.reps}
+                    Latest: {exerciseLabel(latestRecord.record.name)}{" "}
+                    {workingPerformanceLabel(latestRecord.record, latestRecord.performance)}
                   </p>
-                ) : null}
+                ) : (
+                  <p className="text-[13px] text-muted-foreground">No records in this period</p>
+                )}
               </div>
-              <span className="num text-[15px] font-semibold">{recordsThisMonth}</span>
+              <span className="num text-[15px] font-semibold">{events.length}</span>
             </Link>
           ) : null}
           {workoutRecords.length ? (

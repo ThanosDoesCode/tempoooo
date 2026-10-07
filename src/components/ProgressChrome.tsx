@@ -6,6 +6,8 @@ import { NotificationBell } from "./NotificationBell";
 
 import { PERIOD_OPTIONS, useProgressSections, type ProgressSection } from "@/lib/progress-view";
 
+import { progressPeriodLabel, type ProgressPeriod } from "@/lib/progress-period";
+
 const NAV: Record<ProgressSection, { label: string; to: string }> = {
   overview: { label: "Overview", to: "/bulk/progress" },
   endurance: { label: "Endurance", to: "/bulk/progress/endurance" },
@@ -60,23 +62,23 @@ export function ProgressHeader({ children }: { children?: ReactNode }) {
 }
 
 export function PeriodPicker({
-  weeks,
+  period,
   onChange,
 }: {
-  weeks: number;
-  onChange: (weeks: number) => void;
+  period: ProgressPeriod;
+  onChange: (period: ProgressPeriod) => void;
 }) {
   return (
     <label className="relative inline-flex min-w-0">
       <span className="sr-only">Period</span>
       <NativeSelect
-        value={weeks}
-        onChange={(event) => onChange(Number(event.target.value))}
+        value={period}
+        onChange={(event) => onChange(event.target.value as ProgressPeriod)}
         className="h-11 rounded-[10px] bg-elevated text-[13px] font-medium text-foreground outline-none focus:ring-2 focus:ring-ring"
       >
         {PERIOD_OPTIONS.map((option) => (
           <option key={option} value={option}>
-            Last {option} weeks
+            {progressPeriodLabel(option)}
           </option>
         ))}
       </NativeSelect>

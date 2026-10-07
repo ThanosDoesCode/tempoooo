@@ -15,10 +15,12 @@ import { bulkPlanModeFor, useMemberships } from "@/lib/bulk-access";
 import { useAuth } from "@/lib/auth";
 import { useMyChallenge, useWeeks } from "@/lib/challenge";
 import { enduranceSummary } from "@/lib/endurance-progress";
-import { usePeriodWeeks, useProgressSections, useTrackedLifts } from "@/lib/progress-view";
+import { useProgressPeriod, useProgressSections, useTrackedLifts } from "@/lib/progress-view";
 import { useFoodModel, useStrengthModel, useWeightModel } from "@/lib/progress-model";
-import { liftEstimate } from "@/lib/strength-estimates";
+import { strengthProgress } from "@/lib/strength-progress";
 import type { AppData } from "@/lib/types";
+
+import { progressRange } from "@/lib/progress-period";
 
 export const Route = createFileRoute("/_authenticated/bulk/progress")({
   head: () => ({
@@ -55,28 +57,30 @@ function ProgressPage() {
 }
 
 function OwnProgress({ data }: { data: AppData }) {
-  const [weeks, setWeeks] = usePeriodWeeks();
+  const [period, setPeriod] = useProgressPeriod();
+  const range = useMemo(() => progressRange(period), [period]);
   const { sections, hasChallenge } = useProgressSections();
   const { user } = useAuth();
   const challenge = useMyChallenge();
   const weekRows = useWeeks(challenge.data?.id);
 
-  const weight = useWeightModel(weeks * 7);
-  const food = useFoodModel(weeks * 7);
+  const weight = useWeightModel(range);
+  const food = useFoodModel(range);
   const strength = useStrengthModel();
   const [trackedNames] = useTrackedLifts(data);
 
   const strengthTile = useMemo(() => {
     const estimates = trackedNames.flatMap((name) => {
-      const record = strength.records.find((r) => r.name === name);
-      return record ? [liftEstimate(record)] : [];
+      return strength.records
+        .filter((record) => record.name === name)
+        .map((record) => strengthProgress(record, range));
     });
-    const measured = estimates.filter((e) => e.trend !== "insufficient");
-    return { up: measured.filter((e) => e.trend === "up").length, total: measured.length };
-  }, [strength.records, trackedNames]);
+    const measured = estimates.filter((e) => e.changeKg != null);
+    return { up: measured.filter((e) => e.improved).length, total: measured.length };
+  }, [strength.records, trackedNames, range]);
 
   const endurance =
-    hasChallenge && user && weekRows.data ? enduranceSummary(weekRows.data, user.id, weeks) : null;
+    hasChallenge && user && weekRows.data ? enduranceSummary(weekRows.data, user.id, range) : null;
 
   const toGoal = weight.goal.remainingKg;
   const insight = buildInsight({
@@ -90,7 +94,7 @@ function OwnProgress({ data }: { data: AppData }) {
   return (
     <AppShell>
       <ProgressHeader>
-        <PeriodPicker weeks={weeks} onChange={setWeeks} />
+        <PeriodPicker period={period} onChange={setPeriod} />
       </ProgressHeader>
       <ProgressNav active="overview" />
 
@@ -105,9 +109,9 @@ function OwnProgress({ data }: { data: AppData }) {
           to="/bulk/progress/endurance"
           label="Endurance"
           up={
-            endurance?.avgKmPerActiveWeek != null &&
-            endurance.targetKm != null &&
-            endurance.avgKmPerActiveWeek >= endurance.targetKm * 0.9
+            endurance != null &&
+            endurance.activeWeeks > 0 &&
+            endurance.weeksHit === endurance.activeWeeks
           }
           big={
             endurance?.avgKmPerActiveWeek != null
@@ -119,7 +123,7 @@ function OwnProgress({ data }: { data: AppData }) {
           sub={
             endurance?.avgKmPerActiveWeek != null
               ? endurance.targetKm != null
-                ? `a week · target ${fmt0(endurance.targetKm)}`
+                ? `a week · latest target ${fmt0(endurance.targetKm)}`
                 : "a week"
               : "Log a run or ride"
           }
@@ -234,7 +238,7 @@ function Tile({
         className={
           empty
             ? "text-[17px] font-medium leading-snug"
-            : "num text-[26px] font-semibold tracking-tight"
+            : "num break-words text-[26px] font-semibold tracking-tight"
         }
       >
         {big}

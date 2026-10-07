@@ -34,6 +34,7 @@ function nutritionHistoryLink(history, mode = "public") {
     "./PullToRefresh": {},
     "./LogSheet": {},
     "./HistoryBackLink": { HistoryBackLink },
+    "./NotificationBell": { NotificationBell: () => null },
   });
   const { Route } = presentationComponent("src/routes/_authenticated/bulk/meals_.history.tsx", {
     "@/components/TempoDateTimePicker": { TempoDatePicker: "TempoDatePicker" },

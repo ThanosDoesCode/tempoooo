@@ -1,7 +1,9 @@
+import { inProgressRange, progressRangeDays, type ProgressRange } from "./progress-period.ts";
 import type { Activity, WeekRow } from "./challenge.ts";
 
 export type EnduranceBar = {
   weekNumber: number;
+  date: string;
   equivalentKm: number;
   targetKm: number;
   paused: boolean;
@@ -17,6 +19,8 @@ export type EnduranceSummary = {
   pausedWeeks: number;
   totalKm: number;
   bestStreak: number;
+  currentStreak: number;
+  averageTargetKm: number | null;
 };
 
 const userWeeks = (weeks: WeekRow[], userId: string) =>
@@ -26,7 +30,10 @@ const userWeeks = (weeks: WeekRow[], userId: string) =>
 function bestStreak(rows: EnduranceBar[]): number {
   let best = 0;
   let current = 0;
+  let previousWeek: number | null = null;
   for (const row of rows) {
+    if (previousWeek != null && row.weekNumber > previousWeek + 1) current = 0;
+    previousWeek = row.weekNumber;
     if (row.paused) continue; // a paused week neither breaks nor extends the streak
     if (row.hit) {
       current += 1;
@@ -46,26 +53,34 @@ function bestStreak(rows: EnduranceBar[]): number {
 export function enduranceSummary(
   weeks: WeekRow[],
   userId: string,
-  periodWeeks: number,
+  periodWeeks: number | ProgressRange,
 ): EnduranceSummary {
   const mine = userWeeks(weeks, userId);
   const allBars: EnduranceBar[] = mine.map((week) => ({
     weekNumber: week.week_number,
+    date: week.week_start,
     equivalentKm: Number(week.equivalent_km) || 0,
     targetKm: Number(week.target_km) || 0,
     paused: week.paused === true,
     hit: !week.paused && Number(week.equivalent_km) >= Number(week.target_km) && week.target_km > 0,
   }));
-  const bars = allBars.slice(-periodWeeks);
+  const bars =
+    typeof periodWeeks === "number"
+      ? allBars.slice(-periodWeeks)
+      : allBars.filter((bar) => inProgressRange(bar.date, periodWeeks));
   const activeBars = bars.filter((bar) => !bar.paused);
   const avgKmPerActiveWeek = activeBars.length
     ? activeBars.reduce((sum, bar) => sum + bar.equivalentKm, 0) / activeBars.length
     : null;
   const latestTarget = activeBars.length ? activeBars[activeBars.length - 1]!.targetKm : null;
-  const totalKm = mine.reduce(
-    (sum, week) => sum + (Number(week.running_km) || 0) + (Number(week.cycling_km) || 0),
-    0,
-  );
+  const totalKm = mine
+    .filter(
+      (week) => typeof periodWeeks === "number" || inProgressRange(week.week_start, periodWeeks),
+    )
+    .reduce(
+      (sum, week) => sum + (Number(week.running_km) || 0) + (Number(week.cycling_km) || 0),
+      0,
+    );
   return {
     bars,
     avgKmPerActiveWeek,
@@ -74,7 +89,22 @@ export function enduranceSummary(
     activeWeeks: activeBars.length,
     pausedWeeks: bars.filter((bar) => bar.paused).length,
     totalKm,
-    bestStreak: bestStreak(allBars),
+    bestStreak: bestStreak(typeof periodWeeks === "number" ? allBars : bars),
+    currentStreak: (() => {
+      let n = 0;
+      let previousWeek: number | null = null;
+      for (const bar of [...bars].reverse()) {
+        if (previousWeek != null && bar.weekNumber < previousWeek - 1) break;
+        previousWeek = bar.weekNumber;
+        if (bar.paused) continue;
+        if (!bar.hit) break;
+        n++;
+      }
+      return n;
+    })(),
+    averageTargetKm: activeBars.length
+      ? activeBars.reduce((sum, bar) => sum + bar.targetKm, 0) / activeBars.length
+      : null,
   };
 }
 
@@ -149,5 +179,56 @@ export function paceTrend(activities: Activity[], userId: string): PaceTrend {
     latest: series.length ? series[series.length - 1]! : null,
     first: series.length ? series[0]! : null,
     longestRunKm,
+  };
+}
+
+export function runningPeriodStats(
+  activities: Activity[],
+  userId: string,
+  range: ProgressRange,
+  previous: ProgressRange | null = null,
+) {
+  // Raw runs only: converted cycle distance never enters running analytics.
+  const runs = activities
+    .filter((a) => a.user_id === userId && a.activity_type === "run" && Number(a.distance_km) > 0)
+    .sort(
+      (a, b) =>
+        a.activity_date.localeCompare(b.activity_date) ||
+        a.created_at.localeCompare(b.created_at) ||
+        a.id.localeCompare(b.id),
+    );
+  const selected = runs.filter((a) => inProgressRange(a.activity_date, range));
+  const points = selected
+    .filter((a) => Number(a.duration_seconds) > 0)
+    .map((a) => ({
+      id: a.id,
+      date: a.activity_date,
+      distanceKm: Number(a.distance_km),
+      durationSeconds: Number(a.duration_seconds),
+      pace: Number(a.duration_seconds) / Number(a.distance_km),
+    }));
+  const averagePace = (values: Activity[]) => {
+    const timed = values.filter((a) => Number(a.duration_seconds) > 0);
+    const km = timed.reduce((sum, a) => sum + Number(a.distance_km), 0);
+    return km ? timed.reduce((sum, a) => sum + Number(a.duration_seconds), 0) / km : null;
+  };
+  const pace = averagePace(selected);
+  const previousPace = previous
+    ? averagePace(runs.filter((a) => inProgressRange(a.activity_date, previous)))
+    : null;
+  const spanDays = progressRangeDays(range, selected[0]?.activity_date);
+  return {
+    points,
+    runs: selected.length,
+    distanceKm: selected.reduce((sum, a) => sum + Number(a.distance_km), 0),
+    longestRunKm: selected.length ? Math.max(...selected.map((a) => Number(a.distance_km))) : null,
+    durationSeconds:
+      points.length === selected.length && selected.length
+        ? points.reduce((sum, p) => sum + p.durationSeconds, 0)
+        : null,
+    pace,
+    previousPace,
+    paceChange: pace != null && previousPace != null ? previousPace - pace : null,
+    runsPerWeek: selected.length && spanDays >= 7 ? selected.length / (spanDays / 7) : null,
   };
 }
