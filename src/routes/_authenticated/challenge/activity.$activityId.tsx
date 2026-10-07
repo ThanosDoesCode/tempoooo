@@ -136,9 +136,7 @@ function ActivityDetail() {
 
         {!metrics.qualified ? (
           <p className="text-[13px] font-medium text-warn">
-            {run
-              ? "This run is slower than the 7:00 /km limit, so it doesn’t count."
-              : "This ride is under the 18 km/h limit, so it doesn’t count."}
+            {run ? "Not counted · slower than 7:00 /km" : "Not counted · below 18 km/h"}
           </p>
         ) : null}
 

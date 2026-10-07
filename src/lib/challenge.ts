@@ -186,12 +186,12 @@ export function weekPenaltyMessage(
 ): { atRisk: boolean; line: string } {
   const configured = challengeTerms(terms);
   if (targetKm <= 0 || equivalentKm >= targetKm) {
-    return { atRisk: false, line: "On target. No penalty if the week ended now." };
+    return { atRisk: false, line: "On target · no penalty" };
   }
   if (configured.penalty_mode !== "money") {
     return {
       atRisk: true,
-      line: `If the week ended now: ${penaltyTextFor(equivalentKm, configured)}.`,
+      line: `At risk: ${penaltyTextFor(equivalentKm, configured)}`,
     };
   }
   const penalties = {
@@ -201,16 +201,16 @@ export function weekPenaltyMessage(
   };
   const current = penaltyFor(equivalentKm, targetKm, penalties);
   if (current === 0) {
-    return { atRisk: false, line: "On target. No penalty if the week ended now." };
+    return { atRisk: false, line: "On target · no penalty" };
   }
   const nextBoundary = [targetKm / 3, (targetKm * 2) / 3, targetKm].find((b) => b > equivalentKm)!;
   const nextPenalty = penaltyFor(nextBoundary, targetKm, penalties);
   const nextOwed = nextPenalty === 0 ? eur(0) : owedText(nextPenalty, configured.legacy_photo_owed);
   return {
     atRisk: true,
-    line: `You'd pay ${owedText(current, configured.legacy_photo_owed)} if the week ended now. ${km(
+    line: `At risk: ${owedText(current, configured.legacy_photo_owed)} · ${km(
       Math.max(0, nextBoundary - equivalentKm),
-    )} more brings it to ${nextOwed}.`,
+    )} more → ${nextOwed}`,
   };
 }
 

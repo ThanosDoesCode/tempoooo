@@ -166,7 +166,7 @@ function BulkHistoryPage() {
           <>
             {!workoutPerformed ? (
               <p className="mt-3 rounded-xl bg-warn/10 p-3 text-xs text-warn">
-                This saved workout has no working sets, so it is not counted as performed.
+                Not counted · no working sets logged.
               </p>
             ) : null}
             <div className="mt-3 space-y-2">
@@ -256,8 +256,7 @@ function BulkHistoryPage() {
                 <p className="text-sm font-semibold">{nutrition.name}</p>
                 {!day?.mealSnapshot && day?.mealPlan !== "custom" ? (
                   <p className="mt-1 text-[11px] text-warn">
-                    Legacy day: these are the foods configured for the selected plan; individual
-                    consumption was not stored separately.
+                    Plan foods only · individual meals weren’t recorded.
                   </p>
                 ) : day?.mealSnapshot ? (
                   <p className="mt-1 text-[11px] text-muted-foreground">

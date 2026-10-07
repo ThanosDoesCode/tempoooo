@@ -95,9 +95,7 @@ function BulkMorePage() {
             ) : (
               <div className="mt-4">
                 {nutritionDirty || weeklyDirty ? (
-                  <p className="mb-2 text-sm text-warn">
-                    Unsaved target edits will also be discarded.
-                  </p>
+                  <p className="mb-2 text-sm text-warn">Unsaved target changes will be lost.</p>
                 ) : null}
                 <Note>
                   Changing goal resets your current calorie, macro, weight-target and active plan

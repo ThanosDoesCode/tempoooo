@@ -147,15 +147,29 @@ test("weekPenaltyMessage: current owed plus distance to the next lower band", ()
   // 6.5 of 15 km is the medium band (€10); the next boundary is 10 km (€5), 3.5 km away.
   const mid = C.weekPenaltyMessage(6.5, 15, moneyTerms);
   assert.equal(mid.atRisk, true);
-  assert.match(mid.line, /You'd pay €10 if the week ended now\. 3\.5 km more brings it to €5\./);
+  assert.equal(mid.line, "At risk: €10 · 3.5 km more → €5");
 
   // Low band just below target: the next boundary is the target itself, i.e. €0.
-  assert.match(C.weekPenaltyMessage(12, 15, moneyTerms).line, /brings it to €0\./);
+  assert.equal(C.weekPenaltyMessage(12, 15, moneyTerms).line, "At risk: €5 · 3.0 km more → €0");
 
   // On or over target: no penalty, not at risk.
   const done = C.weekPenaltyMessage(15, 15, moneyTerms);
   assert.equal(done.atRisk, false);
-  assert.match(done.line, /No penalty/);
+  assert.equal(done.line, "On target · no penalty");
+});
+
+test("compact risk copy preserves legacy photos and custom consequences", () => {
+  assert.equal(
+    C.weekPenaltyMessage(0, 15, { ...moneyTerms, legacy_photo_owed: true }).line,
+    "At risk: €15 + 3 photos · 5.0 km more → €10 + 2 photos",
+  );
+  const custom = C.weekPenaltyMessage(0, 15, {
+    ...moneyTerms,
+    penalty_mode: "custom",
+    penalty_high_custom: "Cook dinner",
+  });
+  assert.equal(custom.atRisk, true);
+  assert.equal(custom.line, "At risk: Cook dinner");
 });
 
 test("weekPenaltyMessage never re-derives penaltyFor's bands", () => {

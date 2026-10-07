@@ -47,9 +47,7 @@ export function BulkMuscleCoverage({
               {result.summary.trainedMuscleCount} of 19 detailed muscle groups receive plan work.
             </p>
             {result.dataStatus === "incomplete_metadata" ? (
-              <p className="mt-2 text-xs text-warn">
-                Some custom or unavailable exercise metadata could not be analyzed.
-              </p>
+              <p className="mt-2 text-xs text-warn">Some exercises couldn’t be analyzed.</p>
             ) : null}
           </div>
           {result.advisories.length ? (

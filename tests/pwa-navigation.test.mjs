@@ -427,8 +427,8 @@ test("navigation prefetch removes avoidable sequential reads", async () => {
 test("Bulk History uses stored snapshots and labels legacy meal limitations", async () => {
   const source = await read("src/routes/_authenticated/bulk/history.tsx");
   assert.match(source, /day\?\.mealSnapshot \?\? configuredPlan/);
-  assert.match(source, /Legacy day:/);
-  assert.match(source, /individual\s+consumption was not stored separately/);
+  assert.match(source, /Plan foods only/);
+  assert.match(source, /Plan foods only · individual meals weren’t recorded/);
   assert.match(source, /No workout was logged/);
   assert.match(source, /No nutrition was logged/);
 });

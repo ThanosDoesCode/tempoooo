@@ -70,8 +70,8 @@ test("Bulk History exposes stored workout detail and honest nutrition provenance
   ]) {
     assert.match(history, new RegExp(label));
   }
-  assert.match(history, /Legacy day:/);
-  assert.match(history, /foods configured for the selected plan/);
+  assert.match(history, /Plan foods only/);
+  assert.match(history, /individual meals weren’t recorded/);
   assert.match(history, /Stored totals \(authoritative\)/);
   assert.match(history, /Saved plan snapshot for this date/);
   assert.match(history, /Custom foods and quantities were not stored/);

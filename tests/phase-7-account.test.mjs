@@ -892,7 +892,7 @@ test("Phase 7 explicitly confirmed Goal change bypasses the unsaved guard only f
   ui.find("button")
     .find((node) => textOf(node).includes("Change goal"))
     .props.onClick();
-  assert.match(ui.text(), /Unsaved target edits will also be discarded/);
+  assert.match(ui.text(), /Unsaved target changes will be lost/);
   assert.equal(resets, 0);
   ui.button("Reset and change").props.onClick();
   assert.equal(resets, 1);
