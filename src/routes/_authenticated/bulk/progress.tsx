@@ -17,7 +17,11 @@ import { useMyChallenge, useWeeks } from "@/lib/challenge";
 import { enduranceSummary } from "@/lib/endurance-progress";
 import { useProgressPeriod, useProgressSections, useTrackedLifts } from "@/lib/progress-view";
 import { useFoodModel, useStrengthModel, useWeightModel } from "@/lib/progress-model";
-import { strengthProgress } from "@/lib/strength-progress";
+import {
+  bodyweightTrend,
+  trackedLiftSummary,
+  type BodyweightTrend,
+} from "@/lib/progress-presentation";
 import type { AppData } from "@/lib/types";
 
 import { progressRange } from "@/lib/progress-period";
@@ -69,15 +73,10 @@ function OwnProgress({ data }: { data: AppData }) {
   const strength = useStrengthModel();
   const [trackedNames] = useTrackedLifts(data);
 
-  const strengthTile = useMemo(() => {
-    const estimates = trackedNames.flatMap((name) => {
-      return strength.records
-        .filter((record) => record.name === name)
-        .map((record) => strengthProgress(record, range));
-    });
-    const measured = estimates.filter((e) => e.changeKg != null);
-    return { up: measured.filter((e) => e.improved).length, total: measured.length };
-  }, [strength.records, trackedNames, range]);
+  const strengthTile = useMemo(
+    () => trackedLiftSummary(strength.records, trackedNames, range),
+    [strength.records, trackedNames, range],
+  );
 
   const endurance =
     hasChallenge && user && weekRows.data ? enduranceSummary(weekRows.data, user.id, range) : null;
@@ -139,14 +138,22 @@ function OwnProgress({ data }: { data: AppData }) {
             label="Strength"
             up={strengthTile.up > 0}
             big={
-              strengthTile.total > 0
-                ? `${strengthTile.up} of ${strengthTile.total}`
-                : strength.loading
-                  ? "Loading progress…"
+              strength.loading
+                ? "Loading progress…"
+                : strengthTile.total > 0
+                  ? `${strengthTile.up} of ${strengthTile.total}`
                   : "No data yet"
             }
-            sub={strengthTile.total > 0 ? "tracked lifts up" : "Complete a workout"}
-            empty={strengthTile.total === 0}
+            sub={
+              strength.loading
+                ? "Tracked lifts"
+                : strengthTile.comparable > 0
+                  ? "tracked lifts up"
+                  : strengthTile.total > 0
+                    ? "Complete a workout"
+                    : "Choose tracked lifts"
+            }
+            empty={strengthTile.comparable === 0}
             spark={[]}
           />
         ) : null}
@@ -156,7 +163,7 @@ function OwnProgress({ data }: { data: AppData }) {
             <Tile
               to="/bulk/progress/body"
               label="Body"
-              up={weight.latestKg != null && toGoal != null && Math.abs(toGoal) > 0}
+              trend={bodyweightTrend(weight.weekDeltaKg, weight.avgKg, data.targets)}
               big={
                 weight.latestKg != null
                   ? `${fmt(weight.latestKg, 1)} kg`
@@ -217,6 +224,7 @@ function Tile({
   big,
   sub,
   up,
+  trend,
   spark,
   empty = false,
 }: {
@@ -225,6 +233,7 @@ function Tile({
   big: string;
   sub: string;
   up?: boolean;
+  trend?: BodyweightTrend | undefined;
   spark: number[];
   empty?: boolean;
 }) {
@@ -236,7 +245,17 @@ function Tile({
     >
       <span className="flex items-center justify-between text-[13px] text-muted-foreground">
         {label}
-        {up ? <span className="text-[13px] font-semibold text-primary">↑</span> : null}
+        {trend ? (
+          <span
+            role="img"
+            aria-label={trend.label}
+            className={`text-[13px] font-semibold ${trend.tone === "positive" ? "text-primary" : trend.tone === "negative" ? "text-danger" : "text-muted-foreground"}`}
+          >
+            <span aria-hidden="true">{trend.arrow}</span>
+          </span>
+        ) : up ? (
+          <span className="text-[13px] font-semibold text-primary">↑</span>
+        ) : null}
       </span>
       <span
         className={

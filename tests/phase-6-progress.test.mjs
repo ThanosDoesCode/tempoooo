@@ -32,6 +32,7 @@ import {
   hasStrengthData,
 } from "../src/lib/progress-sections.ts";
 import * as periods from "../src/lib/progress-period.ts";
+import * as presentationHelpers from "../src/lib/progress-presentation.ts";
 import * as strengthProgressHelpers from "../src/lib/strength-progress.ts";
 import { activityPage, collectActivityPages } from "../src/lib/challenge-activity-data.ts";
 
@@ -247,7 +248,7 @@ test("Strength shows real working performance with secondary Epley, period, Edit
   const strength = await read("src/routes/_authenticated/bulk/progress_.strength.tsx");
   assert.match(strength, /useTrackedLifts\(data\)/);
   assert.match(strength, /strengthProgress\(record, range\)/);
-  assert.match(strength, /comparable tracked lifts improved/);
+  assert.match(strength, /tracked lifts improved/);
   assert.match(strength, /aria-expanded=\{editing\}/); // Edit toggle
   assert.match(strength, /to="\/bulk\/progress\/strength\/\$lift"/);
   assert.match(strength, /to="\/bulk\/prs"/);
@@ -636,7 +637,7 @@ async function progressFixture(options = {}) {
     target: 2500,
   };
   const strength = options.strength ?? { records: [], workoutRecords: [], loading: false };
-  const data = appData({ targets: { calories: 2500, weeklyWorkoutGoal: 4 } });
+  const data = appData({ targets: { calories: 2500, weeklyWorkoutGoal: 4, ...options.targets } });
   const modules = {
     react: React,
     "./NotificationBell": { NotificationBell: () => null },
@@ -679,6 +680,7 @@ async function progressFixture(options = {}) {
     "@/lib/progress-period": periods,
     "@/lib/progress-model-core": progressCore,
     "@/lib/strength-progress": strengthProgressHelpers,
+    "@/lib/progress-presentation": presentationHelpers,
     "@/components/ProgressChartTooltip": presentationComponent(
       "src/components/ProgressChartTooltip.tsx",
     ),
@@ -795,11 +797,10 @@ test("empty enabled public and legacy Overview renders four honest tiles and sta
     for (const [index, label] of ["Endurance", "Strength", "Body", "Food"].entries())
       assert.match(tiles[index], new RegExp(label));
     assert.match(tiles[0], /No data yet.*Log a run or ride/s);
-    assert.match(tiles[1], /No data yet.*Complete a workout/s);
+    assert.match(tiles[1], /0 of 3.*Complete a workout/s);
     assert.match(tiles[2], /Log your first weight/);
     assert.match(tiles[3], /Start logging meals/);
-    for (const tile of tiles)
-      assert.doesNotMatch(tile, /\b\d+(?:\.\d+)? (?:km|kg)|\d+ of \d+|<svg|↑/);
+    for (const tile of tiles) assert.doesNotMatch(tile, /\b\d+(?:\.\d+)? (?:km|kg)|<svg|↑/);
     assert.doesNotMatch(html, /bg-primary\/10/); // No claims when no data exists.
     for (const active of ["overview", "endurance", "strength", "body"]) {
       const nav = fixture.nav(active);
@@ -822,7 +823,7 @@ test("Body/Food retain real values and insight without inventing missing Strengt
     const tiles = tileMarkup(html);
     assert.equal(tiles.length, 4);
     assert.match(tiles[0], /No data yet.*Log a run or ride/s);
-    assert.match(tiles[1], /No data yet/);
+    assert.match(tiles[1], /0 of 3/);
     assert.match(tiles[2], weight.latestKg != null ? /70.0 kg/ : /Log your first weight/);
     assert.match(tiles[3], /5 of 7/);
     const insight = html.match(/<p class="[^"]*bg-primary\/10[^"]*">([\s\S]*?)<\/p>/)?.[1];
@@ -849,7 +850,7 @@ test("one measurable workout calibrates Strength rather than claiming a fake imp
     },
   });
   const html = await fixture.render(overviewPath);
-  assert.match(tileMarkup(html)[1], /No data yet.*Complete a workout/s);
+  assert.match(tileMarkup(html)[1], /0 of 3.*Complete a workout/s);
   assert.doesNotMatch(tileMarkup(html)[1], /tracked lifts up|↑/);
 });
 
@@ -899,10 +900,10 @@ test("measured Endurance and Strength still use real summaries, trends and suppo
   const tiles = tileMarkup(html);
   assert.equal(tiles.length, 4);
   assert.match(tiles[0], /16.0 km.*a week · latest target 15/s);
-  assert.match(tiles[1], /1 of 1.*tracked lifts up/s);
+  assert.match(tiles[1], /1 of 3.*tracked lifts up/s);
   const insight = html.match(/<p class="[^"]*bg-primary\/10[^"]*">([\s\S]*?)<\/p>/)?.[1];
   assert.match(insight, /endurance target in 1 of 1 active week/);
-  assert.match(insight, /1 of 1 tracked lifts are up/);
+  assert.match(insight, /1 of 3 tracked lifts are up/);
 });
 
 test("Progress controls retain equal-width centered segments and a single explicit select chevron", async () => {
@@ -947,7 +948,7 @@ test("Today, Progress and Challenge share the safe-area-aware shell inset and 14
   const tiles = tileMarkup(html);
   assert.equal(tiles.length, 4);
   assert.match(tiles[0], /No data yet.*Log a run or ride/s);
-  assert.match(tiles[1], /No data yet.*Complete a workout/s);
+  assert.match(tiles[1], /0 of 3.*Complete a workout/s);
   assert.match(tiles[1], /text-\[11px\] tracking-tight min-\[360px\]:text-\[13px\]/);
   assert.doesNotMatch(tiles[0] + tiles[1], /<svg|Not enough data|build your trends|start tracking/);
 });
@@ -1007,4 +1008,65 @@ test("bodyweight-only lift detail preserves actual reps even without an estimate
   assert.match(html, /Bodyweight × 10/);
   assert.match(html, /One session/);
   assert.doesNotMatch(html, /Not enough data yet|Estimated 1RM — kg/);
+});
+
+test("Overview and Strength count all five configured lifts even when only two have comparable history", async () => {
+  const names = ["Press", "Squat", "Row", "Curl", "Deadlift"];
+  const fixture = await progressFixture({
+    plan: {
+      id: "plan",
+      days: names.map((name, order) => ({
+        order,
+        exercises: [{ name, order: 0, isBodyweight: false, repMin: 8, repMax: 12 }],
+      })),
+    },
+    strength: {
+      loading: false,
+      workoutRecords: [],
+      records: names.slice(0, 2).map((name) => ({
+        key: name,
+        name,
+        isBodyweight: false,
+        performances: [
+          { date: "2026-09-01", load: 20, reps: 10 },
+          { date: "2026-10-01", load: 20, reps: 10 },
+        ],
+      })),
+    },
+  });
+  assert.match(tileMarkup(await fixture.render(overviewPath))[1], /0 of 5.*tracked lifts up/s);
+  assert.match(
+    await fixture.render("src/routes/_authenticated/bulk/progress_.strength.tsx"),
+    /0 of 5 tracked lifts improved this period/,
+  );
+});
+
+test("Overview Body uses the real delta for arrow direction and exposes goal-relative meaning", async () => {
+  for (const [goal, delta, tone, direction] of [
+    ["gain", 1, "primary", "increased"],
+    ["gain", -1, "danger", "decreased"],
+    ["cut", -1, "primary", "decreased"],
+    ["cut", 1, "danger", "increased"],
+    ["maintain", 1, "muted-foreground", "increased"],
+  ]) {
+    const fixture = await progressFixture({
+      targets: {
+        goal,
+        startWeight: goal === "cut" ? 80 : 60,
+        targetWeight: goal === "cut" ? 60 : 80,
+      },
+      weight: {
+        latestKg: 70,
+        avgKg: 70,
+        weekDeltaKg: delta,
+        loading: false,
+        series: [],
+        goal: { remainingKg: 10 },
+      },
+    });
+    const tile = tileMarkup(await fixture.render(overviewPath))[2];
+    assert.match(tile, new RegExp(`aria-label="Weight ${direction};`));
+    assert.match(tile, new RegExp(`font-semibold text-${tone}`));
+    assert.match(tile, new RegExp(`aria-hidden="true">${delta > 0 ? "↑" : "↓"}`));
+  }
 });

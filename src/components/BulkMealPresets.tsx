@@ -1,3 +1,4 @@
+import { MealDeleteDialog } from "./MealDeleteDialog";
 import { NativeSelect } from "@/components/ui/native-select";
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Copy, LoaderCircle, Pencil, Plus, Trash2, X } from "lucide-react";
@@ -41,6 +42,7 @@ export function BulkMealPresets({ bulkProfileId }: { bulkProfileId: string }) {
   const meals = useBulkMealPresets(bulkProfileId);
   const mutationBusy = useRef(false);
   const [editor, setEditor] = useState<EditorState | null>(null);
+  const [deleteMeal, setDeleteMeal] = useState<BulkMealPreset | null>(null);
   const [pending, setPending] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -134,8 +136,22 @@ export function BulkMealPresets({ bulkProfileId }: { bulkProfileId: string }) {
 
   const rows = meals.data ?? [];
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between gap-3">
+    <div className="min-w-0 space-y-3">
+      <MealDeleteDialog
+        preset
+        name={deleteMeal?.name ?? ""}
+        open={deleteMeal != null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteMeal(null);
+        }}
+        onConfirm={() => {
+          if (!deleteMeal) return;
+          const meal = deleteMeal;
+          setDeleteMeal(null);
+          void act(`delete:${meal.id}`, () => deleteBulkMealPreset(meal.id), "Meal deleted");
+        }}
+      />
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">Save meals for faster logging.</p>
         {!editor ? (
           <Button className="min-h-11 shrink-0 rounded-xl" onClick={beginCreate}>
@@ -191,10 +207,7 @@ export function BulkMealPresets({ bulkProfileId }: { bulkProfileId: string }) {
                   "Meal duplicated",
                 )
               }
-              onDelete={() => {
-                if (!window.confirm(`Delete “${meal.name}”? This cannot be undone.`)) return;
-                void act(`delete:${meal.id}`, () => deleteBulkMealPreset(meal.id), "Meal deleted");
-              }}
+              onDelete={() => setDeleteMeal(meal)}
               onMove={(direction) =>
                 void act(
                   `move:${meal.id}`,
@@ -245,25 +258,16 @@ function MealCard({
   return (
     <Card className="p-3">
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="truncate font-semibold">{meal.name}</h2>
+        <div className="min-w-0 flex-1">
+          <h2 className="line-clamp-2 font-semibold [overflow-wrap:anywhere]">{meal.name}</h2>
           <p className="mt-0.5 text-[11px] text-muted-foreground">
             {meal.sourceKey ? "Imported preset" : "Custom preset"}
           </p>
           {meal.description ? (
-            <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{meal.description}</p>
+            <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground [overflow-wrap:anywhere]">
+              {meal.description}
+            </p>
           ) : null}
-          <p className="num mt-2 text-sm font-medium">
-            {numberLabel(meal.calories)} kcal
-            <span className="text-muted-foreground">
-              {` · P ${numberLabel(meal.protein)} · C ${numberLabel(meal.carbs)} · F ${numberLabel(meal.fat)}`}
-            </span>
-          </p>
-          <p className="mt-1 truncate text-xs text-muted-foreground">
-            {meal.ingredients.length
-              ? `${meal.ingredients.length} ingredient${meal.ingredients.length === 1 ? "" : "s"}: ${preview}`
-              : "Macro-only preset"}
-          </p>
         </div>
         <div className="flex shrink-0 gap-1">
           <IconButton
@@ -286,6 +290,17 @@ function MealCard({
           </IconButton>
         </div>
       </div>
+      <p className="num mt-2 text-sm font-medium [overflow-wrap:anywhere]">
+        {numberLabel(meal.calories)} kcal
+        <span className="text-muted-foreground">
+          {` · P ${numberLabel(meal.protein)} · C ${numberLabel(meal.carbs)} · F ${numberLabel(meal.fat)}`}
+        </span>
+      </p>
+      <p className="mt-1 line-clamp-2 text-xs text-muted-foreground [overflow-wrap:anywhere]">
+        {meal.ingredients.length
+          ? `${meal.ingredients.length} ingredient${meal.ingredients.length === 1 ? "" : "s"}: ${preview}`
+          : "Macro-only preset"}
+      </p>
       <label
         htmlFor={`quick-add-${meal.id}`}
         className="mt-2 flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-lg px-2 text-sm"
@@ -481,8 +496,8 @@ function MealEditor({
                   />
                 </Field>
               </div>
-              <div className="mt-2 flex items-end gap-2">
-                <label className="min-w-0 flex-1 text-xs font-medium text-muted-foreground">
+              <div className="mt-2 flex flex-wrap items-end gap-2">
+                <label className="min-w-full flex-1 text-xs font-medium text-muted-foreground min-[360px]:min-w-[5rem]">
                   Unit
                   <NativeSelect
                     containerClassName="mt-1 w-full"

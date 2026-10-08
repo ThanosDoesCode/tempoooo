@@ -89,7 +89,7 @@ test("public meal UI uses explicit saves, local errors and mobile-safe controls"
   assert.match(component, /inputMode="decimal"/);
   assert.match(component, /Discard unsaved meal changes/);
   assert.match(component, /Move ingredient/);
-  assert.match(component, /This cannot be undone/);
+  assert.match(component, /<MealDeleteDialog/);
   assert.match(route, /BulkMealPresets/);
   assert.match(shell, /<LogSheet/); // Meals is reached from the shared Log sheet
   // Ingredient reads now depend on the exhaustively loaded, profile-scoped preset IDs.

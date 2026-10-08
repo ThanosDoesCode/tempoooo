@@ -1,3 +1,4 @@
+import { MealDeleteDialog } from "./MealDeleteDialog";
 import { NutritionDateStrip } from "./NutritionDateStrip";
 import { NativeSelect } from "@/components/ui/native-select";
 import { useQueryClient } from "@tanstack/react-query";
@@ -78,6 +79,7 @@ export function BulkNutritionLog({
   const dayQuery = useBulkNutritionDay(bulkProfileId, selectedDate);
   const presets = useBulkMealPresets(bulkProfileId);
   const quickAddPresets = (presets.data ?? []).filter((preset) => preset.showInQuickAdd);
+  const [deleteEntry, setDeleteEntry] = useState<BulkNutritionEntry | null>(null);
   const [pending, setPending] = useState<string | null>(null);
   const [failedPreset, setFailedPreset] = useState<FailedPresetLog | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -201,12 +203,7 @@ export function BulkNutritionLog({
   };
 
   const removeEntry = async (entry: BulkNutritionEntry) => {
-    if (
-      mutationBusy.current ||
-      isFuture ||
-      !window.confirm(`Delete “${entry.name}” from this day?`)
-    )
-      return;
+    if (mutationBusy.current || isFuture) return;
     mutationBusy.current = true;
     setPending(`delete:${entry.id}`);
     setError(null);
@@ -243,12 +240,25 @@ export function BulkNutritionLog({
         const draft = nutritionEntryDraft(entry);
         setEditor({ entry, draft, initial: draftSignature(draft), requestId: crypto.randomUUID() });
       }}
-      onDelete={() => void removeEntry(entry)}
+      onDelete={() => setDeleteEntry(entry)}
     />
   );
 
   return (
-    <div className="space-y-4">
+    <div className="min-w-0 space-y-4">
+      <MealDeleteDialog
+        name={deleteEntry?.name ?? ""}
+        open={deleteEntry != null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteEntry(null);
+        }}
+        onConfirm={() => {
+          if (!deleteEntry) return;
+          const entry = deleteEntry;
+          setDeleteEntry(null);
+          void removeEntry(entry);
+        }}
+      />
       {mode === "overview" ? (
         <NutritionDateStrip selectedDate={selectedDate} today={today} onChange={changeDate} />
       ) : (
@@ -436,10 +446,10 @@ export function BulkNutritionLog({
             const meals = entries.filter((entry) => entry.mealCategory === category);
             return (
               <section key={category} className="rounded-[20px] bg-card px-4 py-3">
-                <div className="flex min-h-11 items-center justify-between gap-3">
+                <div className="flex min-h-11 flex-wrap items-center justify-between gap-x-3 gap-y-1">
                   <h2 className="text-base font-semibold">{mealCategoryLabel(category)}</h2>
                   {meals.length ? (
-                    <span className="num text-[13px] text-muted-foreground">
+                    <span className="num min-w-0 text-[13px] text-muted-foreground [overflow-wrap:anywhere]">
                       {meals.reduce((sum, entry) => sum + entry.calories, 0).toLocaleString()} kcal
                     </span>
                   ) : null}
@@ -492,8 +502,8 @@ function NutritionOverview({ summary }: { summary: ReturnType<typeof nutritionSu
   return (
     <section className="space-y-3" aria-label="Daily nutrition summary">
       <div className="card-surface flex items-center justify-between gap-3 p-[18px]">
-        <div className="min-w-0">
-          <p className="num text-[34px] font-semibold tracking-tight">
+        <div className="min-w-0 flex-1 [overflow-wrap:anywhere]">
+          <p className="num text-[28px] min-[360px]:text-[34px] font-semibold tracking-tight">
             {calories.consumed.toLocaleString()}{" "}
             <span className="text-sm font-normal text-muted-foreground">kcal</span>
           </p>
@@ -514,7 +524,7 @@ function NutritionOverview({ summary }: { summary: ReturnType<typeof nutritionSu
         {calories.target != null ? (
           <svg
             viewBox="0 0 80 80"
-            className="h-20 w-20 shrink-0 -rotate-90"
+            className="h-16 w-16 shrink-0 -rotate-90 min-[360px]:h-20 min-[360px]:w-20"
             role="progressbar"
             aria-label="Calorie target progress"
             aria-valuemin={0}
@@ -545,15 +555,14 @@ function NutritionOverview({ summary }: { summary: ReturnType<typeof nutritionSu
       </div>
       <div className="grid grid-cols-3 gap-2">
         {(["protein", "carbs", "fat"] as const).map((key) => (
-          <div key={key} className="min-w-0 rounded-[16px] bg-card p-3">
+          <div key={key} className="min-w-0 rounded-[16px] bg-card p-2.5 [overflow-wrap:anywhere]">
             <p className="text-[12px] text-muted-foreground">
               {key[0]!.toUpperCase()}
               {key.slice(1)}
             </p>
             <p className="num mt-1 break-words text-[13px] font-semibold">
               {summary[key].consumed}
-              <span className="font-normal text-muted-foreground">
-                {" "}
+              <span className="block text-xs font-normal text-muted-foreground">
                 / {summary[key].target ?? "—"} g
               </span>
             </p>
@@ -591,10 +600,12 @@ function PresetQuickAdd({
       disabled={disabled}
       onClick={onLog}
       aria-label={`Log ${preset.name}`}
-      className="flex min-h-11 shrink-0 flex-col gap-0.5 rounded-[14px] border border-border bg-card px-[14px] py-2.5 text-left disabled:opacity-60 active:opacity-80"
+      className="flex min-h-11 max-w-[min(200px,100%)] shrink-0 flex-col gap-0.5 rounded-[14px] border border-border bg-card px-[14px] py-2.5 text-left disabled:opacity-60 active:opacity-80"
     >
-      <span className="text-sm font-medium">{preset.name}</span>
-      <span className="num text-[13px] text-muted-foreground">
+      <span className="line-clamp-2 text-sm font-medium [overflow-wrap:anywhere]">
+        {preset.name}
+      </span>
+      <span className="num text-[13px] text-muted-foreground [overflow-wrap:anywhere]">
         {loading ? (
           <PendingLabel>Logging…</PendingLabel>
         ) : retry ? (
@@ -628,7 +639,7 @@ function NutritionEntryCard({
   return (
     <div className="border-t border-border py-3">
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1 [overflow-wrap:anywhere]">
           <p className="break-words text-[15px] font-medium">{entry.name}</p>
           <p className="num mt-1 text-xs text-muted-foreground">
             {entry.calories} kcal · P {entry.protein} · C {entry.carbs} · F {entry.fat}
@@ -649,7 +660,7 @@ function NutritionEntryCard({
           ) : null}
         </div>
         {!readOnly ? (
-          <div className="flex">
+          <div className="flex shrink-0">
             <button
               type="button"
               aria-label={`Edit ${entry.name}`}

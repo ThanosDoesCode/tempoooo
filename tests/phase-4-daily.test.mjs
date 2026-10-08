@@ -90,6 +90,7 @@ function fixture(source, exportName, props, options = {}) {
       bulkWeightQueryKey: (id) => ["bulk-weight-entries", id],
       saveBulkWeight: (...a) => record("saveWeight", ...a),
     },
+    "./MealDeleteDialog": { MealDeleteDialog: "MealDeleteDialog" },
     "./NutritionDateStrip": { NutritionDateStrip: "NutritionDateStrip" },
     "@/lib/bulk-nutrition": nutrition,
     "@/lib/network-errors": { userFacingError: () => "Failed. Your entered data is still here." },
@@ -463,7 +464,24 @@ test("Phase 4 Save for quick add creates one preset then logs that preset; edit/
   await new Promise((r) => setImmediate(r));
   assert.equal(g.calls.find(([n]) => n === "updateEntry")[1].id, "entry");
   find(g.render(), "NutritionEntryCard").props.onDelete();
+  assert.equal(
+    g.calls.some(([n]) => n === "deleteEntry"),
+    false,
+  );
+  const deletion = find(g.render(), "MealDeleteDialog");
+  assert.equal(deletion.props.open, true);
+  deletion.props.onOpenChange(false);
+  assert.equal(find(g.render(), "MealDeleteDialog").props.open, false);
+  assert.equal(
+    g.calls.some(([n]) => n === "deleteEntry"),
+    false,
+  );
+  find(g.render(), "NutritionEntryCard").props.onDelete();
+  const confirmed = find(g.render(), "MealDeleteDialog").props.onConfirm;
+  confirmed();
+  confirmed(); // The existing mutation guard still prevents duplicate deletion.
   await new Promise((r) => setImmediate(r));
+  assert.equal(g.calls.filter(([n]) => n === "deleteEntry").length, 1);
   assert.equal(g.calls.find(([n]) => n === "deleteEntry")[1], "entry");
 });
 

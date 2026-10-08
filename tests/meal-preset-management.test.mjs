@@ -243,17 +243,21 @@ test("duplicate and Move up/down retain existing actions; deletion remains confi
     ),
   );
   assert.ok(f.calls.some(([name, meal]) => name === "duplicate" && meal === "meal"));
-  f.setConfirm(false);
   f.click(button(f.render(), "Delete"));
+  assert.equal(nodes(f.render(), (n) => n.type === "MealDeleteDialog")[0].props.open, true);
+  nodes(f.render(), (n) => n.type === "MealDeleteDialog")[0].props.onOpenChange(false);
   assert.equal(
     f.calls.some(([name]) => name === "delete"),
     false,
   );
-  f.setConfirm(true);
   f.click(button(f.render(), "Delete"));
+  const confirmDelete = nodes(f.render(), (n) => n.type === "MealDeleteDialog")[0].props.onConfirm;
+  confirmDelete();
+  confirmDelete();
   await settle();
   assert.ok(f.calls.some(([name, meal]) => name === "delete" && meal === "meal"));
-  assert.match(f.confirmations[0], /This cannot be undone/);
+  assert.equal(f.calls.filter(([name]) => name === "delete").length, 1);
+  assert.equal(f.confirmations.length, 0);
 });
 
 test("query maps visibility/source metadata while retaining all owned presets for management", async () => {

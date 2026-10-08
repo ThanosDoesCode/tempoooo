@@ -12,6 +12,7 @@ import {
 import { useProgressPeriod, useTrackedLifts } from "@/lib/progress-view";
 import { useActiveTrainingPlan } from "@/lib/training-plans-query";
 import { useProgressMode, useStrengthModel } from "@/lib/progress-model";
+import { trackedLiftSummary } from "@/lib/progress-presentation";
 import { fmt, signed } from "@/lib/calc";
 import { useAppData } from "@/lib/store";
 import {
@@ -77,10 +78,7 @@ function StrengthBody({ data, period }: { data: AppData; period: ProgressPeriod 
         }))
       : [{ name, key: name, record: null, progress: null }];
   });
-  const measured = estimates.flatMap(({ progress }) =>
-    progress?.changeKg != null ? [progress] : [],
-  );
-  const up = measured.filter((p) => p.improved).length;
+  const summary = trackedLiftSummary(records, trackedNames, range);
   const adherence = trainingAdherence(
     workoutRecords,
     range,
@@ -123,9 +121,9 @@ function StrengthBody({ data, period }: { data: AppData; period: ProgressPeriod 
               ? "Historical weekly goals aren't recorded, so no adherence percentage is estimated."
               : "Choose a training plan and weekly workout goal to track adherence."}
         </p>
-        {measured.length ? (
+        {summary.total ? (
           <p className="text-sm text-primary">
-            {up} of {measured.length} comparable tracked lifts improved this period.
+            {summary.up} of {summary.total} tracked lifts improved this period.
           </p>
         ) : null}
       </Card>

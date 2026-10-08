@@ -58,6 +58,11 @@ function AppChrome({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Keep scrolled content out of the status bar without changing page scrolling/padding. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none fixed inset-x-0 top-0 z-[45] h-[env(safe-area-inset-top,0px)] bg-background"
+      />
       <PullToRefresh>
         <main
           className={`mx-auto w-full ${widerDailyLayout ? "max-w-2xl" : "max-w-lg"} px-5 ${isAccountOnboarding ? "pb-6 pt-0" : `${focusScreen ? "pb-10" : "pb-28"} ${topSpacing}`}`}
