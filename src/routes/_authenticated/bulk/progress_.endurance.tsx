@@ -1,9 +1,8 @@
 import { useState } from "react";
 import { format, parseISO } from "date-fns";
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { ProgressChartTooltip } from "@/components/ProgressChartTooltip";
-import { NativeSelect } from "@/components/ui/native-select";
-import { chartAxis, chartTooltip } from "@/lib/progress-view";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { chartAxis } from "@/lib/progress-view";
 import { createFileRoute, Link } from "@tanstack/react-router";
 
 import { AppShell } from "@/components/AppShell";
@@ -23,7 +22,7 @@ import {
 } from "@/lib/challenge";
 import { enduranceSummary, runningPeriodStats, rivalComparison } from "@/lib/endurance-progress";
 
-import { progressRange, previousProgressRange, progressPeriodLabel } from "@/lib/progress-period";
+import { progressRange, previousProgressRange } from "@/lib/progress-period";
 
 export const Route = createFileRoute("/_authenticated/bulk/progress_/endurance")({
   head: () => ({ meta: [{ title: "Tempo" }] }),
@@ -89,7 +88,6 @@ function EndurancePage() {
               : null;
           })()}
           runs={runningPeriodStats(activities.data ?? [], user.id, selectedRange, previousRange)}
-          periodLabel={progressPeriodLabel(period)}
           moneyLine={moneySummary(payments.data ?? [], user.id)}
         />
       )}
@@ -97,23 +95,32 @@ function EndurancePage() {
   );
 }
 
-function EnduranceBody({
+export function EnduranceBody({
   summary,
   rival,
   opponent,
   runs,
-  periodLabel,
   moneyLine,
 }: {
   summary: ReturnType<typeof enduranceSummary>;
   rival: ReturnType<typeof rivalComparison>;
   opponent: { name: string; rival: ReturnType<typeof rivalComparison> } | null;
   runs: ReturnType<typeof runningPeriodStats>;
-  periodLabel: string;
   moneyLine: string | null;
 }) {
   const [selectedRun, setSelectedRun] = useState<string | null>(null);
   const run = runs.points.find((p) => p.id === selectedRun) ?? runs.points.at(-1);
+  const runIndex = run ? runs.points.indexOf(run) : -1;
+  const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
+  const week = summary.bars.find((bar) => bar.weekNumber === selectedWeek);
+  const weekStatus = (bar: (typeof summary.bars)[number]) =>
+    bar.paused
+      ? "Paused"
+      : bar.hit
+        ? "Hit"
+        : bar.equivalentKm === 0
+          ? `No activity · Missed by ${fmt(bar.targetKm - bar.equivalentKm, 1)} km`
+          : `Missed by ${fmt(bar.targetKm - bar.equivalentKm, 1)} km`;
   if (!summary.bars.length && !runs.runs) {
     return (
       <Card className="p-[18px]">
@@ -132,50 +139,55 @@ function EnduranceBody({
     <div className="space-y-3">
       {summary.bars.length ? (
         <Card className="p-[18px]">
-          <p className="num">
-            <span className="text-[34px] font-semibold tracking-tight">
-              {summary.avgKmPerActiveWeek == null ? "—" : fmt(summary.avgKmPerActiveWeek, 1)} km
-            </span>
-            <span className="text-base text-muted-foreground"> a week, on average</span>
+          <h2 className="sr-only">Weekly distance</h2>
+          <p className="num text-[28px] font-semibold tracking-tight sm:text-[34px]">
+            {summary.avgKmPerActiveWeek == null ? "—" : fmt(summary.avgKmPerActiveWeek, 1)} km/week
           </p>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            {summary.targetKm != null
-              ? `Latest target ${fmt0(summary.targetKm)} km`
-              : "No target recorded"}
-            {summary.pausedWeeks
-              ? ` · ${summary.pausedWeeks} paused week${summary.pausedWeeks === 1 ? "" : "s"}`
-              : ""}
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Challenge-equivalent km · {periodLabel}
-          </p>
-          {summary.activeWeeks > 0 ? (
-            <p className="mt-2 text-sm text-primary">
-              {summary.weeksHit} of {summary.activeWeeks} weeks hit.
+          <div className="mt-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-sm">
+            <p className="text-muted-foreground">
+              {summary.targetKm != null
+                ? `Target ${fmt0(summary.targetKm)} km`
+                : "No target recorded"}
+            </p>
+            {summary.activeWeeks > 0 ? (
+              <p className="text-primary">
+                {summary.weeksHit}/{summary.activeWeeks} weeks hit
+              </p>
+            ) : null}
+          </div>
+          {summary.pausedWeeks ? (
+            <p className="mt-1 text-xs text-muted-foreground">
+              {summary.pausedWeeks} paused week{summary.pausedWeeks === 1 ? "" : "s"}
             </p>
           ) : null}
           <div
-            className="mt-3 overflow-x-auto pb-2"
+            className="mt-3 overflow-x-auto pb-1"
             tabIndex={0}
             role="region"
             aria-label="Weekly Challenge distance and historical targets"
           >
-            <div className="flex min-w-full items-end gap-2">
+            <div className="flex min-w-full items-end gap-1.5">
               {summary.bars.map((bar, index) => (
-                <div key={bar.weekNumber} className="min-w-[48px] flex-1 text-center">
-                  {index > 0 && bar.weekNumber > summary.bars[index - 1]!.weekNumber + 1 ? (
-                    <span className="text-[10px] text-muted-foreground">Missing week data</span>
-                  ) : null}
-                  <p className="num text-xs font-semibold">
-                    {bar.paused ? "Paused" : `${fmt(bar.equivalentKm, 1)}`}
-                  </p>
-                  <div
+                <button
+                  key={bar.weekNumber}
+                  type="button"
+                  className={`min-h-11 min-w-11 flex-1 rounded-lg text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${selectedWeek === bar.weekNumber ? "bg-primary/10 ring-1 ring-primary/50" : "hover:bg-elevated"}`}
+                  aria-label={`${format(parseISO(bar.date), "d MMM")}: ${fmt(bar.equivalentKm, 1)} km, target ${fmt(bar.targetKm, 1)} km, ${weekStatus(bar)}${index > 0 && bar.weekNumber > summary.bars[index - 1]!.weekNumber + 1 ? ", missing week data before this week" : ""}`}
+                  aria-pressed={selectedWeek === bar.weekNumber}
+                  onClick={() => setSelectedWeek(bar.weekNumber)}
+                  onFocus={() => setSelectedWeek(bar.weekNumber)}
+                  onMouseEnter={() => setSelectedWeek(bar.weekNumber)}
+                >
+                  <span className="num block text-xs font-semibold">
+                    {bar.paused ? "Paused" : fmt(bar.equivalentKm, 1)}
+                  </span>
+                  <span
                     className="relative mt-1 flex h-32 items-end rounded-lg bg-elevated/50"
-                    title={`${format(parseISO(bar.date), "d MMM")}: ${fmt(bar.equivalentKm, 1)} km, target ${fmt(bar.targetKm, 1)} km, ${bar.paused ? "paused" : bar.hit ? "target hit" : "below target"}`}
+                    aria-hidden="true"
                   >
                     {!bar.paused ? (
                       <>
-                        <div
+                        <span
                           className={`w-full rounded-t-lg ${bar.hit ? "bg-primary/80" : "bg-muted-foreground/40"}`}
                           style={{ height: `${(bar.equivalentKm / maxBar) * 100}%` }}
                         />
@@ -185,33 +197,27 @@ function EnduranceBody({
                         />
                       </>
                     ) : (
-                      <span className="w-full border border-dashed border-muted-foreground text-xs text-muted-foreground">
-                        Paused
-                      </span>
+                      <span className="w-full border-t border-dashed border-muted-foreground" />
                     )}
-                  </div>
-                  <p className="mt-1 text-[10px] text-muted-foreground">
+                  </span>
+                  <span className="mt-1 block whitespace-nowrap text-[10px] text-muted-foreground">
                     {format(parseISO(bar.date), "d MMM")}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground">
-                    {bar.paused
-                      ? ""
-                      : bar.equivalentKm === 0
-                        ? "No activity"
-                        : bar.hit
-                          ? "Hit"
-                          : "Miss"}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground">
-                    {bar.paused ? "" : `Target ${fmt0(bar.targetKm)}`}
-                  </p>
-                </div>
+                  </span>
+                </button>
               ))}
             </div>
           </div>
-          <p className="mt-1 text-[11px] text-muted-foreground">
-            Dashed markers show each week's target. Only recorded Challenge weeks are shown.
-          </p>
+          {week ? (
+            <div className="num mt-2 rounded-xl bg-elevated px-3 py-2 text-sm" aria-live="polite">
+              <p className="font-medium">{format(parseISO(week.date), "d MMM")}</p>
+              <p className="mt-0.5 text-muted-foreground">
+                {fmt(week.equivalentKm, 1)} km · Target {fmt0(week.targetKm)} km
+              </p>
+              <p className={week.hit ? "text-primary" : "text-muted-foreground"}>
+                {weekStatus(week)}
+              </p>
+            </div>
+          ) : null}
         </Card>
       ) : (
         <Card className="p-[18px]">
@@ -221,84 +227,148 @@ function EnduranceBody({
         </Card>
       )}
 
-      {runs.pace != null ? (
-        <Card className="p-[18px]">
-          <h2 className="text-[13px] font-medium text-muted-foreground">Average running pace</h2>
-          <p className="num mt-1.5 text-[28px] font-semibold">{formatPace(runs.pace)} /km</p>
-          {paceDelta != null ? (
+      <Card className="p-[18px]">
+        <h2 className="text-[13px] font-medium text-muted-foreground">Average pace</h2>
+        {runs.pace != null ? (
+          <>
+            <p className="num mt-1.5 text-[28px] font-semibold">{formatPace(runs.pace)}</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              {Math.abs(paceDelta) < 1
-                ? "Same pace as previous period"
-                : `${fmt0(Math.abs(paceDelta))} sec/km ${paceDelta > 0 ? "faster" : "slower"} than previous period`}{" "}
-              · Previous {formatPace(runs.previousPace)} /km
+              Across {runs.points.length} timed run{runs.points.length === 1 ? "" : "s"}
             </p>
-          ) : (
-            <p className="mt-1 text-xs text-muted-foreground">
-              Distance-weighted pace from timed runs in this period.
-            </p>
-          )}
-          {runs.points.length >= 2 ? (
-            <div className="mt-3 h-40">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart
-                  data={runs.points}
-                  margin={{ top: 8, right: 8, left: -12, bottom: 0 }}
-                  onClick={(state) => {
-                    const point = state?.activePayload?.[0]?.payload;
-                    if (point?.id) setSelectedRun(point.id);
-                  }}
-                >
-                  <XAxis
-                    dataKey="date"
-                    tickFormatter={(date: string) => format(parseISO(date), "d MMM")}
-                    {...chartAxis}
-                    minTickGap={30}
-                  />
-                  <YAxis
-                    {...chartAxis}
-                    reversed
-                    tickFormatter={(value: number) => formatPace(value)}
-                    width={55}
-                    domain={["dataMin - 10", "dataMax + 10"]}
-                  />
-                  <Tooltip {...chartTooltip} content={<ProgressChartTooltip kind="pace" />} />
-                  <Line
-                    dataKey="pace"
-                    stroke="var(--color-primary)"
-                    strokeWidth={2}
-                    dot={{ r: 3 }}
-                    isAnimationActive={false}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          ) : (
-            <p className="mt-3 text-sm text-muted-foreground">
-              One run. Log another to see your pace trend.
-            </p>
-          )}
-          {run ? (
-            <div className="mt-3">
-              <NativeSelect
-                aria-label="Run details"
-                value={run.id}
-                onChange={(event) => setSelectedRun(event.target.value)}
-                className="text-sm"
-              >
-                {runs.points.map((point) => (
-                  <option key={point.id} value={point.id}>
-                    {format(parseISO(point.date), "d MMM")} · {fmt(point.distanceKm, 1)} km
-                  </option>
-                ))}
-              </NativeSelect>
-              <p className="num mt-2 text-sm text-muted-foreground" aria-live="polite">
-                {format(parseISO(run.date), "d MMM yyyy")} · {fmt(run.distanceKm, 1)} km ·{" "}
-                {formatPace(run.pace)} /km · {formatRunDuration(run.durationSeconds)}
+            <p className="sr-only">Distance-weighted average. Each chart point is one timed run.</p>
+            {paceDelta != null ? (
+              <p className="mt-1 text-sm text-muted-foreground">
+                {Math.abs(paceDelta) < 1
+                  ? "Same pace as previous period"
+                  : `${fmt0(Math.abs(paceDelta))} sec/km ${paceDelta > 0 ? "faster" : "slower"} than previous period`}
               </p>
-            </div>
-          ) : null}
-        </Card>
-      ) : null}
+            ) : null}
+            {runs.points.length >= 2 ? (
+              <div className="mt-3">
+                <p className="text-[10px] text-muted-foreground" aria-hidden="true">
+                  min/km
+                </p>
+                <div
+                  className="h-40"
+                  role="group"
+                  aria-label="Pace of each timed run, faster pace higher"
+                >
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart
+                      data={runs.points}
+                      margin={{ top: 8, right: 8, left: -12, bottom: 0 }}
+                      accessibilityLayer
+                      onClick={(state) => {
+                        const point = state?.activePayload?.[0]?.payload;
+                        if (point?.id) setSelectedRun(point.id);
+                      }}
+                    >
+                      <XAxis
+                        dataKey="date"
+                        tickFormatter={(date: string) => format(parseISO(date), "d MMM")}
+                        {...chartAxis}
+                        minTickGap={30}
+                      />
+                      <YAxis
+                        {...chartAxis}
+                        reversed
+                        tickFormatter={(value: number) => formatPace(value).replace(" min/km", "")}
+                        width={55}
+                        domain={["dataMin - 10", "dataMax + 10"]}
+                      />
+                      <Tooltip content={() => null} cursor={false} isAnimationActive={false} />
+                      <Line
+                        dataKey="pace"
+                        stroke="var(--color-primary)"
+                        strokeWidth={2}
+                        dot={({
+                          cx,
+                          cy,
+                          payload,
+                        }: {
+                          cx?: number;
+                          cy?: number;
+                          payload?: (typeof runs.points)[number];
+                        }) => (
+                          <g
+                            key={payload?.id}
+                            role="button"
+                            tabIndex={0}
+                            className="group cursor-pointer outline-none"
+                            aria-label={
+                              payload
+                                ? `${format(parseISO(payload.date), "d MMM")}, ${formatPace(payload.pace)}, select run`
+                                : "Select run"
+                            }
+                            aria-pressed={payload?.id === run?.id}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              if (payload) setSelectedRun(payload.id);
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                if (payload) setSelectedRun(payload.id);
+                              }
+                            }}
+                          >
+                            <circle cx={cx} cy={cy} r={22} fill="transparent" />
+                            <circle
+                              cx={cx}
+                              cy={cy}
+                              r={payload?.id === run?.id ? 6 : 3}
+                              fill="var(--color-primary)"
+                              stroke="var(--color-card)"
+                              strokeWidth={2}
+                              className="group-focus-visible:stroke-foreground"
+                            />
+                          </g>
+                        )}
+                        isAnimationActive={false}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            ) : null}
+            {run ? (
+              <div className="mt-3 rounded-xl bg-elevated px-3 py-2" aria-live="polite">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-medium">{format(parseISO(run.date), "d MMM")}</p>
+                  {runs.points.length > 1 ? (
+                    <div className="flex shrink-0 gap-1">
+                      <button
+                        type="button"
+                        aria-label="Previous run"
+                        disabled={runIndex === 0}
+                        onClick={() => setSelectedRun(runs.points[runIndex - 1]!.id)}
+                        className="grid h-11 w-11 place-items-center rounded-lg hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-40"
+                      >
+                        <ChevronLeft className="h-5 w-5" aria-hidden="true" />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Next run"
+                        disabled={runIndex === runs.points.length - 1}
+                        onClick={() => setSelectedRun(runs.points[runIndex + 1]!.id)}
+                        className="grid h-11 w-11 place-items-center rounded-lg hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-40"
+                      >
+                        <ChevronRight className="h-5 w-5" aria-hidden="true" />
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+                <p className="num text-sm text-muted-foreground">
+                  {fmt(run.distanceKm, 1)} km · {formatPace(run.pace)} ·{" "}
+                  {formatRunDuration(run.durationSeconds)}
+                </p>
+              </div>
+            ) : null}
+          </>
+        ) : (
+          <p className="mt-2 text-sm text-muted-foreground">No timed runs yet</p>
+        )}
+      </Card>
 
       {runs.runs > 0 ? (
         <Card className="grid grid-cols-2 gap-x-3 gap-y-4 p-[18px]">

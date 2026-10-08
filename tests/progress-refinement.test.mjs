@@ -335,7 +335,7 @@ test("shared chart tooltip formats real food values in high contrast, including 
   assert.match(html, /max-w-\[min/);
 });
 
-test("pace tooltip shows real date, distance, pace and duration; native run picker is keyboard accessible", async () => {
+test("pace tooltip shows real date, distance, pace and duration; compact run controls are keyboard accessible", async () => {
   const { ProgressChartTooltip } = presentationComponent("src/components/ProgressChartTooltip.tsx");
   const html = renderToStaticMarkup(
     React.createElement(ProgressChartTooltip, {
@@ -350,12 +350,14 @@ test("pace tooltip shows real date, distance, pace and duration; native run pick
   assert.match(html, /5:16 \/km/);
   assert.match(html, /5.8 km · 30:32/);
   const source = await read("src/routes/_authenticated/bulk/progress_.endurance.tsx");
-  assert.match(source, /aria-label="Run details"/);
+  assert.match(source, /aria-label="Previous run"/);
+  assert.match(source, /aria-label="Next run"/);
+  assert.doesNotMatch(source, /NativeSelect/);
   assert.match(source, /setSelectedRun/);
   assert.match(source, /h-32/);
-  assert.match(source, /Dashed markers show each week/);
+  assert.doesNotMatch(source, /Dashed markers show each week/);
   assert.match(source, /than previous period/);
-  assert.match(source, /Missing week data/);
+  assert.match(source, /missing week data/);
   assert.doesNotMatch(source, /Sparkline|Ride speed/);
 });
 
