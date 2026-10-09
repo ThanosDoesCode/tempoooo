@@ -1,6 +1,17 @@
 import { MealDeleteDialog } from "./MealDeleteDialog";
 import { NutritionDateStrip } from "./NutritionDateStrip";
 import { NativeSelect } from "@/components/ui/native-select";
+import { Drawer, DrawerContent, DrawerTitle } from "@/components/ui/drawer";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { format, parseISO } from "date-fns";
@@ -88,6 +99,10 @@ export function BulkNutritionLog({
     const draft = { ...emptyNutritionEntryDraft(), mealCategory: initialCategory };
     return { entry: null, draft, initial: draftSignature(draft), requestId: crypto.randomUUID() };
   });
+  // When set, the "Discard changes?" dialog is open; a date string is the pending date to switch
+  // to on discard, "close" means just close the editor.
+  const [discardPending, setDiscardPending] = useState<string | "close" | null>(null);
+  const editorDirty = editor != null && draftSignature(editor.draft) !== editor.initial;
   const today = iso(new Date());
   const isFuture = selectedDate > today;
 
@@ -119,12 +134,10 @@ export function BulkNutritionLog({
 
   const changeDate = (date: string) => {
     if (mutationBusy.current || !isIsoLocalDay(date)) return;
-    if (
-      editor &&
-      draftSignature(editor.draft) !== editor.initial &&
-      !window.confirm("Discard the unsaved nutrition entry?")
-    )
+    if (editorDirty) {
+      setDiscardPending(date);
       return;
+    }
     setEditor(null);
     setError(null);
     setFailedPreset(null);
@@ -219,14 +232,27 @@ export function BulkNutritionLog({
     }
   };
 
-  const closeEditor = () => {
-    if (
-      editor &&
-      draftSignature(editor.draft) !== editor.initial &&
-      !window.confirm("Discard the unsaved nutrition entry?")
-    )
-      return;
+  const onEditorDraftChange = (draft: NutritionEntryDraft) => {
+    savedQuickPreset.current = null;
+    selectedPreset.current = null;
+    setEditor((value) => (value ? { ...value, draft, requestId: crypto.randomUUID() } : value));
+  };
+
+  // Close request from Cancel, Escape or backdrop: confirm first if there are unsaved edits.
+  const requestClose = () => {
+    if (editorDirty) setDiscardPending("close");
+    else setEditor(null);
+  };
+
+  const confirmDiscard = () => {
+    const target = discardPending;
+    setDiscardPending(null);
     setEditor(null);
+    setError(null);
+    if (target && target !== "close") {
+      setFailedPreset(null);
+      onDateChange(target);
+    }
   };
 
   const renderEntry = (entry: BulkNutritionEntry) => (
@@ -361,24 +387,67 @@ export function BulkNutritionLog({
         </div>
       ) : null}
 
-      {isFuture ? null : editor ? (
+      {mode === "add" && !isFuture && editor ? (
         <NutritionEntryEditor
           editor={editor}
           disabled={!!pending}
-          onChange={(draft) => {
-            savedQuickPreset.current = null;
-            selectedPreset.current = null;
-            setEditor((value) =>
-              value ? { ...value, draft, requestId: crypto.randomUUID() } : value,
-            );
-          }}
-          adding={mode === "add"}
+          onChange={onEditorDraftChange}
+          adding
           saveQuick={saveQuick}
           onSaveQuick={setSaveQuick}
-          onCancel={closeEditor}
+          onCancel={requestClose}
           onSave={() => void saveEntry()}
         />
       ) : null}
+
+      {mode === "overview" ? (
+        <Drawer
+          open={editor != null && !isFuture}
+          onOpenChange={(open) => {
+            if (!open) requestClose();
+          }}
+        >
+          <DrawerContent className="mt-24 max-h-[88vh] overflow-y-auto rounded-t-[28px] border-0 bg-card px-5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-3 [&>div:first-child]:mt-0 [&>div:first-child]:h-[5px] [&>div:first-child]:w-10 [&>div:first-child]:bg-[oklch(38%_.01_260)]">
+            <DrawerTitle className="sr-only">Edit meal</DrawerTitle>
+            {editor ? (
+              <NutritionEntryEditor
+                editor={editor}
+                disabled={!!pending}
+                onChange={onEditorDraftChange}
+                onCancel={requestClose}
+                onSave={() => void saveEntry()}
+              />
+            ) : null}
+          </DrawerContent>
+        </Drawer>
+      ) : null}
+
+      <AlertDialog
+        open={discardPending != null}
+        onOpenChange={(open) => {
+          if (!open) setDiscardPending(null);
+        }}
+      >
+        <AlertDialogContent className="w-[calc(100%-2.5rem)] max-w-sm gap-4 rounded-[20px] border-border bg-card p-5 sm:rounded-[20px] motion-reduce:animate-none">
+          <AlertDialogHeader className="space-y-1 text-left">
+            <AlertDialogTitle className="text-lg">Discard changes?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Your meal edits haven&rsquo;t been saved.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="grid grid-cols-2 gap-2 sm:space-x-0">
+            <AlertDialogCancel className="mt-0 h-12 min-w-0 rounded-xl border-border bg-elevated px-2 text-sm">
+              Keep editing
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="h-12 min-w-0 rounded-xl bg-danger px-2 text-sm text-white hover:bg-danger/90"
+              onClick={confirmDiscard}
+            >
+              Discard
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {mode === "overview" && !isFuture ? (
         <div>

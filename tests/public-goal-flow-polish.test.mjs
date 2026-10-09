@@ -153,7 +153,7 @@ test("public Meals never falls back to legacy presets and future dates are read-
   assert.doesNotMatch(goalToday, /MEAL_PLANS|mealPlan\(/);
   assert.match(today, /const isFuture = selectedDate > today/);
   assert.match(today, /Future days are view-only\. Come back on this date to log meals\./);
-  assert.match(today, /isFuture \? null : editor/);
+  assert.match(today, /editor != null && !isFuture/);
   assert.match(query, /_local_today: localToday\(\)/g);
   assert.match(migration, /IF _log_date > _local_today/);
   assert.match(migration, /REVOKE EXECUTE ON FUNCTION public\.delete_bulk_nutrition_entry\(uuid\)/);

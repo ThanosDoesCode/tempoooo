@@ -21,12 +21,20 @@ function mealUI({
 } = {}) {
   const calls = [];
   const destinations = [];
+  const invalidations = [];
+  const dateChanges = [];
   const ui = accountUI(
     "src/components/BulkNutritionLog.tsx",
     "BulkNutritionLog",
     {
       "./NutritionDateStrip": { NutritionDateStrip: "NutritionDateStrip" },
-      "@tanstack/react-query": { useQueryClient: () => ({ invalidateQueries: async () => {} }) },
+      "@tanstack/react-query": {
+        useQueryClient: () => ({
+          invalidateQueries: async (arg) => {
+            invalidations.push(arg);
+          },
+        }),
+      },
       "@tanstack/react-router": {
         Link: "Link",
         useNavigate: () => async (destination) => destinations.push(destination),
@@ -41,6 +49,21 @@ function mealUI({
         updateBulkNutritionEntry: async (...args) => calls.push(args),
       },
       "@/lib/bulk-meal-presets-query": { useBulkMealPresets: () => ready([]) },
+      "@/components/ui/drawer": {
+        Drawer: "Drawer",
+        DrawerContent: "DrawerContent",
+        DrawerTitle: "DrawerTitle",
+      },
+      "@/components/ui/alert-dialog": {
+        AlertDialog: "AlertDialog",
+        AlertDialogAction: "AlertDialogAction",
+        AlertDialogCancel: "AlertDialogCancel",
+        AlertDialogContent: "AlertDialogContent",
+        AlertDialogDescription: "AlertDialogDescription",
+        AlertDialogFooter: "AlertDialogFooter",
+        AlertDialogHeader: "AlertDialogHeader",
+        AlertDialogTitle: "AlertDialogTitle",
+      },
       "@/components/ui/native-select": { NativeSelect: "select" },
       "@/components/ui/input": { Input: "input" },
       "@/components/ui/textarea": { Textarea: "textarea" },
@@ -52,13 +75,13 @@ function mealUI({
       bulkProfileId: "owner",
       selectedDate: date,
       currentTargets: macros,
-      onDateChange() {},
+      onDateChange: (next) => dateChanges.push(next),
       mode,
       initialCategory: category,
     },
     { crypto: { randomUUID: () => "request" }, window: { confirm: () => true } },
   );
-  return { ui, calls, destinations };
+  return { ui, calls, destinations, invalidations, dateChanges };
 }
 
 test("calendar slots include every day across month boundaries without inserting missing intakes into analytics", () => {
@@ -338,4 +361,153 @@ test("Food tooltip distinguishes an empty slot from a genuine zero-calorie log",
   );
   assert.match(source, /dataKey="plotCalories"/);
   assert.match(source, /filterNull=\{false\}/);
+});
+
+// ------------------------------------------- logged-meal edit sheet
+
+const loggedEntry = {
+  id: "meal",
+  name: "Greek yogurt bowl",
+  calories: 420,
+  protein: 30,
+  carbs: 45,
+  fat: 10,
+  ingredients: [],
+  note: "with honey",
+  sourceType: "custom",
+  mealCategory: "breakfast",
+};
+const openEditor = (f) => {
+  f.ui
+    .find("button")
+    .find((n) => n.props["aria-label"] === `Edit ${loggedEntry.name}`)
+    .props.onClick();
+};
+const withEntry = (over = {}) =>
+  mealUI({
+    data: { day: { targets: macros }, entries: [{ ...loggedEntry, ...over }] },
+    ...over.ui,
+  });
+
+test("tapping Edit opens a Drawer sheet (not an inline page form) with fields prefilled", () => {
+  const f = withEntry();
+  try {
+    // Closed state: the sheet exists but is not open, and no editor inputs are on the page.
+    assert.equal(f.ui.find("Drawer")[0].props.open, false);
+    assert.equal(f.ui.find("input").length, 0);
+    assert.doesNotMatch(f.ui.text(), /Edit logged entry/);
+
+    openEditor(f);
+
+    assert.equal(f.ui.find("Drawer")[0].props.open, true);
+    assert.equal(f.ui.find("DrawerContent").length, 1);
+    const inputs = f.ui.find("input");
+    assert.equal(inputs[0].props.value, "Greek yogurt bowl"); // name
+    assert.deepEqual(
+      inputs.slice(1, 5).map((n) => n.props.value),
+      ["420", "30", "45", "10"], // calories/protein/carbs/fat
+    );
+    assert.equal(f.ui.find("select")[0].props.value, "breakfast"); // category preserved
+    assert.equal(f.ui.find("textarea")[0].props.value, "with honey"); // note
+    assert.ok(f.ui.button("Save entry"));
+    assert.ok(f.ui.button("Cancel"));
+  } finally {
+    f.ui.dispose();
+  }
+});
+
+test("Save updates the existing entry exactly once, keeps the date, and refreshes totals", async () => {
+  const f = mealUI({
+    date: "2026-08-15",
+    data: { day: { targets: macros }, entries: [loggedEntry] },
+  });
+  try {
+    openEditor(f);
+    f.ui.find("input")[0].props.onChange({ target: { value: "Greek yogurt bowl XL" } });
+    const save = f.ui.button("Save entry");
+    save.props.onClick();
+    save.props.onClick(); // no double-submit
+    await f.ui.flush();
+
+    assert.equal(f.calls.length, 1); // exactly once
+    assert.equal(f.calls[0][0].id, "meal"); // update (existing entry), not create/log
+    assert.equal(f.calls[0][1].name, "Greek yogurt bowl XL");
+    assert.equal(f.calls[0][1].mealCategory, "breakfast"); // category preserved
+    assert.equal(f.calls[0][1].date, undefined); // not moved to another day
+    assert.equal(f.dateChanges.length, 0); // historical date unchanged
+    assert.ok(f.invalidations.length > 0); // daily totals/macros refresh
+    assert.equal(f.ui.find("Drawer")[0].props.open, false); // sheet closed after save
+  } finally {
+    f.ui.dispose();
+  }
+});
+
+test("Cancel with no changes closes the sheet and mutates nothing", () => {
+  const f = withEntry();
+  try {
+    openEditor(f);
+    f.ui.button("Cancel").props.onClick();
+    assert.equal(f.calls.length, 0);
+    assert.equal(f.ui.find("Drawer")[0].props.open, false);
+    assert.equal(f.ui.find("AlertDialog")[0].props.open, false); // no discard prompt when clean
+  } finally {
+    f.ui.dispose();
+  }
+});
+
+test("closing with unsaved edits opens a Tempo discard confirmation (no window.confirm)", () => {
+  const f = withEntry();
+  try {
+    openEditor(f);
+    f.ui.find("input")[0].props.onChange({ target: { value: "changed" } });
+    f.ui.button("Cancel").props.onClick();
+
+    assert.equal(f.ui.find("AlertDialog")[0].props.open, true);
+    assert.match(f.ui.text(), /Discard changes\?/);
+    assert.match(f.ui.text(), /Your meal edits haven/);
+    assert.equal(f.ui.find("AlertDialogCancel")[0].props.children, "Keep editing");
+    const discard = f.ui.find("AlertDialogAction").find((n) => n.props.children === "Discard");
+    assert.ok(discard);
+    assert.equal(f.calls.length, 0); // still no mutation while confirming
+    discard.props.onClick();
+    assert.equal(f.calls.length, 0); // discard never mutates
+    assert.equal(f.ui.find("Drawer")[0].props.open, false); // editor closed on discard
+  } finally {
+    f.ui.dispose();
+  }
+});
+
+test("Escape/backdrop (onOpenChange) closes a clean sheet and confirms a dirty one", () => {
+  const clean = withEntry();
+  try {
+    openEditor(clean);
+    clean.ui.find("Drawer")[0].props.onOpenChange(false); // Escape with no edits
+    assert.equal(clean.ui.find("Drawer")[0].props.open, false);
+    assert.equal(clean.ui.find("AlertDialog")[0].props.open, false);
+  } finally {
+    clean.ui.dispose();
+  }
+  const dirty = withEntry();
+  try {
+    openEditor(dirty);
+    dirty.ui.find("input")[0].props.onChange({ target: { value: "x" } });
+    dirty.ui.find("Drawer")[0].props.onOpenChange(false); // Escape with edits
+    assert.equal(dirty.ui.find("AlertDialog")[0].props.open, true);
+  } finally {
+    dirty.ui.dispose();
+  }
+});
+
+test("Meals has no inline edit form, no native confirm, and uses focus-trapping primitives", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const src = await readFile(
+    new URL("../src/components/BulkNutritionLog.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.doesNotMatch(src, /window\.confirm/); // no native confirm anywhere
+  // The overview editor lives inside a Drawer (vaul: focus trap + Escape + restore), with the
+  // discard prompt as a radix AlertDialog (focus trap). Edit no longer renders inline on the page.
+  assert.match(src, /mode === "overview" \? \(\s*<Drawer/);
+  assert.match(src, /from "@\/components\/ui\/drawer"/);
+  assert.match(src, /Discard changes\?/);
 });

@@ -126,13 +126,15 @@ test("nutrition UI keeps daily logging and route-backed preset management distin
   assert.match(route, /Back to today/);
   assert.match(component, /Future days are view-only\. Come back on this date to log meals\./);
   assert.match(component, /if \(mutationBusy\.current \|\| isFuture\) return/);
-  assert.match(component, /isFuture \? null : editor/);
+  assert.match(component, /editor != null && !isFuture/);
   assert.match(component, /No meal presets yet/);
   assert.match(component, /Create meal preset/);
   assert.match(component, /Log to \{format\(parseISO\(selectedDate\)/);
   assert.match(component, /Retry same log/);
   assert.match(component, /failedPreset\.requestId/);
-  assert.match(component, /Discard the unsaved nutrition entry/);
+  // Unsaved edits are confirmed with a Tempo dialog, never a native confirm.
+  assert.doesNotMatch(component, /window\.confirm/);
+  assert.match(component, /Discard changes\?/);
   assert.match(component, /to="\/bulk\/meals\/add"/);
   assert.match(component, /Saved meal snapshot/);
   assert.match(component, /MEAL_CATEGORIES.map/);
