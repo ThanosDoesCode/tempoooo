@@ -17,8 +17,8 @@ export function NutritionDateStrip({
   const days = Array.from({ length: 7 }, (_, index) => iso(addDays(start, index)));
   const move = (amount: number) => onChange(iso(addDays(parseISO(selectedDate), amount)));
   return (
-    <div className="space-y-2" data-no-pull>
-      <div className="flex min-h-11 items-center gap-2">
+    <div className="min-w-0 space-y-1" data-no-pull>
+      <div className="mx-auto grid min-h-11 w-full max-w-xs grid-cols-[44px_minmax(0,1fr)_44px] items-center gap-1">
         <button
           type="button"
           aria-label="Previous week"
@@ -32,7 +32,7 @@ export function NutritionDateStrip({
           value={selectedDate}
           max={today}
           onChange={onChange}
-          className="min-h-11 min-w-0 flex-1 rounded-xl text-center text-sm"
+          className="min-h-11 min-w-0 flex-1 justify-center rounded-lg border-0 bg-transparent px-0 text-center text-[13px] hover:bg-elevated [&>svg]:hidden"
         />
         <button
           type="button"
@@ -50,7 +50,7 @@ export function NutritionDateStrip({
           <ChevronRight className="control-chevron" aria-hidden="true" />
         </button>
       </div>
-      <div className="flex gap-1 overflow-x-auto pb-1" aria-label="Nutrition days">
+      <div className="grid grid-cols-7 gap-1" aria-label="Nutrition days">
         {days.map((date) => (
           <button
             key={date}
@@ -60,10 +60,12 @@ export function NutritionDateStrip({
             aria-pressed={date === selectedDate}
             aria-current={date === today ? "date" : undefined}
             onClick={() => onChange(date)}
-            className={`flex min-h-[64px] min-w-11 flex-1 flex-col items-center justify-center gap-0.5 rounded-[14px] text-sm disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:opacity-80 ${date === selectedDate ? "bg-primary/15 text-primary ring-1 ring-primary/30" : "bg-card text-muted-foreground"}`}
+            className={`flex h-13 min-h-11 min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl text-sm disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:opacity-80 ${date === selectedDate ? "bg-primary/15 text-primary ring-1 ring-inset ring-primary/30" : "bg-card text-muted-foreground"}`}
           >
-            <span className="text-[11px]">{format(parseISO(date), "EEE")}</span>
-            <span className="num font-semibold">{format(parseISO(date), "d")}</span>
+            <span className="text-[10px] min-[360px]:text-[11px]">
+              {format(parseISO(date), "EEE")}
+            </span>
+            <span className="num text-base font-semibold">{format(parseISO(date), "d")}</span>
             <span
               aria-hidden="true"
               className={`h-1 w-1 rounded-full ${date === today ? "bg-primary" : "bg-transparent"}`}
@@ -71,15 +73,6 @@ export function NutritionDateStrip({
           </button>
         ))}
       </div>
-      {selectedDate !== today ? (
-        <button
-          type="button"
-          onClick={() => onChange(today)}
-          className="min-h-11 rounded-xl px-3 text-sm font-medium text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          Back to today
-        </button>
-      ) : null}
     </div>
   );
 }

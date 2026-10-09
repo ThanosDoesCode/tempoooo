@@ -177,9 +177,15 @@ export function PageHeader({
   backParams,
   backOriginLabels,
   backSearch,
+  compact = false,
+  action,
 }: {
   title: string;
   subtitle?: string;
+  /** Inline contextual Back and tighter spacing for compact subpage headers. */
+  compact?: boolean;
+  /** Optional compact action beside the bell, without another header row. */
+  action?: ReactNode;
   /** Safe direct-entry fallback; an observed in-app origin takes precedence. */
   backTo?: string;
   backLabel?: string;
@@ -191,20 +197,37 @@ export function PageHeader({
   /** Optional labels for known origins when this page is shared by multiple areas. */
   backOriginLabels?: Readonly<Record<string, string>>;
 }) {
+  const back = backTo ? (
+    <HistoryBackLink
+      fallback={backTo}
+      fallbackLabel={backLabel}
+      iconOnly={compact}
+      {...(backParams ? { fallbackParams: backParams } : {})}
+      {...(backSearch ? { fallbackSearch: backSearch } : {})}
+      {...(backOriginLabels ? { originLabels: backOriginLabels } : {})}
+    />
+  ) : null;
+  const heading = <h1 className="min-w-0 text-3xl font-semibold tracking-tight">{title}</h1>;
   return (
-    <header className="fade-up mb-5">
-      {backTo ? (
-        <HistoryBackLink
-          fallback={backTo}
-          fallbackLabel={backLabel}
-          {...(backParams ? { fallbackParams: backParams } : {})}
-          {...(backSearch ? { fallbackSearch: backSearch } : {})}
-          {...(backOriginLabels ? { originLabels: backOriginLabels } : {})}
-        />
-      ) : null}
+    <header className={`fade-up ${compact ? "mb-2" : "mb-5"}`}>
+      {compact ? null : back}
       <div className="flex items-center justify-between gap-3">
-        <h1 className="min-w-0 text-3xl font-semibold tracking-tight">{title}</h1>
-        <NotificationBell />
+        {compact ? (
+          <div className="flex min-w-0 items-center gap-1">
+            {back}
+            {heading}
+          </div>
+        ) : (
+          heading
+        )}
+        {action ? (
+          <div className="flex shrink-0 items-center gap-1">
+            {action}
+            <NotificationBell />
+          </div>
+        ) : (
+          <NotificationBell />
+        )}
       </div>
       {subtitle ? <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p> : null}
     </header>

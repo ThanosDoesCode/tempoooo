@@ -39,7 +39,25 @@ function BulkMealsPage() {
     <AppShell>
       <PageHeader
         title="Meals"
-        subtitle={selectedDate === today ? "Today" : format(parseISO(selectedDate), "EEEE d MMM")}
+        compact={publicNutrition}
+        action={
+          publicNutrition && selectedDate !== today ? (
+            <button
+              type="button"
+              aria-label="Back to today"
+              onClick={() => void navigate({ to: "/bulk/meals", search: { date: today } })}
+              className="min-h-11 min-w-11 rounded-lg px-1 text-xs font-medium text-primary hover:bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              Today
+            </button>
+          ) : undefined
+        }
+        {...(!publicNutrition
+          ? {
+              subtitle:
+                selectedDate === today ? "Today" : format(parseISO(selectedDate), "EEEE d MMM"),
+            }
+          : {})}
         backTo="/bulk"
         backLabel="Today"
       />

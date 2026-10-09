@@ -400,3 +400,23 @@ test("SSR and auth/setup transitions use safe fallbacks without browser APIs or 
     assert.doesNotThrow(() => renderToStaticMarkup(presetsPageLink(history).link));
   }
 });
+
+test("compact Meals header retains contextual Back, accessible origin label and direct-link fallback", () => {
+  const history = createMemoryHistory({ initialEntries: ["/bulk?date=2026-10-08"] });
+  trackInAppHistory(history);
+  history.push("/bulk/meals?date=2026-10-07");
+  const { HistoryBackLink, PageHeader, href } = controls(history);
+  const header = PageHeader({ title: "Meals", backTo: "/bulk", backLabel: "Today", compact: true });
+  const back = header.props.children[1].props.children[0].props.children[0];
+  assert.equal(back.type, HistoryBackLink);
+  assert.equal(back.props.iconOnly, true);
+  const link = HistoryBackLink(back.props);
+  assert.equal(href(link), "/bulk?date=2026-10-08");
+  assert.equal(link.props["aria-label"], "Back to Today");
+  assert.match(renderToStaticMarkup(link), /class="sr-only"/);
+  assert.doesNotMatch(link.props.className, /pr-3/);
+  click(link, history, href);
+  assert.equal(history.location.href, "/bulk?date=2026-10-08");
+  const direct = controls(createMemoryHistory({ initialEntries: ["/bulk/meals"] }));
+  assert.equal(direct.href(direct.HistoryBackLink(back.props)), "/bulk");
+});

@@ -123,7 +123,7 @@ test("nutrition UI keeps daily logging and route-backed preset management distin
   const strip = await read("src/components/NutritionDateStrip.tsx");
   assert.match(strip, /Previous week/);
   assert.match(strip, /Next week/);
-  assert.match(strip, /Back to today/);
+  assert.match(route, /Back to today/);
   assert.match(component, /Future days are view-only\. Come back on this date to log meals\./);
   assert.match(component, /if \(mutationBusy\.current \|\| isFuture\) return/);
   assert.match(component, /isFuture \? null : editor/);

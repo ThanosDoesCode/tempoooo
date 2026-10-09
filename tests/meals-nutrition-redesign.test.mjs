@@ -182,7 +182,7 @@ test("date strip navigates the true local month boundary, indicates Today and di
       days.find((node) => node.props["aria-current"] === "date").props["aria-label"],
       "Friday 2 October 2026",
     );
-    ui.button("Back to today").props.onClick();
+    ui.find("TempoDatePicker")[0].props.onChange("2026-10-02");
     assert.equal(changes.at(-1), "2026-10-02");
   } finally {
     ui.dispose();
@@ -217,6 +217,8 @@ test("Meals selection follows route search on Back/Forward rather than a copied 
     "@/lib/bulk-access": { useMemberships: () => ready([]), bulkPlanModeFor: () => "public" },
   });
   try {
+    assert.equal(ui.find("header")[0].props.compact, true);
+    assert.equal(ui.find("header")[0].props.subtitle, undefined);
     assert.equal(ui.find("BulkNutritionLog")[0].props.selectedDate, "2026-09-30");
     ui.find("BulkNutritionLog")[0].props.onDateChange("2026-10-01");
     assert.equal(ui.find("BulkNutritionLog")[0].props.selectedDate, "2026-10-01");
@@ -224,6 +226,11 @@ test("Meals selection follows route search on Back/Forward rather than a copied 
     assert.equal(ui.find("BulkNutritionLog")[0].props.selectedDate, "2026-09-30");
     history.forward();
     assert.equal(ui.find("BulkNutritionLog")[0].props.selectedDate, "2026-10-01");
+    const shortcut = ui.find("header")[0].props.action;
+    assert.equal(shortcut.props["aria-label"], "Back to today");
+    shortcut.props.onClick();
+    assert.equal(ui.find("BulkNutritionLog")[0].props.selectedDate, today);
+    assert.equal(ui.find("header")[0].props.action, undefined);
   } finally {
     ui.dispose();
     history.destroy();
