@@ -47,6 +47,13 @@ function AppChrome({ children }: { children: ReactNode }) {
 
   const owner = preferredBulkMembership(memberships);
   const hasFitnessTools = owner !== null;
+  // Challenge-only (core) accounts get an intentional 3-item bar (Challenge · + · You); the
+  // fitness-only Today and Progress tabs are not advertised.
+  const coreNav = !hasFitnessTools;
+  const leftTabs = coreNav
+    ? MAIN_TABS.filter((item) => item.tab === "challenge")
+    : MAIN_TABS.slice(0, 2);
+  const rightTabs = coreNav ? MAIN_TABS.filter((item) => item.tab === "you") : MAIN_TABS.slice(2);
   const activeTab = mainTabForPath(pathname);
   const widerDailyLayout =
     pathname.startsWith("/bulk/training") ||
@@ -85,8 +92,10 @@ function AppChrome({ children }: { children: ReactNode }) {
             >
               <span className="block h-full w-1/2 animate-pulse rounded-full bg-primary" />
             </div>
-            <div className="mx-auto grid max-w-lg grid-cols-5 items-start px-2 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2.5">
-              {MAIN_TABS.slice(0, 2).map((item) => (
+            <div
+              className={`mx-auto grid max-w-lg ${coreNav ? "grid-cols-3" : "grid-cols-5"} items-start px-2 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2.5`}
+            >
+              {leftTabs.map((item) => (
                 <TabLink
                   key={item.tab}
                   item={item}
@@ -108,7 +117,7 @@ function AppChrome({ children }: { children: ReactNode }) {
                 </button>
               </div>
 
-              {MAIN_TABS.slice(2).map((item) => (
+              {rightTabs.map((item) => (
                 <TabLink
                   key={item.tab}
                   item={item}
@@ -132,7 +141,7 @@ function AppChrome({ children }: { children: ReactNode }) {
               ))}
             </div>
           </nav>
-          <LogSheet open={logOpen} onOpenChange={setLogOpen} />
+          <LogSheet open={logOpen} onOpenChange={setLogOpen} showFitnessActions={hasFitnessTools} />
         </>
       ) : null}
     </div>

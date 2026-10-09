@@ -353,8 +353,10 @@ test("default landing resolves to Today; deep links and notification destination
 
 test("bottom navbar is modestly taller with lifted items and preserved safe area + touch targets", async () => {
   const shell = await read("src/components/AppShell.tsx");
-  const bar = shell.match(/grid max-w-lg grid-cols-5[^"]*/)[0];
-  assert.match(bar, /grid-cols-5/); // equal horizontal distribution
+  const bar = shell.match(/grid max-w-lg [^`]*pt-2\.5/)[0];
+  // Fitness = 5 columns, Challenge-only (core) = 3 columns; equal horizontal distribution either way.
+  assert.match(bar, /grid-cols-5/);
+  assert.match(bar, /coreNav \? "grid-cols-3" : "grid-cols-5"/);
   assert.match(bar, /items-start/); // items anchored to the top of the bar
   assert.match(bar, /pt-2\.5/); // top gap unchanged, so items are not pushed down
   // Measured: pt-2.5 + pb-1rem lifts items (16px breathing room below vs 8px) while the bar grows

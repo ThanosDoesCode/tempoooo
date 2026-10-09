@@ -20,9 +20,12 @@ const ICONS: Record<string, LucideIcon> = {
 export function LogSheet({
   open,
   onOpenChange,
+  showFitnessActions = true,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Challenge-only (core) accounts hide the fitness-only "Your day" actions. */
+  showFitnessActions?: boolean;
 }) {
   const navigate = useNavigate();
   const challenge = LOG_ACTIONS.filter((action) => action.group === "challenge");
@@ -72,30 +75,34 @@ export function LogSheet({
           })}
         </div>
 
-        <p className="mx-1 text-[13px] font-medium text-muted-foreground">Your day</p>
-        <div className="rounded-[18px] bg-elevated px-4">
-          {day.map((action) => {
-            const Icon = ICONS[action.key]!;
-            return (
-              <button
-                key={action.key}
-                type="button"
-                onClick={() => go(action)}
-                className="flex min-h-[56px] w-full items-center gap-3.5 border-t border-border py-2 text-left first:border-t-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring active:opacity-80"
-              >
-                <span className="grid h-9 w-9 flex-none place-items-center rounded-[11px] bg-muted">
-                  <Icon className="h-5 w-5" strokeWidth={1.8} aria-hidden="true" />
-                </span>
-                <span>
-                  <span className="block text-[15px] font-medium">{action.label}</span>
-                  <span className="mt-0.5 block text-[13px] text-muted-foreground">
-                    {action.description}
-                  </span>
-                </span>
-              </button>
-            );
-          })}
-        </div>
+        {showFitnessActions ? (
+          <>
+            <p className="mx-1 text-[13px] font-medium text-muted-foreground">Your day</p>
+            <div className="rounded-[18px] bg-elevated px-4">
+              {day.map((action) => {
+                const Icon = ICONS[action.key]!;
+                return (
+                  <button
+                    key={action.key}
+                    type="button"
+                    onClick={() => go(action)}
+                    className="flex min-h-[56px] w-full items-center gap-3.5 border-t border-border py-2 text-left first:border-t-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring active:opacity-80"
+                  >
+                    <span className="grid h-9 w-9 flex-none place-items-center rounded-[11px] bg-muted">
+                      <Icon className="h-5 w-5" strokeWidth={1.8} aria-hidden="true" />
+                    </span>
+                    <span>
+                      <span className="block text-[15px] font-medium">{action.label}</span>
+                      <span className="mt-0.5 block text-[13px] text-muted-foreground">
+                        {action.description}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        ) : null}
       </DrawerContent>
     </Drawer>
   );
