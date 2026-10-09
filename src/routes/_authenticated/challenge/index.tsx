@@ -345,9 +345,7 @@ function ChallengeHome() {
           />
         </div>
 
-        {!progressLoading ? (
-          <ChallengeStatus atRisk={penalty.atRisk}>{penalty.line}</ChallengeStatus>
-        ) : null}
+        {!progressLoading ? <ChallengeStatus penalty={penalty} /> : null}
       </Card>
 
       <Link

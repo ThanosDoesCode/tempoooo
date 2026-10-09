@@ -208,7 +208,7 @@ export function TodayChallenge({ hideDiscovery = false }: { hideDiscovery?: bool
           />
         </div>
       ) : null}
-      <ChallengeStatus atRisk={penalty.atRisk}>{penalty.line}</ChallengeStatus>
+      <ChallengeStatus penalty={penalty} />
     </Link>
   );
 }

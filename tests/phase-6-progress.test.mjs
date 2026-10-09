@@ -909,15 +909,34 @@ test("measured Endurance and Strength still use real summaries, trends and suppo
 test("Progress controls retain equal-width centered segments and a single explicit select chevron", async () => {
   const fixture = await progressFixture();
   const nav = fixture.nav("body");
-  assert.match(nav, /flex gap-1/);
-  const links = [...nav.matchAll(/<a\b[^>]*>/g)].map((match) => match[0]);
+  // A true equal-width grid: 4 columns of minmax(0,1fr) means every tab is mathematically the
+  // same width, with one equal gap token and symmetric outer padding — not content-based flex.
+  const navTag = nav.match(/<nav\b[^>]*>/)[0];
+  assert.match(navTag, /class="[^"]*\bgrid\b[^"]*\bgap-1\b[^"]*\bp-1\b/);
+  assert.match(navTag, /grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\)/);
+  const links = [...nav.matchAll(/<a\b[^>]*class="([^"]*)"[^>]*>/g)].map((match) => match[1]);
   assert.equal(links.length, 4);
+  // Every cell carries identical classes (no per-tab width, flex-grow or basis differences).
+  const base = (c) =>
+    c.replace(
+      / (bg-elevated font-semibold text-foreground|font-medium text-muted-foreground)$/,
+      "",
+    );
+  assert.equal(new Set(links.map(base)).size, 1);
   for (const link of links) {
-    assert.match(link, /min-h-11 min-w-0 flex-1 basis-0/);
+    assert.match(link, /min-h-11 min-w-0/);
+    assert.doesNotMatch(link, /flex-1|basis-|grow/);
     assert.match(link, /justify-center/);
-    assert.match(link, /px-1/);
+    // Measured padding: px-0.5 below 360 (so "Body & food" fits at 320), px-1 at ≥360.
+    assert.match(link, /px-0\.5/);
+    assert.match(link, /min-\[360px\]:px-1/);
     assert.match(link, /focus-visible:ring-inset/);
   }
+  // Measured font: 10px below 360, 11px at ≥360 — all four labels render complete, no truncation.
+  assert.match(
+    nav,
+    /<span class="w-full truncate text-center text-\[10px\] min-\[360px\]:text-\[11px\]">Body &amp; food<\/span>/,
+  );
   assert.equal((nav.match(/aria-current="page"/g) ?? []).length, 1);
   const picker = fixture.picker("3");
   assert.match(picker, /<select[^>]*appearance-none[^>]*bg-none/);

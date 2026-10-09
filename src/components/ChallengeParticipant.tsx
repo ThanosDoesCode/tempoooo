@@ -27,12 +27,30 @@ export function ChallengeParticipantHeading({
   );
 }
 
-export function ChallengeStatus({ atRisk, children }: { atRisk: boolean; children: ReactNode }) {
+/**
+ * Calm risk presentation: the consequence and the action that lowers it read as neutral text, with
+ * amber reduced to a small dot. Calculations are unchanged — this only restyles the penalty.
+ */
+export function ChallengeStatus({
+  penalty,
+}: {
+  penalty: { atRisk: boolean; line: string; consequence?: string | null; action?: string | null };
+}) {
+  if (penalty.atRisk && penalty.consequence) {
+    return (
+      <div className="flex items-start gap-2.5 rounded-xl bg-elevated/50 px-3 py-2.5">
+        <span aria-hidden="true" className="mt-[7px] h-2 w-2 flex-none rounded-full bg-warn-soft" />
+        <div className="min-w-0 text-[13px] leading-snug">
+          <span className="text-muted-foreground">Current consequence</span>
+          <p className="font-semibold text-foreground">{penalty.consequence}</p>
+          {penalty.action ? <p className="mt-0.5 text-muted-foreground">{penalty.action}</p> : null}
+        </div>
+      </div>
+    );
+  }
   return (
-    <p
-      className={`rounded-xl border px-3 py-2.5 text-[13px] leading-relaxed ${atRisk ? "border-warn-soft/20 bg-warn-soft/5 text-warn-soft" : "border-transparent bg-elevated/50 text-muted-foreground"}`}
-    >
-      {children}
+    <p className="rounded-xl bg-elevated/50 px-3 py-2.5 text-[13px] leading-relaxed text-muted-foreground">
+      {penalty.line}
     </p>
   );
 }

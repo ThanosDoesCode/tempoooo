@@ -19,7 +19,12 @@ const NAV: Record<ProgressSection, { label: string; to: string }> = {
 export function ProgressNav({ active }: { active: ProgressSection }) {
   const { sections } = useProgressSections();
   return (
-    <nav aria-label="Progress view" className="mb-3.5 flex gap-1 rounded-[13px] bg-card p-1">
+    <nav
+      aria-label="Progress view"
+      // Equal-width cells via the grid track, so no tab (e.g. "Body & food") gets extra width.
+      className="mb-3.5 grid gap-1 rounded-[13px] bg-card p-1"
+      style={{ gridTemplateColumns: `repeat(${sections.length}, minmax(0, 1fr))` }}
+    >
       {sections.map((section) => {
         const { label, to } = NAV[section];
         const on = section === active;
@@ -29,11 +34,14 @@ export function ProgressNav({ active }: { active: ProgressSection }) {
             to={to}
             preload="intent"
             aria-current={on ? "page" : undefined}
-            className={`flex min-h-11 min-w-0 flex-1 basis-0 items-center justify-center whitespace-nowrap rounded-[10px] px-1 text-[11px] min-[360px]:text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
+            className={`flex min-h-11 min-w-0 items-center justify-center rounded-[10px] px-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring min-[360px]:px-1 ${
               on ? "bg-elevated font-semibold text-foreground" : "font-medium text-muted-foreground"
             }`}
           >
-            {label}
+            {/* 10px/2px below 360 keeps all four labels complete at 320px (measured); 11px above. */}
+            <span className="w-full truncate text-center text-[10px] min-[360px]:text-[11px]">
+              {label}
+            </span>
           </Link>
         );
       })}

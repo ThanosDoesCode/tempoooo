@@ -158,6 +158,35 @@ test("weekPenaltyMessage: current owed plus distance to the next lower band", ()
   assert.equal(done.line, "On target · no penalty");
 });
 
+test("weekPenaltyMessage exposes a structured consequence/action for the calm risk UI", () => {
+  const mid = C.weekPenaltyMessage(6.5, 15, moneyTerms);
+  assert.equal(mid.consequence, "€10"); // current consequence, shown in neutral text
+  assert.equal(mid.action, "3.5 km to reduce it"); // what lowers it
+  // On target: nothing at risk, no consequence/action.
+  const done = C.weekPenaltyMessage(15, 15, moneyTerms);
+  assert.equal(done.consequence, null);
+  assert.equal(done.action, null);
+  // Custom-consequence mode names the consequence but has no distance-to-reduce action.
+  const custom = C.weekPenaltyMessage(0, 15, {
+    ...moneyTerms,
+    penalty_mode: "custom",
+    penalty_high_custom: "Cook dinner",
+  });
+  assert.equal(custom.consequence, "Cook dinner");
+  assert.equal(custom.action, null);
+});
+
+test("the risk block is calm: neutral text with a small amber dot, no amber paragraph", async () => {
+  const participant = await read("src/components/ChallengeParticipant.tsx");
+  // The at-risk branch reads as neutral text (consequence in foreground, action muted)…
+  assert.match(participant, /Current consequence/);
+  assert.match(participant, /font-semibold text-foreground">\{penalty\.consequence\}/);
+  assert.match(participant, /text-muted-foreground">\{penalty\.action\}/);
+  // …with amber reduced to a small dot, not a full amber-text paragraph block.
+  assert.match(participant, /h-2 w-2 flex-none rounded-full bg-warn-soft/);
+  assert.doesNotMatch(participant, /bg-warn-soft\/5 text-warn-soft/);
+});
+
 test("compact risk copy preserves legacy photos and custom consequences", () => {
   assert.equal(
     C.weekPenaltyMessage(0, 15, { ...moneyTerms, legacy_photo_owed: true }).line,

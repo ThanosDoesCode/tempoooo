@@ -85,7 +85,7 @@ function AppChrome({ children }: { children: ReactNode }) {
             >
               <span className="block h-full w-1/2 animate-pulse rounded-full bg-primary" />
             </div>
-            <div className="mx-auto grid max-w-lg grid-cols-5 items-start px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2.5">
+            <div className="mx-auto grid max-w-lg grid-cols-5 items-start px-2 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2.5">
               {MAIN_TABS.slice(0, 2).map((item) => (
                 <TabLink
                   key={item.tab}

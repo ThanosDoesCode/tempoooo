@@ -179,20 +179,32 @@ export function penaltyTextFor(equivalentKm: number, terms?: Partial<ChallengeTe
  * and amounts via penaltyFor — it never re-derives the penalty formula. Money mode returns the
  * amount owed now plus the distance to the next lower band; custom mode names the consequence.
  */
+export type WeekPenalty = {
+  atRisk: boolean;
+  /** Legacy single-line form, kept for any plain-text consumer. */
+  line: string;
+  /** The consequence that applies right now (null when on target). */
+  consequence: string | null;
+  /** The action that lowers it, e.g. "4.8 km to reduce it" (null when nothing lowers it). */
+  action: string | null;
+};
+
 export function weekPenaltyMessage(
   equivalentKm: number,
   targetKm: number,
   terms?: Partial<ChallengeTerms> | null,
-): { atRisk: boolean; line: string } {
+): WeekPenalty {
   const configured = challengeTerms(terms);
-  if (targetKm <= 0 || equivalentKm >= targetKm) {
-    return { atRisk: false, line: "On target · no penalty" };
-  }
+  const onTarget: WeekPenalty = {
+    atRisk: false,
+    line: "On target · no penalty",
+    consequence: null,
+    action: null,
+  };
+  if (targetKm <= 0 || equivalentKm >= targetKm) return onTarget;
   if (configured.penalty_mode !== "money") {
-    return {
-      atRisk: true,
-      line: `At risk: ${penaltyTextFor(equivalentKm, configured)}`,
-    };
+    const consequence = penaltyTextFor(equivalentKm, configured);
+    return { atRisk: true, line: `At risk: ${consequence}`, consequence, action: null };
   }
   const penalties = {
     high: configured.penalty_high_eur,
@@ -200,17 +212,17 @@ export function weekPenaltyMessage(
     low: configured.penalty_low_eur,
   };
   const current = penaltyFor(equivalentKm, targetKm, penalties);
-  if (current === 0) {
-    return { atRisk: false, line: "On target · no penalty" };
-  }
+  if (current === 0) return onTarget;
   const nextBoundary = [targetKm / 3, (targetKm * 2) / 3, targetKm].find((b) => b > equivalentKm)!;
+  const consequence = owedText(current, configured.legacy_photo_owed);
+  const reduceKm = Math.max(0, nextBoundary - equivalentKm);
   const nextPenalty = penaltyFor(nextBoundary, targetKm, penalties);
   const nextOwed = nextPenalty === 0 ? eur(0) : owedText(nextPenalty, configured.legacy_photo_owed);
   return {
     atRisk: true,
-    line: `At risk: ${owedText(current, configured.legacy_photo_owed)} · ${km(
-      Math.max(0, nextBoundary - equivalentKm),
-    )} more → ${nextOwed}`,
+    line: `At risk: ${consequence} · ${km(reduceKm)} more → ${nextOwed}`,
+    consequence,
+    action: `${km(reduceKm)} to reduce it`,
   };
 }
 

@@ -111,15 +111,23 @@ test("participant rows preserve exact names and displayed km while sharing value
   assert.doesNotMatch(html(ChallengeParticipantHeading, { label: "Opponent" }), /0.0|km/);
 });
 
-test("risk copy stays intact with the softer scoped warning token; neutral state is not a warning", () => {
+test("risk copy is calm: consequence and action in neutral text with a small amber dot", () => {
   const risk = html(ChallengeStatus, {
-    atRisk: true,
-    children: "At risk: €10 if the week ended now",
+    penalty: {
+      atRisk: true,
+      line: "At risk: €10 · 4.8 km more → €5",
+      consequence: "€10",
+      action: "4.8 km to reduce it",
+    },
   });
-  assert.match(risk, /At risk: €10 if the week ended now/);
-  assert.match(risk, /border-warn-soft\/20 bg-warn-soft\/5 text-warn-soft/);
-  assert.match(risk, /text-\[13px\] leading-relaxed/);
-  const neutral = html(ChallengeStatus, { atRisk: false, children: "Week paused · no penalty" });
+  assert.match(risk, /Current consequence/);
+  assert.match(risk, /font-semibold text-foreground">€10/); // consequence reads as neutral text
+  assert.match(risk, /4.8 km to reduce it/); // the action that lowers it
+  assert.match(risk, /h-2 w-2 flex-none rounded-full bg-warn-soft/); // amber reduced to a small dot
+  assert.doesNotMatch(risk, /bg-warn-soft\/5 text-warn-soft/); // no paragraph-sized amber block
+  const neutral = html(ChallengeStatus, {
+    penalty: { atRisk: false, line: "Week paused · no penalty" },
+  });
   assert.doesNotMatch(neutral, /warn-soft/);
   assert.match(neutral, /Week paused · no penalty/);
   const css = read("src/styles.css");
@@ -133,7 +141,7 @@ test("Today and main Challenge cards share padding and status presentation witho
   for (const source of [today, challenge]) {
     assert.match(source, /space-y-3.5 p-5/);
     assert.match(source, /<ChallengeParticipantHeading/);
-    assert.match(source, /<ChallengeStatus atRisk=\{penalty.atRisk\}>\{penalty.line\}/);
+    assert.match(source, /<ChallengeStatus penalty=\{penalty\} \/>/);
     assert.match(source, /border-t border-border pt-3.5/);
   }
   assert.match(today, /Math.min\(100, \(myKm \/ target\) \* 100\)/);

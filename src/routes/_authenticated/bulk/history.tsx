@@ -165,7 +165,8 @@ function BulkHistoryPage() {
         ) : (
           <>
             {!workoutPerformed ? (
-              <p className="mt-3 rounded-xl bg-warn/10 p-3 text-xs text-warn">
+              <p className="mt-3 flex items-center gap-2 rounded-xl bg-elevated/50 p-3 text-xs text-muted-foreground">
+                <span aria-hidden="true" className="h-1.5 w-1.5 flex-none rounded-full bg-warn" />
                 Not counted · no working sets logged.
               </p>
             ) : null}

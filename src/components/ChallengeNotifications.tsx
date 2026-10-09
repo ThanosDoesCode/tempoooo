@@ -294,16 +294,16 @@ export function ChallengeNotifications({
       {feedback?.tone === "error" ? (
         <div
           role="alert"
-          className="flex flex-wrap items-center gap-2 border-t border-warn/20 bg-warn/5 px-4 py-3 text-[13px] leading-relaxed text-warn"
+          className="flex flex-wrap items-center gap-2 border-t border-warn/20 bg-warn/5 px-4 py-3 text-[13px] leading-relaxed text-foreground"
         >
-          <TriangleAlert className="h-4 w-4 shrink-0" aria-hidden="true" />
+          <TriangleAlert className="h-4 w-4 shrink-0 text-warn" aria-hidden="true" />
           <span className="min-w-0 flex-1">{feedback.text}</span>
           {serviceState === "temporary-failure" ? (
             <button
               type="button"
               disabled={phase !== null}
               onClick={() => setRetryKey((key) => key + 1)}
-              className="min-h-11 shrink-0 rounded-xl border border-warn/40 px-3 py-2 font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+              className="min-h-11 shrink-0 rounded-xl border border-warn/40 px-3 py-2 font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
             >
               Retry notifications
             </button>

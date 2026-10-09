@@ -135,7 +135,8 @@ function ActivityDetail() {
         </Card>
 
         {!metrics.qualified ? (
-          <p className="text-[13px] font-medium text-warn">
+          <p className="flex items-center gap-2 text-[13px] text-muted-foreground">
+            <span aria-hidden="true" className="h-1.5 w-1.5 flex-none rounded-full bg-warn" />
             {run ? "Not counted · slower than 7:00 /km" : "Not counted · below 18 km/h"}
           </p>
         ) : null}

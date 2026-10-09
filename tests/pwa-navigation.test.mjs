@@ -277,6 +277,8 @@ test("Tempo navigation exposes optional fitness areas only after persisted activ
   const manifest = JSON.parse(await read("public/manifest.webmanifest"));
   assert.equal(manifest.name, "Tempo");
   assert.equal(manifest.short_name, "Tempo");
+  // start_url controls the launch URL on platforms that honour it (Android/Chrome/desktop): Today.
+  // (iOS standalone restores the last-visited URL regardless; manifest.id does not change that.)
   assert.equal(manifest.start_url, "/today");
   assert.equal(manifest.display, "standalone");
   assert.deepEqual(
@@ -327,6 +329,39 @@ test("Tempo navigation exposes optional fitness areas only after persisted activ
   const denied = await read("src/routes/_authenticated/bulk-access-denied.tsx");
   assert.match(denied, /Goal plan required/);
   assert.match(denied, /Goal is optional/);
+});
+
+test("default landing resolves to Today; deep links and notification destinations preserved", async () => {
+  const [index, today, guard] = await Promise.all([
+    read("src/routes/index.tsx"),
+    read("src/routes/_authenticated/today.tsx"),
+    read("src/routes/_authenticated/route.tsx"),
+  ]);
+  // Signed-in root → /today, and /today → the Today daily screen for fitness users (Challenge only
+  // remains the fallback for challenge-only "core" accounts that have no daily screen).
+  assert.match(index, /if \(data\.session\) throw redirect\(\{ to: "\/today", replace: true \}\)/);
+  assert.match(today, /throw redirect\(\{ to: "\/bulk", replace: true \}\)/);
+  assert.match(today, /accountProductMode\(memberships\) === "core"[\s\S]*to: "\/challenge"/);
+  // Deep links / notification destinations are preserved through the auth guard.
+  assert.match(guard, /rememberDestination\(destination\)/);
+  assert.match(guard, /sanitizeDestination\(location\.href\)/);
+  assert.match(
+    guard,
+    /redirect\(\{ to: "\/auth", search: destination \? \{ redirect: destination \}/,
+  );
+});
+
+test("bottom navbar is modestly taller with lifted items and preserved safe area + touch targets", async () => {
+  const shell = await read("src/components/AppShell.tsx");
+  const bar = shell.match(/grid max-w-lg grid-cols-5[^"]*/)[0];
+  assert.match(bar, /grid-cols-5/); // equal horizontal distribution
+  assert.match(bar, /items-start/); // items anchored to the top of the bar
+  assert.match(bar, /pt-2\.5/); // top gap unchanged, so items are not pushed down
+  // Measured: pt-2.5 + pb-1rem lifts items (16px breathing room below vs 8px) while the bar grows
+  // 71→79px — items stay at 15px from the top instead of dropping to 19px (pt-3.5 regressed that).
+  assert.match(bar, /pb-\[max\(1rem,env\(safe-area-inset-bottom\)\)\]/); // taller + safe area preserved
+  assert.match(shell, /h-\[52px\] w-\[52px\] place-items-center rounded-full bg-primary/); // + prominence
+  assert.match(shell, /min-h-11/); // 44px+ touch targets
 });
 
 test("product areas expose distinct contextual destinations and preserve legacy/public data paths", async () => {
