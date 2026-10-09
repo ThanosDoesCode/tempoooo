@@ -129,7 +129,7 @@ test("Sharing is absent while personal Bulk activation guards remain", async () 
   assert.match(strength, /to="\/bulk\/training\/history" label="Workout history"/);
   assert.match(food, /to="\/bulk\/meals\/history" label="Nutrition history"/);
   assert.match(guard, /bulkOwnerQueryOptions/);
-  assert.match(guard, /bulk-onboarding/);
+  assert.match(guard, /bulk-access-denied/);
   assert.match(profile, /<SectionTitle>Fitness tools<\/SectionTitle>/);
   assert.match(profile, /Set up fitness tools/);
   assert.match(profile, /ownedPlan[\s\S]*label: "Goal settings"/);

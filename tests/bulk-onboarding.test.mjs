@@ -271,7 +271,7 @@ test("the five-step UI submits one atomic RPC while optional Goal remains discov
   assert.match(onboarding, /Creating your goal plan/);
   assert.match(onboarding, /bulkOwnerQueryOptions/);
   assert.match(profile, /Set up fitness tools/);
-  assert.match(guard, /redirect\(\{ to: "\/bulk-onboarding", replace: true \}\)/);
+  assert.match(guard, /redirect\(\{ to: "\/bulk-access-denied", replace: true \}\)/);
   // Optional fitness tools stay discoverable through the "You" tab badge, not a filtered bar.
   assert.match(shell, /New Fitness tools/);
   assert.match(shell, /goal_seen_at == null/);

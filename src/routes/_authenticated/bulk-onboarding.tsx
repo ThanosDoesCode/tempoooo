@@ -4,7 +4,6 @@ import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { Check, Dumbbell } from "lucide-react";
 import { BackButton } from "@/components/BackControl";
 import { AppShell } from "@/components/AppShell";
-import { HistoryBackLink } from "@/components/HistoryBackLink";
 import { PendingLabel } from "@/components/ui-kit";
 import { activeBulkMemberships, bulkOwnerQueryOptions } from "@/lib/bulk-access";
 import {
@@ -246,7 +245,9 @@ function BulkOnboarding() {
       <div className="mx-auto max-w-md">
         <div className="mb-4 flex min-h-11 items-center justify-between gap-3">
           {step === 1 ? (
-            <HistoryBackLink fallback="/profile" fallbackLabel="You" />
+            // First fitness step: no Back. There is no prior setup step, and a contextual Back
+            // here (e.g. to Challenge) would be misleading.
+            <span className="text-sm font-semibold text-primary">Tempo</span>
           ) : (
             <BackButton disabled={busy} onClick={() => setStep((step - 1) as Step)} />
           )}

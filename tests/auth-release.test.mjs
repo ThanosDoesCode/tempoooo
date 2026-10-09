@@ -55,7 +55,7 @@ test("authentication does not implicitly activate optional Bulk", async () => {
   assert.match(access, /\.from\("bulk_members"\)/);
   assert.match(access, /\.filter\(\(r\) => r\.role === "owner"\)/);
   assert.match(guard, /bulkOwnerQueryOptions\(\)/);
-  assert.match(guard, /bulk-onboarding/);
+  assert.match(guard, /bulk-access-denied/);
   assert.match(onboarding, /complete_goal_onboarding/);
   assert.doesNotMatch(onboarding, /activate_my_bulk/);
 });

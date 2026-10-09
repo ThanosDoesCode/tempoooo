@@ -321,7 +321,7 @@ test("Tempo navigation exposes optional fitness areas only after persisted activ
   assert.match(guard, /prefetchBulk/);
   assert.match(guard, /if \(!preferred\)/);
   assert.match(guard, /clearBulk\(\)/);
-  assert.match(guard, /redirect\(\{ to: "\/bulk-onboarding", replace: true \}\)/);
+  assert.match(guard, /redirect\(\{ to: "\/bulk-access-denied", replace: true \}\)/);
   const onboarding = await read("src/routes/_authenticated/bulk-onboarding.tsx");
   assert.match(onboarding, /supabase\.rpc\("complete_goal_onboarding"/);
   assert.match(onboarding, /Create my goal plan/);

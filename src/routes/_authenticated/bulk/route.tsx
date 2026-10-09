@@ -23,7 +23,10 @@ export const Route = createFileRoute("/_authenticated/bulk")({
       await context.queryClient.ensureQueryData(bulkOwnerQueryOptions()),
     );
     if (!preferred && location.pathname === "/bulk") return;
-    if (!preferred) throw redirect({ to: "/bulk-onboarding", replace: true });
+    // Challenge-only accounts never get auto-launched into fitness onboarding when they reach a
+    // fitness surface (a Progress/meal/workout tap or deep link). Show the gated screen with an
+    // explicit "Start My Goal" action instead; onboarding stays opt-in.
+    if (!preferred) throw redirect({ to: "/bulk-access-denied", replace: true });
     await prefetchBulk(preferred.bulk_profile_id);
   },
   component: BulkLayout,
@@ -71,7 +74,7 @@ function BulkLayout() {
     const preferred = preferredBulkMembership(memberships);
     if (!preferred) {
       clearBulk();
-      if (pathname !== "/bulk") void navigate({ to: "/bulk-onboarding", replace: true });
+      if (pathname !== "/bulk") void navigate({ to: "/bulk-access-denied", replace: true });
       return;
     }
     if (preferred.bulk_profile_id !== bulkId) {
