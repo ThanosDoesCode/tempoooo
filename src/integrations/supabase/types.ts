@@ -592,6 +592,44 @@ export type Database = {
           },
         ]
       }
+      bulk_streak_goal_events: {
+        Row: {
+          bulk_profile_id: string
+          calorie_target_kcal: number | null
+          effective_at: string
+          id: string
+          recorded_at: string
+          timezone: string | null
+          weekly_workout_goal: number | null
+        }
+        Insert: {
+          bulk_profile_id: string
+          calorie_target_kcal?: number | null
+          effective_at?: string
+          id?: string
+          recorded_at?: string
+          timezone?: string | null
+          weekly_workout_goal?: number | null
+        }
+        Update: {
+          bulk_profile_id?: string
+          calorie_target_kcal?: number | null
+          effective_at?: string
+          id?: string
+          recorded_at?: string
+          timezone?: string | null
+          weekly_workout_goal?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bulk_streak_goal_events_bulk_profile_id_fkey"
+            columns: ["bulk_profile_id"]
+            isOneToOne: false
+            referencedRelation: "bulk_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bulk_targets: {
         Row: {
           bulk_profile_id: string
@@ -1937,6 +1975,149 @@ export type Database = {
         }
         Relationships: []
       }
+      streak_week_run_legs: {
+        Row: {
+          challenge_end_instant: string
+          challenge_id: string | null
+          challenge_timezone: string
+          challenge_week_end: string
+          challenge_week_number: number
+          challenge_week_start: string
+          id: string
+          settled_at: string | null
+          settlement_state: Database["public"]["Enums"]["streak_leg_state"]
+          source_challenge_id: string
+          source_week_id: string | null
+          target_km: number | null
+          user_id: string
+          week_start: string
+        }
+        Insert: {
+          challenge_end_instant: string
+          challenge_id?: string | null
+          challenge_timezone: string
+          challenge_week_end: string
+          challenge_week_number: number
+          challenge_week_start: string
+          id?: string
+          settled_at?: string | null
+          settlement_state?: Database["public"]["Enums"]["streak_leg_state"]
+          source_challenge_id: string
+          source_week_id?: string | null
+          target_km?: number | null
+          user_id: string
+          week_start: string
+        }
+        Update: {
+          challenge_end_instant?: string
+          challenge_id?: string | null
+          challenge_timezone?: string
+          challenge_week_end?: string
+          challenge_week_number?: number
+          challenge_week_start?: string
+          id?: string
+          settled_at?: string | null
+          settlement_state?: Database["public"]["Enums"]["streak_leg_state"]
+          source_challenge_id?: string
+          source_week_id?: string | null
+          target_km?: number | null
+          user_id?: string
+          week_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "streak_week_run_legs_challenge_id_fkey"
+            columns: ["challenge_id"]
+            isOneToOne: false
+            referencedRelation: "challenges"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "streak_week_run_legs_user_id_week_start_fkey"
+            columns: ["user_id", "week_start"]
+            isOneToOne: false
+            referencedRelation: "streak_weeks"
+            referencedColumns: ["user_id", "week_start"]
+          },
+        ]
+      }
+      streak_weeks: {
+        Row: {
+          bulk_profile_id: string | null
+          created_at: string
+          eat_active: boolean
+          eat_required_days: number | null
+          eat_state: Database["public"]["Enums"]["streak_ring_state"]
+          eat_target_kcal: number | null
+          eat_tolerance_pct: number | null
+          free_miss_used: boolean
+          locked_at: string | null
+          result: Database["public"]["Enums"]["streak_week_result"]
+          run_active: boolean
+          run_state: Database["public"]["Enums"]["streak_ring_state"]
+          timezone: string
+          train_active: boolean
+          train_state: Database["public"]["Enums"]["streak_ring_state"]
+          train_target_workouts: number | null
+          updated_at: string
+          user_id: string
+          week_end: string
+          week_start: string
+        }
+        Insert: {
+          bulk_profile_id?: string | null
+          created_at?: string
+          eat_active?: boolean
+          eat_required_days?: number | null
+          eat_state?: Database["public"]["Enums"]["streak_ring_state"]
+          eat_target_kcal?: number | null
+          eat_tolerance_pct?: number | null
+          free_miss_used?: boolean
+          locked_at?: string | null
+          result?: Database["public"]["Enums"]["streak_week_result"]
+          run_active?: boolean
+          run_state?: Database["public"]["Enums"]["streak_ring_state"]
+          timezone: string
+          train_active?: boolean
+          train_state?: Database["public"]["Enums"]["streak_ring_state"]
+          train_target_workouts?: number | null
+          updated_at?: string
+          user_id: string
+          week_end: string
+          week_start: string
+        }
+        Update: {
+          bulk_profile_id?: string | null
+          created_at?: string
+          eat_active?: boolean
+          eat_required_days?: number | null
+          eat_state?: Database["public"]["Enums"]["streak_ring_state"]
+          eat_target_kcal?: number | null
+          eat_tolerance_pct?: number | null
+          free_miss_used?: boolean
+          locked_at?: string | null
+          result?: Database["public"]["Enums"]["streak_week_result"]
+          run_active?: boolean
+          run_state?: Database["public"]["Enums"]["streak_ring_state"]
+          timezone?: string
+          train_active?: boolean
+          train_state?: Database["public"]["Enums"]["streak_ring_state"]
+          train_target_workouts?: number | null
+          updated_at?: string
+          user_id?: string
+          week_end?: string
+          week_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "streak_weeks_bulk_profile_id_fkey"
+            columns: ["bulk_profile_id"]
+            isOneToOne: false
+            referencedRelation: "bulk_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -2280,6 +2461,7 @@ export type Database = {
           weekly_target_km: number
         }[]
       }
+      recompute_streak: { Args: { _timezone: string }; Returns: Json }
       refresh_active_bulk_training_bodyweight: {
         Args: { _profile: string }
         Returns: number
@@ -2475,6 +2657,15 @@ export type Database = {
       bulk_role: "owner" | "viewer" | "editor"
       challenge_status: "draft" | "active" | "completed"
       payment_status: "unpaid" | "marked_paid" | "confirmed_paid"
+      streak_leg_state: "pending" | "completed" | "missed" | "paused"
+      streak_ring_state: "inactive" | "open" | "closed" | "skipped"
+      streak_week_result:
+        | "open"
+        | "kept"
+        | "missed"
+        | "paused"
+        | "free"
+        | "none"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2606,6 +2797,9 @@ export const Constants = {
       bulk_role: ["owner", "viewer", "editor"],
       challenge_status: ["draft", "active", "completed"],
       payment_status: ["unpaid", "marked_paid", "confirmed_paid"],
+      streak_leg_state: ["pending", "completed", "missed", "paused"],
+      streak_ring_state: ["inactive", "open", "closed", "skipped"],
+      streak_week_result: ["open", "kept", "missed", "paused", "free", "none"],
     },
   },
 } as const
