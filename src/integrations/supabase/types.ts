@@ -14,60 +14,6 @@ export type Database = {
   }
   public: {
     Tables: {
-      account_notification_events: {
-        Row: {
-          id: string
-          recipient_user_id: string
-          actor_user_id: string
-          actor_username: string | null
-          event_type: string
-          challenge_id: string
-          invitation_id: string
-          dedupe_key: string
-          created_at: string
-          read_at: string | null
-        }
-        Insert: {
-          id?: string
-          recipient_user_id: string
-          actor_user_id: string
-          actor_username?: string | null
-          event_type: string
-          challenge_id: string
-          invitation_id: string
-          dedupe_key: string
-          created_at?: string
-          read_at?: string | null
-        }
-        Update: {
-          id?: string
-          recipient_user_id?: string
-          actor_user_id?: string
-          actor_username?: string | null
-          event_type?: string
-          challenge_id?: string
-          invitation_id?: string
-          dedupe_key?: string
-          created_at?: string
-          read_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "account_notification_events_invitation_id_fkey"
-            columns: ["invitation_id"]
-            isOneToOne: false
-            referencedRelation: "challenge_invitations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "account_notification_events_challenge_id_fkey"
-            columns: ["challenge_id"]
-            isOneToOne: false
-            referencedRelation: "challenges"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       bulk_admins: {
         Row: {
           created_at: string
@@ -369,45 +315,6 @@ export type Database = {
           },
         ]
       }
-      bulk_nutrition_target_history: {
-        Row: {
-          bulk_profile_id: string
-          effective_from: string
-          calories: number
-          protein_g: number
-          carbs_g: number
-          fat_g: number
-          timezone: string | null
-          recorded_at: string
-        }
-        Insert: {
-          bulk_profile_id: string
-          effective_from: string
-          calories: number
-          protein_g: number
-          carbs_g: number
-          fat_g: number
-          timezone: string | null
-          recorded_at?: string
-        }
-        Update: {
-          bulk_profile_id?: string
-          effective_from?: string
-          calories?: number
-          protein_g?: number
-          carbs_g?: number
-          fat_g?: number
-          timezone?: string | null
-          recorded_at?: string
-        }
-        Relationships: [{
-          foreignKeyName: "bulk_nutrition_target_history_bulk_profile_id_fkey"
-          columns: ["bulk_profile_id"]
-          isOneToOne: false
-          referencedRelation: "bulk_profiles"
-          referencedColumns: ["id"]
-        }]
-      }
       bulk_nutrition_days: {
         Row: {
           bulk_profile_id: string
@@ -425,10 +332,10 @@ export type Database = {
           created_at?: string
           id?: string
           log_date: string
-          target_calories: number | null
-          target_carbs_g: number | null
-          target_fat_g: number | null
-          target_protein_g: number | null
+          target_calories?: number | null
+          target_carbs_g?: number | null
+          target_fat_g?: number | null
+          target_protein_g?: number | null
           updated_at?: string
         }
         Update: {
@@ -520,6 +427,47 @@ export type Database = {
             columns: ["source_meal_preset_id"]
             isOneToOne: false
             referencedRelation: "bulk_meal_presets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bulk_nutrition_target_history: {
+        Row: {
+          bulk_profile_id: string
+          calories: number
+          carbs_g: number
+          effective_from: string
+          fat_g: number
+          protein_g: number
+          recorded_at: string
+          timezone: string | null
+        }
+        Insert: {
+          bulk_profile_id: string
+          calories: number
+          carbs_g: number
+          effective_from: string
+          fat_g: number
+          protein_g: number
+          recorded_at?: string
+          timezone?: string | null
+        }
+        Update: {
+          bulk_profile_id?: string
+          calories?: number
+          carbs_g?: number
+          effective_from?: string
+          fat_g?: number
+          protein_g?: number
+          recorded_at?: string
+          timezone?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bulk_nutrition_target_history_bulk_profile_id_fkey"
+            columns: ["bulk_profile_id"]
+            isOneToOne: false
+            referencedRelation: "bulk_profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -1545,10 +1493,8 @@ export type Database = {
       }
       challenge_notification_events: {
         Row: {
-          account_notification_id: string | null
-          recipient_user_id: string | null
           actor_id: string
-          actor_membership_id: string | null
+          actor_membership_id: string
           attempts: number
           challenge_id: string
           created_at: string
@@ -1561,16 +1507,14 @@ export type Database = {
           lease_token: string | null
           lease_until: string | null
           next_attempt_at: string
-          opponent_membership_id: string | null
+          opponent_membership_id: string
           provider_message_id: string | null
           status: string
           subscription_ids: string[] | null
         }
         Insert: {
-          account_notification_id?: string | null
-          recipient_user_id?: string | null
           actor_id: string
-          actor_membership_id?: string | null
+          actor_membership_id: string
           attempts?: number
           challenge_id: string
           created_at?: string
@@ -1583,16 +1527,14 @@ export type Database = {
           lease_token?: string | null
           lease_until?: string | null
           next_attempt_at?: string
-          opponent_membership_id?: string | null
+          opponent_membership_id: string
           provider_message_id?: string | null
           status?: string
           subscription_ids?: string[] | null
         }
         Update: {
-          account_notification_id?: string | null
-          recipient_user_id?: string | null
           actor_id?: string
-          actor_membership_id?: string | null
+          actor_membership_id?: string
           attempts?: number
           challenge_id?: string
           created_at?: string
@@ -1605,19 +1547,12 @@ export type Database = {
           lease_token?: string | null
           lease_until?: string | null
           next_attempt_at?: string
-          opponent_membership_id?: string | null
+          opponent_membership_id?: string
           provider_message_id?: string | null
           status?: string
           subscription_ids?: string[] | null
         }
         Relationships: [
-          {
-            foreignKeyName: "challenge_notification_events_account_notification_id_fkey"
-            columns: ["account_notification_id"]
-            isOneToOne: false
-            referencedRelation: "account_notification_events"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "challenge_notification_events_challenge_id_fkey"
             columns: ["challenge_id"]
@@ -2007,15 +1942,6 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      bulk_nutrition_targets_for_day: {
-        Args: { _profile: string; _log_date: string; _timezone: string }
-        Returns: Json
-      }
-
-      mark_account_notification_read: {
-        Args: { _notification: string }
-        Returns: boolean
-      }
       accept_bulk_invitation: {
         Args: { _caller: string; _email: string; _token: string }
         Returns: string
@@ -2036,6 +1962,10 @@ export type Database = {
       apply_bulk_calorie_recommendation: {
         Args: { _expected_current_calories: number; _new_calories: number }
         Returns: boolean
+      }
+      bulk_nutrition_targets_for_day: {
+        Args: { _log_date: string; _profile: string; _timezone: string }
+        Returns: Json
       }
       cancel_pending_challenge: {
         Args: { _caller: string; _challenge: string }
@@ -2064,10 +1994,8 @@ export type Database = {
       claim_challenge_push_events: {
         Args: never
         Returns: {
-          account_notification_id: string | null
-          recipient_user_id: string | null
           actor_id: string
-          actor_membership_id: string | null
+          actor_membership_id: string
           attempts: number
           challenge_id: string
           created_at: string
@@ -2080,7 +2008,7 @@ export type Database = {
           lease_token: string | null
           lease_until: string | null
           next_attempt_at: string
-          opponent_membership_id: string | null
+          opponent_membership_id: string
           provider_message_id: string | null
           status: string
           subscription_ids: string[] | null
@@ -2178,15 +2106,15 @@ export type Database = {
             Args: {
               _calories: number
               _carbs: number
+              _category?: string
               _fat: number
-              _category?: string | null
-              _timezone?: string
               _local_today: string
               _log_date: string
               _name: string
               _note?: string
               _protein: number
               _request_id: string
+              _timezone?: string
             }
             Returns: string
           }
@@ -2308,12 +2236,12 @@ export type Database = {
           }
         | {
             Args: {
-              _category?: string | null
-              _timezone?: string
+              _category?: string
               _local_today: string
               _log_date: string
               _preset: string
               _request_id: string
+              _timezone?: string
             }
             Returns: string
           }
@@ -2512,15 +2440,15 @@ export type Database = {
             Args: {
               _calories: number
               _carbs: number
+              _category?: string
               _entry: string
               _expected_updated_at: string
               _fat: number
-              _category?: string | null
-              _timezone?: string
               _local_today: string
               _name: string
               _note?: string
               _protein: number
+              _timezone?: string
             }
             Returns: string
           }
