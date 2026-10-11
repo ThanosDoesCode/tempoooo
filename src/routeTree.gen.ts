@@ -19,6 +19,7 @@ import { Route as AuthenticatedNotificationsRouteImport } from './routes/_authen
 import { Route as AuthenticatedOnboardingRouteImport } from './routes/_authenticated/onboarding'
 import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated/profile'
 import { Route as AuthenticatedProgressRouteImport } from './routes/_authenticated/progress'
+import { Route as AuthenticatedStreakRouteImport } from './routes/_authenticated/streak'
 import { Route as AuthenticatedTodayRouteImport } from './routes/_authenticated/today'
 import { Route as AuthenticatedYouRouteImport } from './routes/_authenticated/you'
 import { Route as AuthenticatedBulkIndexRouteImport } from './routes/_authenticated/bulk/index'
@@ -113,6 +114,11 @@ const AuthenticatedProfileRoute = AuthenticatedProfileRouteImport.update({
 const AuthenticatedProgressRoute = AuthenticatedProgressRouteImport.update({
   id: '/progress',
   path: '/progress',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedStreakRoute = AuthenticatedStreakRouteImport.update({
+  id: '/streak',
+  path: '/streak',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedTodayRoute = AuthenticatedTodayRouteImport.update({
@@ -378,6 +384,7 @@ export interface FileRoutesByFullPath {
   '/onboarding': typeof AuthenticatedOnboardingRoute
   '/profile': typeof AuthenticatedProfileRoute
   '/progress': typeof AuthenticatedProgressRoute
+  '/streak': typeof AuthenticatedStreakRoute
   '/today': typeof AuthenticatedTodayRoute
   '/you': typeof AuthenticatedYouRoute
   '/bulk/check-in': typeof AuthenticatedBulkCheckInRoute
@@ -431,6 +438,7 @@ export interface FileRoutesByTo {
   '/onboarding': typeof AuthenticatedOnboardingRoute
   '/profile': typeof AuthenticatedProfileRoute
   '/progress': typeof AuthenticatedProgressRoute
+  '/streak': typeof AuthenticatedStreakRoute
   '/today': typeof AuthenticatedTodayRoute
   '/you': typeof AuthenticatedYouRoute
   '/bulk/check-in': typeof AuthenticatedBulkCheckInRoute
@@ -487,6 +495,7 @@ export interface FileRoutesById {
   '/_authenticated/onboarding': typeof AuthenticatedOnboardingRoute
   '/_authenticated/profile': typeof AuthenticatedProfileRoute
   '/_authenticated/progress': typeof AuthenticatedProgressRoute
+  '/_authenticated/streak': typeof AuthenticatedStreakRoute
   '/_authenticated/today': typeof AuthenticatedTodayRoute
   '/_authenticated/you': typeof AuthenticatedYouRoute
   '/_authenticated/bulk/check-in': typeof AuthenticatedBulkCheckInRoute
@@ -543,6 +552,7 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/profile'
     | '/progress'
+    | '/streak'
     | '/today'
     | '/you'
     | '/bulk/check-in'
@@ -596,6 +606,7 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/profile'
     | '/progress'
+    | '/streak'
     | '/today'
     | '/you'
     | '/bulk/check-in'
@@ -651,6 +662,7 @@ export interface FileRouteTypes {
     | '/_authenticated/onboarding'
     | '/_authenticated/profile'
     | '/_authenticated/progress'
+    | '/_authenticated/streak'
     | '/_authenticated/today'
     | '/_authenticated/you'
     | '/_authenticated/bulk/check-in'
@@ -772,6 +784,13 @@ declare module '@tanstack/react-router' {
       path: '/progress'
       fullPath: '/progress'
       preLoaderRoute: typeof AuthenticatedProgressRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/streak': {
+      id: '/_authenticated/streak'
+      path: '/streak'
+      fullPath: '/streak'
+      preLoaderRoute: typeof AuthenticatedStreakRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/today': {
@@ -1154,6 +1173,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedOnboardingRoute: typeof AuthenticatedOnboardingRoute
   AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute
   AuthenticatedProgressRoute: typeof AuthenticatedProgressRoute
+  AuthenticatedStreakRoute: typeof AuthenticatedStreakRoute
   AuthenticatedTodayRoute: typeof AuthenticatedTodayRoute
   AuthenticatedYouRoute: typeof AuthenticatedYouRoute
   AuthenticatedChallengeAddRoute: typeof AuthenticatedChallengeAddRoute
@@ -1182,6 +1202,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedOnboardingRoute: AuthenticatedOnboardingRoute,
   AuthenticatedProfileRoute: AuthenticatedProfileRoute,
   AuthenticatedProgressRoute: AuthenticatedProgressRoute,
+  AuthenticatedStreakRoute: AuthenticatedStreakRoute,
   AuthenticatedTodayRoute: AuthenticatedTodayRoute,
   AuthenticatedYouRoute: AuthenticatedYouRoute,
   AuthenticatedChallengeAddRoute: AuthenticatedChallengeAddRoute,

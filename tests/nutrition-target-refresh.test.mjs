@@ -67,6 +67,8 @@ test("saving targets updates Today immediately without a reload, preserving inta
     "@/components/PageSkeleton": { PageSkeleton: "PageSkeleton" },
     "@/components/TodayChallenge": { TodayChallenge: "TodayChallenge" },
     "@/components/NotificationBell": { NotificationBell: "NotificationBell" },
+    "@/lib/streak": { useStreak: () => ready(undefined), useThisWeekRingProgress: () => ({}) },
+    "@/components/StreakRings": { StreakRings: "StreakRings" },
   });
   const editor = accountUI("src/components/NutritionTargetsEditor.tsx", "NutritionTargetsEditor", {
     "@/lib/store": store,

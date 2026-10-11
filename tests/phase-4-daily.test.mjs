@@ -83,6 +83,11 @@ function fixture(source, exportName, props, options = {}) {
       useChallengeInvitations: () => ({ data: [], isLoading: false }),
     },
     "@/components/NotificationBell": { NotificationBell: "NotificationBell" },
+    "@/lib/streak": {
+      useStreak: () => ({ data: undefined }),
+      useThisWeekRingProgress: () => ({}),
+    },
+    "@/components/StreakRings": { StreakRings: "StreakRings" },
     "@/lib/daily-check-in": { checkInDraft, validateCheckIn },
     "@/lib/calc": { iso },
     "@/lib/store": { useActions: () => ({ saveDay: (...a) => record("saveDay", ...a) }) },

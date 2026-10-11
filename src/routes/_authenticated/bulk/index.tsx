@@ -1,11 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { startOfWeek } from "date-fns";
-import { Check, ChevronRight } from "lucide-react";
+import { Check, ChevronRight, Flame } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { PageSkeleton } from "@/components/PageSkeleton";
 import { DataError } from "@/components/ui-kit";
 import { TodayChallenge } from "@/components/TodayChallenge";
 import { MainPageHeader } from "@/components/MainPageHeader";
+import { StreakRings } from "@/components/StreakRings";
+import { useStreak, useThisWeekRingProgress } from "@/lib/streak";
 import { iso } from "@/lib/calc";
 import { useAppData, useActions, useBulkMeta } from "@/lib/store";
 import { preferredBulkMembership, useMemberships } from "@/lib/bulk-access";
@@ -32,6 +34,8 @@ export const Route = createFileRoute("/_authenticated/bulk/")({
 });
 function TodayPage() {
   const today = useLocalDay();
+  const streak = useStreak();
+  const ringProgress = useThisWeekRingProgress(streak.data?.thisWeek ?? null);
   const memberships = useMemberships();
   const invitations = useChallengeInvitations();
   const owner = preferredBulkMembership(memberships.data);
@@ -170,6 +174,24 @@ function TodayPage() {
     <AppShell>
       <div className="space-y-[14px]">
         <MainPageHeader title="Today" />
+        {streak.data ? (
+          <Link
+            to="/streak"
+            className="card-surface block rounded-[20px] p-4"
+            aria-label={`Streak, ${streak.data.current} ${streak.data.current === 1 ? "week" : "weeks"}`}
+          >
+            <div className="mb-2 flex items-center justify-between">
+              <span className="inline-flex items-center gap-1.5">
+                <Flame className="h-4 w-4 text-orange-400" aria-hidden="true" />
+                <span className="num text-[15px] font-semibold">
+                  {streak.data.current} {streak.data.current === 1 ? "week" : "weeks"}
+                </span>
+              </span>
+              <ChevronRight className="control-chevron text-muted-foreground" aria-hidden="true" />
+            </div>
+            <StreakRings thisWeek={streak.data.thisWeek} progress={ringProgress} />
+          </Link>
+        ) : null}
         {memberships.isLoading ? (
           <PageSkeleton />
         ) : !owner ? (

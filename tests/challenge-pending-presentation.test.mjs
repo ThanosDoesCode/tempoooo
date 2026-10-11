@@ -97,6 +97,9 @@ function load(source, modules = {}, globals = {}) {
         return presentationComponent("src/components/ChallengeParticipant.tsx", {
           "react/jsx-runtime": { jsx, jsxs: jsx, Fragment: "fragment" },
         });
+      if (name === "@/components/StreakFlame") return { StreakFlame: "StreakFlame" };
+      if (name === "@/lib/bulk-access")
+        return { accountProductMode: () => "public", useMemberships: () => ({ data: [] }) };
       throw new Error(`Unexpected import: ${name}`);
     },
     ...globals,

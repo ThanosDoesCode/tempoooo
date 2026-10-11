@@ -40,6 +40,8 @@ import { ChallengeInviteCard } from "@/components/ChallengeInvite";
 import { challengeParticipation, usePendingChallengeRefresh } from "@/lib/challenge-participation";
 import { ChallengeWaiting } from "@/components/ChallengeWaiting";
 import { MainPageHeader } from "@/components/MainPageHeader";
+import { StreakFlame } from "@/components/StreakFlame";
+import { accountProductMode, useMemberships } from "@/lib/bulk-access";
 import { ChallengeParticipantHeading, ChallengeStatus } from "@/components/ChallengeParticipant";
 import { ChallengeInvitations } from "@/components/ChallengeInvitations";
 
@@ -72,6 +74,8 @@ export const Route = createFileRoute("/_authenticated/challenge/")({
 function ChallengeHome() {
   const { user } = useAuth();
   const qc = useQueryClient();
+  // Challenge-only (core) accounts have no Today tab, so Challenge is their streak entry point.
+  const core = accountProductMode(useMemberships().data) === "core";
   const { challenge: challengeId } = Route.useSearch();
   const challengeQuery = useMyChallenge(challengeId);
   const { data: challenge, isLoading, error: challengeError } = challengeQuery;
@@ -289,7 +293,7 @@ function ChallengeHome() {
 
   return (
     <AppShell>
-      <MainPageHeader title="This week" />
+      <MainPageHeader title="This week">{core ? <StreakFlame /> : null}</MainPageHeader>
       <ChallengeInvitations />
 
       {membersError || activitiesError || summaryQuery.error || pausesError || weekTargetsError ? (
@@ -421,9 +425,11 @@ function ChallengeHome() {
 type ProgressTotals = { running: number; cycling: number; equivalent: number };
 
 function ChallengeHeader({ subtitle }: { subtitle?: string }) {
+  // Core (Challenge-only) accounts reach the streak from here; fitness accounts use Today.
+  const core = accountProductMode(useMemberships().data) === "core";
   return (
     <>
-      <MainPageHeader title="Challenge" />
+      <MainPageHeader title="Challenge">{core ? <StreakFlame /> : null}</MainPageHeader>
       {subtitle ? <p className="mb-3.5 text-sm text-muted-foreground">{subtitle}</p> : null}
     </>
   );
