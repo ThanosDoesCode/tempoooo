@@ -26,7 +26,7 @@ export function AccountNotificationInbox() {
     setError(null);
     try {
       if (!event.read_at) {
-        const result = await supabase.rpc("mark_account_notification_read", {
+        const result = await (supabase.rpc as unknown as UntypedRpc)("mark_account_notification_read", {
           _notification: event.id,
         });
         if (result.error || !result.data) throw new Error("Read receipt unavailable");
@@ -115,3 +115,9 @@ export function AccountNotificationInbox() {
     </div>
   );
 }
+
+// Notification objects are absent from the generated schema until their migration is applied.
+type UntypedRpc = (
+  fn: string,
+  args: Record<string, unknown>,
+) => Promise<{ data: unknown; error: unknown }>;
