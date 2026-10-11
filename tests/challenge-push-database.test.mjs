@@ -744,31 +744,32 @@ test("Tempo templates are immutable and selection creates one isolated owner pla
     ),
   );
   const planId = selected.rows[0].id;
+  // Non-destructive create: a repeated copy of the same template is a new, independent saved plan
+  // (Phase A allows multiple copies from one template), not a returned existing plan.
   const repeated = await asUser(d, () =>
     db.query(
       "SELECT public.instantiate_bulk_training_plan('template:intermediate-upper-lower-4','generated') AS id",
     ),
   );
-  assert.equal(repeated.rows[0].id, planId);
-  assert.equal(
+  assert.notEqual(repeated.rows[0].id, planId);
+  const activeFor = async (owner) =>
     Number(
       (
         await db.query(
           "SELECT count(*) AS n FROM public.bulk_training_plans WHERE bulk_profile_id=(SELECT id FROM public.bulk_profiles WHERE owner_id=$1) AND active",
-          [d],
+          [owner],
         )
       ).rows[0].n,
+    );
+  assert.equal(await activeFor(d), 1, "the first selected plan stays the only active one");
+  // Selecting a different template while one is active saves it inactive, never replacing.
+  const second = await asUser(d, () =>
+    db.query(
+      "SELECT public.instantiate_bulk_training_plan('template:advanced-ppl-6','generated') AS id",
     ),
-    1,
   );
-  await assert.rejects(
-    asUser(d, () =>
-      db.query(
-        "SELECT public.instantiate_bulk_training_plan('template:advanced-ppl-6','generated')",
-      ),
-    ),
-    /active training plan already exists/i,
-  );
+  assert.notEqual(second.rows[0].id, planId);
+  assert.equal(await activeFor(d), 1);
   const copied = await asUser(d, () =>
     db.query(
       `
@@ -822,7 +823,8 @@ test("Tempo templates are immutable and selection creates one isolated owner pla
   const customAgain = await asUser(customUser, () =>
     db.query("SELECT public.create_empty_bulk_training_plan('My Plan') AS id"),
   );
-  assert.equal(customAgain.rows[0].id, custom.rows[0].id);
+  // Same name is not identity: a repeated create is a new, independent saved plan.
+  assert.notEqual(customAgain.rows[0].id, custom.rows[0].id);
   assert.equal(
     Number(
       (
