@@ -2135,6 +2135,10 @@ export type Database = {
         Args: { _caller: string; _invitation: string }
         Returns: string
       }
+      activate_bulk_training_plan: {
+        Args: { _plan_id: string }
+        Returns: undefined
+      }
       activate_my_bulk: { Args: never; Returns: string }
       add_bulk_training_session_set: {
         Args: { _exercise: string; _session: string }
@@ -2345,7 +2349,7 @@ export type Database = {
         Returns: string
       }
       create_empty_bulk_training_plan: {
-        Args: { _name: string }
+        Args: { _name: string; _request_id?: string }
         Returns: string
       }
       deactivate_public_goal: { Args: never; Returns: string }
@@ -2357,6 +2361,10 @@ export type Database = {
       delete_bulk_nutrition_entry:
         | { Args: { _entry: string }; Returns: boolean }
         | { Args: { _entry: string; _local_today: string }; Returns: boolean }
+      delete_bulk_training_plan: {
+        Args: { _plan_id: string }
+        Returns: boolean
+      }
       delete_completed_bulk_training_session: {
         Args: { _session: string }
         Returns: boolean
@@ -2368,6 +2376,10 @@ export type Database = {
         Returns: boolean
       }
       duplicate_bulk_meal_preset: { Args: { _meal: string }; Returns: string }
+      duplicate_bulk_training_plan: {
+        Args: { _plan_id: string; _request_id?: string }
+        Returns: string
+      }
       ensure_bulk_profile: { Args: { _caller: string }; Returns: string }
       finalize_challenge: {
         Args: { _c: string; _caller: string }
@@ -2382,7 +2394,7 @@ export type Database = {
         Returns: boolean
       }
       instantiate_bulk_training_plan: {
-        Args: { _plan_type: string; _template_id: string }
+        Args: { _plan_type: string; _request_id?: string; _template_id: string }
         Returns: string
       }
       is_bulk_admin: { Args: never; Returns: boolean }

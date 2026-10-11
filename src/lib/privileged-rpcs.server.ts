@@ -379,7 +379,9 @@ export const setChallengeWeekTargetFor = (
 export async function listAccountNotificationsFor(caller: string): Promise<AccountNotification[]> {
   const rows = await readAllByKey(
     (cursor) => {
-      let query = supabaseAdmin
+      // Not in generated types until the notification migration is applied live.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let query = (supabaseAdmin as any)
         .from("account_notification_events")
         .select(
           "id,recipient_user_id,actor_user_id,actor_username,event_type,challenge_id,invitation_id,created_at,read_at,challenge_invitations(expires_at,accepted_at,revoked_at)",
@@ -390,9 +392,9 @@ export async function listAccountNotificationsFor(caller: string): Promise<Accou
       if (cursor) query = query.gt("id", cursor);
       return query;
     },
-    (row) => row.id,
+    (row: { id: string }) => row.id,
   );
-  return rows
+  return (rows as AccountNotificationRow[])
     .map(({ challenge_invitations: invitation, ...event }) => ({
       ...event,
       event_type: event.event_type as InvitationEventType,
@@ -401,3 +403,15 @@ export async function listAccountNotificationsFor(caller: string): Promise<Accou
     }))
     .sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id));
 }
+
+type AccountNotificationRow = Omit<
+  AccountNotification,
+  "event_type" | "invitation_expires_at" | "invitation_pending"
+> & {
+  event_type: string;
+  challenge_invitations: {
+    expires_at: string;
+    accepted_at: string | null;
+    revoked_at: string | null;
+  } | null;
+};
