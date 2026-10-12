@@ -14,6 +14,60 @@ export type Database = {
   }
   public: {
     Tables: {
+      account_notification_events: {
+        Row: {
+          actor_user_id: string
+          actor_username: string | null
+          challenge_id: string
+          created_at: string
+          dedupe_key: string
+          event_type: string
+          id: string
+          invitation_id: string
+          read_at: string | null
+          recipient_user_id: string
+        }
+        Insert: {
+          actor_user_id: string
+          actor_username?: string | null
+          challenge_id: string
+          created_at?: string
+          dedupe_key: string
+          event_type: string
+          id?: string
+          invitation_id: string
+          read_at?: string | null
+          recipient_user_id: string
+        }
+        Update: {
+          actor_user_id?: string
+          actor_username?: string | null
+          challenge_id?: string
+          created_at?: string
+          dedupe_key?: string
+          event_type?: string
+          id?: string
+          invitation_id?: string
+          read_at?: string | null
+          recipient_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "account_notification_events_challenge_id_fkey"
+            columns: ["challenge_id"]
+            isOneToOne: false
+            referencedRelation: "challenges"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "account_notification_events_invitation_id_fkey"
+            columns: ["invitation_id"]
+            isOneToOne: false
+            referencedRelation: "challenge_invitations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bulk_admins: {
         Row: {
           created_at: string
@@ -1531,8 +1585,9 @@ export type Database = {
       }
       challenge_notification_events: {
         Row: {
+          account_notification_id: string | null
           actor_id: string
-          actor_membership_id: string
+          actor_membership_id: string | null
           attempts: number
           challenge_id: string
           created_at: string
@@ -1545,14 +1600,16 @@ export type Database = {
           lease_token: string | null
           lease_until: string | null
           next_attempt_at: string
-          opponent_membership_id: string
+          opponent_membership_id: string | null
           provider_message_id: string | null
+          recipient_user_id: string | null
           status: string
           subscription_ids: string[] | null
         }
         Insert: {
+          account_notification_id?: string | null
           actor_id: string
-          actor_membership_id: string
+          actor_membership_id?: string | null
           attempts?: number
           challenge_id: string
           created_at?: string
@@ -1565,14 +1622,16 @@ export type Database = {
           lease_token?: string | null
           lease_until?: string | null
           next_attempt_at?: string
-          opponent_membership_id: string
+          opponent_membership_id?: string | null
           provider_message_id?: string | null
+          recipient_user_id?: string | null
           status?: string
           subscription_ids?: string[] | null
         }
         Update: {
+          account_notification_id?: string | null
           actor_id?: string
-          actor_membership_id?: string
+          actor_membership_id?: string | null
           attempts?: number
           challenge_id?: string
           created_at?: string
@@ -1585,12 +1644,20 @@ export type Database = {
           lease_token?: string | null
           lease_until?: string | null
           next_attempt_at?: string
-          opponent_membership_id?: string
+          opponent_membership_id?: string | null
           provider_message_id?: string | null
+          recipient_user_id?: string | null
           status?: string
           subscription_ids?: string[] | null
         }
         Relationships: [
+          {
+            foreignKeyName: "challenge_notification_events_account_notification_id_fkey"
+            columns: ["account_notification_id"]
+            isOneToOne: false
+            referencedRelation: "account_notification_events"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "challenge_notification_events_challenge_id_fkey"
             columns: ["challenge_id"]
@@ -2179,8 +2246,9 @@ export type Database = {
       claim_challenge_push_events: {
         Args: never
         Returns: {
+          account_notification_id: string | null
           actor_id: string
-          actor_membership_id: string
+          actor_membership_id: string | null
           attempts: number
           challenge_id: string
           created_at: string
@@ -2193,8 +2261,9 @@ export type Database = {
           lease_token: string | null
           lease_until: string | null
           next_attempt_at: string
-          opponent_membership_id: string
+          opponent_membership_id: string | null
           provider_message_id: string | null
+          recipient_user_id: string | null
           status: string
           subscription_ids: string[] | null
         }[]
@@ -2438,6 +2507,10 @@ export type Database = {
             }
             Returns: string
           }
+      mark_account_notification_read: {
+        Args: { _notification: string }
+        Returns: boolean
+      }
       move_bulk_meal_preset: {
         Args: { _direction: number; _meal: string }
         Returns: boolean
