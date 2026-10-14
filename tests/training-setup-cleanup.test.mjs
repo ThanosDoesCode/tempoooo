@@ -81,6 +81,7 @@ function fixture(preference, replacingPlan = false, templateError = null) {
     "@/lib/network-errors": { userFacingError: () => "Could not load plans" },
   };
   const context = {
+    crypto: globalThis.crypto,
     exports: {},
     require: (name) => modules[name] ?? new Proxy({}, { get: (_, key) => String(key) }),
   };
@@ -145,9 +146,15 @@ test("Tempo selection keeps the template path while custom selection keeps empty
     assert.match(text(f.render()), /Tempo full body/);
     button(f.render(), "Use this plan").props.onClick();
     await new Promise((resolve) => setImmediate(resolve));
-    assert.deepEqual(JSON.parse(JSON.stringify(f.calls)), [
-      [replacing ? "switch" : "instantiate", "template", "tempo_preset"],
+    assert.equal(f.calls.length, 1);
+    const presetCall = f.calls[0];
+    assert.deepEqual(presetCall.slice(0, 3), [
+      replacing ? "switch" : "instantiate",
+      "template",
+      "tempo_preset",
     ]);
+    // The non-replacing create path threads a stable request id to the idempotent RPC.
+    if (!replacing) assert.equal(typeof presetCall[3], "string");
     assert.ok(f.invalidated.some((key) => key[0] === "bulk-training-plan"));
 
     const custom = fixture("tempo_preset", replacing);
@@ -159,9 +166,13 @@ test("Tempo selection keeps the template path while custom selection keeps empty
     assert.equal(button(custom.render(), "Use this plan"), undefined);
     button(custom.render(), "Create My Training Plan").props.onClick();
     await new Promise((resolve) => setImmediate(resolve));
-    assert.deepEqual(JSON.parse(JSON.stringify(custom.calls)), [
-      [replacing ? "switchCustom" : "createCustom", "My Training Plan"],
+    assert.equal(custom.calls.length, 1);
+    const customCall = custom.calls[0];
+    assert.deepEqual(customCall.slice(0, 2), [
+      replacing ? "switchCustom" : "createCustom",
+      "My Training Plan",
     ]);
+    if (!replacing) assert.equal(typeof customCall[2], "string");
   }
 });
 

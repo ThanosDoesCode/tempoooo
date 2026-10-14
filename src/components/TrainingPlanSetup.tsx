@@ -205,7 +205,7 @@ export function TrainingPlanSetup({
   targets: Targets;
   replacingPlan?: boolean;
   currentPlan?: UserTrainingPlan | null;
-  onCreated?: () => void | Promise<void>;
+  onCreated?: (planId: string) => void | Promise<void>;
   showCurrentPlan?: boolean;
   selectionDisabled?: boolean;
 }) {
@@ -214,6 +214,15 @@ export function TrainingPlanSetup({
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const choosing = useRef(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
+  // One stable request id per logical create action; reused on retry, minted fresh per new action.
+  const requestIds = useRef<Map<string, string>>(new Map());
+  const stableRequestId = (key: string) => {
+    const existing = requestIds.current.get(key);
+    if (existing) return existing;
+    const id = crypto.randomUUID();
+    requestIds.current.set(key, id);
+    return id;
+  };
   const [customName, setCustomName] = useState("My Training Plan");
   const preference = targets.trainingSetupPreference;
   const [mode, setMode] = useState<CreationMode>(() =>
@@ -263,12 +272,15 @@ export function TrainingPlanSetup({
     if (choosing.current || selectionDisabled || mode !== "tempo_preset") return;
     choosing.current = true;
     setPendingId(plan.id);
+    const key = `preset:${plan.id}`;
     try {
-      if (replacingPlan) await switchTrainingPlan(plan.id, "tempo_preset");
-      else await instantiateTrainingPlan(plan.id, "tempo_preset");
+      const createdId = replacingPlan
+        ? await switchTrainingPlan(plan.id, "tempo_preset")
+        : await instantiateTrainingPlan(plan.id, "tempo_preset", stableRequestId(key));
+      requestIds.current.delete(key);
       await refreshPlan();
       toast.success(replacingPlan ? "Training plan changed" : "Training plan created");
-      await onCreated?.();
+      await onCreated?.(createdId);
     } catch (error) {
       toast.error(
         userFacingError(
@@ -291,12 +303,15 @@ export function TrainingPlanSetup({
     }
     choosing.current = true;
     setPendingId("custom");
+    const key = `custom:${name}`;
     try {
-      if (replacingPlan) await switchToEmptyTrainingPlan(name);
-      else await createEmptyTrainingPlan(name);
+      const createdId = replacingPlan
+        ? await switchToEmptyTrainingPlan(name)
+        : await createEmptyTrainingPlan(name, stableRequestId(key));
+      requestIds.current.delete(key);
       await refreshPlan();
       toast.success(replacingPlan ? "Training plan changed" : "Training plan created");
-      await onCreated?.();
+      await onCreated?.(createdId);
     } catch (error) {
       toast.error(
         userFacingError(

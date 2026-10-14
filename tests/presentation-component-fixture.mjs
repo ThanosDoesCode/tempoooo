@@ -8,6 +8,7 @@ const require = createRequire(import.meta.url);
 // Run the authored presentation primitive, not a copy of its markup or prop handling.
 export function presentationComponent(file, modules = {}, globals = {}) {
   const context = {
+    crypto: globalThis.crypto,
     ...globals,
     exports: {},
     require(name) {

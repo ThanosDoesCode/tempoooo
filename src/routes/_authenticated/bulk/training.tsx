@@ -12,7 +12,7 @@ import { TrainingPlanOverview } from "@/components/TrainingPlanSetup";
 import { iso } from "@/lib/calc";
 import { useAuth } from "@/lib/auth";
 import { useActions, useAppData, useBulkMeta } from "@/lib/store";
-import { useActiveTrainingPlan } from "@/lib/training-plans-query";
+import { useActiveTrainingPlan, useTrainingPlans } from "@/lib/training-plans-query";
 import { Card, DataError, PendingLabel } from "@/components/ui-kit";
 import { userFacingError } from "@/lib/network-errors";
 import {
@@ -59,6 +59,7 @@ function TrainingPage() {
   const planMode = bulkPlanModeFor(memberships.data, bulkId);
   const usesPlanSetup = planMode === "public";
   const activePlan = useActiveTrainingPlan(usesPlanSetup ? bulkId : null);
+  const allPlans = useTrainingPlans(usesPlanSetup ? bulkId : null);
   const { saveWorkout, saveTargets } = useActions();
   const today = iso(new Date());
   const [date, setDate] = useState(today);
@@ -208,10 +209,11 @@ function TrainingPage() {
           <Card className="py-8 text-center">
             <h2 className="font-semibold">You haven&apos;t chosen a training plan yet</h2>
             <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
-              Pick a plan to start tracking today&apos;s workouts.
+              Create a plan, or activate one you&apos;ve saved, to start tracking today&apos;s
+              workouts.
             </p>
             <Button asChild className="mt-4 min-h-11">
-              <Link to="/bulk/training/more">Choose training plan</Link>
+              <Link to="/bulk/training/plans">My plans</Link>
             </Button>
           </Card>
         ) : planMode === "legacy" && data && bulkId && user ? (
@@ -263,7 +265,18 @@ function TrainingPage() {
         <div className="mt-[14px]">
           <NavRows
             rows={[
-              { to: "/bulk/training/more", label: "Plan and setup", hint: "Manage your program" },
+              {
+                to: "/bulk/training/plans",
+                label: "My plans",
+                hint: allPlans.data
+                  ? `${allPlans.data.length} saved plan${allPlans.data.length === 1 ? "" : "s"}`
+                  : "Manage your plans",
+              },
+              {
+                to: "/bulk/training/more",
+                label: "Plan and setup",
+                hint: "Change your active plan",
+              },
               { to: "/bulk/training/history", label: "Past workouts", hint: "Completed sessions" },
               { to: "/bulk/prs", label: "Personal records", hint: "Your best performances" },
             ]}

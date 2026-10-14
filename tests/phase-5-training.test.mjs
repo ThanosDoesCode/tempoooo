@@ -193,6 +193,7 @@ function fixture(source, exportName, initialProps, options = {}) {
     clearInterval: (id) => intervals.delete(id),
   };
   const context = {
+    crypto: globalThis.crypto,
     exports: {},
     Date: options.now
       ? class extends Date {
@@ -1037,7 +1038,10 @@ test("Phase 5 actual Training route starts one session, resumes its exact id and
       useActions: () => ({}),
     },
     "@/lib/bulk-access": { bulkPlanModeFor: () => "public", useMemberships: () => q([]) },
-    "@/lib/training-plans-query": { useActiveTrainingPlan: () => currentPlan },
+    "@/lib/training-plans-query": {
+      useActiveTrainingPlan: () => currentPlan,
+      useTrainingPlans: () => q([]),
+    },
     "@/lib/bulk-progression-query": { useBulkProgressionTargets: () => q({}) },
     "@/lib/goal-metrics": {
       collectCompletedWorkouts: () => [],

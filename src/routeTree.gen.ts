@@ -45,6 +45,7 @@ import { Route as AuthenticatedChallengeRulesRouteImport } from './routes/_authe
 import { Route as AuthenticatedChallengeTargetsRouteImport } from './routes/_authenticated/challenge/targets'
 import { Route as AuthenticatedChallengeTermsRouteImport } from './routes/_authenticated/challenge/terms'
 import { Route as AuthenticatedProfileNotificationsRouteImport } from './routes/_authenticated/profile_.notifications'
+import { Route as AuthenticatedProfileSettingsRouteImport } from './routes/_authenticated/profile_.settings'
 import { Route as AuthenticatedBulkMealsAddRouteImport } from './routes/_authenticated/bulk/meals_.add'
 import { Route as AuthenticatedBulkMealsHistoryRouteImport } from './routes/_authenticated/bulk/meals_.history'
 import { Route as AuthenticatedBulkMealsMoreRouteImport } from './routes/_authenticated/bulk/meals_.more'
@@ -55,6 +56,7 @@ import { Route as AuthenticatedBulkProgressPhotosRouteImport } from './routes/_a
 import { Route as AuthenticatedBulkProgressStrengthRouteImport } from './routes/_authenticated/bulk/progress_.strength'
 import { Route as AuthenticatedBulkTrainingHistoryRouteImport } from './routes/_authenticated/bulk/training_.history'
 import { Route as AuthenticatedBulkTrainingMoreRouteImport } from './routes/_authenticated/bulk/training_.more'
+import { Route as AuthenticatedBulkTrainingPlansRouteImport } from './routes/_authenticated/bulk/training_.plans'
 import { Route as AuthenticatedBulkWorkoutSessionIdRouteImport } from './routes/_authenticated/bulk/workout.$sessionId'
 import { Route as AuthenticatedChallengeActivityActivityIdRouteImport } from './routes/_authenticated/challenge/activity.$activityId'
 import { Route as AuthenticatedChallengeTermsOverrideRouteImport } from './routes/_authenticated/challenge/terms_.override'
@@ -265,6 +267,12 @@ const AuthenticatedProfileNotificationsRoute =
     path: '/profile/notifications',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedProfileSettingsRoute =
+  AuthenticatedProfileSettingsRouteImport.update({
+    id: '/profile_/settings',
+    path: '/profile/settings',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedBulkMealsAddRoute =
   AuthenticatedBulkMealsAddRouteImport.update({
     id: '/meals_/add',
@@ -323,6 +331,12 @@ const AuthenticatedBulkTrainingMoreRoute =
   AuthenticatedBulkTrainingMoreRouteImport.update({
     id: '/training_/more',
     path: '/training/more',
+    getParentRoute: () => AuthenticatedBulkRouteRoute,
+  } as any)
+const AuthenticatedBulkTrainingPlansRoute =
+  AuthenticatedBulkTrainingPlansRouteImport.update({
+    id: '/training_/plans',
+    path: '/training/plans',
     getParentRoute: () => AuthenticatedBulkRouteRoute,
   } as any)
 const AuthenticatedBulkWorkoutSessionIdRoute =
@@ -408,6 +422,7 @@ export interface FileRoutesByFullPath {
   '/challenge/targets': typeof AuthenticatedChallengeTargetsRoute
   '/challenge/terms': typeof AuthenticatedChallengeTermsRoute
   '/profile/notifications': typeof AuthenticatedProfileNotificationsRoute
+  '/profile/settings': typeof AuthenticatedProfileSettingsRoute
   '/bulk/': typeof AuthenticatedBulkIndexRoute
   '/challenge/': typeof AuthenticatedChallengeIndexRoute
   '/bulk/meals/add': typeof AuthenticatedBulkMealsAddRoute
@@ -420,6 +435,7 @@ export interface FileRoutesByFullPath {
   '/bulk/progress/strength': typeof AuthenticatedBulkProgressStrengthRoute
   '/bulk/training/history': typeof AuthenticatedBulkTrainingHistoryRoute
   '/bulk/training/more': typeof AuthenticatedBulkTrainingMoreRoute
+  '/bulk/training/plans': typeof AuthenticatedBulkTrainingPlansRoute
   '/bulk/workout/$sessionId': typeof AuthenticatedBulkWorkoutSessionIdRoute
   '/challenge/activity/$activityId': typeof AuthenticatedChallengeActivityActivityIdRoute
   '/challenge/terms/override': typeof AuthenticatedChallengeTermsOverrideRoute
@@ -462,6 +478,7 @@ export interface FileRoutesByTo {
   '/challenge/targets': typeof AuthenticatedChallengeTargetsRoute
   '/challenge/terms': typeof AuthenticatedChallengeTermsRoute
   '/profile/notifications': typeof AuthenticatedProfileNotificationsRoute
+  '/profile/settings': typeof AuthenticatedProfileSettingsRoute
   '/bulk': typeof AuthenticatedBulkIndexRoute
   '/challenge': typeof AuthenticatedChallengeIndexRoute
   '/bulk/meals/add': typeof AuthenticatedBulkMealsAddRoute
@@ -474,6 +491,7 @@ export interface FileRoutesByTo {
   '/bulk/progress/strength': typeof AuthenticatedBulkProgressStrengthRoute
   '/bulk/training/history': typeof AuthenticatedBulkTrainingHistoryRoute
   '/bulk/training/more': typeof AuthenticatedBulkTrainingMoreRoute
+  '/bulk/training/plans': typeof AuthenticatedBulkTrainingPlansRoute
   '/bulk/workout/$sessionId': typeof AuthenticatedBulkWorkoutSessionIdRoute
   '/challenge/activity/$activityId': typeof AuthenticatedChallengeActivityActivityIdRoute
   '/challenge/terms/override': typeof AuthenticatedChallengeTermsOverrideRoute
@@ -519,6 +537,7 @@ export interface FileRoutesById {
   '/_authenticated/challenge/targets': typeof AuthenticatedChallengeTargetsRoute
   '/_authenticated/challenge/terms': typeof AuthenticatedChallengeTermsRoute
   '/_authenticated/profile_/notifications': typeof AuthenticatedProfileNotificationsRoute
+  '/_authenticated/profile_/settings': typeof AuthenticatedProfileSettingsRoute
   '/_authenticated/bulk/': typeof AuthenticatedBulkIndexRoute
   '/_authenticated/challenge/': typeof AuthenticatedChallengeIndexRoute
   '/_authenticated/bulk/meals_/add': typeof AuthenticatedBulkMealsAddRoute
@@ -531,6 +550,7 @@ export interface FileRoutesById {
   '/_authenticated/bulk/progress_/strength': typeof AuthenticatedBulkProgressStrengthRoute
   '/_authenticated/bulk/training_/history': typeof AuthenticatedBulkTrainingHistoryRoute
   '/_authenticated/bulk/training_/more': typeof AuthenticatedBulkTrainingMoreRoute
+  '/_authenticated/bulk/training_/plans': typeof AuthenticatedBulkTrainingPlansRoute
   '/_authenticated/bulk/workout/$sessionId': typeof AuthenticatedBulkWorkoutSessionIdRoute
   '/_authenticated/challenge/activity/$activityId': typeof AuthenticatedChallengeActivityActivityIdRoute
   '/_authenticated/challenge/terms_/override': typeof AuthenticatedChallengeTermsOverrideRoute
@@ -576,6 +596,7 @@ export interface FileRouteTypes {
     | '/challenge/targets'
     | '/challenge/terms'
     | '/profile/notifications'
+    | '/profile/settings'
     | '/bulk/'
     | '/challenge/'
     | '/bulk/meals/add'
@@ -588,6 +609,7 @@ export interface FileRouteTypes {
     | '/bulk/progress/strength'
     | '/bulk/training/history'
     | '/bulk/training/more'
+    | '/bulk/training/plans'
     | '/bulk/workout/$sessionId'
     | '/challenge/activity/$activityId'
     | '/challenge/terms/override'
@@ -630,6 +652,7 @@ export interface FileRouteTypes {
     | '/challenge/targets'
     | '/challenge/terms'
     | '/profile/notifications'
+    | '/profile/settings'
     | '/bulk'
     | '/challenge'
     | '/bulk/meals/add'
@@ -642,6 +665,7 @@ export interface FileRouteTypes {
     | '/bulk/progress/strength'
     | '/bulk/training/history'
     | '/bulk/training/more'
+    | '/bulk/training/plans'
     | '/bulk/workout/$sessionId'
     | '/challenge/activity/$activityId'
     | '/challenge/terms/override'
@@ -686,6 +710,7 @@ export interface FileRouteTypes {
     | '/_authenticated/challenge/targets'
     | '/_authenticated/challenge/terms'
     | '/_authenticated/profile_/notifications'
+    | '/_authenticated/profile_/settings'
     | '/_authenticated/bulk/'
     | '/_authenticated/challenge/'
     | '/_authenticated/bulk/meals_/add'
@@ -698,6 +723,7 @@ export interface FileRouteTypes {
     | '/_authenticated/bulk/progress_/strength'
     | '/_authenticated/bulk/training_/history'
     | '/_authenticated/bulk/training_/more'
+    | '/_authenticated/bulk/training_/plans'
     | '/_authenticated/bulk/workout/$sessionId'
     | '/_authenticated/challenge/activity/$activityId'
     | '/_authenticated/challenge/terms_/override'
@@ -968,6 +994,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedProfileNotificationsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/profile_/settings': {
+      id: '/_authenticated/profile_/settings'
+      path: '/profile/settings'
+      fullPath: '/profile/settings'
+      preLoaderRoute: typeof AuthenticatedProfileSettingsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/bulk/meals_/add': {
       id: '/_authenticated/bulk/meals_/add'
       path: '/meals/add'
@@ -1036,6 +1069,13 @@ declare module '@tanstack/react-router' {
       path: '/training/more'
       fullPath: '/bulk/training/more'
       preLoaderRoute: typeof AuthenticatedBulkTrainingMoreRouteImport
+      parentRoute: typeof AuthenticatedBulkRouteRoute
+    }
+    '/_authenticated/bulk/training_/plans': {
+      id: '/_authenticated/bulk/training_/plans'
+      path: '/training/plans'
+      fullPath: '/bulk/training/plans'
+      preLoaderRoute: typeof AuthenticatedBulkTrainingPlansRouteImport
       parentRoute: typeof AuthenticatedBulkRouteRoute
     }
     '/_authenticated/bulk/workout/$sessionId': {
@@ -1120,6 +1160,7 @@ interface AuthenticatedBulkRouteRouteChildren {
   AuthenticatedBulkProgressStrengthRoute: typeof AuthenticatedBulkProgressStrengthRoute
   AuthenticatedBulkTrainingHistoryRoute: typeof AuthenticatedBulkTrainingHistoryRoute
   AuthenticatedBulkTrainingMoreRoute: typeof AuthenticatedBulkTrainingMoreRoute
+  AuthenticatedBulkTrainingPlansRoute: typeof AuthenticatedBulkTrainingPlansRoute
   AuthenticatedBulkWorkoutSessionIdRoute: typeof AuthenticatedBulkWorkoutSessionIdRoute
   AuthenticatedBulkProgressBodyFoodRoute: typeof AuthenticatedBulkProgressBodyFoodRoute
   AuthenticatedBulkProgressStrengthLiftRoute: typeof AuthenticatedBulkProgressStrengthLiftRoute
@@ -1152,6 +1193,7 @@ const AuthenticatedBulkRouteRouteChildren: AuthenticatedBulkRouteRouteChildren =
     AuthenticatedBulkTrainingHistoryRoute:
       AuthenticatedBulkTrainingHistoryRoute,
     AuthenticatedBulkTrainingMoreRoute: AuthenticatedBulkTrainingMoreRoute,
+    AuthenticatedBulkTrainingPlansRoute: AuthenticatedBulkTrainingPlansRoute,
     AuthenticatedBulkWorkoutSessionIdRoute:
       AuthenticatedBulkWorkoutSessionIdRoute,
     AuthenticatedBulkProgressBodyFoodRoute:
@@ -1186,6 +1228,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedChallengeTargetsRoute: typeof AuthenticatedChallengeTargetsRoute
   AuthenticatedChallengeTermsRoute: typeof AuthenticatedChallengeTermsRoute
   AuthenticatedProfileNotificationsRoute: typeof AuthenticatedProfileNotificationsRoute
+  AuthenticatedProfileSettingsRoute: typeof AuthenticatedProfileSettingsRoute
   AuthenticatedChallengeIndexRoute: typeof AuthenticatedChallengeIndexRoute
   AuthenticatedChallengeActivityActivityIdRoute: typeof AuthenticatedChallengeActivityActivityIdRoute
   AuthenticatedChallengeTermsOverrideRoute: typeof AuthenticatedChallengeTermsOverrideRoute
@@ -1216,6 +1259,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedChallengeTermsRoute: AuthenticatedChallengeTermsRoute,
   AuthenticatedProfileNotificationsRoute:
     AuthenticatedProfileNotificationsRoute,
+  AuthenticatedProfileSettingsRoute: AuthenticatedProfileSettingsRoute,
   AuthenticatedChallengeIndexRoute: AuthenticatedChallengeIndexRoute,
   AuthenticatedChallengeActivityActivityIdRoute:
     AuthenticatedChallengeActivityActivityIdRoute,

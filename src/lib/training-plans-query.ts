@@ -99,6 +99,70 @@ export const trainingPlanTemplatesQueryOptions = () =>
     retryDelay: readRetryDelay,
   });
 
+const PLAN_COLUMNS =
+  "id,source_template_id,plan_type,name,description,experience_level,training_days_per_week,updated_at,created_at";
+
+type PlanRow = {
+  id: string;
+  source_template_id: string | null;
+  plan_type: string;
+  name: string;
+  description: string;
+  experience_level: string | null;
+  training_days_per_week: number;
+  updated_at: string;
+  created_at: string;
+};
+
+async function loadFullPlan(plan: PlanRow): Promise<UserTrainingPlan> {
+  const { data: days, error: daysError } = await supabase
+    .from("bulk_training_plan_days")
+    .select(
+      "id,day_order,name,bulk_training_plan_exercises(id,exercise_id,source_system_exercise_id,exercise_name,exercise_order,sets,rep_min,rep_max,intended_unilateral_mode,notes,bulk_exercises!bulk_training_plan_exercises_exercise_id_fkey(supports_unilateral,is_bodyweight))",
+    )
+    .eq("plan_id", plan.id)
+    .order("day_order");
+  if (daysError) {
+    developmentErrorDiagnostic("active_training_plan_days", daysError);
+    throw daysError;
+  }
+  return {
+    id: plan.id,
+    sourceTemplateId: plan.source_template_id,
+    planType: plan.plan_type as UserTrainingPlan["planType"],
+    name: plan.name,
+    description: plan.description,
+    experienceLevel: plan.experience_level as UserTrainingPlan["experienceLevel"],
+    trainingDaysPerWeek: plan.training_days_per_week,
+    updatedAt: plan.updated_at,
+    createdAt: plan.created_at,
+    days: (days ?? []).map((day) => ({
+      id: day.id,
+      order: day.day_order,
+      name: day.name,
+      exercises: ((day.bulk_training_plan_exercises ?? []) as ExerciseRow[])
+        .sort((a, b) => a.exercise_order - b.exercise_order)
+        .map(mapExercise),
+    })),
+  };
+}
+
+export type TrainingPlanSummary = {
+  id: string;
+  name: string;
+  planType: UserTrainingPlan["planType"];
+  dayCount: number;
+  active: boolean;
+  createdAt: string;
+};
+
+/** Active plan first, then remaining plans newest first. */
+export function sortTrainingPlanSummaries(plans: TrainingPlanSummary[]): TrainingPlanSummary[] {
+  return [...plans].sort(
+    (a, b) => Number(b.active) - Number(a.active) || b.createdAt.localeCompare(a.createdAt),
+  );
+}
+
 export const activeTrainingPlanQueryOptions = (bulkProfileId: string | null) =>
   queryOptions({
     queryKey: ["bulk-training-plan", bulkProfileId],
@@ -107,9 +171,7 @@ export const activeTrainingPlanQueryOptions = (bulkProfileId: string | null) =>
       if (!bulkProfileId) return null;
       const { data: plan, error } = await supabase
         .from("bulk_training_plans")
-        .select(
-          "id,source_template_id,plan_type,name,description,experience_level,training_days_per_week,updated_at,created_at",
-        )
+        .select(PLAN_COLUMNS)
         .eq("bulk_profile_id", bulkProfileId)
         .eq("active", true)
         .maybeSingle();
@@ -118,36 +180,60 @@ export const activeTrainingPlanQueryOptions = (bulkProfileId: string | null) =>
         throw error;
       }
       if (!plan) return null;
-      const { data: days, error: daysError } = await supabase
-        .from("bulk_training_plan_days")
-        .select(
-          "id,day_order,name,bulk_training_plan_exercises(id,exercise_id,source_system_exercise_id,exercise_name,exercise_order,sets,rep_min,rep_max,intended_unilateral_mode,notes,bulk_exercises!bulk_training_plan_exercises_exercise_id_fkey(supports_unilateral,is_bodyweight))",
-        )
-        .eq("plan_id", plan.id)
-        .order("day_order");
-      if (daysError) {
-        developmentErrorDiagnostic("active_training_plan_days", daysError);
-        throw daysError;
+      return loadFullPlan(plan as PlanRow);
+    },
+    staleTime: 60 * 1000,
+    retry: shouldRetryRead,
+    retryDelay: readRetryDelay,
+  });
+
+export const trainingPlansQueryOptions = (bulkProfileId: string | null) =>
+  queryOptions({
+    queryKey: ["bulk-training-plans", bulkProfileId],
+    enabled: !!bulkProfileId,
+    queryFn: async (): Promise<TrainingPlanSummary[]> => {
+      if (!bulkProfileId) return [];
+      const { data, error } = await supabase
+        .from("bulk_training_plans")
+        .select("id,name,plan_type,active,created_at,bulk_training_plan_days(count)")
+        .eq("bulk_profile_id", bulkProfileId);
+      if (error) {
+        developmentErrorDiagnostic("training_plans", error);
+        throw error;
       }
-      return {
-        id: plan.id,
-        sourceTemplateId: plan.source_template_id,
-        planType: plan.plan_type as UserTrainingPlan["planType"],
-        name: plan.name,
-        description: plan.description,
-        experienceLevel: plan.experience_level as UserTrainingPlan["experienceLevel"],
-        trainingDaysPerWeek: plan.training_days_per_week,
-        updatedAt: plan.updated_at,
-        createdAt: plan.created_at,
-        days: (days ?? []).map((day) => ({
-          id: day.id,
-          order: day.day_order,
-          name: day.name,
-          exercises: ((day.bulk_training_plan_exercises ?? []) as ExerciseRow[])
-            .sort((a, b) => a.exercise_order - b.exercise_order)
-            .map(mapExercise),
+      return sortTrainingPlanSummaries(
+        (data ?? []).map((plan) => ({
+          id: plan.id,
+          name: plan.name,
+          planType: plan.plan_type as UserTrainingPlan["planType"],
+          dayCount: (plan.bulk_training_plan_days as { count: number }[])?.[0]?.count ?? 0,
+          active: plan.active,
+          createdAt: plan.created_at,
         })),
-      };
+      );
+    },
+    staleTime: 60 * 1000,
+    retry: shouldRetryRead,
+    retryDelay: readRetryDelay,
+  });
+
+export const trainingPlanByIdQueryOptions = (planId: string | null) =>
+  queryOptions({
+    queryKey: ["bulk-training-plan-detail", planId],
+    enabled: !!planId,
+    queryFn: async (): Promise<UserTrainingPlan | null> => {
+      if (!planId) return null;
+      const { data: plan, error } = await supabase
+        .from("bulk_training_plans")
+        .select(PLAN_COLUMNS)
+        .eq("id", planId)
+        .maybeSingle();
+      if (error) {
+        developmentErrorDiagnostic("training_plan_detail", error);
+        throw error;
+      }
+      if (!plan) return null;
+      return loadFullPlan(plan as PlanRow);
     },
     staleTime: 60 * 1000,
     retry: shouldRetryRead,
@@ -162,13 +248,54 @@ export function useActiveTrainingPlan(bulkProfileId: string | null) {
   return useQuery(activeTrainingPlanQueryOptions(bulkProfileId));
 }
 
+export function useTrainingPlans(bulkProfileId: string | null) {
+  return useQuery(trainingPlansQueryOptions(bulkProfileId));
+}
+
+export function useTrainingPlanById(planId: string | null) {
+  return useQuery(trainingPlanByIdQueryOptions(planId));
+}
+
+export async function activateTrainingPlan(planId: string): Promise<void> {
+  const { error } = await supabase.rpc("activate_bulk_training_plan", { _plan_id: planId });
+  if (error) {
+    developmentErrorDiagnostic("activate_training_plan", error);
+    throw error;
+  }
+}
+
+export async function deleteTrainingPlan(planId: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc("delete_bulk_training_plan", { _plan_id: planId });
+  if (error) {
+    developmentErrorDiagnostic("delete_training_plan", error);
+    throw error;
+  }
+  return data;
+}
+
+// requestId must be held stable by the caller across retries of one logical action so the RPC's
+// _request_id PK dedupes a replayed request; see useStableRequestId in the callers.
+export async function duplicateTrainingPlan(planId: string, requestId: string): Promise<string> {
+  const { data, error } = await supabase.rpc("duplicate_bulk_training_plan", {
+    _plan_id: planId,
+    _request_id: requestId,
+  });
+  if (error) {
+    developmentErrorDiagnostic("duplicate_training_plan", error);
+    throw error;
+  }
+  return data;
+}
+
 export async function instantiateTrainingPlan(
   templateId: string,
   planType: "generated" | "tempo_preset",
+  requestId: string,
 ): Promise<string> {
   const { data, error } = await supabase.rpc("instantiate_bulk_training_plan", {
     _template_id: templateId,
     _plan_type: planType,
+    _request_id: requestId,
   });
   if (error) {
     developmentErrorDiagnostic("instantiate_training_plan", error);
@@ -192,9 +319,10 @@ export async function switchTrainingPlan(
   return data;
 }
 
-export async function createEmptyTrainingPlan(name: string): Promise<string> {
+export async function createEmptyTrainingPlan(name: string, requestId: string): Promise<string> {
   const { data, error } = await supabase.rpc("create_empty_bulk_training_plan", {
     _name: name,
+    _request_id: requestId,
   });
   if (error) {
     developmentErrorDiagnostic("create_empty_training_plan", error);
