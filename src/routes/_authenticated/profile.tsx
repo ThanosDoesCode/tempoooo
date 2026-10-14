@@ -1,24 +1,25 @@
-import { PageSkeleton } from "@/components/PageSkeleton";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import { LogOut, ChevronRight } from "lucide-react";
-import * as Dialog from "@radix-ui/react-dialog";
-import { DeleteAccountDialog } from "@/components/DeleteAccountDialog";
-import { NavRows } from "@/components/NavRows";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect, useRef } from "react";
+import { startOfWeek } from "date-fns";
+import { ChevronRight, Flame, Settings } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { MainPageHeader } from "@/components/MainPageHeader";
-import { Card, SectionTitle } from "@/components/ui-kit";
-import { ChallengeDataExport } from "@/components/ChallengeDataExport";
-import { clearDeletedAccountSession, useAuth, signOut } from "@/lib/auth";
-import { preferredBulkMembership, useBulkAdmin, useMemberships } from "@/lib/bulk-access";
+import { PageSkeleton } from "@/components/PageSkeleton";
+import { useAuth } from "@/lib/auth";
+import { accountProductMode, preferredBulkMembership, useMemberships } from "@/lib/bulk-access";
+import { useAccountProfile } from "@/lib/account-profile";
 import { useAcknowledgeGoal, useGoalDiscovery } from "@/lib/goal-discovery";
+import { useStreak } from "@/lib/streak";
+import { useAppData, useBulkMeta } from "@/lib/store";
+import { useLocalDay } from "@/lib/use-local-day";
+import { useActiveTrainingPlan } from "@/lib/training-plans-query";
+import { useCompletedSessionDates } from "@/lib/bulk-training-sessions";
 import {
-  normalizeUsername,
-  useAccountProfile,
-  usernameValidationError,
-} from "@/lib/account-profile";
-import { checkUsernameAvailability, saveAccountUsername } from "@/lib/privileged-rpcs.functions";
+  collectCompletedWorkouts,
+  countWorkoutsInRange,
+  resolveWeeklyWorkoutTarget,
+} from "@/lib/goal-metrics";
+import { iso } from "@/lib/calc";
 
 export const Route = createFileRoute("/_authenticated/profile")({
   head: () => ({
@@ -40,56 +41,21 @@ export const Route = createFileRoute("/_authenticated/profile")({
   component: ProfilePage,
 });
 
+const GOAL_LABEL: Record<string, string> = { gain: "Bulk", cut: "Cut", maintain: "Maintain" };
+
 function ProfilePage() {
   const { user } = useAuth();
   const accountProfile = useAccountProfile(user?.id);
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const {
-    data: memberships,
-    isLoading: bulkAccessLoading,
-    isError: bulkAccessError,
-    refetch: refetchBulkAccess,
-  } = useMemberships();
+  const { data: memberships, isLoading: membershipsLoading } = useMemberships();
   const goalDiscovery = useGoalDiscovery();
   const acknowledgeGoal = useAcknowledgeGoal();
-  const { data: isAdmin } = useBulkAdmin();
-  const [signingOut, setSigningOut] = useState(false);
-  const [signOutError, setSignOutError] = useState<string | null>(null);
-  const [editingUsername, setEditingUsername] = useState(false);
-  const [username, setUsername] = useState("");
-  const [usernameBusy, setUsernameBusy] = useState(false);
-  const [usernameError, setUsernameError] = useState<string | null>(null);
-  const [usernameCheckFailed, setUsernameCheckFailed] = useState(false);
-  const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
   const acknowledgementStarted = useRef(false);
 
-  useEffect(() => {
-    if (!editingUsername || usernameValidationError(username)) {
-      setUsernameAvailable(null);
-      return;
-    }
-    setUsernameCheckFailed(false);
-    const normalized = normalizeUsername(username);
-    let active = true;
-    setUsernameAvailable(null);
-    const timer = window.setTimeout(() => {
-      void checkUsernameAvailability({ data: { username: normalized } })
-        .then((available) => {
-          if (active) setUsernameAvailable(available);
-        })
-        .catch(() => {
-          if (active) setUsernameCheckFailed(true);
-        });
-    }, 350);
-    return () => {
-      active = false;
-      window.clearTimeout(timer);
-    };
-  }, [editingUsername, username]);
-
   const ownedPlan = preferredBulkMembership(memberships);
+  const mode = accountProductMode(memberships);
+  const core = mode === "core";
 
+  // Clear the "New Fitness tools" badge once a Challenge-only user has seen the You tab.
   useEffect(() => {
     if (
       ownedPlan ||
@@ -111,241 +77,175 @@ function ProfilePage() {
     ownedPlan,
   ]);
 
+  const username = accountProfile.data?.username;
+  const initials = (username ?? user?.email ?? "").slice(0, 2).toUpperCase();
+  const descriptor = core ? "Challenge only" : "Fitness";
+
   return (
     <AppShell>
-      <MainPageHeader title="You" />
-      <div className="mb-6 flex items-center gap-3">
+      <MainPageHeader title="You">
+        <Link
+          to="/profile/settings"
+          aria-label="Settings"
+          className="grid h-11 w-11 place-items-center rounded-full text-muted-foreground active:opacity-80"
+        >
+          <Settings className="h-5 w-5" aria-hidden="true" />
+        </Link>
+      </MainPageHeader>
+
+      <div className="mb-5 flex items-center gap-3">
         <span
           aria-hidden="true"
           className="grid h-14 w-14 shrink-0 place-items-center rounded-full bg-elevated text-lg font-semibold"
         >
-          {(accountProfile.data?.username ?? user?.email ?? "").slice(0, 2).toUpperCase()}
+          {initials}
         </span>
         <div className="min-w-0">
-          <p className="break-all text-xl font-semibold">@{accountProfile.data?.username ?? "…"}</p>
-          <p className="mt-1 break-all text-[13px] text-muted-foreground">{user?.email ?? "…"}</p>
+          <p className="break-all text-xl font-semibold">@{username ?? "…"}</p>
+          <p className="mt-0.5 break-all text-[13px] text-muted-foreground">
+            {user?.email ?? "…"} · {descriptor}
+          </p>
         </div>
       </div>
 
-      <section className="mt-4">
-        {bulkAccessLoading ? (
-          <PageSkeleton label="Loading plan" />
-        ) : bulkAccessError ? (
-          <Card>
-            <SectionTitle>Fitness tools</SectionTitle>
-            <p className="text-sm leading-6 text-muted-foreground">
-              Tempo couldn't check your fitness setup. Your account and Challenge are still safe.
-            </p>
-            <button
-              type="button"
-              onClick={() => void refetchBulkAccess()}
-              className="account-secondary mt-3"
-            >
-              Retry
-            </button>
-          </Card>
-        ) : (
-          <NavRows
-            title="Settings"
-            rows={[
-              ...(ownedPlan
-                ? [
-                    {
-                      to: "/bulk/more",
-                      label: "Goal settings",
-                      hint: "Daily targets and weekly workout goal",
-                    },
-                    {
-                      to: "/bulk/training",
-                      label: "Training plan",
-                      hint: "Your workouts and plan tools",
-                    },
-                  ]
-                : [
-                    {
-                      to: "/bulk-onboarding",
-                      label: "Set up fitness tools",
-                      hint: "Optional training, meals and Goal targets",
-                    },
-                  ]),
-              {
-                to: "/profile/notifications",
-                label: "Notification settings",
-                hint: "Browser permission and Challenge updates",
-              },
-            ]}
-          />
-        )}
-        <Dialog.Root
-          open={editingUsername}
-          onOpenChange={(open) => {
-            if (usernameBusy) return;
-            setEditingUsername(open);
-            if (!open) setUsernameError(null);
-          }}
-        >
-          <Dialog.Trigger asChild>
-            <button
-              type="button"
-              onClick={() => {
-                setUsername(accountProfile.data?.username ?? "");
-                setUsernameError(null);
-              }}
-              className="mt-3 flex min-h-14 w-full items-center justify-between gap-3 rounded-[20px] bg-card px-4 text-left text-[15px] font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:bg-elevated"
-            >
-              Edit username
-              <ChevronRight className="control-chevron text-muted-foreground" aria-hidden="true" />
-            </button>
-          </Dialog.Trigger>
-          <Dialog.Portal>
-            <Dialog.Overlay className="fixed inset-0 z-50 bg-black/70" />
-            <Dialog.Content
-              className="fixed left-1/2 top-1/2 z-50 w-[calc(100%-2.5rem)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-[20px] border border-border bg-card p-5"
-              onEscapeKeyDown={(event) => {
-                if (usernameBusy) event.preventDefault();
-              }}
-              onPointerDownOutside={(event) => {
-                if (usernameBusy) event.preventDefault();
-              }}
-            >
-              <Dialog.Title className="text-2xl font-semibold">Edit username</Dialog.Title>
-              <Dialog.Description className="mt-2 text-sm leading-6 text-muted-foreground">
-                Friends use this to find you. Changing it keeps your account and Challenge identity
-                intact.
-              </Dialog.Description>
-              <label className="mt-4 block text-[13px] text-muted-foreground">
-                Username
-                <input
-                  className="account-input mt-2"
-                  disabled={usernameBusy}
-                  value={username}
-                  maxLength={21}
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  aria-invalid={!!usernameValidationError(username) || usernameAvailable === false}
-                  onChange={(event) => {
-                    setUsername(event.target.value);
-                    setUsernameError(null);
-                  }}
-                />
-              </label>
-              <p aria-live="polite" className="mt-2 min-h-5 text-[13px] text-muted-foreground">
-                {usernameValidationError(username) ??
-                  (usernameCheckFailed
-                    ? "Availability could not be checked. Save to retry."
-                    : usernameAvailable === null
-                      ? "Checking availability…"
-                      : usernameAvailable
-                        ? `@${normalizeUsername(username)} is available`
-                        : "That username is already taken.")}
-              </p>
-              {usernameError ? (
-                <p role="alert" className="mt-2 text-sm text-warn">
-                  {usernameError}
-                </p>
-              ) : null}
-              <div className="mt-5 grid grid-cols-2 gap-2">
-                <Dialog.Close asChild>
-                  <button type="button" disabled={usernameBusy} className="account-secondary">
-                    Cancel
-                  </button>
-                </Dialog.Close>
-                <button
-                  type="button"
-                  disabled={
-                    usernameBusy ||
-                    usernameAvailable === false ||
-                    normalizeUsername(username) === accountProfile.data?.username
-                  }
-                  onClick={() => {
-                    const validation = usernameValidationError(username);
-                    if (validation) {
-                      setUsernameError(validation);
-                      return;
-                    }
-                    setUsernameBusy(true);
-                    setUsernameError(null);
-                    void saveAccountUsername({
-                      data: {
-                        username: normalizeUsername(username),
-                        completeOnboarding: false,
-                      },
-                    })
-                      .then(() =>
-                        queryClient.invalidateQueries({ queryKey: ["account-profile", user?.id] }),
-                      )
-                      .then(() => setEditingUsername(false))
-                      .catch((cause: unknown) =>
-                        setUsernameError(
-                          /taken|unique/i.test(cause instanceof Error ? cause.message : "")
-                            ? "That username is already taken."
-                            : "We couldn't update your username. Try again.",
-                        ),
-                      )
-                      .finally(() => setUsernameBusy(false));
-                  }}
-                  className="account-primary"
-                >
-                  {usernameBusy ? "Saving…" : "Save"}
-                </button>
-              </div>
-            </Dialog.Content>
-          </Dialog.Portal>
-        </Dialog.Root>
-      </section>
+      <StreakSummary />
 
-      <ChallengeDataExport />
-      {isAdmin ? (
+      {membershipsLoading ? (
         <div className="mt-4">
-          <NavRows
-            title="Administration"
-            rows={[{ to: "/bulk/diagnostics", label: "Production diagnostics" }]}
-          />
+          <PageSkeleton label="Loading profile" />
         </div>
-      ) : null}
-
-      <section aria-label="Account actions" className="mt-5">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <button
-            type="button"
-            disabled={signingOut}
-            onClick={() => {
-              if (signingOut) return;
-              setSigningOut(true);
-              setSignOutError(null);
-              void signOut()
-                .then((signedOut) => {
-                  if (signedOut) {
-                    void navigate({ to: "/auth", replace: true });
-                    return;
-                  }
-                  setSignOutError("Could not sign out. Please try again.");
-                  setSigningOut(false);
-                })
-                .catch(() => {
-                  setSignOutError("Could not sign out. Please try again.");
-                  setSigningOut(false);
-                });
-            }}
-            className="flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm font-medium text-muted-foreground hover:bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+      ) : core ? (
+        !ownedPlan ? (
+          <Link
+            to="/bulk-onboarding"
+            className="mt-4 block rounded-[20px] bg-card p-5 active:bg-elevated"
           >
-            <LogOut className="h-4 w-4" aria-hidden="true" />{" "}
-            {signingOut ? "Signing out…" : "Sign out"}
-          </button>
-          <DeleteAccountDialog
-            onDeleted={async () => {
-              await clearDeletedAccountSession();
-              queryClient.clear();
-              await navigate({ to: "/auth", replace: true });
-            }}
-          />
-        </div>
-        {signOutError ? (
-          <p role="alert" className="mt-2 text-sm text-warn">
-            {signOutError}
-          </p>
-        ) : null}
-      </section>
+            <p className="text-[15px] font-medium">Set up fitness tools</p>
+            <p className="mt-1 text-[13px] text-muted-foreground">
+              Optional training, meals and Goal targets. Your Challenge works without them.
+            </p>
+          </Link>
+        ) : null
+      ) : (
+        <FitnessSummary ownedPublic={ownedPlan?.is_public === true} />
+      )}
     </AppShell>
+  );
+}
+
+function StreakSummary() {
+  const { data } = useStreak();
+  const current = data?.current ?? 0;
+  const best = data?.best ?? 0;
+  return (
+    <Link
+      to="/streak"
+      aria-label={`Streak, ${current} ${current === 1 ? "week" : "weeks"}`}
+      className="flex items-center gap-3 rounded-[20px] bg-card p-4 active:bg-elevated"
+    >
+      <span className="grid h-11 w-11 flex-none place-items-center rounded-full bg-orange-500/15">
+        <Flame className="h-5 w-5 text-orange-400" aria-hidden="true" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="num block text-[17px] font-semibold">
+          {current} {current === 1 ? "week" : "weeks"}
+        </span>
+        <span className="block text-[13px] text-muted-foreground">
+          {current === 0 && best === 0 ? "Start your first week" : `Best ${best}`}
+        </span>
+      </span>
+      <ChevronRight className="control-chevron text-muted-foreground" aria-hidden="true" />
+    </Link>
+  );
+}
+
+function SummaryRow({
+  to,
+  label,
+  value,
+  hint,
+}: {
+  to: string;
+  label: string;
+  value: string;
+  hint?: string;
+}) {
+  return (
+    <Link
+      to={to}
+      className="flex min-h-[56px] items-center justify-between gap-3 border-t border-border first:border-t-0 active:opacity-80"
+    >
+      <span className="min-w-0 flex-1">
+        <span className="block text-[15px] font-medium">{label}</span>
+        {hint ? (
+          <span className="mt-0.5 block text-[13px] text-muted-foreground">{hint}</span>
+        ) : null}
+      </span>
+      <span className="flex items-center gap-2">
+        <span className="num text-[15px] font-semibold">{value}</span>
+        <ChevronRight className="control-chevron text-muted-foreground" aria-hidden="true" />
+      </span>
+    </Link>
+  );
+}
+
+/** Fitness mode: a concise overview, not a second Progress screen. */
+function FitnessSummary({ ownedPublic }: { ownedPublic: boolean }) {
+  const data = useAppData();
+  const { bulkId } = useBulkMeta();
+  const today = useLocalDay();
+  const from = iso(startOfWeek(new Date(), { weekStartsOn: 1 }));
+  const sessions = useCompletedSessionDates(ownedPublic ? bulkId : null, from, today);
+  const plan = useActiveTrainingPlan(ownedPublic ? bulkId : null);
+  const targets = data?.targets;
+
+  const goalLabel = targets?.goal ? (GOAL_LABEL[targets.goal] ?? "Goal") : null;
+  const latestWeight = data
+    ? Object.entries(data.days)
+        .filter(([, day]) => day.weight != null)
+        .sort((a, b) => (a[0] < b[0] ? 1 : -1))[0]?.[1]?.weight
+    : undefined;
+
+  const target = resolveWeeklyWorkoutTarget({
+    weeklyWorkoutGoal: targets?.weeklyWorkoutGoal ?? null,
+    targetDaysPerWeek: targets?.trainingDaysPerWeek ?? null,
+    activePlanDaysPerWeek: plan.data?.trainingDaysPerWeek ?? null,
+  });
+  const completed = collectCompletedWorkouts({
+    sessions: sessions.data ?? null,
+    legacyWorkouts: data?.workouts ?? null,
+    legacyDays: data?.days ?? null,
+  });
+  const weeklyCount = countWorkoutsInRange(completed, from, today);
+
+  return (
+    <section className="mt-4 rounded-[20px] bg-card px-4">
+      <h2 className="pt-4 text-[13px] font-medium text-muted-foreground">Your fitness</h2>
+      <div className="mt-1">
+        {goalLabel ? (
+          <SummaryRow
+            to="/bulk/more"
+            label="Goal"
+            value={`${goalLabel} · ${targets?.targetWeight ?? "—"} kg`}
+            {...(latestWeight != null ? { hint: `Now ${latestWeight} kg` } : {})}
+          />
+        ) : null}
+        <SummaryRow
+          to="/bulk/training"
+          label="Training"
+          value={target == null ? `${weeklyCount}` : `${weeklyCount} / ${target}`}
+          hint={plan.data?.name ?? "This week"}
+        />
+        {targets?.calories ? (
+          <SummaryRow
+            to="/bulk/meals"
+            label="Nutrition"
+            value={`${targets.calories} kcal`}
+            hint="Daily target"
+          />
+        ) : null}
+      </div>
+      <div className="pb-2" />
+    </section>
   );
 }

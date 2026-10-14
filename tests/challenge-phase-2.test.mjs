@@ -395,7 +395,7 @@ test("Activity detail shows the large evidence panel via the shared signed-URL l
 });
 
 test("Profile loads the moved Phase 2 components without a blocking data dependency", async () => {
-  const profile = await read("src/routes/_authenticated/profile.tsx");
+  const profile = await read("src/routes/_authenticated/profile_.settings.tsx");
   // The CSV export and notifications moved here; both are present and self-contained.
   assert.match(profile, /import \{ ChallengeDataExport \}/);
   assert.match(profile, /<ChallengeDataExport \/>/);

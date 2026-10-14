@@ -114,7 +114,7 @@ test("exercise progress history uses labeled, readable summaries", async () => {
 test("Sharing is absent while personal Bulk activation guards remain", async () => {
   const shell = await read("src/components/AppShell.tsx");
   const guard = await read("src/routes/_authenticated/bulk/route.tsx");
-  const profile = await read("src/routes/_authenticated/profile.tsx");
+  const profile = await read("src/routes/_authenticated/profile_.settings.tsx");
   const migration = await read("supabase/migrations/20260905120000_public_bulk_activation.sql");
   const onboardingMigration = await read(
     "supabase/migrations/20260905150000_complete_bulk_onboarding.sql",

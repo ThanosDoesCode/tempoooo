@@ -44,7 +44,7 @@ test("Challenge rules and targets consolidate into one Terms screen", async () =
 
 test("diagnostics belongs to You/Profile and retains both admin boundaries", async () => {
   const [profile, progress, route, server] = await Promise.all([
-    read("src/routes/_authenticated/profile.tsx"),
+    read("src/routes/_authenticated/profile_.settings.tsx"), // admin diagnostics moved to Settings
     read("src/routes/_authenticated/bulk/progress.tsx"),
     read("src/routes/_authenticated/bulk/diagnostics.tsx"),
     read("src/lib/privileged-rpcs.server.ts"),

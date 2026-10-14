@@ -43,7 +43,7 @@ test("new account onboarding ends with a one-time Tempo intro and keeps Goal opt
 test("username availability is debounced and completion uses the authenticated server boundary", async () => {
   const [onboarding, profile, functions] = await Promise.all([
     read("src/routes/_authenticated/onboarding.tsx"),
-    read("src/routes/_authenticated/profile.tsx"),
+    read("src/routes/_authenticated/profile_.settings.tsx"),
     read("src/lib/privileged-rpcs.functions.ts"),
   ]);
   assert.match(onboarding, /window\.setTimeout\([\s\S]*350/);

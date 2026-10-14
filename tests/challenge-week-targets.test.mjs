@@ -83,7 +83,7 @@ test("public Goal migration defaults existing public plans while leaving legacy 
   const [migration, shell, profile, onboarding] = await Promise.all([
     read("supabase/migrations/20260907130000_public_goal_modes.sql"),
     read("src/components/AppShell.tsx"),
-    read("src/routes/_authenticated/profile.tsx"),
+    read("src/routes/_authenticated/profile_.settings.tsx"),
     read("src/routes/_authenticated/bulk-onboarding.tsx"),
   ]);
 

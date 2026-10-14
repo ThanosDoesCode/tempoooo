@@ -8,7 +8,7 @@ test("account deletion is authenticated, deletes only context.userId and release
   const [functions, server, profile, migration] = await Promise.all([
     read("src/lib/privileged-rpcs.functions.ts"),
     read("src/lib/privileged-rpcs.server.ts"),
-    read("src/routes/_authenticated/profile.tsx"),
+    read("src/routes/_authenticated/profile_.settings.tsx"),
     read("supabase/migrations/20260919120000_account_deletion_and_in_app_challenge_invites.sql"),
   ]);
   const boundary =

@@ -273,7 +273,12 @@ test("inbox uses shared contextual Back, while Profile retains a separate push-s
   assert.equal(ui.find("AccountNotificationInbox").length, 1);
   const profile = read("src/routes/_authenticated/profile.tsx");
   assert.doesNotMatch(profile, /ChallengeInvitations|Compatibility tools/);
-  assert.match(profile, /to: "\/profile\/notifications"[\s\S]*label: "Notification settings"/);
+  // The notification-settings link now lives on the Settings screen.
+  const accountSettings = read("src/routes/_authenticated/profile_.settings.tsx");
+  assert.match(
+    accountSettings,
+    /to: "\/profile\/notifications"[\s\S]*label: "Notification settings"/,
+  );
   const settings = read("src/routes/_authenticated/profile_.notifications.tsx");
   assert.match(settings, /title="Notification settings"/);
   assert.match(settings, /<ChallengeNotifications userId=\{user\.id\} expanded/);

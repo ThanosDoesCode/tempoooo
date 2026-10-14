@@ -219,7 +219,10 @@ test("admin diagnostics are server-authorized and return no private notification
   assert.match(route, /Private operational status/);
   assert.match(route, /bulkAdminQueryOptions/);
   assert.match(access, /supabase\.rpc\("is_bulk_admin"\)/);
-  assert.match(profile, /\{isAdmin \? \([\s\S]*Production diagnostics/);
+  assert.match(
+    await read("src/routes/_authenticated/profile_.settings.tsx"),
+    /\{isAdmin \? \([\s\S]*Production diagnostics/,
+  );
   assert.match(
     bulkMigration,
     /INSERT INTO public\.bulk_admins\(user_id\)[\s\S]*FROM public\.bulk_members[\s\S]*WHERE role = 'owner'/,

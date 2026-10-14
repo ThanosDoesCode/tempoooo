@@ -288,7 +288,7 @@ test("Goal discovery is persisted on the self-owned profile and activation ackno
 test("nested navigation, evidence recovery and sign-out stay local and responsive", async () => {
   const [shell, profile, evidence, backLink] = await Promise.all([
     read("src/components/AppShell.tsx"),
-    read("src/routes/_authenticated/profile.tsx"),
+    read("src/routes/_authenticated/profile_.settings.tsx"), // sign-out moved to Settings
     read("src/components/ChallengeEvidenceViewer.tsx"),
     read("src/components/HistoryBackLink.tsx"),
   ]);

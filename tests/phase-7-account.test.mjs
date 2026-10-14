@@ -380,6 +380,7 @@ test("Phase 7 local sign-out retry after deletion does not call account deletion
   assert.equal(completion, 2);
 });
 
+// Account/fitness/admin controls now live on the Settings screen (/profile/settings).
 function profileFixture({
   owned = true,
   admin = false,
@@ -388,12 +389,13 @@ function profileFixture({
   logout = async () => true,
   navigate = async () => {},
 } = {}) {
-  return accountUI("src/routes/_authenticated/profile.tsx", "Route", {
+  return accountUI("src/routes/_authenticated/profile_.settings.tsx", "Route", {
     "@tanstack/react-router": router(navigate),
     "@tanstack/react-query": { useQueryClient: () => queryClient },
     "@/lib/auth": {
       useAuth: () => ({ user: { id: "owner", email: "owner@tempo.test" } }),
       signOut: logout,
+      clearDeletedAccountSession: async () => {},
     },
     "@/lib/account-profile": {
       ...username,
@@ -405,11 +407,10 @@ function profileFixture({
         owned && !loading && !failed ? { bulk_profile_id: "owned" } : null,
       useBulkAdmin: () => ({ data: admin }),
     },
-    "@/lib/goal-discovery": {
-      useGoalDiscovery: () => ({ data: { goal_seen_at: "2026-01-01" } }),
-      useAcknowledgeGoal: () => async () => {},
+    "@/lib/privileged-rpcs.functions": {
+      checkUsernameAvailability: async () => true,
+      saveAccountUsername: async () => {},
     },
-    "@/lib/privileged-rpcs.functions": { checkUsernameAvailability: async () => true },
     "@/components/NavRows": presentationComponent("src/components/NavRows.tsx", {
       "@tanstack/react-router": { Link: "Link" },
       "lucide-react": { ChevronRight: "ChevronRight" },
@@ -421,12 +422,11 @@ function profileFixture({
   });
 }
 
-test("Phase 7 Profile is owner-aware, with direct Goal/Training/Notifications and admin access but no legacy daily-log tool", () => {
+test("Phase 7 Settings is owner-aware, with direct Goal/Training/Notifications and admin access but no legacy daily-log tool", () => {
   const ui = profileFixture({ admin: true });
-  assert.match(ui.text(), /@alice/);
   assert.deepEqual(
     ui.find("Link").map((node) => node.props.to),
-    ["/bulk/more", "/bulk/training", "/profile/notifications", "/bulk/diagnostics"],
+    ["/profile/notifications", "/bulk/more", "/bulk/training", "/bulk/diagnostics"],
   );
   assert.doesNotMatch(ui.text(), /Compatibility tools|Daily log|Legacy Today/);
   assert.equal(ui.find("ChallengeInvitations").length, 0);
@@ -436,19 +436,24 @@ test("Phase 7 Profile is owner-aware, with direct Goal/Training/Notifications an
   const core = profileFixture({ owned: false });
   assert.deepEqual(
     core.find("Link").map((node) => node.props.to),
-    ["/bulk-onboarding", "/profile/notifications"],
+    ["/profile/notifications", "/bulk-onboarding"],
   );
   assert.doesNotMatch(core.text(), /Production diagnostics/);
 });
 
-test("Phase 7 Profile doesn't flash plan links during loading or hide a data-check failure", () => {
+test("Phase 7 Settings doesn't flash plan links during loading or hide a data-check failure", () => {
   const loading = profileFixture({ loading: true });
   assert.equal(loading.find("PageSkeleton").length, 1);
-  assert.equal(loading.find("Link").length, 0);
+  // The fitness plan links are gated behind the access check (never flashed while loading).
+  assert.ok(
+    !loading
+      .find("Link")
+      .some((node) => ["/bulk/more", "/bulk/training", "/bulk-onboarding"].includes(node.props.to)),
+  );
   assert.match(profileFixture({ failed: true }).text(), /Retry/);
 });
 
-test("Phase 7 logout navigates only after successful sign-out and surfaces failure inside Profile", async () => {
+test("Phase 7 logout navigates only after successful sign-out and surfaces failure inside Settings", async () => {
   const navigated = [];
   let success = false;
   const ui = profileFixture({

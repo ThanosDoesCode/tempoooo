@@ -390,7 +390,8 @@ test("product areas expose distinct contextual destinations and preserve legacy/
   // Progress is a bottom tab; its sub-screens are reached from Progress's in-page rows.
   assert.match(nav, /to: "\/bulk\/progress"/);
   assert.match(progress, /to="\/bulk\/check-in"/);
-  assert.match(profile, /to: "\/bulk\/more"/);
+  // Goal settings (/bulk/more) is reached from the Settings screen now.
+  assert.match(await read("src/routes/_authenticated/profile_.settings.tsx"), /to: "\/bulk\/more"/);
   assert.match(productNavigation, /pathname\.startsWith\("\/bulk\/prs"\)/);
   assert.doesNotMatch(shell, /location\.reload/);
   assert.doesNotMatch(shell, /hash: "(?:plan|presets)"/);
