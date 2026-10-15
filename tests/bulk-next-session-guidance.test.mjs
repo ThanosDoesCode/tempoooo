@@ -325,8 +325,8 @@ test("overview and active workout render guidance from the one batched progressi
     read("src/lib/bulk-progression-query.ts"),
     read("src/lib/bulk-training-sessions.ts"),
   ]);
-  assert.match(overview, /buildBulkNextSessionGuidance/);
-  assert.match(overview, /guidance\.targetText/);
+  assert.match(overview, /workoutOverviewPresentation/);
+  assert.match(overview, /overview\.today/);
   assert.match(workout, /previousSetLabel/);
   assert.match(workout, /Previous:/);
   assert.match(workout, /Next-session guidance/);

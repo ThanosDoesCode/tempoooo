@@ -9,6 +9,7 @@ import * as plans from "../src/lib/training-plans.ts";
 import { TRAINING_SETUP_OPTIONS } from "../src/lib/bulk-onboarding.ts";
 import * as progression from "../src/lib/bulk-progression.ts";
 import * as guidance from "../src/lib/bulk-next-session-guidance.ts";
+import * as overviewPresentation from "../src/lib/workout-overview-presentation.ts";
 import { EXERCISE_MUSCLE_CATEGORIES, MUSCLE_GROUPS } from "../src/lib/exercise-library.ts";
 import { isFocusScreen, LOG_ACTIONS } from "../src/lib/main-navigation.ts";
 const read = (p) => readFile(new URL(`../${p}`, import.meta.url), "utf8");
@@ -150,6 +151,7 @@ function fixture(source, exportName, initialProps, options = {}) {
     "@/lib/bulk-training-session-domain": domain,
     "@/lib/bulk-progression": progression,
     "@/lib/bulk-next-session-guidance": guidance,
+    "@/lib/workout-overview-presentation": overviewPresentation,
     "@/lib/bulk-training-sessions": Object.fromEntries(
       [
         "saveBulkTrainingSet",

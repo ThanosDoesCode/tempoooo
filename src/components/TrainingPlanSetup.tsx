@@ -25,7 +25,7 @@ import { userFacingError } from "@/lib/network-errors";
 import { Button } from "@/components/ui/button";
 import { Card, DataError, PendingLabel, SectionTitle } from "@/components/ui-kit";
 import type { BulkProgressionResult } from "@/lib/bulk-progression";
-import { buildBulkNextSessionGuidance } from "@/lib/bulk-next-session-guidance";
+import { workoutOverviewPresentation } from "@/lib/workout-overview-presentation";
 
 function PlanDetail({ plan }: { plan: TrainingPlanTemplate }) {
   return (
@@ -513,32 +513,34 @@ export function TrainingPlanOverview({
     plan.days[0];
   return (
     <div className="space-y-[14px]">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-[13px] font-medium text-muted-foreground">
-          {plan.name}
-          {day ? ` · Day ${day.order} of ${plan.days.length}` : ""}
-        </p>
-        {weekProgress ? (
-          <p className="text-sm text-muted-foreground">
-            <span className="num text-foreground">{weekProgress}</span> workouts this week
-          </p>
-        ) : null}
-      </div>
       {day ? (
         <>
           <div>
-            <h2 className="text-[32px] font-semibold leading-tight tracking-tight">{day.name}</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
+            <p className="text-[13px] font-medium text-muted-foreground">Workout day</p>
+            <h1 className="mt-1 break-words text-[30px] font-semibold leading-tight tracking-tight">
+              {day.name}
+            </h1>
+            <p className="mt-2 break-words text-xs text-muted-foreground">
+              {plan.name} · Day {day.order} of {plan.days.length}
+            </p>
+            <p className="mt-1 text-[13px] text-muted-foreground">
               {day.exercises.length} exercises
               {completedDayIds?.has(day.id) ? " · Completed this week" : ""}
+              {weekProgress ? (
+                <>
+                  {" "}
+                  · <span className="num">{weekProgress}</span> workouts this week
+                </>
+              ) : null}
             </p>
           </div>
           {plan.days.length > 1 ? (
             <label className="flex min-h-11 items-center justify-between gap-3 text-sm text-muted-foreground">
-              Workout day
+              Day
               <NativeSelect
                 aria-label="Workout day"
                 value={day.id}
+                title={day.name}
                 onChange={(event) => setSelectedDayId(event.target.value)}
                 containerClassName="min-w-0 max-w-[70%]"
                 className="min-h-11 rounded-[14px] border border-input bg-card px-3 text-base text-foreground"
@@ -564,10 +566,10 @@ export function TrainingPlanOverview({
               )}
             </Button>
           ) : null}
-          <ol className="card-surface divide-y divide-border px-4">
+          <ol className="divide-y divide-border/60 rounded-[20px] bg-card px-4">
             {day.exercises.map((exercise, index) => {
               const next = progression[exercise.id];
-              const guidance = buildBulkNextSessionGuidance(next, {
+              const overview = workoutOverviewPresentation(next, {
                 planExerciseId: exercise.id,
                 exerciseId: exercise.exerciseId,
                 executionMode: exercise.intendedUnilateralMode,
@@ -582,18 +584,39 @@ export function TrainingPlanOverview({
                     {index + 1}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="text-[16px] font-medium leading-snug">{exercise.name}</p>
+                    <p className="break-words text-[16px] font-medium leading-snug">
+                      {exercise.name}
+                    </p>
                     <p className="mt-1 text-[13px] text-muted-foreground">
                       {exercise.sets} × {exercise.repMin}–{exercise.repMax}
                     </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {next?.dataStatus === "usable" ? guidance.targetText : "No previous session"}
-                    </p>
-                    {guidance.previousPerformanceText ? (
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        Previous: {guidance.previousPerformanceText}
-                      </p>
-                    ) : null}
+                    <dl className="mt-3 space-y-2 text-[13px] leading-5">
+                      <div className="grid min-w-0 gap-x-3 gap-y-0.5 min-[375px]:grid-cols-[64px_minmax(0,1fr)]">
+                        <dt className="text-muted-foreground">Today</dt>
+                        <dd className="min-w-0 break-words font-medium" title={overview.reasonText}>
+                          {overview.today.map((line) => (
+                            <span key={line} className="block">
+                              {line}
+                            </span>
+                          ))}
+                          {overview.note ? (
+                            <span className="block text-xs font-normal text-muted-foreground">
+                              {overview.note}
+                            </span>
+                          ) : null}
+                        </dd>
+                      </div>
+                      <div className="grid min-w-0 gap-x-3 gap-y-0.5 min-[375px]:grid-cols-[64px_minmax(0,1fr)]">
+                        <dt className="text-muted-foreground">Last time</dt>
+                        <dd className="min-w-0 break-words text-muted-foreground">
+                          {overview.lastTime.map((line) => (
+                            <span key={line} className="block">
+                              {line}
+                            </span>
+                          ))}
+                        </dd>
+                      </div>
+                    </dl>
                     {exercise.notes ? (
                       <p className="mt-1 text-xs text-muted-foreground">{exercise.notes}</p>
                     ) : null}
