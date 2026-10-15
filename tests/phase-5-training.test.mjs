@@ -133,6 +133,7 @@ function fixture(source, exportName, initialProps, options = {}) {
       },
     },
     "react/jsx-runtime": { jsx, jsxs: jsx, Fragment: "fragment" },
+    "react-dom": { createPortal: (children) => children },
     "@tanstack/react-router": {
       Link: "Link",
       useNavigate: () => async (d) => destinations.push(d),
@@ -191,6 +192,7 @@ function fixture(source, exportName, initialProps, options = {}) {
       return timerId;
     },
     clearInterval: (id) => intervals.delete(id),
+    ...options.browser,
   };
   const context = {
     crypto: globalThis.crypto,
@@ -223,13 +225,17 @@ function fixture(source, exportName, initialProps, options = {}) {
     },
   };
   vm.runInNewContext(
-    ts.transpileModule(source + (source === workoutSource ? "\nexport { WorkoutSetRow };" : ""), {
-      compilerOptions: {
-        module: ts.ModuleKind.CommonJS,
-        target: ts.ScriptTarget.ES2022,
-        jsx: ts.JsxEmit.ReactJSX,
+    ts.transpileModule(
+      source +
+        (source === workoutSource ? "\nexport { WorkoutSetRow, WorkoutControlsPortal };" : ""),
+      {
+        compilerOptions: {
+          module: ts.ModuleKind.CommonJS,
+          target: ts.ScriptTarget.ES2022,
+          jsx: ts.JsxEmit.ReactJSX,
+        },
       },
-    }).outputText,
+    ).outputText,
     context,
   );
   return {
@@ -1086,4 +1092,108 @@ test("Phase 5 actual Training route starts one session, resumes its exact id and
   assert.equal(overview.props.workoutActive, true);
   overview.props.onStart("day1");
   assert.equal(starts, 1);
+});
+
+test("exercise transitions reveal their heading below the sticky safe-area header, without scrolling during same-exercise edits", () => {
+  const scrolls = [];
+  const f = fixture(
+    workoutSource,
+    "BulkWorkoutSessionView",
+    { session: session(), progression: {} },
+    {
+      browser: {
+        scrollY: 600,
+        getComputedStyle: () => ({ top: "47px" }),
+        scrollTo: (options) => scrolls.push(options),
+      },
+    },
+  );
+  let tree = f.render();
+  const header = nodes(tree, (n) => n.type === "header")[0];
+  header.props.ref.current = { offsetHeight: 97 };
+  const heading = nodes(tree, (n) => n.type === "p" && n.props.ref)[0];
+  heading.props.ref.current = { getBoundingClientRect: () => ({ top: -200 }) };
+  f.runEffects();
+  assert.equal(scrolls.length, 0, "initial render does not unnecessarily scroll");
+  find(tree, "Next exercise").props.onClick();
+  tree = f.render();
+  f.runEffects();
+  assert.equal(scrolls.length, 1);
+  assert.equal(scrolls[0].top, 244);
+  assert.equal(scrolls[0].behavior, "instant");
+  setRows(tree)[0].props.onChange({ bilateralWeight: 22.5 });
+  f.render();
+  f.runEffects();
+  f.tick();
+  f.render();
+  f.runEffects();
+  assert.equal(scrolls.length, 1, "autosave/elapsed updates do not reset scroll");
+  find(tree, "Previous").props.onClick();
+  f.render();
+  f.runEffects();
+  assert.equal(scrolls.length, 2);
+});
+
+test("workout rest controls escape transformed pull surfaces and retain bottom safe area and content clearance", () => {
+  const f = fixture(workoutSource, "BulkWorkoutSessionView", {
+    session: session(),
+    progression: {},
+  });
+  const tree = f.render();
+  const portal = nodes(
+    tree,
+    (n) => typeof n.type === "function" && n.type.name === "WorkoutControlsPortal",
+  )[0];
+  assert.ok(portal);
+  const dock = nodes(portal, (n) => n.props["aria-label"] === "Workout controls")[0];
+  assert.match(dock.props.className, /fixed.*bottom-0/);
+  assert.match(dock.props.className, /16px\+env\(safe-area-inset-bottom\)/);
+  assert.match(tree.props.className, /184px\+env\(safe-area-inset-bottom\)/);
+  assert.match(workoutSource, /createPortal\(children, container\)/);
+  assert.match(workoutSource, /useEffect\(\(\) => setContainer\(document.body\), \[\]\)/);
+});
+
+test("workout controls portal has no document access or hydration markup until its client effect", () => {
+  const f = fixture(workoutSource, "WorkoutControlsPortal", { children: "controls" });
+  assert.equal(f.render(), null);
+});
+
+test("saving the final complete set advances the exercise and repositions its heading once", async () => {
+  const scrolls = [];
+  const value = session();
+  value.exercises[0].sets = value.exercises[0].sets.map((s) => ({
+    ...s,
+    isComplete: true,
+    bilateralWeight: 20,
+    bilateralReps: 10,
+  }));
+  const f = fixture(
+    workoutSource,
+    "BulkWorkoutSessionView",
+    { session: value, progression: {} },
+    {
+      browser: {
+        scrollY: 600,
+        getComputedStyle: () => ({ top: "47px" }),
+        scrollTo: (o) => scrolls.push(o),
+      },
+    },
+  );
+  const tree = f.render();
+  nodes(tree, (n) => n.type === "header")[0].props.ref.current = { offsetHeight: 97 };
+  nodes(tree, (n) => n.type === "p" && n.props.ref)[0].props.ref.current = {
+    getBoundingClientRect: () => ({ top: -200 }),
+  };
+  f.runEffects();
+  setRows(tree)[1].props.onChange({ bilateralWeight: 22.5 });
+  setRows(f.render())[1].props.onDone();
+  await new Promise(setImmediate);
+  const advanced = f.render();
+  f.runEffects();
+  assert.equal(
+    nodes(advanced, (n) => n.type === "section" && !n.props.hidden)[0].props["aria-label"],
+    "Real row",
+  );
+  assert.equal(scrolls.length, 1);
+  assert.ok(f.calls.some(([name]) => name === "saveBulkTrainingSet"));
 });

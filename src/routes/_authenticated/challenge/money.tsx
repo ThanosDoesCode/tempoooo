@@ -119,20 +119,21 @@ function MoneyContent({ challenge }: { challenge: Challenge }) {
 
   return (
     <div className="space-y-3.5">
-      <Card className="grid grid-cols-2 gap-3 p-[18px]">
-        <div>
-          <p className="text-[13px] text-muted-foreground">You owe</p>
-          <p className={`num mt-1 text-3xl font-semibold ${iOwe > 0 ? "text-warn" : ""}`}>
-            {owedText(iOwe, challenge.legacy_photo_owed)}
+      <Card className="grid grid-cols-1 gap-4 p-[18px] min-[360px]:grid-cols-2 min-[360px]:gap-3">
+        <div className="min-w-0">
+          <p className="text-[13px] font-medium leading-5 text-muted-foreground min-[360px]:min-h-10">
+            You owe
           </p>
+          <Obligation text={owedText(iOwe, challenge.legacy_photo_owed)} warning={iOwe > 0} />
         </div>
-        <div>
-          <p className="text-[13px] text-muted-foreground">
+        <div className="min-w-0">
+          <p
+            className="line-clamp-2 break-words text-[13px] font-medium leading-5 text-muted-foreground min-[360px]:min-h-10"
+            title={opponent ? `${opponent.name} owes you` : "Owed to you"}
+          >
             {opponent ? `${opponent.name} owes you` : "Owed to you"}
           </p>
-          <p className="num mt-1 text-3xl font-semibold">
-            {owedText(owedToMe, challenge.legacy_photo_owed)}
-          </p>
+          <Obligation text={owedText(owedToMe, challenge.legacy_photo_owed)} />
         </div>
       </Card>
 
@@ -228,6 +229,21 @@ function MoneyContent({ challenge }: { challenge: Challenge }) {
   );
 }
 
+/** Presentation only: retain the canonical owedText result and group photo obligations. */
+function Obligation({ text, warning = false }: { text: string; warning?: boolean }) {
+  const [amount, ...other] = text.split(" + ");
+  return (
+    <p
+      className={`num mt-1 flex flex-wrap items-baseline gap-x-1 text-lg font-semibold tracking-tight min-[430px]:text-xl ${warning ? "text-warn" : ""}`}
+    >
+      <span>{amount}</span>
+      {other.length ? (
+        <span className="whitespace-nowrap text-[13px] font-medium">+ {other.join(" + ")}</span>
+      ) : null}
+    </p>
+  );
+}
+
 function PaymentItem({
   payment,
   week,
@@ -253,53 +269,56 @@ function PaymentItem({
 }) {
   const amount = owedText(Number(payment.amount_eur), legacyPhotoOwed);
   const title = mine
-    ? `You owe ${name(payment.recipient_id)} ${amount}`
-    : `${name(payment.payer_id)} owes you ${amount}`;
+    ? `You owe ${name(payment.recipient_id)}`
+    : `${name(payment.payer_id)} owes you`;
   const detail = week
-    ? `Week ${week.week_number} · ${name(week.user_id)} did ${Number(week.equivalent_km).toFixed(1)} km`
+    ? `Week ${week.week_number} · ${Number(week.equivalent_km).toFixed(1)} km`
     : "";
 
   return (
-    <div className="flex min-h-16 items-center gap-3 border-t border-border first:border-t-0">
+    <div className="flex min-w-0 flex-col gap-2 border-t border-border py-4 first:border-t-0 sm:flex-row sm:items-center sm:gap-4">
       <div className="min-w-0 flex-1">
-        <p className="text-[15px] font-medium">{title}</p>
+        <p className="break-words text-sm font-medium">{title}</p>
+        <Obligation text={amount} />
         {detail ? <p className="mt-0.5 text-[13px] text-muted-foreground">{detail}</p> : null}
       </div>
-      {mine && payment.status === "unpaid" ? (
-        <button
-          type="button"
-          disabled={busy}
-          onClick={onMarkPaid}
-          className="min-h-11 rounded-[20px] bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-        >
-          {pending ? <PendingLabel>…</PendingLabel> : "I paid"}
-        </button>
-      ) : null}
-      {mine && payment.status === "marked_paid" ? (
-        <button
-          type="button"
-          disabled={busy}
-          onClick={onUndo}
-          className="min-h-11 rounded-lg px-3 text-[13px] font-medium text-muted-foreground disabled:opacity-60"
-        >
-          {pending ? <PendingLabel>…</PendingLabel> : "Waiting · undo"}
-        </button>
-      ) : null}
-      {!mine && payment.status === "unpaid" ? (
-        <span className="text-[13px] text-muted-foreground">
-          Waiting for {name(payment.payer_id)}
-        </span>
-      ) : null}
-      {!mine && payment.status === "marked_paid" ? (
-        <button
-          type="button"
-          disabled={busy}
-          onClick={onConfirm}
-          className="min-h-11 rounded-[20px] bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-        >
-          {pending ? <PendingLabel>…</PendingLabel> : "Got it"}
-        </button>
-      ) : null}
+      <div className="flex min-w-0 shrink-0 items-center justify-end sm:max-w-[45%]">
+        {mine && payment.status === "unpaid" ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onMarkPaid}
+            className="min-h-11 rounded-[20px] bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+          >
+            {pending ? <PendingLabel>…</PendingLabel> : "I paid"}
+          </button>
+        ) : null}
+        {mine && payment.status === "marked_paid" ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onUndo}
+            className="min-h-11 rounded-lg px-3 text-[13px] font-medium text-muted-foreground disabled:opacity-60"
+          >
+            {pending ? <PendingLabel>…</PendingLabel> : "Waiting · undo"}
+          </button>
+        ) : null}
+        {!mine && payment.status === "unpaid" ? (
+          <span className="break-words text-right text-xs text-muted-foreground">
+            Waiting for {name(payment.payer_id)}
+          </span>
+        ) : null}
+        {!mine && payment.status === "marked_paid" ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onConfirm}
+            className="min-h-11 rounded-[20px] bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+          >
+            {pending ? <PendingLabel>…</PendingLabel> : "Got it"}
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 }

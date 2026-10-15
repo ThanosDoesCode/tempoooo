@@ -3,8 +3,10 @@ import {
   useMemo,
   useRef,
   useState,
+  type ReactNode,
   type PointerEvent as ReactPointerEvent,
 } from "react";
+import { createPortal } from "react-dom";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -82,6 +84,13 @@ const toDraft = (set: BulkTrainingSet): SetDraft => ({
   rightWeight: set.rightWeight,
   rightReps: set.rightReps,
 });
+
+/** Pull-to-refresh transforms its content; keep viewport-pinned controls outside that surface. */
+function WorkoutControlsPortal({ children }: { children: ReactNode }) {
+  const [container, setContainer] = useState<HTMLElement | null>(null);
+  useEffect(() => setContainer(document.body), []);
+  return container ? createPortal(children, container) : null;
+}
 
 const hasValues = (set: SetDraft) =>
   [
@@ -474,9 +483,30 @@ export function BulkWorkoutSessionView({
     return total + exerciseVolume;
   }, 0);
 
+  const activeIndex = Math.min(activeExerciseIndex, Math.max(0, session.exercises.length - 1));
+  const activeExerciseId = session.exercises[activeIndex]?.id;
+  const lastVisibleExercise = useRef(activeExerciseId);
+  const workoutHeader = useRef<HTMLElement | null>(null);
+  const exerciseHeading = useRef<HTMLParagraphElement | null>(null);
+  useEffect(() => {
+    if (lastVisibleExercise.current === activeExerciseId) return;
+    lastVisibleExercise.current = activeExerciseId;
+    const header = workoutHeader.current;
+    const heading = exerciseHeading.current;
+    if (!header || !heading) return;
+    // Reposition only on an exercise transition, never on draft/autosave updates.
+    const safeTop = parseFloat(window.getComputedStyle(header).top) || 0;
+    window.scrollTo({
+      top: Math.max(
+        0,
+        window.scrollY + heading.getBoundingClientRect().top - header.offsetHeight - safeTop - 12,
+      ),
+      behavior: "instant",
+    });
+  }, [activeExerciseId]);
+
   if (session.status === "completed") return <CompletedWorkout session={session} />;
 
-  const activeIndex = Math.min(activeExerciseIndex, Math.max(0, session.exercises.length - 1));
   const restSeconds =
     restDeadline == null ? 0 : Math.max(0, Math.ceil((restDeadline - clock) / 1000));
   async function confirmSet(exercise: BulkTrainingSessionExercise, set: BulkTrainingSet) {
@@ -504,8 +534,11 @@ export function BulkWorkoutSessionView({
     }
   }
   return (
-    <div className="space-y-[14px] pb-[calc(184px+env(safe-area-inset-bottom))]">
-      <header className="sticky top-0 z-20 -mx-5 border-b border-border bg-background/95 px-5 pb-3 pt-2 backdrop-blur">
+    <div className="space-y-3 pb-[calc(184px+env(safe-area-inset-bottom))]">
+      <header
+        ref={workoutHeader}
+        className="sticky top-[env(safe-area-inset-top,0px)] z-20 -mx-5 border-b border-border bg-background/95 px-5 py-1 backdrop-blur"
+      >
         <div className="flex min-h-11 items-center gap-2">
           <button
             type="button"
@@ -532,7 +565,7 @@ export function BulkWorkoutSessionView({
           </Button>
         </div>
         <div
-          className="mt-3 flex flex-wrap gap-1"
+          className="flex flex-wrap gap-1"
           aria-label={`${completedSets} of ${totalSets} sets entered`}
         >
           {session.exercises.map((exercise, index) => (
@@ -567,7 +600,10 @@ export function BulkWorkoutSessionView({
             hidden={exerciseIndex !== activeIndex}
             aria-label={exercise.name}
           >
-            <p className="text-sm text-muted-foreground">
+            <p
+              ref={exerciseIndex === activeIndex ? exerciseHeading : undefined}
+              className="text-sm text-muted-foreground"
+            >
               Exercise {exerciseIndex + 1} of {session.exercises.length}
             </p>
             <h2 className="mt-1 text-[28px] font-semibold leading-tight tracking-tight break-words">
@@ -615,9 +651,7 @@ export function BulkWorkoutSessionView({
             <div className="mt-[14px] space-y-2">
               <div className="workout-set-grid text-center text-[10px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">
                 <span>Set</span>
-                <span className="text-left normal-case tracking-normal min-[375px]:uppercase">
-                  Previous
-                </span>
+                <span className="text-left tracking-normal">Previous</span>
                 <span>{exercise.isBodyweight ? "+kg" : "kg"}</span>
                 <span>Reps</span>
                 <span>RPE</span>
@@ -672,81 +706,86 @@ export function BulkWorkoutSessionView({
           </section>
         ))}
       </fieldset>
-      <div
-        className="fixed inset-x-0 bottom-0 z-30 my-0! border-t border-border bg-background/95 px-5 pt-4 pb-[calc(16px+env(safe-area-inset-bottom))] backdrop-blur"
-        aria-label="Workout controls"
-      >
-        <div className="mx-auto max-w-2xl">
-          {restSeconds > 0 ? (
-            <>
-              <div
-                className="flex min-h-11 items-center gap-4"
-                role="timer"
-                aria-label="Rest timer"
-              >
-                <p className="flex-1 text-sm text-muted-foreground">Rest</p>
-                <p className="num text-[22px] font-semibold">{formatDuration(restSeconds)}</p>
-                <button
-                  type="button"
-                  className="min-h-11 rounded-xl bg-elevated px-3 text-sm font-semibold active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  aria-label="Add 15 seconds to rest"
-                  onClick={() => {
-                    const now = Date.now();
-                    setRestDeadline((deadline) => Math.max(deadline ?? now, now) + 15_000);
-                    setClock(now);
-                  }}
-                >
-                  +15s
-                </button>
-                <button
-                  type="button"
-                  className="min-h-11 min-w-11 px-2 text-sm font-medium text-primary"
-                  onClick={() => setRestDeadline(null)}
-                >
-                  Skip
-                </button>
-              </div>
-              <div className="mt-2 h-1 overflow-hidden rounded-full bg-elevated" aria-hidden="true">
+      <WorkoutControlsPortal>
+        <div
+          className="fixed inset-x-0 bottom-0 z-30 my-0! border-t border-border bg-background/95 px-5 pt-4 pb-[calc(16px+env(safe-area-inset-bottom))] backdrop-blur"
+          aria-label="Workout controls"
+        >
+          <div className="mx-auto max-w-2xl">
+            {restSeconds > 0 ? (
+              <>
                 <div
-                  className="h-full rounded-full bg-primary transition-[width] duration-150 motion-reduce:transition-none"
-                  style={{ width: `${Math.min(100, (restSeconds / 120) * 100)}%` }}
-                />
-              </div>
-            </>
-          ) : (
-            <button
-              type="button"
-              className="min-h-12 text-sm text-muted-foreground"
-              onClick={() => {
-                setRestDeadline(Date.now() + 120_000);
-                setClock(Date.now());
-              }}
-            >
-              Start 2:00 rest
-            </button>
-          )}
-          <div className="mt-4 grid grid-cols-2 gap-4">
-            <button
-              type="button"
-              disabled={activeIndex === 0}
-              onClick={() => setActiveExerciseIndex(activeIndex - 1)}
-              className="flex min-h-12 min-w-0 items-center justify-center gap-2 rounded-2xl border border-border bg-card px-2 text-[13px] font-medium text-foreground disabled:opacity-30 sm:px-3 sm:text-sm"
-            >
-              <ChevronLeft className="control-chevron" aria-hidden="true" />
-              Previous
-            </button>
-            <button
-              type="button"
-              disabled={activeIndex >= session.exercises.length - 1}
-              onClick={() => setActiveExerciseIndex(activeIndex + 1)}
-              className="flex min-h-12 min-w-0 items-center justify-center gap-2 rounded-2xl border border-primary/30 bg-primary px-2 text-[13px] font-semibold text-primary-foreground disabled:border-border disabled:bg-card disabled:text-muted-foreground disabled:opacity-50 sm:px-3 sm:text-sm"
-            >
-              Next exercise
-              <ChevronRight className="control-chevron" aria-hidden="true" />
-            </button>
+                  className="flex min-h-11 items-center gap-4"
+                  role="timer"
+                  aria-label="Rest timer"
+                >
+                  <p className="flex-1 text-sm text-muted-foreground">Rest</p>
+                  <p className="num text-[22px] font-semibold">{formatDuration(restSeconds)}</p>
+                  <button
+                    type="button"
+                    className="min-h-11 rounded-xl bg-elevated px-3 text-sm font-semibold active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    aria-label="Add 15 seconds to rest"
+                    onClick={() => {
+                      const now = Date.now();
+                      setRestDeadline((deadline) => Math.max(deadline ?? now, now) + 15_000);
+                      setClock(now);
+                    }}
+                  >
+                    +15s
+                  </button>
+                  <button
+                    type="button"
+                    className="min-h-11 min-w-11 px-2 text-sm font-medium text-primary"
+                    onClick={() => setRestDeadline(null)}
+                  >
+                    Skip
+                  </button>
+                </div>
+                <div
+                  className="mt-2 h-1 overflow-hidden rounded-full bg-elevated"
+                  aria-hidden="true"
+                >
+                  <div
+                    className="h-full rounded-full bg-primary transition-[width] duration-150 motion-reduce:transition-none"
+                    style={{ width: `${Math.min(100, (restSeconds / 120) * 100)}%` }}
+                  />
+                </div>
+              </>
+            ) : (
+              <button
+                type="button"
+                className="min-h-12 text-sm text-muted-foreground"
+                onClick={() => {
+                  setRestDeadline(Date.now() + 120_000);
+                  setClock(Date.now());
+                }}
+              >
+                Start 2:00 rest
+              </button>
+            )}
+            <div className="mt-4 grid grid-cols-2 gap-4">
+              <button
+                type="button"
+                disabled={activeIndex === 0}
+                onClick={() => setActiveExerciseIndex(activeIndex - 1)}
+                className="flex min-h-12 min-w-0 items-center justify-center gap-2 rounded-2xl border border-border bg-card px-2 text-[13px] font-medium text-foreground disabled:opacity-30 sm:px-3 sm:text-sm"
+              >
+                <ChevronLeft className="control-chevron" aria-hidden="true" />
+                Previous
+              </button>
+              <button
+                type="button"
+                disabled={activeIndex >= session.exercises.length - 1}
+                onClick={() => setActiveExerciseIndex(activeIndex + 1)}
+                className="flex min-h-12 min-w-0 items-center justify-center gap-2 rounded-2xl border border-primary/30 bg-primary px-2 text-[13px] font-semibold text-primary-foreground disabled:border-border disabled:bg-card disabled:text-muted-foreground disabled:opacity-50 sm:px-3 sm:text-sm"
+              >
+                Next exercise
+                <ChevronRight className="control-chevron" aria-hidden="true" />
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      </WorkoutControlsPortal>
       <div className="rounded-2xl bg-card p-4">
         <div className="flex items-baseline justify-between text-xs text-muted-foreground">
           <span>

@@ -137,6 +137,9 @@ const persistedSetType = (set: BulkTrainingSet): BulkSetType => set.setType ?? "
 const plannedWorkingSets = (exercise: BulkTrainingSessionExercise) =>
   exercise.sets
     .filter((set) => !set.isExtra && persistedSetType(set) === "normal")
+    // Callers may supply unordered rows. Select the prescribed sets in canonical order,
+    // before slicing or calculating, keeping unilateral values attached to each set.
+    .sort((a, b) => a.order - b.order)
     .slice(0, exercise.targetSets);
 
 const toPreviousSet = (set: BulkTrainingSet): BulkProgressionPreviousSet => ({

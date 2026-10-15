@@ -9,6 +9,7 @@ import * as nutrition from "../src/lib/bulk-nutrition.ts";
 import { nutritionCalendarSlots, nutritionWindow } from "../src/lib/progress-model-core.ts";
 import { nutritionWeekSummary } from "../src/lib/bulk-progress.ts";
 import { iso } from "../src/lib/calc.ts";
+import { trackInAppHistory, backWithinApp } from "../src/lib/in-app-back.ts";
 const ready = (data) => ({ data, isLoading: false, error: null });
 const macros = { calories: 2400, protein: 140, carbs: 300, fat: 80 };
 const today = iso(new Date());
@@ -212,8 +213,11 @@ test("date strip navigates the true local month boundary, indicates Today and di
   }
 });
 
-test("Meals selection follows route search on Back/Forward rather than a copied React date state", () => {
-  const history = createMemoryHistory({ initialEntries: ["/bulk/meals?date=2026-09-30"] });
+test("Meals date browsing replaces search state: one Back returns to origin and Forward restores the last date", () => {
+  const history = createMemoryHistory({ initialEntries: ["/bulk"] });
+  trackInAppHistory(history);
+  history.push("/bulk/meals?date=2026-09-30");
+  const entryIndex = history.location.state.__TSR_index;
   const ui = accountUI("src/routes/_authenticated/bulk/meals.tsx", "Route", {
     "@tanstack/react-router": {
       createFileRoute: () => (options) => ({
@@ -223,7 +227,9 @@ test("Meals selection follows route search on Back/Forward rather than a copied 
         }),
       }),
       useNavigate: () => (destination) =>
-        history.push(`${destination.to}?date=${destination.search.date}`),
+        history[destination.replace ? "replace" : "push"](
+          `${destination.to}?date=${destination.search.date}`,
+        ),
       Link: "Link",
     },
     "@/components/AppShell": { AppShell: "main", PageHeader: "header" },
@@ -243,17 +249,19 @@ test("Meals selection follows route search on Back/Forward rather than a copied 
     assert.equal(ui.find("header")[0].props.compact, true);
     assert.equal(ui.find("header")[0].props.subtitle, undefined);
     assert.equal(ui.find("BulkNutritionLog")[0].props.selectedDate, "2026-09-30");
-    ui.find("BulkNutritionLog")[0].props.onDateChange("2026-10-01");
-    assert.equal(ui.find("BulkNutritionLog")[0].props.selectedDate, "2026-10-01");
-    history.back();
-    assert.equal(ui.find("BulkNutritionLog")[0].props.selectedDate, "2026-09-30");
+    for (const date of ["2026-10-01", "2026-09-29", "2026-09-28"])
+      ui.find("BulkNutritionLog")[0].props.onDateChange(date);
+    assert.equal(history.location.state.__TSR_index, entryIndex);
+    assert.equal(backWithinApp(history), true);
+    assert.equal(history.location.pathname, "/bulk");
     history.forward();
-    assert.equal(ui.find("BulkNutritionLog")[0].props.selectedDate, "2026-10-01");
+    assert.equal(ui.find("BulkNutritionLog")[0].props.selectedDate, "2026-09-28");
     const shortcut = ui.find("header")[0].props.action;
     assert.equal(shortcut.props["aria-label"], "Back to today");
     shortcut.props.onClick();
     assert.equal(ui.find("BulkNutritionLog")[0].props.selectedDate, today);
     assert.equal(ui.find("header")[0].props.action, undefined);
+    assert.equal(history.location.state.__TSR_index, entryIndex);
   } finally {
     ui.dispose();
     history.destroy();

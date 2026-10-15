@@ -8,7 +8,7 @@
   display: grid;
   grid-template-columns: 44px minmax(0, 1fr) minmax(44px, 1fr) minmax(44px, 1fr) 44px 44px;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   @media (min-width: 375px) {
     gap: 8px;
   }

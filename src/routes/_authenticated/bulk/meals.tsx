@@ -45,7 +45,9 @@ function BulkMealsPage() {
             <button
               type="button"
               aria-label="Back to today"
-              onClick={() => void navigate({ to: "/bulk/meals", search: { date: today } })}
+              onClick={() =>
+                void navigate({ to: "/bulk/meals", search: { date: today }, replace: true })
+              }
               className="min-h-11 min-w-11 rounded-lg px-1 text-xs font-medium text-primary hover:bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               Today
@@ -78,7 +80,9 @@ function BulkMealsPage() {
               : undefined
           }
           selectedDate={selectedDate}
-          onDateChange={(date) => void navigate({ to: "/bulk/meals", search: { date } })}
+          onDateChange={(date) =>
+            void navigate({ to: "/bulk/meals", search: { date }, replace: true })
+          }
           currentTargets={{
             calories: data.targets.calories,
             protein: data.targets.protein,

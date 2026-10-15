@@ -1,4 +1,5 @@
 import { test } from "node:test";
+import * as guidance from "../src/lib/bulk-next-session-guidance.ts";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import {
@@ -287,4 +288,78 @@ test("public progression integration is batched, derived and invalidated without
   assert.match(workout, /invalidateQueries\(\{ queryKey: \["bulk-progression"\] \}\)/);
   assert.match(legacy, /repDelta >= 2/);
   assert.match(legacy, /repDelta <= -3/);
+});
+
+test("canonical set order drives Previous and the recommendation before slicing, not UUID or input order", () => {
+  const stored = [
+    set(3, { id: "a-uuid", bilateralReps: 9 }),
+    set(1, { id: "z-uuid", bilateralReps: 12 }),
+    set(2, { id: "m-uuid", bilateralReps: 11 }),
+  ];
+  const before = structuredClone(stored);
+  const out = result(target(), [session(exercise(stored))]);
+  assert.deepEqual(
+    out.previousPerformance.map((s) => s.bilateralReps),
+    [12, 11, 9],
+  );
+  assert.deepEqual(
+    out.previousBySetType.normal.map((s) => s.bilateralReps),
+    [12, 11, 9],
+  );
+  assert.deepEqual(stored, before, "source history is never mutated");
+  const { perSetRepObjective } = guidance;
+  assert.deepEqual(perSetRepObjective(out), [12, 11, 10]);
+  const subset = result(target({ targetSets: 2 }), [session(exercise(stored, { targetSets: 2 }))]);
+  assert.deepEqual(
+    subset.previousPerformance.map((s) => s.bilateralReps),
+    [12, 11],
+  );
+  assert.equal(subset.decision, "maintain_load_increase_reps");
+});
+
+test("canonical unilateral ordering keeps left/right values and special-set metadata attached to their own set", () => {
+  const options = { executionMode: "unilateral" };
+  const stored = [
+    set(4, { leftWeight: 20, rightWeight: 21, leftReps: 9, rightReps: 10 }),
+    set(1, { setType: "warmup", leftWeight: 10, rightWeight: 11, leftReps: 15, rightReps: 14 }),
+    set(2, { leftWeight: 20, rightWeight: 21, leftReps: 12, rightReps: 13 }),
+    set(6, { setType: "drop", leftWeight: 8, rightWeight: 9, leftReps: 14, rightReps: 15 }),
+    set(3, { leftWeight: 20, rightWeight: 21, leftReps: 11, rightReps: 12 }),
+    set(5, { setType: "failure", leftWeight: 16, rightWeight: 17, leftReps: 8, rightReps: 7 }),
+  ];
+  const out = result(target(options), [session(exercise(stored, options))]);
+  assert.deepEqual(
+    out.previousPerformance.map((s) => [s.leftLoad, s.leftReps, s.rightLoad, s.rightReps]),
+    [
+      [20, 12, 21, 13],
+      [20, 11, 21, 12],
+      [20, 9, 21, 10],
+    ],
+  );
+  assert.deepEqual(guidance.perSetRepObjective(out), [12, 11, 10]);
+  for (const [type, left, right] of [
+    ["warmup", 15, 14],
+    ["failure", 8, 7],
+    ["drop", 14, 15],
+  ]) {
+    assert.equal(out.previousBySetType[type][0].leftReps, left);
+    assert.equal(out.previousBySetType[type][0].rightReps, right);
+  }
+});
+
+test("canonical set ordering does not sort reps descending or change the existing last-set extra-rep policy", () => {
+  const out = result(target(), [
+    session(
+      exercise([
+        set(3, { bilateralReps: 10 }),
+        set(1, { bilateralReps: 12 }),
+        set(2, { bilateralReps: 10 }),
+      ]),
+    ),
+  ]);
+  assert.deepEqual(
+    out.previousPerformance.map((s) => s.bilateralReps),
+    [12, 10, 10],
+  );
+  assert.deepEqual(guidance.perSetRepObjective(out), [12, 10, 11]);
 });

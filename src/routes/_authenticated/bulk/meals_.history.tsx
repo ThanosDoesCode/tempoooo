@@ -39,7 +39,8 @@ function MealsHistoryPage() {
   const search = Route.useSearch();
   const date = search.date ?? iso(addDays(new Date(), -1));
   const navigate = useNavigate();
-  const setDate = (date: string) => void navigate({ to: "/bulk/meals/history", search: { date } });
+  const setDate = (date: string) =>
+    void navigate({ to: "/bulk/meals/history", search: { date }, replace: true });
   const planMode = bulkPlanModeFor(memberships.data, bulkId);
   const isPublic = planMode === "public";
   const nutrition = useBulkNutritionDay(isPublic ? bulkId : null, date);

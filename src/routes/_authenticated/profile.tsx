@@ -83,15 +83,18 @@ function ProfilePage() {
 
   return (
     <AppShell>
-      <MainPageHeader title="You">
-        <Link
-          to="/profile/settings"
-          aria-label="Settings"
-          className="grid h-11 w-11 place-items-center rounded-full text-muted-foreground active:opacity-80"
-        >
-          <Settings className="h-5 w-5" aria-hidden="true" />
-        </Link>
-      </MainPageHeader>
+      <MainPageHeader
+        title="You"
+        actions={
+          <Link
+            to="/profile/settings"
+            aria-label="Settings"
+            className="grid h-11 w-11 place-items-center rounded-full text-muted-foreground hover:bg-elevated active:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Settings className="h-5 w-5" aria-hidden="true" />
+          </Link>
+        }
+      />
 
       <div className="mb-5 flex items-center gap-3">
         <span

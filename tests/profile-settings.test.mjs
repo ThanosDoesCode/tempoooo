@@ -45,7 +45,9 @@ function youFixture({ mode = "public", owned = { bulk_profile_id: "b", is_public
       resolveWeeklyWorkoutTarget: () => 4,
     },
     "@/lib/calc": { iso: () => "2026-10-05" },
-    "@/components/MainPageHeader": { MainPageHeader: "MainPageHeader" },
+    "@/components/MainPageHeader": {
+      MainPageHeader: ({ actions, children }) => [actions, children],
+    },
     "@/components/PageSkeleton": { PageSkeleton: "PageSkeleton" },
   });
 }

@@ -42,7 +42,8 @@ function fixture({ failSets = false, apiCap = 1000 } = {}) {
       });
       for (let s = 1; s <= 8; s++)
         tables.bulk_training_session_sets.push({
-          id: exerciseId + ":" + s,
+          // Deliberately oppose UUID/cursor order and canonical set order.
+          id: exerciseId + ":" + (9 - s),
           session_exercise_id: exerciseId,
           set_order: s,
           is_extra: false,

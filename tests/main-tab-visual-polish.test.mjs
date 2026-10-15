@@ -65,7 +65,7 @@ test("Progress header places the period control on a separate narrow-screen row 
       React.createElement("option", {}, "Last 3 months"),
     ),
   });
-  assert.match(markup, /col-start-2 row-start-1 min-\[400px\]:col-start-3/);
+  assert.match(markup, /col-start-2 row-start-1.*min-\[400px\]:col-start-3/);
   assert.match(markup, /row-start-2.*min-\[400px\]:row-start-1/);
   assert.equal((markup.match(/<select/g) ?? []).length, 1);
 });
