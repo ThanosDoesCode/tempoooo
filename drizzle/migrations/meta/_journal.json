@@ -22,6 +22,13 @@
       "when": 1791813344492,
       "tag": "0002_challenge_invitation_notifications",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792172814162,
+      "tag": "0003_contiguous_active_workout_sets",
+      "breakpoints": true
     }
   ]
 }
