@@ -1199,3 +1199,103 @@ test("saving the final complete set advances the exercise and repositions its he
   assert.equal(scrolls.length, 1);
   assert.ok(f.calls.some(([name]) => name === "saveBulkTrainingSet"));
 });
+
+test("renumbered set snapshots preserve UUID-keyed drafts, autosave and badge positions after deletion and resume", async () => {
+  const original = [
+    makeSet("first", 1),
+    makeSet("survivor", 2, {
+      setType: "failure",
+      rpe: 8,
+      leftWeight: 20,
+      leftReps: 12,
+      rightWeight: 22,
+      rightReps: 10,
+      isComplete: true,
+    }),
+    makeSet("last", 3, { setType: "warmup" }),
+  ];
+  const value = session({
+    exercises: [exercise("ex1", { executionMode: "unilateral", sets: original })],
+  });
+  const f = fixture(workoutSource, "BulkWorkoutSessionView", { session: value, progression: {} });
+  f.render();
+  f.runEffects();
+  setRows(f.render())[1].props.onChange({ rpe: 9.5, leftReps: 13 });
+  setRows(f.render())[0].props.onRemove();
+  await new Promise(setImmediate);
+  const renumbered = (sets) => ({
+    ...value,
+    exercises: [
+      { ...value.exercises[0], sets: sets.map((set, index) => ({ ...set, order: index + 1 })) },
+    ],
+  });
+  // These snapshots mirror the real RPC results verified by the database tests.
+  f.update({ session: renumbered(original.slice(1)), progression: {} });
+  f.render();
+  f.runEffects();
+  assert.deepEqual(
+    setRows(f.render()).map((row) => row.props.set.order),
+    [1, 2],
+  );
+  setRows(f.render())[1].props.onRemove();
+  await new Promise(setImmediate);
+  f.update({ session: renumbered([original[1]]), progression: {} });
+  f.render();
+  f.runEffects();
+  const survivor = setRows(f.render())[0].props;
+  assert.equal(survivor.set.id, "survivor");
+  assert.equal(survivor.set.order, 1);
+  assert.equal(survivor.draft.rpe, 9.5);
+  assert.equal(survivor.draft.leftReps, 13);
+  assert.equal(survivor.draft.rightReps, 10);
+  assert.equal(survivor.draft.setType, "failure");
+  assert.equal(survivor.set.isComplete, true);
+  const row = fixture(workoutSource, "WorkoutSetRow", survivor);
+  assert.ok(
+    nodes(row.render(), (n) => n.props["aria-label"] === "Set 1, failure set. Change set type")
+      .length,
+  );
+  await f.flushTimers();
+  const saves = f.calls.filter(([name]) => name === "saveBulkTrainingSet");
+  assert.equal(saves.length, 1);
+  assert.equal(saves[0][2].id, "survivor");
+  assert.equal(saves[0][2].rpe, 9.5);
+  assert.equal(saves[0][2].leftReps, 13);
+  assert.equal(saves[0][2].rightWeight, 22);
+  assert.equal(
+    saves[0][2].order,
+    undefined,
+    "autosave never persists a stale position from the draft",
+  );
+  assert.ok(
+    f.invalidations.some((key) => key[0] === "bulk-training-session" && key[1] === "session1"),
+  );
+  await find(f.render(), "Add set").props.onClick();
+  await new Promise(setImmediate);
+  const resumedValue = renumbered([
+    { ...original[1], rpe: 9.5, leftReps: 13 },
+    makeSet("added", 2, { isExtra: true }),
+  ]);
+  const resumed = fixture(workoutSource, "BulkWorkoutSessionView", {
+    session: resumedValue,
+    progression: {},
+  });
+  const rows = setRows(resumed.render());
+  assert.deepEqual(
+    rows.map((entry) => entry.props.set.order),
+    [1, 2],
+  );
+  assert.equal(rows[0].props.draft.rpe, 9.5);
+  assert.equal(rows[1].props.draft.rpe, null);
+  assert.equal(rows[1].props.set.isComplete, false);
+  const newRow = fixture(workoutSource, "WorkoutSetRow", rows[1].props);
+  assert.equal(
+    text(
+      nodes(
+        newRow.render(),
+        (n) => n.props["aria-label"] === "Set 2, normal set. Change set type",
+      )[0],
+    ),
+    "2",
+  );
+});
