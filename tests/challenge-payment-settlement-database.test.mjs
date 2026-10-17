@@ -92,6 +92,19 @@ const setStatus = async (db, uid, payment, status) => {
     await asService(db);
   }
 };
+// Force columns into an intentionally-dirty state that the public API could never produce, by briefly
+// disabling the guard trigger. Used to prove each transition normalizes regardless of prior row state.
+const forceColumns = async (db, payment, cols) => {
+  await asService(db);
+  await db.exec("ALTER TABLE public.challenge_payments DISABLE TRIGGER challenge_payments_guard");
+  const keys = Object.keys(cols);
+  const sets = keys.map((k, i) => `${k}=$${i + 2}`).join(", ");
+  await db.query(`UPDATE public.challenge_payments SET ${sets} WHERE id=$1`, [
+    payment,
+    ...keys.map((k) => cols[k]),
+  ]);
+  await db.exec("ALTER TABLE public.challenge_payments ENABLE TRIGGER challenge_payments_guard");
+};
 const row = async (db, payment) =>
   (
     await db.query(
@@ -238,6 +251,75 @@ test("payment evidence survives mark-paid and a 'Not received' rejection", async
   await setStatus(db, payer, payment, "marked_paid");
   await setStatus(db, recipient, payment, "unpaid");
   assert.equal((await row(db, payment)).payment_evidence_path, "payment-evidence/receipt.jpg");
+});
+
+// ------------------------------------------------------------- timestamp normalization (dirty state)
+test("unpaid -> marked_paid normalizes stale confirmed_at/settled_by and preserves the obligation", async () => {
+  const db = await freshDatabase();
+  const { payer, outsider, payment } = await seedPayment(db, {
+    evidence: "payment-evidence/receipt.jpg",
+  });
+  // An impossible-through-API dirty unpaid row: a leftover confirmed_at and settled_by.
+  await forceColumns(db, payment, { confirmed_at: new Date().toISOString(), settled_by: outsider });
+  await setStatus(db, payer, payment, "marked_paid");
+  const r = await row(db, payment);
+  assert.equal(r.status, "marked_paid");
+  assert.ok(r.marked_paid_at, "marked_paid_at set");
+  assert.equal(r.confirmed_at, null, "stale confirmed_at cleared");
+  assert.equal(r.settled_by, null, "stale settled_by cleared");
+  assert.equal(r.amount, "15.00");
+  assert.equal(r.payment_evidence_path, "payment-evidence/receipt.jpg");
+});
+
+test("marked_paid -> unpaid normalizes stale confirmed_at/settled_by for both payer and recipient", async () => {
+  for (const actor of ["payer", "recipient"]) {
+    const db = await freshDatabase();
+    const seeded = await seedPayment(db, { evidence: "payment-evidence/receipt.jpg" });
+    await setStatus(db, seeded.payer, seeded.payment, "marked_paid");
+    // Dirty the awaiting row with a leftover settlement.
+    await forceColumns(db, seeded.payment, {
+      confirmed_at: new Date().toISOString(),
+      settled_by: seeded.outsider,
+    });
+    await setStatus(db, seeded[actor], seeded.payment, "unpaid");
+    const r = await row(db, seeded.payment);
+    assert.equal(r.status, "unpaid");
+    assert.equal(r.marked_paid_at, null, `${actor} reopen clears marked_paid_at`);
+    assert.equal(r.confirmed_at, null, `${actor} reopen clears confirmed_at`);
+    assert.equal(r.settled_by, null, `${actor} reopen clears settled_by`);
+    assert.equal(r.amount, "15.00");
+    assert.equal(r.payment_evidence_path, "payment-evidence/receipt.jpg");
+  }
+});
+
+test("confirmed_paid -> unpaid clears every settlement field and preserves amount/evidence", async () => {
+  const db = await freshDatabase();
+  const { payer, recipient, payment } = await seedPayment(db, {
+    evidence: "payment-evidence/receipt.jpg",
+  });
+  await setStatus(db, payer, payment, "marked_paid");
+  await setStatus(db, recipient, payment, "confirmed_paid");
+  await setStatus(db, recipient, payment, "unpaid");
+  const r = await row(db, payment);
+  assert.equal(r.status, "unpaid");
+  assert.equal(r.marked_paid_at, null);
+  assert.equal(r.confirmed_at, null);
+  assert.equal(r.settled_by, null);
+  assert.equal(r.amount, "15.00");
+  assert.equal(r.payment_evidence_path, "payment-evidence/receipt.jpg");
+});
+
+test("marked_paid -> confirmed_paid keeps marked_paid_at and records the recipient as settler", async () => {
+  const db = await freshDatabase();
+  const { payer, recipient, payment } = await seedPayment(db);
+  await setStatus(db, payer, payment, "marked_paid");
+  const sent = (await row(db, payment)).marked_paid_at;
+  await setStatus(db, recipient, payment, "confirmed_paid");
+  const r = await row(db, payment);
+  assert.equal(r.status, "confirmed_paid");
+  assert.ok(r.confirmed_at, "confirmed_at set");
+  assert.equal(String(r.marked_paid_at), String(sent), "marked_paid_at preserved through confirm");
+  assert.equal(r.settled_by, recipient);
 });
 
 // ------------------------------------------------------------- reopen a settle (recipient only)

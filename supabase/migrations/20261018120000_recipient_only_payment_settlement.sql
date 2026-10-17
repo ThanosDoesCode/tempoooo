@@ -57,10 +57,17 @@ begin
     return new;
   end if;
 
+  -- Each transition fully normalizes the settlement timestamps/settler for the TARGET status; it never
+  -- relies on the previous row already being clean. Canonical invariant:
+  --   unpaid         -> marked_paid_at NULL, confirmed_at NULL, settled_by NULL
+  --   marked_paid    -> marked_paid_at NOT NULL, confirmed_at NULL, settled_by NULL
+  --   confirmed_paid -> confirmed_at NOT NULL, settled_by = recipient
+
   -- Payer marks their own obligation as sent; it now awaits recipient confirmation.
   if new.status = 'marked_paid' and old.status = 'unpaid' then
     if auth.uid() <> old.payer_id then raise exception 'Only the payer can mark a payment as paid'; end if;
     new.marked_paid_at := now();
+    new.confirmed_at := null;
     new.settled_by := null;
     return new;
   end if;
@@ -72,15 +79,17 @@ begin
       raise exception 'Only the payer or recipient can reopen this';
     end if;
     new.marked_paid_at := null;
+    new.confirmed_at := null;
     new.settled_by := null;
     return new;
   end if;
 
-  -- ONLY the recipient may settle, and only from marked_paid. settled_by records the recipient so
-  -- they alone can reopen a mistaken confirmation.
+  -- ONLY the recipient may settle, and only from marked_paid. marked_paid_at is preserved (it records
+  -- when the payer sent it); settled_by records the recipient so they alone can reopen a mistake.
   if new.status = 'confirmed_paid' and old.status <> 'confirmed_paid' then
     if auth.uid() <> old.recipient_id then raise exception 'Only the recipient can confirm this payment'; end if;
     if old.status <> 'marked_paid' then raise exception 'Payment must be marked as paid first'; end if;
+    new.marked_paid_at := coalesce(old.marked_paid_at, now());
     new.confirmed_at := now();
     new.settled_by := old.recipient_id;
     return new;
