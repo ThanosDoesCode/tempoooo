@@ -179,13 +179,14 @@ test("Money keeps exact obligations and week results while using compact respons
   assert.doesNotMatch(html, /text-3xl/);
 });
 
-for (const [mine, status, action] of [
-  [true, "unpaid", "I paid"],
-  [true, "marked_paid", "Waiting · undo"],
-  [false, "marked_paid", "Got it"],
-  [false, "unpaid", null],
+for (const [mine, status, actions] of [
+  [true, "unpaid", ["I paid"]],
+  [true, "marked_paid", ["Undo"]],
+  // Only the recipient can settle; they get both a reject and a confirm action.
+  [false, "marked_paid", ["Not received", "Got it"]],
+  [false, "unpaid", []],
 ]) {
-  test(`Money ${mine ? "payer" : "recipient"} ${status} keeps the existing action/permission branch`, () => {
+  test(`Money ${mine ? "payer" : "recipient"} ${status} keeps the recipient-confirmed settlement branch`, () => {
     const { PaymentItem, payment, week } = moneyFixture();
     const calls = [];
     const tree = PaymentItem({
@@ -197,17 +198,18 @@ for (const [mine, status, action] of [
       pending: false,
       busy: false,
       onMarkPaid: () => calls.push("I paid"),
-      onUndo: () => calls.push("Waiting · undo"),
+      onUndo: () => calls.push("Undo"),
       onConfirm: () => calls.push("Got it"),
+      onReject: () => calls.push("Not received"),
     });
     const buttons = [...walk(tree)].filter((n) => n.type === "button");
-    assert.equal(buttons.length, action ? 1 : 0);
-    if (action) {
-      assert.equal(buttons[0].props.children, action);
-      buttons[0].props.onClick();
-      assert.deepEqual(calls, [action]);
-      assert.match(buttons[0].props.className, /min-h-11/);
-    }
+    assert.equal(buttons.length, actions.length);
+    actions.forEach((label, i) => {
+      assert.equal(buttons[i].props.children, label);
+      buttons[i].props.onClick();
+      assert.match(buttons[i].props.className, /min-h-11/);
+    });
+    assert.deepEqual(calls, actions);
   });
 }
 

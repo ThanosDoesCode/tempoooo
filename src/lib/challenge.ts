@@ -795,17 +795,6 @@ export const eur = (n: number) =>
   `€${new Intl.NumberFormat("en", { maximumFractionDigits: 2 }).format(n)}`;
 export const km = (n: number) => `${n.toFixed(1)} km`;
 
-/** Marks every open obligation of the signed-in payer as settled in one step. */
-export async function settleMyDebts(challengeId: string, userId: string) {
-  const { error } = await supabase
-    .from("challenge_payments")
-    .update({ status: "confirmed_paid" })
-    .eq("challenge_id", challengeId)
-    .eq("payer_id", userId)
-    .neq("status", "confirmed_paid");
-  if (error) throw error;
-}
-
 /** Reopens a settle done by the signed-in user, in case it was a mistake. */
 export async function reopenPayment(paymentId: string) {
   const { error } = await supabase

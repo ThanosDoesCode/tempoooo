@@ -165,6 +165,7 @@ function MoneyContent({ challenge }: { challenge: Challenge }) {
                 onMarkPaid={() => void setStatus(p.id, "marked_paid")}
                 onUndo={() => void setStatus(p.id, "unpaid")}
                 onConfirm={() => void setStatus(p.id, "confirmed_paid")}
+                onReject={() => void setStatus(p.id, "unpaid")}
               />
             ))}
           </div>
@@ -218,7 +219,7 @@ function MoneyContent({ challenge }: { challenge: Challenge }) {
         <p className="text-[13px] font-medium text-muted-foreground">How settling works</p>
         <Step n={1}>Sunday locks the week and works out who owes what.</Step>
         <Step n={2}>The payer pays outside the app and taps “I paid”.</Step>
-        <Step n={3}>The other person taps “Got it” to close it.</Step>
+        <Step n={3}>The recipient taps “Got it” to close it, or “Not received” to reopen it.</Step>
       </Card>
 
       <Note>
@@ -255,6 +256,7 @@ function PaymentItem({
   onMarkPaid,
   onUndo,
   onConfirm,
+  onReject,
 }: {
   payment: PaymentRow;
   week: WeekRow | undefined;
@@ -266,6 +268,7 @@ function PaymentItem({
   onMarkPaid: () => void;
   onUndo: () => void;
   onConfirm: () => void;
+  onReject: () => void;
 }) {
   const amount = owedText(Number(payment.amount_eur), legacyPhotoOwed);
   const title = mine
@@ -278,9 +281,22 @@ function PaymentItem({
   return (
     <div className="flex min-w-0 flex-col gap-2 border-t border-border py-4 first:border-t-0 sm:flex-row sm:items-center sm:gap-4">
       <div className="min-w-0 flex-1">
-        <p className="break-words text-sm font-medium">{title}</p>
+        <p className="break-words text-sm font-medium">
+          {mine && payment.status === "marked_paid"
+            ? `Payment marked as sent to ${name(payment.recipient_id)}`
+            : !mine && payment.status === "marked_paid"
+              ? `${name(payment.payer_id)} says this was paid`
+              : title}
+        </p>
         <Obligation text={amount} />
         {detail ? <p className="mt-0.5 text-[13px] text-muted-foreground">{detail}</p> : null}
+        {payment.status === "marked_paid" ? (
+          <p className="mt-0.5 text-[13px] text-warn">
+            {mine
+              ? `Waiting for ${name(payment.recipient_id)} to confirm.`
+              : "Awaiting your confirmation."}
+          </p>
+        ) : null}
       </div>
       <div className="flex min-w-0 shrink-0 items-center justify-end sm:max-w-[45%]">
         {mine && payment.status === "unpaid" ? (
@@ -300,7 +316,7 @@ function PaymentItem({
             onClick={onUndo}
             className="min-h-11 rounded-lg px-3 text-[13px] font-medium text-muted-foreground disabled:opacity-60"
           >
-            {pending ? <PendingLabel>…</PendingLabel> : "Waiting · undo"}
+            {pending ? <PendingLabel>…</PendingLabel> : "Undo"}
           </button>
         ) : null}
         {!mine && payment.status === "unpaid" ? (
@@ -309,14 +325,24 @@ function PaymentItem({
           </span>
         ) : null}
         {!mine && payment.status === "marked_paid" ? (
-          <button
-            type="button"
-            disabled={busy}
-            onClick={onConfirm}
-            className="min-h-11 rounded-[20px] bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-          >
-            {pending ? <PendingLabel>…</PendingLabel> : "Got it"}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={onReject}
+              className="min-h-11 rounded-lg px-3 text-[13px] font-medium text-muted-foreground disabled:opacity-60"
+            >
+              Not received
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={onConfirm}
+              className="min-h-11 rounded-[20px] bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+            >
+              {pending ? <PendingLabel>…</PendingLabel> : "Got it"}
+            </button>
+          </div>
         ) : null}
       </div>
     </div>
