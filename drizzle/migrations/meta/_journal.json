@@ -29,6 +29,13 @@
       "when": 1792172814162,
       "tag": "0003_contiguous_active_workout_sets",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792282266344,
+      "tag": "0004_recipient_only_payment_settlement",
+      "breakpoints": true
     }
   ]
 }
