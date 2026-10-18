@@ -43,6 +43,13 @@
       "when": 1792289687300,
       "tag": "0005_recover_historical_payer_settled_payment",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792358315665,
+      "tag": "0006_workout_template_table_permissions",
+      "breakpoints": true
     }
   ]
 }
