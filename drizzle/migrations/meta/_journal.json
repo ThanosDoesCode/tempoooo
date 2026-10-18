@@ -36,6 +36,13 @@
       "when": 1792282266344,
       "tag": "0004_recipient_only_payment_settlement",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792289687300,
+      "tag": "0005_recover_historical_payer_settled_payment",
+      "breakpoints": true
     }
   ]
 }
