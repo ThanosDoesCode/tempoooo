@@ -2185,6 +2185,121 @@ export type Database = {
           },
         ]
       }
+      workout_template_exercises: {
+        Row: {
+          exercise_id: string | null
+          exercise_name: string
+          exercise_order: number
+          id: string
+          intended_unilateral_mode: string
+          notes: string | null
+          rep_max: number
+          rep_min: number
+          sets: number
+          source_system_exercise_id: string | null
+          workout_template_id: string
+        }
+        Insert: {
+          exercise_id?: string | null
+          exercise_name: string
+          exercise_order: number
+          id?: string
+          intended_unilateral_mode?: string
+          notes?: string | null
+          rep_max: number
+          rep_min: number
+          sets: number
+          source_system_exercise_id?: string | null
+          workout_template_id: string
+        }
+        Update: {
+          exercise_id?: string | null
+          exercise_name?: string
+          exercise_order?: number
+          id?: string
+          intended_unilateral_mode?: string
+          notes?: string | null
+          rep_max?: number
+          rep_min?: number
+          sets?: number
+          source_system_exercise_id?: string | null
+          workout_template_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workout_template_exercises_exercise_id_fkey"
+            columns: ["exercise_id"]
+            isOneToOne: false
+            referencedRelation: "bulk_exercises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workout_template_exercises_source_system_exercise_id_fkey"
+            columns: ["source_system_exercise_id"]
+            isOneToOne: false
+            referencedRelation: "bulk_exercises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workout_template_exercises_workout_template_id_fkey"
+            columns: ["workout_template_id"]
+            isOneToOne: false
+            referencedRelation: "workout_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workout_templates: {
+        Row: {
+          bulk_profile_id: string | null
+          created_at: string
+          description: string
+          id: string
+          is_system: boolean
+          source_workout_template_id: string | null
+          title: string
+          updated_at: string
+          visibility: string
+        }
+        Insert: {
+          bulk_profile_id?: string | null
+          created_at?: string
+          description?: string
+          id?: string
+          is_system?: boolean
+          source_workout_template_id?: string | null
+          title: string
+          updated_at?: string
+          visibility?: string
+        }
+        Update: {
+          bulk_profile_id?: string | null
+          created_at?: string
+          description?: string
+          id?: string
+          is_system?: boolean
+          source_workout_template_id?: string | null
+          title?: string
+          updated_at?: string
+          visibility?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workout_templates_bulk_profile_id_fkey"
+            columns: ["bulk_profile_id"]
+            isOneToOne: false
+            referencedRelation: "bulk_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workout_templates_source_workout_template_id_fkey"
+            columns: ["source_workout_template_id"]
+            isOneToOne: false
+            referencedRelation: "workout_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -2421,6 +2536,10 @@ export type Database = {
         Args: { _name: string; _request_id?: string }
         Returns: string
       }
+      create_workout_template: {
+        Args: { _request_id?: string; _title: string }
+        Returns: string
+      }
       deactivate_public_goal: { Args: never; Returns: string }
       decline_challenge_invitation: {
         Args: { _caller: string; _invitation: string }
@@ -2439,6 +2558,10 @@ export type Database = {
         Returns: boolean
       }
       delete_legacy_bulk_workout: { Args: { _day: string }; Returns: boolean }
+      delete_workout_template: {
+        Args: { _template_id: string }
+        Returns: boolean
+      }
       disable_challenge_push: { Args: { _caller: string }; Returns: undefined }
       discard_bulk_training_session: {
         Args: { _session: string }
@@ -2447,6 +2570,10 @@ export type Database = {
       duplicate_bulk_meal_preset: { Args: { _meal: string }; Returns: string }
       duplicate_bulk_training_plan: {
         Args: { _plan_id: string; _request_id?: string }
+        Returns: string
+      }
+      duplicate_workout_template: {
+        Args: { _request_id?: string; _template_id: string }
         Returns: string
       }
       ensure_bulk_profile: { Args: { _caller: string }; Returns: string }
@@ -2631,6 +2758,15 @@ export type Database = {
           _weight_kg: number
         }
         Returns: undefined
+      }
+      save_workout_template_exercises: {
+        Args: {
+          _exercises: Json
+          _expected_updated_at: string
+          _template: string
+          _title: string
+        }
+        Returns: string
       }
       search_challenge_invite_users: {
         Args: { _caller: string; _challenge: string; _query: string }
