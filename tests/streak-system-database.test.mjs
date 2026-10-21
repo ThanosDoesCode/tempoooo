@@ -163,18 +163,28 @@ test("canonical settled completed leg => Run closed => week kept and locked", as
   const db = await freshDatabase();
   const owner = await makeUser(db);
   const uid = await makeUser(db);
-  const cid = await createChallenge(db, { createdBy: owner, startDate: "2026-09-28", duration: 4 });
+  // Anchor week 1 to the most-recently-concluded week relative to recompute_streak's live clock, so it
+  // is deterministically the current streak regardless of the real calendar date. (recompute_streak
+  // derives today/cur_week from now(); a hard-coded past date drifts out of the current streak.)
+  const start = (
+    await db.query(
+      "SELECT (date_trunc('week', (now() AT TIME ZONE 'Europe/Athens')::date) - interval '7 days')::date::text AS d",
+    )
+  ).rows[0].d;
+  // Join the day before week 1 starts, unambiguously before the account-week-start instant in any tz.
+  const joined = (await db.query("SELECT ($1::date - 1)::text AS d", [start])).rows[0].d;
+  const cid = await createChallenge(db, { createdBy: owner, startDate: start, duration: 4 });
   await addMember(db, cid, owner, "owner");
-  await addMember(db, cid, uid, "member", "2026-09-28T00:00:00+03");
+  await addMember(db, cid, uid, "member", joined);
   await settleWeek(db, { cid, uid, week: 1, eq: 20, target: 15, completed: true });
   const r = await recompute(db, uid);
-  const past = (await weeksOf(db, uid)).find((w) => w.week_start === "2026-09-28");
+  const leg = (await legsOf(db, uid)).find((l) => l.challenge_week_number === 1);
+  const past = (await weeksOf(db, uid)).find((w) => w.week_start === leg.week_start);
   assert.equal(past.result, "kept");
   assert.equal(past.run_state, "closed");
   assert.ok(past.locked_at);
   assert.equal(r.current, 1);
   assert.equal(r.best, 1);
-  const leg = (await legsOf(db, uid)).find((l) => l.challenge_week_number === 1);
   assert.equal(leg.settlement_state, "completed");
   assert.ok(leg.source_week_id);
 });
