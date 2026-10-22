@@ -57,6 +57,13 @@
       "when": 1792646231979,
       "tag": "0007_challenge_week_exceptions",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792648029463,
+      "tag": "0008_fix_week_adjustments_read_policy",
+      "breakpoints": true
     }
   ]
 }
