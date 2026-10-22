@@ -1670,6 +1670,8 @@ export type Database = {
       challenge_payments: {
         Row: {
           amount_eur: number
+          cancelled_at: string | null
+          cancelled_reason: string | null
           challenge_id: string
           confirmed_at: string | null
           created_at: string
@@ -1684,6 +1686,8 @@ export type Database = {
         }
         Insert: {
           amount_eur: number
+          cancelled_at?: string | null
+          cancelled_reason?: string | null
           challenge_id: string
           confirmed_at?: string | null
           created_at?: string
@@ -1698,6 +1702,8 @@ export type Database = {
         }
         Update: {
           amount_eur?: number
+          cancelled_at?: string | null
+          cancelled_reason?: string | null
           challenge_id?: string
           confirmed_at?: string | null
           created_at?: string
@@ -1783,6 +1789,65 @@ export type Database = {
           },
         ]
       }
+      challenge_week_adjustments: {
+        Row: {
+          challenge_id: string
+          created_at: string
+          evidence_path: string | null
+          id: string
+          kind: string
+          note: string | null
+          original_completed: boolean | null
+          original_penalty_eur: number | null
+          requested_by: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          user_id: string
+          week_number: number
+        }
+        Insert: {
+          challenge_id: string
+          created_at?: string
+          evidence_path?: string | null
+          id?: string
+          kind: string
+          note?: string | null
+          original_completed?: boolean | null
+          original_penalty_eur?: number | null
+          requested_by: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          user_id: string
+          week_number: number
+        }
+        Update: {
+          challenge_id?: string
+          created_at?: string
+          evidence_path?: string | null
+          id?: string
+          kind?: string
+          note?: string | null
+          original_completed?: boolean | null
+          original_penalty_eur?: number | null
+          requested_by?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          user_id?: string
+          week_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "challenge_week_adjustments_challenge_id_fkey"
+            columns: ["challenge_id"]
+            isOneToOne: false
+            referencedRelation: "challenges"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       challenge_week_targets: {
         Row: {
           challenge_id: string
@@ -1825,8 +1890,10 @@ export type Database = {
         Row: {
           challenge_id: string
           completed: boolean
+          corrected_at: string | null
           cycling_km: number
           equivalent_km: number
+          excuse_reason: string | null
           finalized_at: string
           id: string
           pause_country: string | null
@@ -1845,8 +1912,10 @@ export type Database = {
         Insert: {
           challenge_id: string
           completed?: boolean
+          corrected_at?: string | null
           cycling_km?: number
           equivalent_km?: number
+          excuse_reason?: string | null
           finalized_at?: string
           id?: string
           pause_country?: string | null
@@ -1865,8 +1934,10 @@ export type Database = {
         Update: {
           challenge_id?: string
           completed?: boolean
+          corrected_at?: string | null
           cycling_km?: number
           equivalent_km?: number
+          excuse_reason?: string | null
           finalized_at?: string
           id?: string
           pause_country?: string | null
@@ -2334,6 +2405,10 @@ export type Database = {
         Args: { _log_date: string; _profile: string; _timezone: string }
         Returns: Json
       }
+      cancel_challenge_week_exception: {
+        Args: { _adjustment: string }
+        Returns: boolean
+      }
       cancel_pending_challenge: {
         Args: { _caller: string; _challenge: string }
         Returns: boolean
@@ -2707,6 +2782,21 @@ export type Database = {
         Args: { _day: string; _workout_date: string }
         Returns: string
       }
+      request_challenge_week_exception: {
+        Args: {
+          _challenge: string
+          _evidence_path?: string
+          _kind: string
+          _note?: string
+          _request_id?: string
+          _week: number
+        }
+        Returns: string
+      }
+      review_challenge_week_exception: {
+        Args: { _adjustment: string; _approve: boolean }
+        Returns: Json
+      }
       safe_uuid: { Args: { _t: string }; Returns: string }
       save_bulk_targets_for_local_day: {
         Args: { _profile: string; _targets: Json; _timezone: string }
@@ -2877,7 +2967,7 @@ export type Database = {
       activity_kind: "run" | "cycle"
       bulk_role: "owner" | "viewer" | "editor"
       challenge_status: "draft" | "active" | "completed"
-      payment_status: "unpaid" | "marked_paid" | "confirmed_paid"
+      payment_status: "unpaid" | "marked_paid" | "confirmed_paid" | "cancelled"
       streak_leg_state: "pending" | "completed" | "missed" | "paused"
       streak_ring_state: "inactive" | "open" | "closed" | "skipped"
       streak_week_result:
@@ -3017,7 +3107,7 @@ export const Constants = {
       activity_kind: ["run", "cycle"],
       bulk_role: ["owner", "viewer", "editor"],
       challenge_status: ["draft", "active", "completed"],
-      payment_status: ["unpaid", "marked_paid", "confirmed_paid"],
+      payment_status: ["unpaid", "marked_paid", "confirmed_paid", "cancelled"],
       streak_leg_state: ["pending", "completed", "missed", "paused"],
       streak_ring_state: ["inactive", "open", "closed", "skipped"],
       streak_week_result: ["open", "kept", "missed", "paused", "free", "none"],
