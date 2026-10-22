@@ -50,6 +50,13 @@
       "when": 1792358315665,
       "tag": "0006_workout_template_table_permissions",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792646231979,
+      "tag": "0007_challenge_week_exceptions",
+      "breakpoints": true
     }
   ]
 }
