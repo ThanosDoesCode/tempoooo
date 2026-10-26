@@ -43,6 +43,7 @@ import { MainPageHeader } from "@/components/MainPageHeader";
 import { StreakFlame } from "@/components/StreakFlame";
 import { accountProductMode, useMemberships } from "@/lib/bulk-access";
 import { ChallengeParticipantHeading, ChallengeStatus } from "@/components/ChallengeParticipant";
+import { ChallengeWeekExceptions } from "@/components/ChallengeWeekExceptions";
 import { ChallengeInvitations } from "@/components/ChallengeInvitations";
 
 export const Route = createFileRoute("/_authenticated/challenge/")({
@@ -351,6 +352,19 @@ function ChallengeHome() {
 
         {!progressLoading ? <ChallengeStatus penalty={penalty} /> : null}
       </Card>
+
+      {week && week.n >= 1 && opponent && user ? (
+        <div className="mt-3.5">
+          <ChallengeWeekExceptions
+            challengeId={challenge.id}
+            week={week.n}
+            kind="sick"
+            userId={user.id}
+            opponentName={opponent.name}
+            eligible
+          />
+        </div>
+      ) : null}
 
       <Link
         to="/challenge/add"

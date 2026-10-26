@@ -86,6 +86,8 @@ function load(source, modules = {}, globals = {}) {
         return { NotificationBell: "NotificationBell" };
       if (name === "@/components/ChallengeInvitations")
         return { ChallengeInvitations: "ChallengeInvitations" };
+      if (name === "@/components/ChallengeWeekExceptions")
+        return { ChallengeWeekExceptions: "ChallengeWeekExceptions" };
       if (name.includes("ui-kit") || name === "lucide-react")
         return new Proxy({}, { get: (_, key) => String(key) });
       if (name.endsWith("/MainPageHeader") || name === "./MainPageHeader")

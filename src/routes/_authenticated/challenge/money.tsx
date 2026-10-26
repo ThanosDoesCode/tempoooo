@@ -71,8 +71,11 @@ function MoneyContent({ challenge }: { challenge: Challenge }) {
   const [error, setError] = useState<string | null>(null);
 
   const rows = paymentsQuery.data ?? [];
-  const open = rows.filter((p) => p.status !== "confirmed_paid");
+  // Cancelled obligations (reversed by an approved week correction) are not outstanding and never
+  // carry settlement controls; they only appear in history, labelled Cancelled.
+  const open = rows.filter((p) => p.status !== "confirmed_paid" && p.status !== "cancelled");
   const settled = rows.filter((p) => p.status === "confirmed_paid");
+  const cancelled = rows.filter((p) => p.status === "cancelled");
   const iOwe = open
     .filter((p) => p.payer_id === user?.id)
     .reduce((s, p) => s + Number(p.amount_eur), 0);
@@ -139,7 +142,7 @@ function MoneyContent({ challenge }: { challenge: Challenge }) {
 
       {loading ? <div className="h-32 animate-pulse rounded-[20px] bg-card" /> : null}
 
-      {!loading && open.length === 0 && settled.length === 0 ? (
+      {!loading && open.length === 0 && settled.length === 0 && cancelled.length === 0 ? (
         <Card className="px-[18px] py-7 text-center">
           <p className="text-base font-medium">You’re all square</p>
           <p className="mt-1.5 text-sm text-muted-foreground">
@@ -202,6 +205,33 @@ function MoneyContent({ challenge }: { challenge: Challenge }) {
                       {pending === p.id ? <PendingLabel>…</PendingLabel> : "Reopen"}
                     </button>
                   ) : null}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+
+      {cancelled.length ? (
+        <div>
+          <p className="mx-1 mb-1.5 text-[13px] font-medium text-muted-foreground">Cancelled</p>
+          <div className="rounded-[20px] bg-card px-4">
+            {cancelled.map((p) => {
+              const week = weekFor(p.week_id);
+              return (
+                <div
+                  key={p.id}
+                  className="flex min-h-16 items-center gap-3 border-t border-border first:border-t-0"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[15px] font-medium text-muted-foreground line-through">
+                      {name(p.payer_id)} → {name(p.recipient_id)}{" "}
+                      {owedText(Number(p.amount_eur), challenge.legacy_photo_owed)}
+                    </p>
+                    <p className="mt-0.5 text-[13px] text-muted-foreground">
+                      {week ? `Week ${week.week_number} · ` : ""}Cancelled
+                    </p>
+                  </div>
                 </div>
               );
             })}

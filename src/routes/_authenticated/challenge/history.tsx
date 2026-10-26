@@ -189,6 +189,9 @@ function HistoryContent({ challenge }: { challenge: Challenge }) {
 
 function WeekValue({ row }: { row: WeekRow | undefined }) {
   if (!row) return <span className="text-muted-foreground">—</span>;
+  // An approved sick week is excused, not a travel pause and not a plain failure.
+  if (row.excuse_reason === "sick")
+    return <span className="text-muted-foreground">Sick · excused</span>;
   if (row.paused) {
     return (
       <span className="text-muted-foreground">

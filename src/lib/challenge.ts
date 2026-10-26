@@ -733,6 +733,8 @@ export type WeekRow = {
   penalty_consequence: string | null;
   paused: boolean;
   pause_country: string | null;
+  excuse_reason: string | null;
+  corrected_at: string | null;
 };
 
 export type PaymentRow = {
@@ -742,7 +744,7 @@ export type PaymentRow = {
   payer_id: string;
   recipient_id: string;
   amount_eur: number;
-  status: "unpaid" | "marked_paid" | "confirmed_paid";
+  status: "unpaid" | "marked_paid" | "confirmed_paid" | "cancelled";
   payment_evidence_path: string | null;
   settled_by: string | null;
 };

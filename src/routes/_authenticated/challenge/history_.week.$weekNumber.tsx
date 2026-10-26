@@ -16,6 +16,7 @@ import {
   type Activity,
   type WeekRow,
 } from "@/lib/challenge";
+import { ChallengeWeekExceptions } from "@/components/ChallengeWeekExceptions";
 import { countryName } from "@/lib/countries";
 
 export const Route = createFileRoute("/_authenticated/challenge/history_/week/$weekNumber")({
@@ -91,6 +92,21 @@ function FinalizedWeekDetail() {
               activities={activities.filter((activity) => activity.user_id === week.user_id)}
             />
           ))}
+          {user && challenge ? (
+            <ChallengeWeekExceptions
+              challengeId={challenge.id}
+              week={weekNumber}
+              kind="late_completion"
+              userId={user.id}
+              opponentName={
+                membersQuery.data?.find((m) => m.userId !== user.id)?.name ?? "your opponent"
+              }
+              eligible={(() => {
+                const mine = weekRows.find((w) => w.user_id === user.id);
+                return !!mine && !mine.completed && !mine.paused && mine.excuse_reason !== "sick";
+              })()}
+            />
+          ) : null}
           {activitiesQuery.hasNextPage ? (
             <button
               type="button"
@@ -120,13 +136,18 @@ function ParticipantWeek({
   activities: Activity[];
   hasMore: boolean;
 }) {
-  const result = week.paused
-    ? "No penalty"
-    : week.completed
-      ? "Completed · No penalty"
-      : week.penalty_mode === "custom"
-        ? (week.penalty_consequence ?? "Custom consequence")
-        : owedText(Number(week.penalty_eur), legacyPhotoOwed);
+  const result =
+    week.excuse_reason === "sick"
+      ? "Sick · excused"
+      : week.corrected_at && week.completed
+        ? "Late completion approved"
+        : week.paused
+          ? "No penalty"
+          : week.completed
+            ? "Completed · No penalty"
+            : week.penalty_mode === "custom"
+              ? (week.penalty_consequence ?? "Custom consequence")
+              : owedText(Number(week.penalty_eur), legacyPhotoOwed);
   return (
     <Card>
       <SectionTitle
