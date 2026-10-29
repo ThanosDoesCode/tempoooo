@@ -204,9 +204,9 @@ export function WorkoutLibrary({ userId, profileId }: { userId: string; profileI
           ))
         ) : (
           <Card>
-            <h2 className="font-semibold">No workouts yet</h2>
+            <h2 className="font-semibold">Create your first workout</h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              Create a standalone workout to reuse in your training plans later.
+              Save reusable workouts and add them to your training setup.
             </p>
           </Card>
         )}

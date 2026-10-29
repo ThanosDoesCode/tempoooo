@@ -362,8 +362,8 @@ test("empty library explains future reuse, with Create workout and no automatic 
     {},
     { state: { data: [] } },
   );
-  assert.match(ui.text(), /No workouts yet/);
-  assert.match(ui.text(), /reuse in your training plans later/);
+  assert.match(ui.text(), /Create your first workout/);
+  assert.match(ui.text(), /Save reusable workouts and add them to your training setup/);
   assert.ok(button(ui, "Create workout"));
   assert.equal(
     calls.some(([kind]) => kind === "create"),
@@ -595,7 +595,8 @@ test("private routes preserve contextual Back, safe fallback, primary ownership 
   await ui.flush();
   assert.equal(calls.find(([kind]) => kind === "navigate")[1].replace, true);
   const trainingSource = await read("src/routes/_authenticated/bulk/training.tsx");
-  assert.match(trainingSource, /usesPlanSetup \? \([\s\S]*My plans[\s\S]*My workouts/);
+  assert.match(trainingSource, /usesPlanSetup \? \([\s\S]*My workouts/);
+  assert.doesNotMatch(trainingSource, /My plans|\/bulk\/training\/plans/);
   assert.doesNotMatch(
     await read("src/routes/_authenticated/challenge/new.tsx"),
     /My workouts|workout_templates/,

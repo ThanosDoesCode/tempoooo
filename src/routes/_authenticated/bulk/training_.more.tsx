@@ -43,7 +43,7 @@ function TrainingMorePage() {
 
   return (
     <AppShell>
-      <PageHeader title="Your plan" historyBack backTo="/bulk/training" backLabel="Training" />
+      <PageHeader title="Plan and setup" historyBack backTo="/bulk/training" backLabel="Training" />
 
       {usesPlanSetup && activePlan.isLoading ? (
         <div className="h-48 animate-pulse rounded-2xl bg-card" />
@@ -160,7 +160,15 @@ function TrainingMorePage() {
           </div>
         )
       ) : usesPlanSetup && data ? (
-        <TrainingPlanSetup targets={data.targets} />
+        <div className="space-y-[14px]">
+          <Card>
+            <h2 className="font-semibold">Configure your training schedule</h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Choose a program or create your own setup.
+            </p>
+          </Card>
+          <TrainingPlanSetup targets={data.targets} />
+        </div>
       ) : (
         <Card>
           <SectionTitle>Legacy training</SectionTitle>
@@ -170,6 +178,14 @@ function TrainingMorePage() {
           </p>
         </Card>
       )}
+
+      {usesPlanSetup && !editing ? (
+        <Button asChild variant="outline" className="mt-3 min-h-11 w-full">
+          <Link to="/bulk/training/plans" preload="intent">
+            Manage training plans
+          </Link>
+        </Button>
+      ) : null}
 
       {!editing ? (
         <Link

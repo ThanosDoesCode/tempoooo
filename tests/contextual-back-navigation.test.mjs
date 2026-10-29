@@ -178,7 +178,7 @@ const flows = [
     "/bulk/training/more?panel=plan",
     "bulk/training_.more.tsx",
     "/bulk/training",
-    "Your plan",
+    "Plan and setup",
   ],
   [
     "/bulk/training",

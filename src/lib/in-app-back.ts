@@ -72,7 +72,7 @@ export function inAppBackLabel(path: string): string | undefined {
     "/notifications": "Notifications",
     "/bulk/morning": "Morning check-in",
     "/bulk/training": "Training",
-    "/bulk/training/more": "Your plan",
+    "/bulk/training/more": "Plan and setup",
     "/bulk/training/workouts": "My workouts",
     "/bulk/training/history": "History",
     "/bulk/prs": "Personal records",
