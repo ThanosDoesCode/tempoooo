@@ -57,6 +57,7 @@ import { Route as AuthenticatedBulkProgressStrengthRouteImport } from './routes/
 import { Route as AuthenticatedBulkTrainingHistoryRouteImport } from './routes/_authenticated/bulk/training_.history'
 import { Route as AuthenticatedBulkTrainingMoreRouteImport } from './routes/_authenticated/bulk/training_.more'
 import { Route as AuthenticatedBulkTrainingPlansRouteImport } from './routes/_authenticated/bulk/training_.plans'
+import { Route as AuthenticatedBulkTrainingWorkoutsRouteImport } from './routes/_authenticated/bulk/training_.workouts'
 import { Route as AuthenticatedBulkWorkoutSessionIdRouteImport } from './routes/_authenticated/bulk/workout.$sessionId'
 import { Route as AuthenticatedChallengeActivityActivityIdRouteImport } from './routes/_authenticated/challenge/activity.$activityId'
 import { Route as AuthenticatedChallengeTermsOverrideRouteImport } from './routes/_authenticated/challenge/terms_.override'
@@ -64,6 +65,7 @@ import { Route as AuthenticatedChallengeTermsPauseRouteImport } from './routes/_
 import { Route as AuthenticatedInviteChallengeTokenRouteImport } from './routes/_authenticated/invite.challenge.$token'
 import { Route as AuthenticatedBulkProgressBodyFoodRouteImport } from './routes/_authenticated/bulk/progress_.body_.food'
 import { Route as AuthenticatedBulkProgressStrengthLiftRouteImport } from './routes/_authenticated/bulk/progress_.strength_.$lift'
+import { Route as AuthenticatedBulkTrainingWorkoutsWorkoutIdRouteImport } from './routes/_authenticated/bulk/training_.workouts_.$workoutId'
 import { Route as AuthenticatedChallengeHistoryWeekWeekNumberRouteImport } from './routes/_authenticated/challenge/history_.week.$weekNumber'
 
 const IndexRoute = IndexRouteImport.update({
@@ -339,6 +341,12 @@ const AuthenticatedBulkTrainingPlansRoute =
     path: '/training/plans',
     getParentRoute: () => AuthenticatedBulkRouteRoute,
   } as any)
+const AuthenticatedBulkTrainingWorkoutsRoute =
+  AuthenticatedBulkTrainingWorkoutsRouteImport.update({
+    id: '/training_/workouts',
+    path: '/training/workouts',
+    getParentRoute: () => AuthenticatedBulkRouteRoute,
+  } as any)
 const AuthenticatedBulkWorkoutSessionIdRoute =
   AuthenticatedBulkWorkoutSessionIdRouteImport.update({
     id: '/workout/$sessionId',
@@ -379,6 +387,12 @@ const AuthenticatedBulkProgressStrengthLiftRoute =
   AuthenticatedBulkProgressStrengthLiftRouteImport.update({
     id: '/progress_/strength_/$lift',
     path: '/progress/strength/$lift',
+    getParentRoute: () => AuthenticatedBulkRouteRoute,
+  } as any)
+const AuthenticatedBulkTrainingWorkoutsWorkoutIdRoute =
+  AuthenticatedBulkTrainingWorkoutsWorkoutIdRouteImport.update({
+    id: '/training_/workouts_/$workoutId',
+    path: '/training/workouts/$workoutId',
     getParentRoute: () => AuthenticatedBulkRouteRoute,
   } as any)
 const AuthenticatedChallengeHistoryWeekWeekNumberRoute =
@@ -436,6 +450,7 @@ export interface FileRoutesByFullPath {
   '/bulk/training/history': typeof AuthenticatedBulkTrainingHistoryRoute
   '/bulk/training/more': typeof AuthenticatedBulkTrainingMoreRoute
   '/bulk/training/plans': typeof AuthenticatedBulkTrainingPlansRoute
+  '/bulk/training/workouts': typeof AuthenticatedBulkTrainingWorkoutsRoute
   '/bulk/workout/$sessionId': typeof AuthenticatedBulkWorkoutSessionIdRoute
   '/challenge/activity/$activityId': typeof AuthenticatedChallengeActivityActivityIdRoute
   '/challenge/terms/override': typeof AuthenticatedChallengeTermsOverrideRoute
@@ -443,6 +458,7 @@ export interface FileRoutesByFullPath {
   '/invite/challenge/$token': typeof AuthenticatedInviteChallengeTokenRoute
   '/bulk/progress/body/food': typeof AuthenticatedBulkProgressBodyFoodRoute
   '/bulk/progress/strength/$lift': typeof AuthenticatedBulkProgressStrengthLiftRoute
+  '/bulk/training/workouts/$workoutId': typeof AuthenticatedBulkTrainingWorkoutsWorkoutIdRoute
   '/challenge/history/week/$weekNumber': typeof AuthenticatedChallengeHistoryWeekWeekNumberRoute
 }
 export interface FileRoutesByTo {
@@ -492,6 +508,7 @@ export interface FileRoutesByTo {
   '/bulk/training/history': typeof AuthenticatedBulkTrainingHistoryRoute
   '/bulk/training/more': typeof AuthenticatedBulkTrainingMoreRoute
   '/bulk/training/plans': typeof AuthenticatedBulkTrainingPlansRoute
+  '/bulk/training/workouts': typeof AuthenticatedBulkTrainingWorkoutsRoute
   '/bulk/workout/$sessionId': typeof AuthenticatedBulkWorkoutSessionIdRoute
   '/challenge/activity/$activityId': typeof AuthenticatedChallengeActivityActivityIdRoute
   '/challenge/terms/override': typeof AuthenticatedChallengeTermsOverrideRoute
@@ -499,6 +516,7 @@ export interface FileRoutesByTo {
   '/invite/challenge/$token': typeof AuthenticatedInviteChallengeTokenRoute
   '/bulk/progress/body/food': typeof AuthenticatedBulkProgressBodyFoodRoute
   '/bulk/progress/strength/$lift': typeof AuthenticatedBulkProgressStrengthLiftRoute
+  '/bulk/training/workouts/$workoutId': typeof AuthenticatedBulkTrainingWorkoutsWorkoutIdRoute
   '/challenge/history/week/$weekNumber': typeof AuthenticatedChallengeHistoryWeekWeekNumberRoute
 }
 export interface FileRoutesById {
@@ -551,6 +569,7 @@ export interface FileRoutesById {
   '/_authenticated/bulk/training_/history': typeof AuthenticatedBulkTrainingHistoryRoute
   '/_authenticated/bulk/training_/more': typeof AuthenticatedBulkTrainingMoreRoute
   '/_authenticated/bulk/training_/plans': typeof AuthenticatedBulkTrainingPlansRoute
+  '/_authenticated/bulk/training_/workouts': typeof AuthenticatedBulkTrainingWorkoutsRoute
   '/_authenticated/bulk/workout/$sessionId': typeof AuthenticatedBulkWorkoutSessionIdRoute
   '/_authenticated/challenge/activity/$activityId': typeof AuthenticatedChallengeActivityActivityIdRoute
   '/_authenticated/challenge/terms_/override': typeof AuthenticatedChallengeTermsOverrideRoute
@@ -558,6 +577,7 @@ export interface FileRoutesById {
   '/_authenticated/invite/challenge/$token': typeof AuthenticatedInviteChallengeTokenRoute
   '/_authenticated/bulk/progress_/body_/food': typeof AuthenticatedBulkProgressBodyFoodRoute
   '/_authenticated/bulk/progress_/strength_/$lift': typeof AuthenticatedBulkProgressStrengthLiftRoute
+  '/_authenticated/bulk/training_/workouts_/$workoutId': typeof AuthenticatedBulkTrainingWorkoutsWorkoutIdRoute
   '/_authenticated/challenge/history_/week/$weekNumber': typeof AuthenticatedChallengeHistoryWeekWeekNumberRoute
 }
 export interface FileRouteTypes {
@@ -610,6 +630,7 @@ export interface FileRouteTypes {
     | '/bulk/training/history'
     | '/bulk/training/more'
     | '/bulk/training/plans'
+    | '/bulk/training/workouts'
     | '/bulk/workout/$sessionId'
     | '/challenge/activity/$activityId'
     | '/challenge/terms/override'
@@ -617,6 +638,7 @@ export interface FileRouteTypes {
     | '/invite/challenge/$token'
     | '/bulk/progress/body/food'
     | '/bulk/progress/strength/$lift'
+    | '/bulk/training/workouts/$workoutId'
     | '/challenge/history/week/$weekNumber'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -666,6 +688,7 @@ export interface FileRouteTypes {
     | '/bulk/training/history'
     | '/bulk/training/more'
     | '/bulk/training/plans'
+    | '/bulk/training/workouts'
     | '/bulk/workout/$sessionId'
     | '/challenge/activity/$activityId'
     | '/challenge/terms/override'
@@ -673,6 +696,7 @@ export interface FileRouteTypes {
     | '/invite/challenge/$token'
     | '/bulk/progress/body/food'
     | '/bulk/progress/strength/$lift'
+    | '/bulk/training/workouts/$workoutId'
     | '/challenge/history/week/$weekNumber'
   id:
     | '__root__'
@@ -724,6 +748,7 @@ export interface FileRouteTypes {
     | '/_authenticated/bulk/training_/history'
     | '/_authenticated/bulk/training_/more'
     | '/_authenticated/bulk/training_/plans'
+    | '/_authenticated/bulk/training_/workouts'
     | '/_authenticated/bulk/workout/$sessionId'
     | '/_authenticated/challenge/activity/$activityId'
     | '/_authenticated/challenge/terms_/override'
@@ -731,6 +756,7 @@ export interface FileRouteTypes {
     | '/_authenticated/invite/challenge/$token'
     | '/_authenticated/bulk/progress_/body_/food'
     | '/_authenticated/bulk/progress_/strength_/$lift'
+    | '/_authenticated/bulk/training_/workouts_/$workoutId'
     | '/_authenticated/challenge/history_/week/$weekNumber'
   fileRoutesById: FileRoutesById
 }
@@ -1078,6 +1104,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedBulkTrainingPlansRouteImport
       parentRoute: typeof AuthenticatedBulkRouteRoute
     }
+    '/_authenticated/bulk/training_/workouts': {
+      id: '/_authenticated/bulk/training_/workouts'
+      path: '/training/workouts'
+      fullPath: '/bulk/training/workouts'
+      preLoaderRoute: typeof AuthenticatedBulkTrainingWorkoutsRouteImport
+      parentRoute: typeof AuthenticatedBulkRouteRoute
+    }
     '/_authenticated/bulk/workout/$sessionId': {
       id: '/_authenticated/bulk/workout/$sessionId'
       path: '/workout/$sessionId'
@@ -1127,6 +1160,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedBulkProgressStrengthLiftRouteImport
       parentRoute: typeof AuthenticatedBulkRouteRoute
     }
+    '/_authenticated/bulk/training_/workouts_/$workoutId': {
+      id: '/_authenticated/bulk/training_/workouts_/$workoutId'
+      path: '/training/workouts/$workoutId'
+      fullPath: '/bulk/training/workouts/$workoutId'
+      preLoaderRoute: typeof AuthenticatedBulkTrainingWorkoutsWorkoutIdRouteImport
+      parentRoute: typeof AuthenticatedBulkRouteRoute
+    }
     '/_authenticated/challenge/history_/week/$weekNumber': {
       id: '/_authenticated/challenge/history_/week/$weekNumber'
       path: '/challenge/history/week/$weekNumber'
@@ -1161,9 +1201,11 @@ interface AuthenticatedBulkRouteRouteChildren {
   AuthenticatedBulkTrainingHistoryRoute: typeof AuthenticatedBulkTrainingHistoryRoute
   AuthenticatedBulkTrainingMoreRoute: typeof AuthenticatedBulkTrainingMoreRoute
   AuthenticatedBulkTrainingPlansRoute: typeof AuthenticatedBulkTrainingPlansRoute
+  AuthenticatedBulkTrainingWorkoutsRoute: typeof AuthenticatedBulkTrainingWorkoutsRoute
   AuthenticatedBulkWorkoutSessionIdRoute: typeof AuthenticatedBulkWorkoutSessionIdRoute
   AuthenticatedBulkProgressBodyFoodRoute: typeof AuthenticatedBulkProgressBodyFoodRoute
   AuthenticatedBulkProgressStrengthLiftRoute: typeof AuthenticatedBulkProgressStrengthLiftRoute
+  AuthenticatedBulkTrainingWorkoutsWorkoutIdRoute: typeof AuthenticatedBulkTrainingWorkoutsWorkoutIdRoute
 }
 
 const AuthenticatedBulkRouteRouteChildren: AuthenticatedBulkRouteRouteChildren =
@@ -1194,12 +1236,16 @@ const AuthenticatedBulkRouteRouteChildren: AuthenticatedBulkRouteRouteChildren =
       AuthenticatedBulkTrainingHistoryRoute,
     AuthenticatedBulkTrainingMoreRoute: AuthenticatedBulkTrainingMoreRoute,
     AuthenticatedBulkTrainingPlansRoute: AuthenticatedBulkTrainingPlansRoute,
+    AuthenticatedBulkTrainingWorkoutsRoute:
+      AuthenticatedBulkTrainingWorkoutsRoute,
     AuthenticatedBulkWorkoutSessionIdRoute:
       AuthenticatedBulkWorkoutSessionIdRoute,
     AuthenticatedBulkProgressBodyFoodRoute:
       AuthenticatedBulkProgressBodyFoodRoute,
     AuthenticatedBulkProgressStrengthLiftRoute:
       AuthenticatedBulkProgressStrengthLiftRoute,
+    AuthenticatedBulkTrainingWorkoutsWorkoutIdRoute:
+      AuthenticatedBulkTrainingWorkoutsWorkoutIdRoute,
   }
 
 const AuthenticatedBulkRouteRouteWithChildren =

@@ -89,24 +89,33 @@ export function validateTrainingPlanDraft(plan: EditableTrainingPlan): string[] 
   plan.days.forEach((day, dayIndex) => {
     if (!day.name.trim() || day.name.trim().length > 60)
       errors.push(`Day ${dayIndex + 1} needs a valid name.`);
-    if (day.exercises.length > 20)
-      errors.push(`${day.name || `Day ${dayIndex + 1}`} can contain up to 20 exercises.`);
-    day.exercises.forEach((exercise) => {
-      if (!Number.isInteger(exercise.sets) || exercise.sets < 1 || exercise.sets > 10)
-        errors.push(`${exercise.name}: sets must be between 1 and 10.`);
-      if (
-        !Number.isInteger(exercise.repMin) ||
-        !Number.isInteger(exercise.repMax) ||
-        exercise.repMin < 1 ||
-        exercise.repMax > 100 ||
-        exercise.repMin > exercise.repMax
-      )
-        errors.push(`${exercise.name}: enter a valid rep range from 1 to 100.`);
-      if (exercise.intendedUnilateralMode === "unilateral" && !exercise.supportsUnilateral)
-        errors.push(`${exercise.name} does not support unilateral mode.`);
-      if ((exercise.notes?.length ?? 0) > 240)
-        errors.push(`${exercise.name}: notes must be 240 characters or less.`);
-    });
+    errors.push(...validateTrainingExercises(day.exercises, day.name || `Day ${dayIndex + 1}`));
+  });
+  return errors;
+}
+
+/** Same executable prescriptions for plan days and standalone workouts. */
+export function validateTrainingExercises(
+  exercises: TrainingPlanExercise[],
+  name: string,
+): string[] {
+  const errors: string[] = [];
+  if (exercises.length > 20) errors.push(`${name} can contain up to 20 exercises.`);
+  exercises.forEach((exercise) => {
+    if (!Number.isInteger(exercise.sets) || exercise.sets < 1 || exercise.sets > 10)
+      errors.push(`${exercise.name}: sets must be between 1 and 10.`);
+    if (
+      !Number.isInteger(exercise.repMin) ||
+      !Number.isInteger(exercise.repMax) ||
+      exercise.repMin < 1 ||
+      exercise.repMax > 100 ||
+      exercise.repMin > exercise.repMax
+    )
+      errors.push(`${exercise.name}: enter a valid rep range from 1 to 100.`);
+    if (exercise.intendedUnilateralMode === "unilateral" && !exercise.supportsUnilateral)
+      errors.push(`${exercise.name} does not support unilateral mode.`);
+    if ((exercise.notes?.length ?? 0) > 240)
+      errors.push(`${exercise.name}: notes must be 240 characters or less.`);
   });
   return errors;
 }

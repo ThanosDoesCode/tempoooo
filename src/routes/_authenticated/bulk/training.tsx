@@ -273,6 +273,11 @@ function TrainingPage() {
                   : "Manage your plans",
               },
               {
+                to: "/bulk/training/workouts",
+                label: "My workouts",
+                hint: "Your reusable workouts",
+              },
+              {
                 to: "/bulk/training/more",
                 label: "Plan and setup",
                 hint: "Change your active plan",

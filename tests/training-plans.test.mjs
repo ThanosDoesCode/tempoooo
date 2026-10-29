@@ -244,12 +244,14 @@ test("training UI supports generated, preset and empty custom paths without repl
   assert.match(editor, /days[\s\S]*\.filter\(\(day\) => day\.id === selectedDayId\)/);
   assert.match(editor, /Save and return/);
   assert.match(editor, /Add Workout Day/);
-  assert.match(editor, /Add Exercise/);
+  const sharedEditor = await read("src/components/WorkoutExerciseListEditor.tsx");
+  assert.match(editor, /WorkoutExerciseListEditor/);
+  assert.match(sharedEditor, /Add Exercise/);
   assert.match(editor, /Historical workouts will stay unchanged/);
   assert.match(editor, /Move .* up/);
   assert.match(editor, /Move .* down/);
-  assert.match(editor, /Replace/);
-  assert.match(editor, /Execution mode/);
+  assert.match(sharedEditor, /Replace/);
+  assert.match(sharedEditor, /Execution mode/);
   assert.match(picker, /createCustomExercise/);
   assert.match(picker, /useExerciseLibrary/);
   assert.match(editMigration, /save_bulk_training_plan/);
