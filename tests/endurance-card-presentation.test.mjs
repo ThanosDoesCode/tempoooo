@@ -1,24 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import vm from "node:vm";
-import ts from "typescript";
-import { accountUI } from "./account-ui-fixture.mjs";
-import { enduranceSummary, runningPeriodStats } from "../src/lib/endurance-progress.ts";
-import { fmt, fmt0 } from "../src/lib/calc.ts";
-
-// Use the actual shared formatter, including its unit, so duplicated units cannot hide in a mock.
-const context = { exports: {} };
-const formatter = readFileSync(new URL("../src/lib/challenge.ts", import.meta.url), "utf8").match(
-  /export function formatPace[\s\S]*?\n}/,
-)[0];
-vm.runInNewContext(
-  ts.transpileModule(formatter, {
-    compilerOptions: { module: ts.ModuleKind.CommonJS },
-  }).outputText,
-  context,
-);
-const { formatPace } = context.exports;
+import { enduranceUI, formatPace, activityButton as button } from "./endurance-ui-fixture.mjs";
+import { runningPeriodStats } from "../src/lib/endurance-progress.ts";
 const range = { start: "2026-09-01", end: "2026-09-30" };
 const activity = (id, date, distance, duration) => ({
   id,
@@ -30,49 +13,9 @@ const activity = (id, date, distance, duration) => ({
   duration_seconds: duration,
 });
 const activities = [activity("a", "2026-09-07", 5, 1500), activity("b", "2026-09-21", 5, 1740)];
-const weeks = [
-  { user_id: "me", week_number: 1, week_start: "2026-09-07", equivalent_km: 15.1, target_km: 15 },
-  { user_id: "me", week_number: 2, week_start: "2026-09-14", equivalent_km: 18.6, target_km: 20 },
-  {
-    user_id: "me",
-    week_number: 4,
-    week_start: "2026-09-28",
-    equivalent_km: 0,
-    target_km: 20,
-    paused: true,
-  },
-];
-function fixture({ values = activities, recordedWeeks = weeks, previous = null } = {}) {
-  return accountUI(
-    "src/routes/_authenticated/bulk/progress_.endurance.tsx",
-    "EnduranceBody",
-    {
-      recharts: Object.fromEntries(
-        ["Line", "LineChart", "ResponsiveContainer", "Tooltip", "XAxis", "YAxis"].map((n) => [
-          n,
-          n,
-        ]),
-      ),
-      "@/components/ProgressChartTooltip": { ProgressChartTooltip: "ProgressChartTooltip" },
-      "@/components/ProgressChrome": {},
-      "@/lib/progress-view": { chartAxis: {}, chartTooltip: {} },
-      "@/lib/calc": { fmt, fmt0 },
-      "@/lib/auth": {},
-      "@/lib/challenge": { formatPace },
-      "@/lib/endurance-progress": {},
-      "@/lib/progress-period": {},
-    },
-    {
-      summary: enduranceSummary(recordedWeeks, "me", range),
-      runs: runningPeriodStats(values, "me", range, previous),
-      rival: {},
-      opponent: null,
-      moneyLine: null,
-    },
-  );
+function fixture({ values = activities, previous = null } = {}) {
+  return enduranceUI({ values, range, previous });
 }
-const button = (ui, prefix) =>
-  ui.find("button").find((n) => n.props["aria-label"]?.startsWith(prefix));
 
 test("pace hierarchy uses one unit, the real timed count and only one selected-run detail panel", () => {
   const ui = fixture({ values: [...activities, activity("untimed", "2026-09-23", 5, null)] });
@@ -150,7 +93,7 @@ for (const [label, duration, expected] of [
 }
 
 test("no activities keeps the intentional empty state", () => {
-  assert.match(fixture({ values: [], recordedWeeks: [] }).text(), /No activities yet/);
+  assert.match(fixture({ values: [], recordedWeeks: [] }).text(), /No runs yet/);
 });
 
 test("previous-period comparison keeps weighted semantics and only shows a valid concise comparison", () => {
@@ -167,30 +110,28 @@ test("previous-period comparison keeps weighted semantics and only shows a valid
   assert.match(slower.text(), /24 sec\/km slower than previous period/);
 });
 
-test("weekly hierarchy removes repeated status/target copy until an actual week is selected", () => {
+test("weekly hierarchy shows raw running distance without Challenge targets or converted values", () => {
   const ui = fixture();
-  assert.match(ui.text(), /16.9 km\/weekTarget 20 km1\/2 weeks hit1 paused week/);
-  assert.doesNotMatch(
-    ui.text(),
-    /a week, on average|Latest target \d|Challenge-equivalent km|Dashed markers|Target 15/,
-  );
-  assert.equal(ui.find("button").filter((n) => n.props["aria-pressed"] === true).length, 0);
+  assert.match(ui.text(), /Weekly running distance2.3 km\/week/);
+  assert.doesNotMatch(ui.text(), /Target|weeks hit|paused week|equivalent|Dashed markers/);
+  assert.equal(ui.find("button").filter((n) => n.props["aria-label"]?.includes("km,")).length, 4);
   const bar = button(ui, "7 Sep:");
-  assert.match(bar.props["aria-label"], /15.1 km, target 15.0 km, Hit/);
-  assert.match(bar.props.className, /min-h-11 min-w-11/);
+  assert.match(bar.props["aria-label"], /5.0 km, 1 run/);
+  assert.match(bar.props.className, /min-h-11 min-w-0/);
   bar.props.onClick();
-  assert.match(ui.text(), /7 Sep15.1 km · Target 15 kmHit/);
+  assert.match(ui.text(), /Week of 7 Sep5.0 km · 1 run/);
   assert.equal(button(ui, "7 Sep:").props["aria-pressed"], true);
 });
 
-test("weekly focus/hover details preserve historical targets, misses, pauses, zero activity and missing-week information", () => {
+test("weekly focus/hover details show real zero-activity weeks, with earlier weeks explicitly reachable", () => {
   const ui = fixture();
   button(ui, "14 Sep:").props.onFocus();
-  assert.match(ui.text(), /18.6 km · Target 20 kmMissed by 1.4 km/);
+  assert.match(ui.text(), /Week of 14 Sep0.0 km · 0 runs/);
   button(ui, "28 Sep:").props.onMouseEnter();
-  assert.match(ui.text(), /0.0 km · Target 20 kmPaused/);
-  assert.match(button(ui, "28 Sep:").props["aria-label"], /missing week data/);
-  const noActivity = fixture({ recordedWeeks: [{ ...weeks[0], equivalent_km: 0 }] });
-  button(noActivity, "7 Sep:").props.onClick();
-  assert.match(noActivity.text(), /No activity · Missed by 15.0 km/);
+  assert.match(ui.text(), /Week of 28 Sep0.0 km · 0 runs/);
+  button(ui, "Previous weeks").props.onClick();
+  assert.ok(button(ui, "31 Aug:"));
+  assert.equal(button(ui, "Previous weeks").props.disabled, true);
+  button(ui, "Next weeks").props.onClick();
+  assert.ok(button(ui, "28 Sep:"));
 });

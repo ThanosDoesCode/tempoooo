@@ -350,14 +350,14 @@ test("pace tooltip shows real date, distance, pace and duration; compact run con
   assert.match(html, /5:16 \/km/);
   assert.match(html, /5.8 km · 30:32/);
   const source = await read("src/routes/_authenticated/bulk/progress_.endurance.tsx");
-  assert.match(source, /aria-label="Previous run"/);
-  assert.match(source, /aria-label="Next run"/);
+  assert.match(source, /aria-label=\{`Previous \$\{activityLabel\}`\}/);
+  assert.match(source, /aria-label=\{`Next \$\{activityLabel\}`\}/);
   assert.doesNotMatch(source, /NativeSelect/);
-  assert.match(source, /setSelectedRun/);
+  assert.match(source, /choosePoint/);
   assert.match(source, /h-32/);
   assert.doesNotMatch(source, /Dashed markers show each week/);
   assert.match(source, /than previous period/);
-  assert.match(source, /missing week data/);
+  assert.match(source, /Weekly \$\{riding \? "cycling" : "running"\}/);
   assert.doesNotMatch(source, /Sparkline|Ride speed/);
 });
 

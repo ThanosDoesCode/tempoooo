@@ -230,16 +230,16 @@ test("Overview keeps honest empty states instead of hiding product areas", async
 
 // --------------------------------------------------------------- Endurance
 
-test("Endurance uses existing challenge data only and reuses challenge helpers", async () => {
+test("Endurance uses complete canonical activities for separate raw running and cycling views", async () => {
   const endurance = await read("src/routes/_authenticated/bulk/progress_.endurance.tsx");
-  assert.match(endurance, /useWeeks\(challengeId\)/);
   assert.match(endurance, /useMyChallenge\(\)/);
-  assert.match(endurance, /enduranceSummary\(/);
-  assert.match(endurance, /rivalComparison\(/);
   assert.match(endurance, /runningPeriodStats\(/);
-  // Money comes from the stored payment rows, not a re-derivation.
-  assert.match(endurance, /usePayments\(challengeId\)/);
-  // Deep-link safe empty state when there is no challenge.
+  assert.match(endurance, /cyclingPeriodStats\(/);
+  assert.match(endurance, /rawWeeklyDistance\(/);
+  assert.doesNotMatch(
+    endurance,
+    /useWeeks|usePayments|rivalComparison|enduranceSummary|equivalent_km/,
+  );
   assert.match(endurance, /No challenge yet/);
 });
 

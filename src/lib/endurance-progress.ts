@@ -1,5 +1,7 @@
 import { inProgressRange, progressRangeDays, type ProgressRange } from "./progress-period.ts";
 import type { Activity, WeekRow } from "./challenge.ts";
+import { addDays, startOfWeek, parseISO } from "date-fns";
+import { iso } from "./calc.ts";
 
 export type EnduranceBar = {
   weekNumber: number;
@@ -230,5 +232,105 @@ export function runningPeriodStats(
     previousPace,
     paceChange: pace != null && previousPace != null ? previousPace - pace : null,
     runsPerWeek: selected.length && spanDays >= 7 ? selected.length / (spanDays / 7) : null,
+  };
+}
+
+/** Raw cycling only. The stored duration is the only timing source; never use Challenge km. */
+export function cyclingPeriodStats(
+  activities: Activity[],
+  userId: string,
+  range: ProgressRange,
+  previous: ProgressRange | null = null,
+) {
+  const rides = activities
+    .filter(
+      (a) =>
+        a.user_id === userId &&
+        a.activity_type === "cycle" &&
+        Number.isFinite(Number(a.distance_km)) &&
+        Number(a.distance_km) > 0,
+    )
+    .sort(
+      (a, b) =>
+        a.activity_date.localeCompare(b.activity_date) ||
+        a.created_at.localeCompare(b.created_at) ||
+        a.id.localeCompare(b.id),
+    );
+  const selected = rides.filter((a) => inProgressRange(a.activity_date, range));
+  const isTimed = (a: Activity) =>
+    Number.isFinite(Number(a.duration_seconds)) && Number(a.duration_seconds) > 0;
+  const points = selected.filter(isTimed).map((a) => ({
+    id: a.id,
+    date: a.activity_date,
+    distanceKm: Number(a.distance_km),
+    durationSeconds: Number(a.duration_seconds),
+    speed: (Number(a.distance_km) * 3600) / Number(a.duration_seconds),
+  }));
+  const averageSpeed = (values: Activity[]) => {
+    const timed = values.filter(isTimed);
+    const seconds = timed.reduce((sum, a) => sum + Number(a.duration_seconds), 0);
+    return seconds > 0
+      ? (timed.reduce((sum, a) => sum + Number(a.distance_km), 0) * 3600) / seconds
+      : null;
+  };
+  const speed = averageSpeed(selected);
+  const previousSpeed = previous
+    ? averageSpeed(rides.filter((a) => inProgressRange(a.activity_date, previous)))
+    : null;
+  const spanDays = progressRangeDays(range, selected[0]?.activity_date);
+  return {
+    points,
+    rides: selected.length,
+    distanceKm: selected.reduce((sum, a) => sum + Number(a.distance_km), 0),
+    longestRideKm: selected.length ? Math.max(...selected.map((a) => Number(a.distance_km))) : null,
+    durationSeconds: points.length ? points.reduce((sum, p) => sum + p.durationSeconds, 0) : null,
+    untimedRides: selected.length - points.length,
+    speed,
+    previousSpeed,
+    speedChange: speed != null && previousSpeed != null ? speed - previousSpeed : null,
+    ridesPerWeek: selected.length && spanDays >= 7 ? selected.length / (spanDays / 7) : null,
+  };
+}
+
+/** Calendar weeks of raw distance, including zero-activity weeks inside the selected range.
+ * No Challenge qualification, conversion, target or pause affects these activity totals.
+ */
+export function rawWeeklyDistance(
+  activities: Activity[],
+  userId: string,
+  range: ProgressRange,
+  type: "run" | "cycle",
+) {
+  const selected = activities.filter(
+    (a) =>
+      a.user_id === userId &&
+      a.activity_type === type &&
+      inProgressRange(a.activity_date, range) &&
+      Number.isFinite(Number(a.distance_km)) &&
+      Number(a.distance_km) > 0,
+  );
+  const first = range.start ?? selected.map((a) => a.activity_date).sort()[0];
+  if (!first) return { bars: [], kmPerWeek: null };
+  const grouped = new Map<string, { date: string; distanceKm: number; count: number }>();
+  for (
+    let day = startOfWeek(parseISO(first), { weekStartsOn: 1 });
+    iso(day) <= range.end;
+    day = addDays(day, 7)
+  ) {
+    const date = iso(day);
+    grouped.set(date, { date, distanceKm: 0, count: 0 });
+  }
+  for (const activity of selected) {
+    const date = iso(startOfWeek(parseISO(activity.activity_date), { weekStartsOn: 1 }));
+    const bar = grouped.get(date)!;
+    bar.distanceKm += Number(activity.distance_km);
+    bar.count++;
+  }
+  const days = progressRangeDays(range, first);
+  return {
+    bars: [...grouped.values()],
+    kmPerWeek: selected.length
+      ? selected.reduce((sum, a) => sum + Number(a.distance_km), 0) / (days / 7)
+      : null,
   };
 }
