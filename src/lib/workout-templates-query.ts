@@ -1,3 +1,4 @@
+import { matchesWorkoutCopy } from "./workout-plan-copy";
 import { queryOptions, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { developmentErrorDiagnostic, readRetryDelay, shouldRetryRead } from "@/lib/network-errors";
@@ -68,51 +69,58 @@ export const workoutByIdQueryOptions = (
   queryOptions({
     queryKey: workoutDetailKey(userId, profileId, id),
     enabled: !!userId && !!profileId && !!id,
-    queryFn: async (): Promise<PrivateWorkout | null> => {
-      if (!userId || !profileId || !id) return null;
-      const { data: workout, error } = await supabase
-        .from("workout_templates")
-        .select("id,title,updated_at")
-        .eq("id", id)
-        .eq("bulk_profile_id", profileId)
-        .eq("is_system", false)
-        .eq("visibility", "private")
-        .maybeSingle();
-      if (error) throw error;
-      if (!workout) return null;
-      const { data, error: exercisesError } = await supabase
-        .from("workout_template_exercises")
-        .select(
-          "id,exercise_id,source_system_exercise_id,exercise_name,exercise_order,sets,rep_min,rep_max,intended_unilateral_mode,notes,bulk_exercises!workout_template_exercises_exercise_id_fkey(supports_unilateral,is_bodyweight)",
-        )
-        .eq("workout_template_id", id)
-        .order("exercise_order");
-      if (exercisesError) throw exercisesError;
-      return {
-        id: workout.id,
-        title: workout.title,
-        updatedAt: workout.updated_at,
-        exercises: (data ?? []).map((row) => ({
-          id: row.id,
-          exerciseId: row.exercise_id,
-          sourceSystemExerciseId: row.source_system_exercise_id,
-          name: row.exercise_name,
-          order: row.exercise_order,
-          sets: row.sets,
-          repMin: row.rep_min,
-          repMax: row.rep_max,
-          intendedUnilateralMode:
-            row.intended_unilateral_mode as TrainingPlanExercise["intendedUnilateralMode"],
-          notes: row.notes,
-          supportsUnilateral: row.bulk_exercises?.supports_unilateral ?? false,
-          isBodyweight: row.bulk_exercises?.is_bodyweight ?? false,
-        })),
-      };
-    },
+    queryFn: () => fetchPrivateWorkout(userId, profileId, id),
     staleTime: 0,
     retry: shouldRetryRead,
     retryDelay: readRetryDelay,
   });
+
+/** Fresh owner-scoped read, shared by the library and snapshot bridge. */
+export async function fetchPrivateWorkout(
+  userId: string | null,
+  profileId: string | null,
+  id: string | null,
+): Promise<PrivateWorkout | null> {
+  if (!userId || !profileId || !id) return null;
+  const { data: workout, error } = await supabase
+    .from("workout_templates")
+    .select("id,title,updated_at")
+    .eq("id", id)
+    .eq("bulk_profile_id", profileId)
+    .eq("is_system", false)
+    .eq("visibility", "private")
+    .maybeSingle();
+  if (error) throw error;
+  if (!workout) return null;
+  const { data, error: exercisesError } = await supabase
+    .from("workout_template_exercises")
+    .select(
+      "id,exercise_id,source_system_exercise_id,exercise_name,exercise_order,sets,rep_min,rep_max,intended_unilateral_mode,notes,bulk_exercises!workout_template_exercises_exercise_id_fkey(supports_unilateral,is_bodyweight)",
+    )
+    .eq("workout_template_id", id)
+    .order("exercise_order");
+  if (exercisesError) throw exercisesError;
+  return {
+    id: workout.id,
+    title: workout.title,
+    updatedAt: workout.updated_at,
+    exercises: (data ?? []).map((row) => ({
+      id: row.id,
+      exerciseId: row.exercise_id,
+      sourceSystemExerciseId: row.source_system_exercise_id,
+      name: row.exercise_name,
+      order: row.exercise_order,
+      sets: row.sets,
+      repMin: row.rep_min,
+      repMax: row.rep_max,
+      intendedUnilateralMode:
+        row.intended_unilateral_mode as TrainingPlanExercise["intendedUnilateralMode"],
+      notes: row.notes,
+      supportsUnilateral: row.bulk_exercises?.supports_unilateral ?? false,
+      isBodyweight: row.bulk_exercises?.is_bodyweight ?? false,
+    })),
+  };
+}
 
 export const useMyWorkouts = (user: string | null, profile: string | null) =>
   useQuery(myWorkoutsQueryOptions(user, profile));
@@ -162,4 +170,40 @@ export async function deleteWorkout(id: string): Promise<boolean> {
   const { data, error } = await supabase.rpc("delete_workout_template", { _template_id: id });
   if (error) throw error;
   return data;
+}
+
+/** Two existing RPCs, with one stable create ID and optimistic concurrency on every save.
+ * A failed save leaves a visible empty private workout; retry completes that same row.
+ */
+export async function copyPlanDayToWorkout(
+  userId: string,
+  profileId: string,
+  request: import("./workout-plan-copy").WorkoutCopyRequest,
+): Promise<PrivateWorkout> {
+  const id = await createWorkout(request.title, request.requestId);
+  const current = await fetchPrivateWorkout(userId, profileId, id);
+  if (!current) throw new Error("Could not load the new workout. Retry to finish copying it.");
+  if (matchesWorkoutCopy(current, request)) return current;
+  if (!request.expectedUpdatedAt) {
+    if (current.exercises.length || current.title !== request.title)
+      throw new Error("Workout changed on another device");
+    request.expectedUpdatedAt = current.updatedAt;
+  }
+  try {
+    await saveWorkout({
+      ...current,
+      title: request.title,
+      exercises: request.exercises,
+      updatedAt: request.expectedUpdatedAt,
+    });
+  } catch (cause) {
+    // The write may have committed before its response was lost. Never overwrite a different edit.
+    const stored = await fetchPrivateWorkout(userId, profileId, id).catch(() => null);
+    if (stored && matchesWorkoutCopy(stored, request)) return stored;
+    throw cause;
+  }
+  const saved = await fetchPrivateWorkout(userId, profileId, id);
+  if (!saved || !matchesWorkoutCopy(saved, request))
+    throw new Error("Could not verify the copied workout. Retry to finish copying it.");
+  return saved;
 }

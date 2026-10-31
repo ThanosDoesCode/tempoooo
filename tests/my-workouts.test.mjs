@@ -709,6 +709,7 @@ test("TrainingPlanEditor still edits the selected day through shared controls an
     "TrainingPlanEditor",
     {
       "./BackControl": { BackButton: "BackButton" },
+      "@/components/PlanDayWorkoutBridge": { PlanDayWorkoutBridge: "PlanDayWorkoutBridge" },
       "@/components/WorkoutExerciseListEditor": {
         WorkoutExerciseListEditor: "WorkoutExerciseListEditor",
       },

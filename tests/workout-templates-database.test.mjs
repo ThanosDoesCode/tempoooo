@@ -663,3 +663,152 @@ test("visibility: every user path keeps visibility='private'; there is no publis
   );
   await asService(db);
 });
+
+// The frontend bridge composes these existing RPCs; neither table gains a template/plan-day FK.
+test("snapshot bridge: both RPC copy directions preserve prescriptions and remain independent through edits/deletes", async () => {
+  const db = await freshDatabase();
+  try {
+    const { uid, profile } = await fitnessProfile(db);
+    const sys = await seedSystemExercise(db, "system:bridge-press", true);
+    const custom = await seedCustomExercise(db, uid, "custom:bridge-row", true);
+    const source = await createWorkout(db, uid, "Push");
+    const prescriptions = [
+      ex(custom, {
+        sets: 4,
+        repMin: 10,
+        repMax: 15,
+        executionMode: "unilateral",
+        notes: "Left and right",
+      }),
+      ex(sys, { sets: 2, repMin: 5, repMax: 8, notes: "Bench 2" }),
+    ];
+    await saveWorkout(db, uid, source, await updatedAtOf(db, source), "Push", prescriptions);
+    const sourceRows = await exercisesOf(db, source);
+    await asUser(db, uid);
+    const plan = (await db.query("SELECT public.create_empty_bulk_training_plan('Schedule') AS id"))
+      .rows[0].id;
+    const token = async () =>
+      (
+        await db.query(
+          "SELECT updated_at::text AS token FROM public.bulk_training_plans WHERE id=$1",
+          [plan],
+        )
+      ).rows[0].token;
+    const planExercises = async () =>
+      (
+        await db.query(
+          `SELECT e.* FROM public.bulk_training_plan_exercises e JOIN public.bulk_training_plan_days d ON d.id=e.plan_day_id WHERE d.plan_id=$1 ORDER BY d.day_order,e.exercise_order`,
+          [plan],
+        )
+      ).rows;
+    const saveDay = async (exercises) => {
+      await asUser(db, uid);
+      await db.query("SELECT public.save_bulk_training_plan($1,$2,'Schedule',$3::jsonb)", [
+        plan,
+        await token(),
+        JSON.stringify([{ name: "Push", exercises }]),
+      ]);
+      await asService(db);
+    };
+    await saveDay(prescriptions);
+    const imported = await planExercises();
+    assert.deepEqual(
+      imported.map((e) => e.exercise_id),
+      [custom, sys],
+    );
+    assert.deepEqual(
+      imported.map((e) => e.exercise_order),
+      [1, 2],
+    );
+    assert.deepEqual(
+      imported.map((e) => [e.sets, e.rep_min, e.rep_max, e.intended_unilateral_mode, e.notes]),
+      [
+        [4, 10, 15, "unilateral", "Left and right"],
+        [2, 5, 8, "bilateral", "Bench 2"],
+      ],
+    );
+    assert.deepEqual(
+      imported.map((e) => e.exercise_name),
+      sourceRows.map((e) => e.exercise_name),
+    );
+    assert.ok(imported.every((e) => !sourceRows.some((old) => old.id === e.id)));
+    // A completed session remains a historical snapshot even when plan configuration is edited.
+    const sessionId = randomUUID();
+    await db.query(
+      `INSERT INTO public.bulk_training_sessions(id,bulk_profile_id,training_plan_id,plan_name_snapshot,workout_day_name_snapshot,workout_day_order_snapshot,status,completed_at,workout_date) VALUES($1,$2,$3,'Schedule','Push',1,'completed',now(),CURRENT_DATE)`,
+      [sessionId, profile, plan],
+    );
+    await saveWorkout(db, uid, source, await updatedAtOf(db, source), "Edited source", [
+      ex(sys, { sets: 9 }),
+    ]);
+    assert.deepEqual(
+      await planExercises(),
+      imported,
+      "editing the source workout does not change its plan copy",
+    );
+    const editedDay = [
+      ex(custom, { sets: 5, executionMode: "unilateral", notes: "Plan only" }),
+      ex(sys, { sets: 3 }),
+    ];
+    const sourceAfterEdit = await exercisesOf(db, source);
+    await saveDay(editedDay);
+    assert.deepEqual(
+      await exercisesOf(db, source),
+      sourceAfterEdit,
+      "editing the plan does not change the workout",
+    );
+    const planAfterEdit = await planExercises();
+    await delWorkout(db, uid, source);
+    assert.deepEqual(
+      await planExercises(),
+      planAfterEdit,
+      "source deletion leaves the copied plan intact",
+    );
+    const savedCopy = await createWorkout(db, uid, "Push", randomUUID());
+    await saveWorkout(db, uid, savedCopy, await updatedAtOf(db, savedCopy), "Push", editedDay);
+    const savedRows = await exercisesOf(db, savedCopy);
+    assert.deepEqual(
+      savedRows.map((e) => e.exercise_id),
+      [custom, sys],
+    );
+    assert.deepEqual(
+      savedRows.map((e) => [e.sets, e.intended_unilateral_mode, e.notes]),
+      [
+        [5, "unilateral", "Plan only"],
+        [3, "bilateral", null],
+      ],
+    );
+    assert.ok(savedRows.every((e) => !planAfterEdit.some((old) => old.id === e.id)));
+    assert.deepEqual(
+      await planExercises(),
+      planAfterEdit,
+      "saving to the library does not change the plan day",
+    );
+    await asUser(db, uid);
+    await db.query("SELECT public.delete_bulk_training_plan($1)", [plan]);
+    await asService(db);
+    assert.deepEqual(
+      await exercisesOf(db, savedCopy),
+      savedRows,
+      "deleting the plan cannot delete the private workout",
+    );
+    const historical = (
+      await db.query(
+        "SELECT status,plan_name_snapshot,workout_day_name_snapshot,training_plan_id FROM public.bulk_training_sessions WHERE id=$1",
+        [sessionId],
+      )
+    ).rows[0];
+    assert.deepEqual(historical, {
+      status: "completed",
+      plan_name_snapshot: "Schedule",
+      workout_day_name_snapshot: "Push",
+      training_plan_id: null,
+    });
+    assert.ok(
+      (await db.query("SELECT id FROM public.bulk_exercises WHERE id=ANY($1)", [[sys, custom]]))
+        .rows.length === 2,
+    );
+  } finally {
+    await db.close();
+  }
+});

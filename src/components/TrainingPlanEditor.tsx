@@ -3,6 +3,7 @@ import { ArrowDown, ArrowUp, ChevronRight, Plus, Trash2 } from "lucide-react";
 import { BackButton } from "./BackControl";
 import { toast } from "sonner";
 import { WorkoutExerciseListEditor } from "@/components/WorkoutExerciseListEditor";
+import { PlanDayWorkoutBridge } from "@/components/PlanDayWorkoutBridge";
 import { Button } from "@/components/ui/button";
 import { Card, PendingLabel, SectionTitle } from "@/components/ui-kit";
 import {
@@ -162,7 +163,7 @@ export function TrainingPlanEditor({
                   <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                     Day {dayIndex + 1}
                   </p>
-                  <h2 className="mt-1 text-lg font-semibold">{day.name}</h2>
+                  <h2 className="mt-1 break-words text-lg font-semibold">{day.name}</h2>
                   <p className="mt-1 text-xs text-muted-foreground">
                     {day.exercises.length} exercise{day.exercises.length === 1 ? "" : "s"}
                   </p>
@@ -211,7 +212,7 @@ export function TrainingPlanEditor({
           return (
             <Card key={day.id} className="space-y-3">
               <BackButton onClick={() => setSelectedDayId(null)}>Training plan</BackButton>
-              <div className="flex items-start gap-2">
+              <div className="flex flex-col gap-2 min-[390px]:flex-row min-[390px]:items-start">
                 <label className="min-w-0 flex-1 text-xs font-medium text-muted-foreground">
                   Day {dayIndex + 1}
                   <input
@@ -224,7 +225,7 @@ export function TrainingPlanEditor({
                     className="mt-1 min-h-11 w-full rounded-xl border border-input bg-elevated px-3 text-base font-semibold text-foreground outline-none focus:border-ring"
                   />
                 </label>
-                <div className="flex pt-5">
+                <div className="flex self-end min-[390px]:self-auto min-[390px]:pt-5">
                   <IconButton
                     label={`Move ${day.name} up`}
                     disabled={dayIndex === 0}
@@ -249,6 +250,11 @@ export function TrainingPlanEditor({
                 </div>
               </div>
 
+              <PlanDayWorkoutBridge
+                day={day}
+                disabled={saving}
+                onReplace={(snapshot) => updateDay(dayIndex, () => snapshot)}
+              />
               <WorkoutExerciseListEditor
                 exercises={day.exercises}
                 title={day.name}

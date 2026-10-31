@@ -22,10 +22,12 @@ export function WorkoutTemplateEditor({
   workout,
   onCancel,
   onSaved,
+  embedded = false,
 }: {
   workout: PrivateWorkout;
   onCancel: () => void;
   onSaved: (workout: PrivateWorkout) => Promise<void>;
+  embedded?: boolean;
 }) {
   const [title, setTitle] = useState(workout.title);
   const [exercises, setExercises] = useState(() => structuredClone(workout.exercises));
@@ -118,7 +120,9 @@ export function WorkoutTemplateEditor({
           ) : null}
         </p>
       ) : null}
-      <div className="sticky bottom-[calc(5rem+env(safe-area-inset-bottom))] z-10 grid grid-cols-2 gap-2 rounded-2xl border border-border bg-background/95 p-2">
+      <div
+        className={`sticky ${embedded ? "bottom-0" : "bottom-[calc(5rem+env(safe-area-inset-bottom))]"} z-10 grid grid-cols-2 gap-2 rounded-2xl border border-border bg-background/95 p-2`}
+      >
         <Button variant="outline" className="min-h-11 min-w-0" disabled={saving} onClick={cancel}>
           Cancel
         </Button>
