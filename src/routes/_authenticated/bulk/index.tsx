@@ -9,7 +9,8 @@ import { MainPageHeader } from "@/components/MainPageHeader";
 import { StreakRings } from "@/components/StreakRings";
 import { useStreak, useThisWeekRingProgress } from "@/lib/streak";
 import { iso } from "@/lib/calc";
-import { useAppData, useActions, useBulkMeta } from "@/lib/store";
+import { useActions } from "@/lib/store";
+import { useBulkToday } from "@/lib/bulk-today-query";
 import { preferredBulkMembership, useMemberships } from "@/lib/bulk-access";
 import { useBulkWeights } from "@/lib/bulk-progress-query";
 import { useBulkNutritionDay } from "@/lib/bulk-nutrition-query";
@@ -39,11 +40,11 @@ function TodayPage() {
   const memberships = useMemberships();
   const invitations = useChallengeInvitations();
   const owner = preferredBulkMembership(memberships.data);
-  const data = useAppData();
-  const { bulkId } = useBulkMeta();
-  const id = owner ? bulkId : null;
+  const id = owner?.bulk_profile_id ?? null;
+  const legacy = useBulkToday(id, today);
+  const data = legacy.data;
   const publicGoal = owner?.is_public === true;
-  const weights = useBulkWeights(publicGoal ? id : null, today);
+  const weights = useBulkWeights(publicGoal ? id : null, today, today);
   const nutrition = useBulkNutritionDay(publicGoal ? id : null, today);
   const from = iso(startOfWeek(new Date(), { weekStartsOn: 1 }));
   const sessions = useCompletedSessionDates(id, from, today);
@@ -60,7 +61,9 @@ function TodayPage() {
     (!publicGoal || (!weights.isLoading && !nutrition.isLoading)) &&
     !sessions.isLoading &&
     !plan.isLoading;
-  const failure = owner ? [weights, nutrition, sessions, plan].find((q) => q.error) : undefined;
+  const failure = owner
+    ? [legacy, weights, nutrition, sessions, plan].find((q) => q.error)
+    : undefined;
   const weight = publicGoal
     ? weights.data?.find((w) => w.logDate === today)?.weightKg
     : day?.weight;
@@ -138,7 +141,8 @@ function TodayPage() {
     setRestPending(true);
     setRestError(false);
     try {
-      await saveDay(today, { restDay: !rest });
+      await saveDay(today, { restDay: !rest }, true);
+      await legacy.refetch();
     } catch {
       setRestError(true);
     } finally {

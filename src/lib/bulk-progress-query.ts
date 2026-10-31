@@ -31,21 +31,37 @@ export const bulkWeightQueryOptions = (
     enabled: !!profileId,
     queryFn: async (): Promise<BulkWeightEntry[]> => {
       if (!profileId) return [];
-      const data = await readAllByKey<Tables<"bulk_weight_entries">>(
-        (cursor) => {
-          let query = supabase
+      // A single local day has at most one weight row (profile/date unique key).
+      // Reuse the canonical range cache key without an extra empty pagination request.
+      const singleDay = from != null && from === to;
+      const result = singleDay
+        ? await supabase
             .from("bulk_weight_entries")
             .select("*")
             .eq("bulk_profile_id", profileId)
-            .order("log_date")
-            .limit(QUERY_PAGE_SIZE);
-          if (from) query = query.gte("log_date", from);
-          if (to) query = query.lte("log_date", to);
-          if (cursor) query = query.gt("log_date", cursor);
-          return query;
-        },
-        (row) => row.log_date,
-      );
+            .eq("log_date", from)
+            .maybeSingle()
+        : null;
+      if (result?.error) throw result.error;
+      const data = singleDay
+        ? result?.data
+          ? [result.data]
+          : []
+        : await readAllByKey<Tables<"bulk_weight_entries">>(
+            (cursor) => {
+              let query = supabase
+                .from("bulk_weight_entries")
+                .select("*")
+                .eq("bulk_profile_id", profileId)
+                .order("log_date")
+                .limit(QUERY_PAGE_SIZE);
+              if (from) query = query.gte("log_date", from);
+              if (to) query = query.lte("log_date", to);
+              if (cursor) query = query.gt("log_date", cursor);
+              return query;
+            },
+            (row) => row.log_date,
+          );
       return data.reverse().map((row) => ({
         id: row.id,
         bulkProfileId: row.bulk_profile_id,
@@ -71,23 +87,32 @@ export const bulkProgressNutritionQueryOptions = (
     enabled: !!profileId,
     queryFn: async (): Promise<BulkNutritionProgressDay[]> => {
       if (!profileId) return [];
-      const days = await readAllByKey<
-        Pick<Tables<"bulk_nutrition_days">, "id" | "log_date" | "target_calories">
-      >(
-        (cursor) => {
-          let query = supabase
-            .from("bulk_nutrition_days")
-            .select("id,log_date,target_calories")
-            .eq("bulk_profile_id", profileId)
-            .lte("log_date", to)
-            .order("id")
-            .limit(QUERY_PAGE_SIZE);
-          if (from) query = query.gte("log_date", from);
-          if (cursor) query = query.gt("id", cursor);
-          return query;
-        },
-        (row) => row.id,
-      );
+      const readDays = (cursor: string | null, limit: number) => {
+        let query = supabase
+          .from("bulk_nutrition_days")
+          .select("id,log_date,target_calories")
+          .eq("bulk_profile_id", profileId)
+          .lte("log_date", to)
+          .order("id")
+          .limit(limit);
+        if (from) query = query.gte("log_date", from);
+        if (cursor) query = query.gt("id", cursor);
+        return query;
+      };
+      // The Today streak's week contains at most seven unique profile/date rows. Entries
+      // are not bounded per day, so their exhaustive pagination below must remain intact.
+      const span = from == null ? Infinity : (Date.parse(to) - Date.parse(from)) / 86_400_000;
+      const boundedWeek = Number.isInteger(span) && span >= 0 && span < 7;
+      const result = boundedWeek ? await readDays(null, 7) : null;
+      if (result?.error) throw result.error;
+      const days = result
+        ? (result.data ?? [])
+        : await readAllByKey<
+            Pick<Tables<"bulk_nutrition_days">, "id" | "log_date" | "target_calories">
+          >(
+            (cursor) => readDays(cursor, QUERY_PAGE_SIZE),
+            (row) => row.id,
+          );
       const totals = new Map<string, { calories: number; protein: number }>();
       for (let offset = 0; offset < days.length; offset += QUERY_ID_BATCH_SIZE) {
         const ids = days.slice(offset, offset + QUERY_ID_BATCH_SIZE).map((day) => day.id);

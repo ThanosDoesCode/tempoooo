@@ -198,12 +198,18 @@ export const activeBulkTrainingSessionQueryOptions = (bulkProfileId: string | nu
       if (!bulkProfileId) return null;
       const { data, error } = await supabase
         .from("bulk_training_sessions")
-        .select("*")
+        .select("*,bulk_training_session_exercises(*,bulk_training_session_sets(*))")
         .eq("bulk_profile_id", bulkProfileId)
         .eq("status", "in_progress")
         .maybeSingle();
       if (error) throw error;
-      return data ? (await hydrateSessions([data as SessionRow]))[0]! : null;
+      if (!data) return null;
+      const exercises = data.bulk_training_session_exercises ?? [];
+      return mapSessions(
+        [data],
+        exercises,
+        exercises.flatMap((row) => row.bulk_training_session_sets ?? []),
+      )[0]!;
     },
     staleTime: 0,
     retry: shouldRetryRead,

@@ -28,7 +28,8 @@ function fixture(tables, { apiCap = 73 } = {}) {
       let limit = 1000,
         options = {},
         fields,
-        expression;
+        expression,
+        single = false;
       const query = {
         select(value, opts = {}) {
           fields = value;
@@ -68,10 +69,12 @@ function fixture(tables, { apiCap = 73 } = {}) {
           return query;
         },
         async maybeSingle() {
-          return { data: (tables[table] ?? [])[0] ?? null, error: null };
+          single = true;
+          const result = await query;
+          return { ...result, data: result.data?.[0] ?? null };
         },
         then(resolve, reject) {
-          calls.push({ table, limit, fields, options, filters, orders, expression });
+          calls.push({ table, limit, fields, options, filters, orders, expression, single });
           if (table === failingTable)
             return Promise.resolve({ data: null, error: new Error("offline") }).then(
               resolve,
@@ -419,7 +422,7 @@ test("legacy days, workouts, notes and photos load completely and preserve paylo
   assert.equal(data.photos[0].date, day(0));
   assert.equal(data.photos.at(-1).date, day(404));
   assert.equal(JSON.stringify(tables), before, "source rows are never rewritten");
-  assert.ok(f.calls.every((call) => call.limit <= pagination.QUERY_PAGE_SIZE));
+  assert.ok(f.calls.every((call) => call.single || call.limit <= pagination.QUERY_PAGE_SIZE));
   assert.ok(f.signed.every((call) => call.paths.length <= pagination.QUERY_PAGE_SIZE));
 });
 
@@ -627,5 +630,5 @@ test("All-time nutrition and weight omit a made-up start and exhaust capped owne
   assert.equal(allFood[0].targetCalories, 2000);
   assert.equal(allFood.at(-1).targetCalories, 3000);
   assert.ok(allWeights.every((entry) => entry.bulkProfileId === "owner"));
-  assert.ok(f.calls.every((call) => call.limit <= pagination.QUERY_PAGE_SIZE));
+  assert.ok(f.calls.every((call) => call.single || call.limit <= pagination.QUERY_PAGE_SIZE));
 });

@@ -60,7 +60,7 @@ function AppChrome({ children }: { children: ReactNode }) {
     pathname.startsWith("/bulk/workout/") ||
     pathname.startsWith("/bulk/exercises");
   const prefetchDestination = (to: string) => {
-    if (to.startsWith("/bulk") && owner) void prefetchBulk(owner.bulk_profile_id);
+    if (to.startsWith("/bulk/") && owner) void prefetchBulk(owner.bulk_profile_id);
   };
 
   return (

@@ -19,7 +19,7 @@ function MorningPage() {
   const { bulkId } = useBulkMeta();
   const memberships = useMemberships();
   const publicGoal = bulkPlanModeFor(memberships.data, bulkId) === "public";
-  const weights = useBulkWeights(publicGoal ? bulkId : null, today);
+  const weights = useBulkWeights(publicGoal ? bulkId : null, today, today);
   return (
     <AppShell>
       <PageHeader

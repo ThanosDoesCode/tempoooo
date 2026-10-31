@@ -90,6 +90,14 @@ function fixture(source, exportName, props, options = {}) {
     "@/components/StreakRings": { StreakRings: "StreakRings" },
     "@/lib/daily-check-in": { checkInDraft, validateCheckIn },
     "@/lib/calc": { iso },
+    "@/lib/bulk-today-query": {
+      useBulkToday: () => ({
+        data: options.modules?.["@/lib/store"]?.useAppData?.(),
+        isLoading: false,
+        error: null,
+        refetch: async () => {},
+      }),
+    },
     "@/lib/store": { useActions: () => ({ saveDay: (...a) => record("saveDay", ...a) }) },
     "@/lib/bulk-progress-query": {
       bulkWeightQueryKey: (id) => ["bulk-weight-entries", id],
@@ -631,7 +639,7 @@ test("Phase 4 Today renders persisted habits and bell, then skeleton/error inste
         "@/components/TodayChallenge": { TodayChallenge: "TodayChallenge" },
         "@/lib/use-local-day": { useLocalDay: () => "2026-10-03" },
         "@/lib/bulk-access": {
-          preferredBulkMembership: () => ({ is_public: true }),
+          preferredBulkMembership: () => ({ bulk_profile_id: "owner", is_public: true }),
           useMemberships: () => membership,
         },
         "@/lib/store": {
@@ -735,7 +743,7 @@ function todayFixture({
         "@/lib/challenge-invitations": { useChallengeInvitations: () => q(invites) },
         "@/lib/use-local-day": { useLocalDay: () => today },
         "@/lib/bulk-access": {
-          preferredBulkMembership: () => ({ is_public: publicGoal }),
+          preferredBulkMembership: () => ({ bulk_profile_id: "owner", is_public: publicGoal }),
           useMemberships: () => q([]),
         },
         "@/lib/store": {

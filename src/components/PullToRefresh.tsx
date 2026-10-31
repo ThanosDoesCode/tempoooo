@@ -89,7 +89,7 @@ export function PullToRefresh({ children }: { children: ReactNode }) {
       updateDistance(PULL_REFRESH_HOLD_DISTANCE);
       updateStatus("refreshing");
       setAnnouncement("Refreshing content");
-      const isBulkRoute = pathname === "/bulk" || pathname.startsWith("/bulk/");
+      const isBulkRoute = pathname.startsWith("/bulk/");
       void Promise.all([
         queryClient.refetchQueries({ type: "active" }),
         isBulkRoute ? refreshBulk() : Promise.resolve(),

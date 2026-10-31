@@ -38,7 +38,11 @@ test("the first fitness onboarding step shows no Back and no misleading Challeng
 test("Challenge-only users hitting a fitness surface get the gated screen, never auto-launched onboarding", async () => {
   const guard = await read("src/routes/_authenticated/bulk/route.tsx");
   // /bulk itself stays reachable (Welcome/empty Today); deeper fitness surfaces are gated.
-  assert.match(guard, /if \(!preferred && location\.pathname === "\/bulk"\) return/);
+  assert.match(
+    guard,
+    /const today = location\.pathname === "\/bulk" \|\| location\.pathname === "\/bulk\/"/,
+  );
+  assert.match(guard, /if \(!preferred && today\) return/);
   assert.match(guard, /redirect\(\{ to: "\/bulk-access-denied", replace: true \}\)/);
   assert.match(guard, /navigate\(\{ to: "\/bulk-access-denied", replace: true \}\)/);
   // The guard no longer force-launches the onboarding wizard.

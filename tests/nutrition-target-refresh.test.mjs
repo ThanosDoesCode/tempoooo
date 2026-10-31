@@ -46,11 +46,12 @@ test("saving targets updates Today immediately without a reload, preserving inta
   const ready = (value) => ({ data: value, isLoading: false, error: null });
   const view = accountUI("src/routes/_authenticated/bulk/index.tsx", "Route", {
     "@/lib/store": store,
+    "@/lib/bulk-today-query": { useBulkToday: () => ready(data) },
     "@/lib/use-local-day": { useLocalDay: () => today },
     "@/lib/calc": { iso },
     "@/lib/bulk-access": {
       useMemberships: () => ready([{ is_public: true }]),
-      preferredBulkMembership: () => ({ is_public: true }),
+      preferredBulkMembership: () => ({ bulk_profile_id: "owner", is_public: true }),
     },
     "@/lib/challenge-invitations": { useChallengeInvitations: () => ready([]) },
     "@/lib/bulk-progress-query": { useBulkWeights: () => ready([]) },

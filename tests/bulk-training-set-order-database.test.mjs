@@ -186,7 +186,23 @@ async function setOrderApi(f) {
     from(table) {
       let rows = tables[table];
       const query = {
-        select() {
+        select(fields) {
+          if (
+            table === "bulk_training_sessions" &&
+            fields.includes("bulk_training_session_exercises(")
+          ) {
+            rows = rows.map((session) => ({
+              ...session,
+              bulk_training_session_exercises: tables.bulk_training_session_exercises
+                .filter((exercise) => exercise.session_id === session.id)
+                .map((exercise) => ({
+                  ...exercise,
+                  bulk_training_session_sets: tables.bulk_training_session_sets.filter(
+                    (set) => set.session_exercise_id === exercise.id,
+                  ),
+                })),
+            }));
+          }
           return query;
         },
         eq(key, value) {

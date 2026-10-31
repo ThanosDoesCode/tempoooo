@@ -126,6 +126,17 @@ async function loadFullPlan(plan: PlanRow): Promise<UserTrainingPlan> {
     developmentErrorDiagnostic("active_training_plan_days", daysError);
     throw daysError;
   }
+  return mapPlan(plan, (days ?? []) as PlanDayRow[]);
+}
+
+type PlanDayRow = {
+  id: string;
+  day_order: number;
+  name: string;
+  bulk_training_plan_exercises: ExerciseRow[];
+};
+
+function mapPlan(plan: PlanRow, days: PlanDayRow[]): UserTrainingPlan {
   return {
     id: plan.id,
     sourceTemplateId: plan.source_template_id,
@@ -136,14 +147,16 @@ async function loadFullPlan(plan: PlanRow): Promise<UserTrainingPlan> {
     trainingDaysPerWeek: plan.training_days_per_week,
     updatedAt: plan.updated_at,
     createdAt: plan.created_at,
-    days: (days ?? []).map((day) => ({
-      id: day.id,
-      order: day.day_order,
-      name: day.name,
-      exercises: ((day.bulk_training_plan_exercises ?? []) as ExerciseRow[])
-        .sort((a, b) => a.exercise_order - b.exercise_order)
-        .map(mapExercise),
-    })),
+    days: [...days]
+      .sort((a, b) => a.day_order - b.day_order)
+      .map((day) => ({
+        id: day.id,
+        order: day.day_order,
+        name: day.name,
+        exercises: ((day.bulk_training_plan_exercises ?? []) as ExerciseRow[])
+          .sort((a, b) => a.exercise_order - b.exercise_order)
+          .map(mapExercise),
+      })),
   };
 }
 
@@ -171,7 +184,9 @@ export const activeTrainingPlanQueryOptions = (bulkProfileId: string | null) =>
       if (!bulkProfileId) return null;
       const { data: plan, error } = await supabase
         .from("bulk_training_plans")
-        .select(PLAN_COLUMNS)
+        .select(
+          `${PLAN_COLUMNS},bulk_training_plan_days(id,day_order,name,bulk_training_plan_exercises(id,exercise_id,source_system_exercise_id,exercise_name,exercise_order,sets,rep_min,rep_max,intended_unilateral_mode,notes,bulk_exercises!bulk_training_plan_exercises_exercise_id_fkey(supports_unilateral,is_bodyweight)))`,
+        )
         .eq("bulk_profile_id", bulkProfileId)
         .eq("active", true)
         .maybeSingle();
@@ -180,7 +195,7 @@ export const activeTrainingPlanQueryOptions = (bulkProfileId: string | null) =>
         throw error;
       }
       if (!plan) return null;
-      return loadFullPlan(plan as PlanRow);
+      return mapPlan(plan as PlanRow, plan.bulk_training_plan_days as PlanDayRow[]);
     },
     staleTime: 60 * 1000,
     retry: shouldRetryRead,

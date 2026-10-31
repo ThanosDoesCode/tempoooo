@@ -10,7 +10,14 @@ import {
 } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { bulkOwnerQueryOptions, preferredBulkMembership, useMemberships } from "@/lib/bulk-access";
-import { clearBulk, loadBulk, prefetchBulk, useBulkMeta } from "@/lib/store";
+import {
+  clearBulk,
+  loadBulk,
+  prefetchBulk,
+  selectBulk,
+  useAppData,
+  useBulkMeta,
+} from "@/lib/store";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { DataError } from "@/components/ui-kit";
 import { developmentErrorDiagnostic, userFacingError } from "@/lib/network-errors";
@@ -22,12 +29,14 @@ export const Route = createFileRoute("/_authenticated/bulk")({
     const preferred = preferredBulkMembership(
       await context.queryClient.ensureQueryData(bulkOwnerQueryOptions()),
     );
-    if (!preferred && location.pathname === "/bulk") return;
+    const today = location.pathname === "/bulk" || location.pathname === "/bulk/";
+    if (!preferred && today) return;
     // Challenge-only accounts never get auto-launched into fitness onboarding when they reach a
     // fitness surface (a Progress/meal/workout tap or deep link). Show the gated screen with an
     // explicit "Start My Goal" action instead; onboarding stays opt-in.
     if (!preferred) throw redirect({ to: "/bulk-access-denied", replace: true });
-    await prefetchBulk(preferred.bulk_profile_id);
+    // Historical screens retain lazy compatibility hydration; Today has bounded readers.
+    if (!today) await prefetchBulk(preferred.bulk_profile_id);
   },
   component: BulkLayout,
   errorComponent: BulkRouteError,
@@ -67,6 +76,8 @@ function BulkLayout() {
   const navigate = useNavigate();
   const { data: memberships, isLoading } = useMemberships();
   const { bulkId } = useBulkMeta();
+  const data = useAppData();
+  const today = pathname === "/bulk" || pathname === "/bulk/";
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -74,18 +85,22 @@ function BulkLayout() {
     const preferred = preferredBulkMembership(memberships);
     if (!preferred) {
       clearBulk();
-      if (pathname !== "/bulk") void navigate({ to: "/bulk-access-denied", replace: true });
+      if (!today) void navigate({ to: "/bulk-access-denied", replace: true });
       return;
     }
-    if (preferred.bulk_profile_id !== bulkId) {
+    if (today) {
+      selectBulk(preferred.bulk_profile_id, preferred.role);
+      return;
+    }
+    if (preferred.bulk_profile_id !== bulkId || !data) {
       loadBulk(preferred.bulk_profile_id, preferred.role).catch((e: Error) => {
         developmentErrorDiagnostic("bulk_snapshot", e);
         setError(userFacingError(e, "load your plan"));
       });
     }
-  }, [memberships, bulkId, navigate, pathname]);
+  }, [memberships, bulkId, navigate, pathname, today, data]);
 
-  if (error) {
+  if (error && !today) {
     return (
       <AppShell>
         <PageHeader title="Plan unavailable" />
@@ -105,11 +120,11 @@ function BulkLayout() {
     );
   }
   const preferred = preferredBulkMembership(memberships);
-  if (memberships && !preferred) return pathname === "/bulk" ? <Outlet /> : null;
+  if (memberships && !preferred) return today ? <Outlet /> : null;
   if (
     isLoading ||
     (!memberships && !error) ||
-    (preferred && bulkId !== preferred.bulk_profile_id)
+    (preferred && (bulkId !== preferred.bulk_profile_id || (!today && !data)))
   ) {
     return <PageSkeleton label="Loading plan" />;
   }

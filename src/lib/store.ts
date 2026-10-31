@@ -77,6 +77,18 @@ export const getBulkRole = () => role;
 export const canWrite = () => role === "owner" || role === "editor";
 export const isOwner = () => role === "owner";
 
+/** Select access context without fetching history. Only deep screens call loadBulk. */
+export function selectBulk(id: string, r: BulkRole) {
+  if (bulkId === id && role === r) return;
+  if (bulkId !== id) {
+    state = null;
+    photoPaths.clear();
+  }
+  bulkId = id;
+  role = r;
+  emit();
+}
+
 /** Storage object paths per photo set, needed to clean up files on delete. */
 const photoPaths = new Map<string, string[]>();
 
@@ -319,40 +331,75 @@ export function clearBulk() {
 }
 
 export function useActions() {
-  const saveDay = useCallback(async (date: string, patch: Partial<DailyLog>) => {
-    if (!state || !bulkId || !canWrite()) return;
-    const previous = state.days[date];
-    const merged: DailyLog = { ...state.days[date], ...patch, date };
-    const id = bulkId;
-    const version = (dayRevisions.get(date) ?? 0) + 1;
-    dayRevisions.set(date, version);
-    state.days[date] = merged;
-    pendingDays.add(date);
-    emit();
-    const queue = daySaveQueues.get(date) ?? createSaveQueue();
-    daySaveQueues.set(date, queue);
-    try {
-      await queue(async () => {
-        if (bulkId !== id || !canWrite()) throw new Error("Account or plan changed.");
-        const { error } = await supabase
-          .from("bulk_days")
-          .upsert(
-            { bulk_profile_id: id, day: date, payload: json(merged) },
-            { onConflict: "bulk_profile_id,day" },
-          );
-        if (error) throw new Error(error.message);
-      });
-    } catch (error) {
-      if (state && dayRevisions.get(date) === version) {
-        if (previous) state.days[date] = previous;
-        else delete state.days[date];
-        emit();
+  const saveDay = useCallback(
+    async (date: string, patch: Partial<DailyLog>, readCurrent = false) => {
+      if (readCurrent) {
+        if (!bulkId || !canWrite()) throw new Error("This day cannot be edited.");
+        // Today does not hydrate history. Merge the complete current-day payload inside the same
+        // save queue so rest-day changes preserve sleep, nutrition, notes and concurrent local saves.
+        const id = bulkId;
+        const queue = daySaveQueues.get(date) ?? createSaveQueue();
+        daySaveQueues.set(date, queue);
+        await queue(async () => {
+          if (bulkId !== id || !canWrite()) throw new Error("Account or plan changed.");
+          const { data, error } = await supabase
+            .from("bulk_days")
+            .select("payload")
+            .eq("bulk_profile_id", id)
+            .eq("day", date)
+            .maybeSingle();
+          if (error) throw error;
+          if (bulkId !== id || !canWrite()) throw new Error("Account or plan changed.");
+          const merged = { ...(data?.payload as DailyLog | undefined), ...patch, date };
+          const result = await supabase
+            .from("bulk_days")
+            .upsert(
+              { bulk_profile_id: id, day: date, payload: json(merged) },
+              { onConflict: "bulk_profile_id,day" },
+            );
+          if (result.error) throw result.error;
+          if (state && bulkId === id) {
+            state.days[date] = merged;
+            emit();
+          }
+        });
+        return;
       }
-      throw error;
-    } finally {
-      if (dayRevisions.get(date) === version) pendingDays.delete(date);
-    }
-  }, []);
+      if (!state || !bulkId || !canWrite()) return;
+      const previous = state.days[date];
+      const merged: DailyLog = { ...state.days[date], ...patch, date };
+      const id = bulkId;
+      const version = (dayRevisions.get(date) ?? 0) + 1;
+      dayRevisions.set(date, version);
+      state.days[date] = merged;
+      pendingDays.add(date);
+      emit();
+      const queue = daySaveQueues.get(date) ?? createSaveQueue();
+      daySaveQueues.set(date, queue);
+      try {
+        await queue(async () => {
+          if (bulkId !== id || !canWrite()) throw new Error("Account or plan changed.");
+          const { error } = await supabase
+            .from("bulk_days")
+            .upsert(
+              { bulk_profile_id: id, day: date, payload: json(merged) },
+              { onConflict: "bulk_profile_id,day" },
+            );
+          if (error) throw new Error(error.message);
+        });
+      } catch (error) {
+        if (state && dayRevisions.get(date) === version) {
+          if (previous) state.days[date] = previous;
+          else delete state.days[date];
+          emit();
+        }
+        throw error;
+      } finally {
+        if (dayRevisions.get(date) === version) pendingDays.delete(date);
+      }
+    },
+    [],
+  );
 
   const saveWorkout = useCallback(async (workout: Workout, expectedUserId?: string) => {
     if (!state || !bulkId || !canWrite()) throw new Error("This workout cannot be edited.");
