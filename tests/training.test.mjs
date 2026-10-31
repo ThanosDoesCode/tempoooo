@@ -433,10 +433,17 @@ test("strength trend keeps the existing volume calculation and formats change di
 
 test("Progress Strength leads with actual working performance and keeps secondary estimates", async () => {
   const strength = await read("src/routes/_authenticated/bulk/progress_.strength.tsx");
-  assert.match(strength, /strengthProgress\(record, range\)/);
+  const grouped = await read("src/lib/exercise-records.ts");
+  const summary = await read("src/components/ExerciseRecordSummary.tsx");
+  assert.match(strength, /ExerciseRecordSummary group=\{group\}/);
+  assert.match(grouped, /strengthProgress\(record, range\)/);
   assert.match(strength, /useTrackedLifts\(data\)/);
   assert.match(strength, /No data yet/);
-  assert.match(strength, /signed\(progress\.estimate\.changePct, 0\)/);
+  assert.match(
+    grouped,
+    /estimateChange: kind === "latest" \? progress\.estimate\.changePct : null/,
+  );
+  assert.match(summary, /signed\(row\.estimateChange, 0\)/);
   // An Edit control lets the user choose which lifts to track (default: first lift of each day).
   assert.match(strength, /editing \? "Done" : "Edit"/);
 });

@@ -1,5 +1,6 @@
 import type { PersonalRecord } from "./personal-records.ts";
 import type { ProgressRange } from "./progress-period.ts";
+import { groupExerciseRecords, resolveExerciseRecord } from "./exercise-records.ts";
 import { strengthProgress } from "./strength-progress.ts";
 
 /** Count configured lifts, not only those with comparable history in this period. */
@@ -8,10 +9,14 @@ export function trackedLiftSummary(
   trackedNames: string[],
   range: ProgressRange,
 ) {
-  const comparisons = [...new Set(trackedNames)].map((name) =>
-    records
-      .filter((record) => record.name === name)
-      .map((record) => strengthProgress(record, range)),
+  const groups = groupExerciseRecords(records);
+  const identities = [
+    ...new Set(trackedNames.map((key) => resolveExerciseRecord(groups, key)?.key ?? key)),
+  ];
+  const comparisons = identities.map((key) =>
+    (resolveExerciseRecord(groups, key)?.records ?? []).map((record) =>
+      strengthProgress(record, range),
+    ),
   );
   return {
     total: comparisons.length,

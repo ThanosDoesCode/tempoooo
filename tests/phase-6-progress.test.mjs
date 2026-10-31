@@ -1,3 +1,4 @@
+import * as exerciseRecordHelpers from "../src/lib/exercise-records.ts";
 import * as progressCore from "../src/lib/progress-model-core.ts";
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -247,7 +248,8 @@ test("Endurance uses existing challenge data only and reuses challenge helpers",
 test("Strength shows real working performance with secondary Epley, period, Edit and records/history", async () => {
   const strength = await read("src/routes/_authenticated/bulk/progress_.strength.tsx");
   assert.match(strength, /useTrackedLifts\(data\)/);
-  assert.match(strength, /strengthProgress\(record, range\)/);
+  assert.match(strength, /ExerciseRecordSummary/);
+  assert.match(await read("src/lib/exercise-records.ts"), /strengthProgress\(record, range\)/);
   assert.match(strength, /tracked lifts improved/);
   assert.match(strength, /aria-expanded=\{editing\}/); // Edit toggle
   assert.match(strength, /to="\/bulk\/progress\/strength\/\$lift"/);
@@ -729,6 +731,13 @@ async function progressFixture(options = {}) {
       exports: {},
       require(name) {
         if (modules[name]) return modules[name];
+        if (name === "./exercise-records.ts" || name === "@/lib/exercise-records")
+          return exerciseRecordHelpers;
+        if (name === "@/components/ExerciseRecordSummary")
+          return presentationComponent("src/components/ExerciseRecordSummary.tsx", {
+            ...modules,
+            "@/lib/exercise-records": exerciseRecordHelpers,
+          });
         if (name === "./progress-period.ts") return periods;
         if (name === "./challenge.ts") return modules["@/lib/challenge"];
         if (name === "./progress-model.ts") return modules["@/lib/progress-model"];

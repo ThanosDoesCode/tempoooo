@@ -12,6 +12,9 @@ import {
 } from "recharts";
 
 import { AppShell, PageHeader } from "@/components/AppShell";
+import { ExerciseRecordSummary } from "@/components/ExerciseRecordSummary";
+import { groupExerciseRecords, resolveExerciseRecord } from "@/lib/exercise-records";
+import type { PersonalRecord } from "@/lib/personal-records";
 import { Card } from "@/components/ui-kit";
 import { PeriodPicker } from "@/components/ProgressChrome";
 import { ProgressChartTooltip } from "@/components/ProgressChartTooltip";
@@ -32,13 +35,17 @@ function LiftDetailPage() {
   const { lift } = Route.useParams();
   const data = useAppData();
   const [period, setPeriod] = useProgressPeriod();
+  const { records } = useStrengthModel();
+  const group = resolveExerciseRecord(groupExerciseRecords(records), lift);
   return (
     <AppShell>
-      <PageHeader
-        title={exerciseLabel(lift)}
-        backTo="/bulk/progress/strength"
-        backLabel="Strength"
-      />
+      <div className="[&_h1]:break-words">
+        <PageHeader
+          title={group?.name ?? exerciseLabel(lift)}
+          backTo="/bulk/progress/strength"
+          backLabel="Strength"
+        />
+      </div>
       <div className="mb-3 flex justify-end">
         <PeriodPicker period={period} onChange={setPeriod} />
       </div>
@@ -53,10 +60,48 @@ function LiftDetailPage() {
 
 function LiftBody({ data, name, period }: { data: AppData; name: string; period: ProgressPeriod }) {
   const { records } = useStrengthModel();
-  const record = useMemo(() => records.find((r) => r.name === name), [records, name]);
+  const group = resolveExerciseRecord(groupExerciseRecords(records), name);
+  const canonicalName = group?.name ?? name;
+  const nextSuggestion = useMemo(
+    () => nextSessionSuggestion(data, canonicalName),
+    [data, canonicalName],
+  );
+  if (group?.records.some((record) => record.side != null))
+    return (
+      <div className="space-y-4">
+        <Card>
+          <ExerciseRecordSummary group={group} range={progressRange(period)} />
+        </Card>
+        {group.records.map((record) => (
+          <section key={record.key} className="min-w-0 space-y-2">
+            <h2 className="text-base font-semibold">
+              {record.side === "left" ? "Left" : record.side === "right" ? "Right" : "Standard"}
+            </h2>
+            <LiftRecordBody record={record} period={period} hideSummary />
+          </section>
+        ))}
+        {nextSuggestion ? (
+          <p className="text-sm text-muted-foreground">Next time: {nextSuggestion}</p>
+        ) : null}
+      </div>
+    );
+  return (
+    <LiftRecordBody record={group?.records[0]} period={period} nextSuggestion={nextSuggestion} />
+  );
+}
+function LiftRecordBody({
+  record,
+  period,
+  nextSuggestion,
+  hideSummary = false,
+}: {
+  record: PersonalRecord | undefined;
+  period: ProgressPeriod;
+  nextSuggestion?: string | null;
+  hideSummary?: boolean;
+}) {
   const progress = record ? strengthProgress(record, progressRange(period)) : null;
   const estimate = progress?.estimate;
-  const nextSuggestion = useMemo(() => nextSessionSuggestion(data, name), [data, name]);
 
   if (!record || !estimate || !progress?.latest) {
     return (
@@ -81,25 +126,29 @@ function LiftBody({ data, name, period }: { data: AppData; name: string; period:
   return (
     <div className="space-y-3">
       <Card className="p-[18px]">
-        <p className="num text-[30px] font-semibold tracking-tight">
-          {workingPerformanceLabel(record, progress!.latest)}
-        </p>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {progress?.changeKg != null
-            ? `${signed(progress.changeKg, 1)} kg vs start of period · same ${progress.latest!.reps} reps`
-            : progress?.sessions === 1
-              ? "One session"
-              : "No comparable previous session yet"}
-        </p>
-        {estimate.current != null ? (
-          <p className="num mt-3 text-sm text-muted-foreground">
-            Estimated 1RM {fmt(estimate.current, 1)} kg
-            {estimate.changePct != null ? ` · ${signed(estimate.changePct, 0)}%` : ""}
-          </p>
+        {!hideSummary ? (
+          <>
+            <p className="num text-[30px] font-semibold tracking-tight">
+              {workingPerformanceLabel(record, progress!.latest)}
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {progress?.changeKg != null
+                ? `${signed(progress.changeKg, 1)} kg vs start of period · same ${progress.latest!.reps} reps`
+                : progress?.sessions === 1
+                  ? "One session"
+                  : "No comparable previous session yet"}
+            </p>
+            {estimate.current != null ? (
+              <p className="num mt-3 text-sm text-muted-foreground">
+                Estimated 1RM {fmt(estimate.current, 1)} kg
+                {estimate.changePct != null ? ` · ${signed(estimate.changePct, 0)}%` : ""}
+              </p>
+            ) : null}
+            <p className="mt-1 text-xs text-muted-foreground">
+              Estimated 1RM uses your logged weight and reps to estimate a one-rep maximum.
+            </p>
+          </>
         ) : null}
-        <p className="mt-1 text-xs text-muted-foreground">
-          Estimated 1RM uses your logged weight and reps to estimate a one-rep maximum.
-        </p>
         <div className="mt-3 h-[150px]">
           {chart.length >= 2 ? (
             <ResponsiveContainer width="100%" height="100%">
@@ -136,9 +185,11 @@ function LiftBody({ data, name, period }: { data: AppData; name: string; period:
         {bestSets.map((performance) => (
           <div
             key={performance.date}
-            className="flex min-h-[52px] items-center gap-3 border-t border-border text-[15px] first:border-t-0"
+            className="flex min-h-[52px] min-w-0 flex-wrap items-center gap-3 border-t border-border text-[15px] first:border-t-0"
           >
-            <span className="flex-1">{workingPerformanceLabel(record, performance)}</span>
+            <span className="min-w-0 flex-1 break-words">
+              {workingPerformanceLabel(record, performance)}
+            </span>
             <span className="text-[13px] text-muted-foreground">
               {format(parseISO(performance.date), "EEE d MMM")}
             </span>

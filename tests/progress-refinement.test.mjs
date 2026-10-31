@@ -365,7 +365,7 @@ test("records drilldown reuses existing route and exercise histories without a 5
   const source = await read("src/routes/_authenticated/bulk/prs.tsx");
   assert.match(source, /progressRecordEvents\(records, progressRange\(period\)\)/);
   assert.match(source, /useStrengthModel\(\)/);
-  assert.match(source, /search=\{\{ record: event.record.key \}\}/);
+  assert.match(source, /search=\{\{ record: group.key \}\}/);
   assert.doesNotMatch(source, /fetchRecentCompletedBulkTrainingSessions|500/);
 });
 

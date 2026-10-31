@@ -1,6 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { format, parseISO } from "date-fns";
-import { Trophy } from "lucide-react";
 import { z } from "zod";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { HistoryBackLink } from "@/components/HistoryBackLink";
@@ -8,6 +7,13 @@ import { Card, DataError, SectionTitle } from "@/components/ui-kit";
 import { useStrengthModel } from "@/lib/progress-model";
 import { progressRange, recordsPeriodTitle, PROGRESS_PERIODS } from "@/lib/progress-period";
 import { progressRecordEvents, workingPerformanceLabel } from "@/lib/strength-progress";
+import { ExerciseRecordSummary } from "@/components/ExerciseRecordSummary";
+import {
+  groupExerciseRecords,
+  resolveExerciseRecord,
+  exerciseRecordKey,
+  type ExerciseRecord,
+} from "@/lib/exercise-records";
 import { userFacingError } from "@/lib/network-errors";
 import type { PersonalRecord } from "@/lib/personal-records";
 
@@ -27,12 +33,15 @@ function PersonalRecordsPage() {
   const { record: selectedKey, period } = Route.useSearch();
   const { records, loading, error, refetch } = useStrengthModel();
   const events = period ? progressRecordEvents(records, progressRange(period)) : [];
-  const selected = records.find((item) => item.key === selectedKey);
+  const groups = groupExerciseRecords(records);
+  const selected = selectedKey ? resolveExerciseRecord(groups, selectedKey) : undefined;
+  const eventGroupKey = (record: PersonalRecord) =>
+    resolveExerciseRecord(groups, record.key)?.key ?? exerciseRecordKey(record);
 
   return (
     <AppShell>
       {selected ? (
-        <RecordDetail record={selected} />
+        <RecordDetail group={selected} />
       ) : (
         <>
           <PageHeader
@@ -56,36 +65,54 @@ function PersonalRecordsPage() {
           ) : period ? (
             <div className="space-y-2">
               {events.length ? (
-                events.map((event) => (
-                  <Link
-                    key={event.id}
-                    to="/bulk/prs"
-                    search={{ record: event.record.key }}
-                    preload="intent"
-                    className="card-surface block min-h-16 p-4 active:opacity-80"
-                  >
-                    <p className="break-words font-semibold">
-                      {event.record.name}
-                      {event.record.side ? ` · ${event.record.side}` : ""}
-                    </p>
-                    <p className="num mt-1 text-sm">
-                      {event.kind === "volume"
-                        ? `${number(event.performance.volume)} kg volume`
-                        : event.kind === "reps"
-                          ? `${event.performance.repCount} reps${event.performance.repLoad != null ? ` @ ${number(event.performance.repLoad)} kg` : ""}`
-                          : workingPerformanceLabel(event.record, event.performance)}
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {format(parseISO(event.performance.date), "d MMM yyyy")} ·{" "}
-                      {event.kind === "weight"
-                        ? "Weight PR"
-                        : event.kind === "reps"
-                          ? "Rep PR"
-                          : "Volume PR"}{" "}
-                      · Open exercise history
-                    </p>
-                  </Link>
-                ))
+                groups
+                  .filter((group) =>
+                    events.some((event) => eventGroupKey(event.record) === group.key),
+                  )
+                  .sort(
+                    (a, b) =>
+                      events.findIndex((event) => eventGroupKey(event.record) === a.key) -
+                      events.findIndex((event) => eventGroupKey(event.record) === b.key),
+                  )
+                  .map((group) => (
+                    <Card key={group.key} className="min-w-0 space-y-2">
+                      <Link
+                        to="/bulk/prs"
+                        search={{ record: group.key }}
+                        preload="intent"
+                        className="flex min-h-11 items-center break-words font-semibold"
+                      >
+                        {group.name}
+                      </Link>
+                      {events
+                        .filter((event) => eventGroupKey(event.record) === group.key)
+                        .map((event) => (
+                          <div key={event.id} className="border-t border-border py-2">
+                            <p className="num break-words text-sm">
+                              {event.record.side
+                                ? `${event.record.side === "left" ? "Left" : "Right"}: `
+                                : ""}
+                              {event.kind === "volume"
+                                ? `${number(event.performance.volume)} kg volume`
+                                : event.kind === "reps"
+                                  ? `${event.performance.repCount} reps${event.performance.repLoad != null ? ` @ ${number(event.performance.repLoad)} kg` : ""}`
+                                  : workingPerformanceLabel(
+                                      { ...event.record, side: null },
+                                      event.performance,
+                                    )}
+                            </p>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {format(parseISO(event.performance.date), "d MMM yyyy")} ·{" "}
+                              {event.kind === "weight"
+                                ? "Weight PR"
+                                : event.kind === "reps"
+                                  ? "Rep PR"
+                                  : "Volume PR"}
+                            </p>
+                          </div>
+                        ))}
+                    </Card>
+                  ))
               ) : (
                 <Card>
                   <p className="font-semibold">No records in this period</p>
@@ -97,22 +124,24 @@ function PersonalRecordsPage() {
             </div>
           ) : records.length ? (
             <div className="space-y-2">
-              {records.map((record) => (
+              {groups.map((group) => (
                 <Link
-                  key={record.key}
+                  key={group.key}
                   to="/bulk/prs"
-                  search={{ record: record.key }}
-                  className="card-surface flex min-h-16 items-center justify-between gap-3 p-4 active:scale-[0.99]"
+                  search={{ record: group.key }}
+                  preload="intent"
+                  className="card-surface block min-h-16 min-w-0 space-y-2 p-4 active:opacity-80"
                 >
-                  <div className="min-w-0">
-                    <p className="truncate font-semibold">{record.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {record.side ? `${record.side} side · ` : ""}
-                      {record.performances.length} completed performance
-                      {record.performances.length === 1 ? "" : "s"}
-                    </p>
-                  </div>
-                  <Trophy className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
+                  <p className="break-words font-semibold">{group.name}</p>
+                  <ExerciseRecordSummary group={group} range={progressRange("all")} kind="best" />
+                  <p className="text-xs text-muted-foreground">
+                    {
+                      new Set(
+                        group.records.flatMap((record) => record.performances.map((p) => p.date)),
+                      ).size
+                    }{" "}
+                    completed performances · Open exercise history
+                  </p>
                 </Link>
               ))}
             </div>
@@ -130,7 +159,7 @@ function PersonalRecordsPage() {
   );
 }
 
-function RecordDetail({ record }: { record: PersonalRecord }) {
+function RecordDetail({ group }: { group: ExerciseRecord }) {
   return (
     <>
       <HistoryBackLink
@@ -139,10 +168,36 @@ function RecordDetail({ record }: { record: PersonalRecord }) {
         parentPath="/bulk/prs"
         fallbackSearch={{}}
       />
-      <PageHeader
-        title={record.name}
-        subtitle={record.side ? `${record.side} side` : "Completed history"}
-      />
+      <div className="[&_h1]:break-words">
+        <PageHeader title={group.name} subtitle="Completed history" />
+      </div>
+      <Card className="mb-4">
+        <ExerciseRecordSummary group={group} range={progressRange("all")} kind="best" />
+      </Card>
+      {group.records.map((record) => (
+        <SideRecordHistory
+          key={record.key}
+          record={record}
+          showLabel={group.records.length > 1 || record.side != null}
+        />
+      ))}
+      {group.records.some((record) => record.isBodyweight) ? (
+        <p className="mt-3 text-xs text-muted-foreground">
+          Bodyweight records show the saved bodyweight when available. Public sessions retain
+          external load separately and never invent missing bodyweight.
+        </p>
+      ) : null}
+    </>
+  );
+}
+function SideRecordHistory({ record, showLabel }: { record: PersonalRecord; showLabel: boolean }) {
+  return (
+    <section className="mb-5 min-w-0">
+      {showLabel ? (
+        <h2 className="mb-2 text-base font-semibold">
+          {record.side === "left" ? "Left" : record.side === "right" ? "Right" : "Standard"}
+        </h2>
+      ) : null}
       <div className="grid grid-cols-3 gap-2">
         <RecordCard
           label="Weight PR"
@@ -163,22 +218,16 @@ function RecordDetail({ record }: { record: PersonalRecord }) {
           value={`${number(record.bestVolume?.volume ?? null)} kg`}
           date={record.bestVolume?.date}
         />
-      </div>
-      {record.isBodyweight ? (
-        <p className="mt-3 text-xs text-muted-foreground">
-          Bodyweight records show the saved bodyweight when available. Public sessions retain
-          external load separately and never invent missing bodyweight.
-        </p>
-      ) : null}
+      </div>{" "}
       <section className="mt-5">
         <SectionTitle>History</SectionTitle>
         <div className="mt-2 space-y-2">
           {record.performances.map((performance, index) => (
             <Card
               key={`${performance.date}:${index}`}
-              className="flex items-center justify-between gap-3"
+              className="flex min-w-0 flex-wrap items-center justify-between gap-3"
             >
-              <div>
+              <div className="min-w-0">
                 <p className="text-sm font-semibold">
                   {new Date(performance.date).toLocaleDateString("en-GB")}
                 </p>
@@ -196,7 +245,7 @@ function RecordDetail({ record }: { record: PersonalRecord }) {
           ))}
         </div>
       </section>
-    </>
+    </section>
   );
 }
 
@@ -212,7 +261,7 @@ function RecordCard({
   return (
     <Card className="min-w-0 p-3">
       <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="num mt-1 truncate text-sm font-semibold">{value}</p>
+      <p className="num mt-1 break-words text-sm font-semibold">{value}</p>
       <p className="mt-1 text-[10px] text-muted-foreground">
         {date ? new Date(date).toLocaleDateString("en-GB") : "No data"}
       </p>

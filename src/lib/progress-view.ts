@@ -4,11 +4,8 @@ import { useMyChallenge } from "./challenge.ts";
 import { availableProgressSections, type ProgressSection } from "./progress-sections.ts";
 import { useProgressMode, useStrengthModel } from "./progress-model.ts";
 import { useActiveTrainingPlan } from "./training-plans-query.ts";
-import {
-  defaultTrackedLifts,
-  trackedLiftCandidates,
-  resolveTrackedLifts,
-} from "./strength-estimates.ts";
+import { defaultTrackedLifts } from "./strength-estimates.ts";
+import { normalizeTrackedPreferences, trackedExerciseOptions } from "./exercise-records.ts";
 import { EXERCISES, orderedExerciseDefs, type AppData, type SplitType } from "./types.ts";
 
 export type { ProgressSection } from "./progress-sections.ts";
@@ -74,52 +71,82 @@ export function useTrackedLifts(
   string[],
   (names: string[]) => void,
   () => void,
-  { fromPlan: string[]; history: string[] },
+  { fromPlan: string[]; history: string[]; labels: Record<string, string> },
   boolean,
 ] {
   const { publicId, bulkId, mode } = useProgressMode();
   const plan = useActiveTrainingPlan(publicId);
   const { records } = useStrengthModel();
   const scope = bulkId ?? "legacy";
+  const legacyDefaults = defaultTrackedLifts(data);
+  const legacyNames =
+    mode !== "public"
+      ? [
+          ...new Set([
+            ...legacyDefaults,
+            ...(Object.keys(EXERCISES) as SplitType[]).flatMap((split) =>
+              orderedExerciseDefs(data.targets, split).map((exercise) => exercise.name),
+            ),
+          ]),
+        ]
+      : [];
+  const choices = trackedExerciseOptions(
+    mode === "public" ? (plan.data ?? null) : null,
+    records,
+    legacyNames,
+  );
+  const defaults =
+    mode === "public"
+      ? choices.defaults
+      : normalizeTrackedPreferences(legacyDefaults, choices.options);
+  const candidates = {
+    fromPlan: choices.fromPlan,
+    history: choices.history,
+    labels: Object.fromEntries(choices.options.map((option) => [option.key, option.name])),
+  };
+  const available = [...new Set([...choices.fromPlan, ...choices.history, ...defaults])];
   const read = (): string[] | null => {
     try {
       const parsed = JSON.parse(localStorage.getItem(TRACKED_KEY) ?? "null");
       const value = Array.isArray(parsed) ? parsed : parsed?.[scope];
-      if (Array.isArray(parsed) && parsed.every((name) => typeof name === "string"))
-        localStorage.setItem(TRACKED_KEY, JSON.stringify({ [scope]: parsed }));
-      return Array.isArray(value) && value.every((name) => typeof name === "string") ? value : null;
+      if (!Array.isArray(value) || !value.every((name) => typeof name === "string")) return null;
+      const normalized = normalizeTrackedPreferences(value, choices.options);
+      if (Array.isArray(parsed) || JSON.stringify(value) !== JSON.stringify(normalized))
+        localStorage.setItem(
+          TRACKED_KEY,
+          JSON.stringify({ ...(Array.isArray(parsed) ? {} : parsed), [scope]: normalized }),
+        );
+      return normalized;
     } catch {
       return null;
     }
   };
-  const [saved, setSaved] = useState(() => ({ scope, value: read() }));
-  const override = saved.scope === scope ? saved.value : read();
-  const defaults = defaultTrackedLifts(mode === "public" ? (plan.data ?? null) : data);
-  const candidates = trackedLiftCandidates(plan.data ?? null, records);
-  if (mode !== "public")
-    candidates.fromPlan = [
-      ...new Set([
-        ...defaults,
-        ...(Object.keys(EXERCISES) as SplitType[]).flatMap((split) =>
-          orderedExerciseDefs(data.targets, split).map((exercise) => exercise.name),
-        ),
-      ]),
-    ];
-  const available = [...new Set([...candidates.fromPlan, ...candidates.history, ...defaults])];
+  const persisted = read();
+  const [saved, setSaved] = useState(() => ({ scope, value: persisted }));
+  const override = saved.scope === scope ? saved.value : persisted;
   const update = (names: string[] | null) => {
-    setSaved({ scope, value: names });
+    const unavailable = normalizeTrackedPreferences(override ?? [], choices.options).filter(
+      (key) => !available.includes(key),
+    );
+    const normalized =
+      names === null
+        ? null
+        : normalizeTrackedPreferences([...names, ...unavailable], choices.options);
+    setSaved({ scope, value: normalized });
     try {
       const old = JSON.parse(localStorage.getItem(TRACKED_KEY) ?? "null");
       const preferences = old && !Array.isArray(old) && typeof old === "object" ? old : {};
-      if (names === null) delete preferences[scope];
-      else preferences[scope] = names;
+      if (normalized === null) delete preferences[scope];
+      else preferences[scope] = normalized;
       localStorage.setItem(TRACKED_KEY, JSON.stringify(preferences));
     } catch {
       /* storage may be unavailable */
     }
   };
   return [
-    resolveTrackedLifts(defaults, override, available),
+    normalizeTrackedPreferences(override ?? defaults, choices.options).filter((key) =>
+      available.includes(key),
+    ),
     (names) => update(names),
     () => update(null),
     candidates,

@@ -27,7 +27,17 @@ export type PersonalRecord = {
 /** Compare the existing PR summaries; history never uses a separate PR formula. */
 export function personalRecordImprovements(before: PersonalRecord[], after: PersonalRecord[]) {
   return after.flatMap((record) => {
-    const previous = before.find((r) => compatibleRecordKey(r) === compatibleRecordKey(record));
+    const previous =
+      before.find((r) => compatibleRecordKey(r) === compatibleRecordKey(record)) ??
+      (() => {
+        const compatible = before.filter(
+          (r) =>
+            r.side === record.side &&
+            (!r.exerciseId || !record.exerciseId) &&
+            personalRecordNameKey(r.name) === personalRecordNameKey(record.name),
+        );
+        return compatible.length === 1 ? compatible[0] : undefined;
+      })();
     const weight = record.bestWeight;
     const reps = record.bestReps;
     const volume = record.bestVolume;
@@ -91,7 +101,7 @@ export const personalRecordNameKey = (name: string) =>
     .replaceAll(/[^a-z0-9]+/g, "");
 
 const compatibleRecordKey = (record: PersonalRecord) =>
-  `${personalRecordNameKey(record.name)}:${record.side ?? "bilateral"}`;
+  `${record.exerciseId ?? `name:${personalRecordNameKey(record.name)}`}:${record.side ?? "bilateral"}`;
 
 /**
  * Combines preserved legacy JSON performances with normalized sessions without
@@ -103,8 +113,19 @@ export function mergePersonalRecords(
   legacy: PersonalRecord[],
 ): PersonalRecord[] {
   const grouped = new Map<string, PersonalRecord>();
-  for (const record of [...normalized, ...legacy]) {
-    const key = compatibleRecordKey(record);
+  // Resolve real IDs first. Name fallback may attach old JSON only when there
+  // is exactly one candidate; distinct custom exercises must never be merged.
+  const all = [...normalized, ...legacy];
+  for (const record of [...all.filter((r) => r.exerciseId), ...all.filter((r) => !r.exerciseId)]) {
+    let key = compatibleRecordKey(record);
+    if (!record.exerciseId && !grouped.has(key)) {
+      const matches = [...grouped.entries()].filter(
+        ([, existing]) =>
+          existing.side === record.side &&
+          personalRecordNameKey(existing.name) === personalRecordNameKey(record.name),
+      );
+      if (matches.length === 1) key = matches[0]![0];
+    }
     const existing = grouped.get(key);
     if (!existing) {
       grouped.set(key, record);

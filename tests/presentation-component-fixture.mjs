@@ -14,6 +14,17 @@ export function presentationComponent(file, modules = {}, globals = {}) {
     require(name) {
       if (modules[name]) return modules[name];
       if (name === "./MealDeleteDialog") return { MealDeleteDialog: "MealDeleteDialog" };
+      if (name === "./exercise-records.ts" || name === "@/lib/exercise-records")
+        return require("../src/lib/exercise-records.ts");
+      if (name === "@/components/ExerciseRecordSummary")
+        return presentationComponent(
+          "src/components/ExerciseRecordSummary.tsx",
+          {
+            ...modules,
+            "@/lib/calc": modules["@/lib/calc"] ?? require("../src/lib/calc.ts"),
+          },
+          globals,
+        );
       if (name === "./query-pagination")
         return presentationComponent("src/lib/query-pagination.ts");
       if (name === "@/lib/utils") return presentationComponent("src/lib/utils.ts");

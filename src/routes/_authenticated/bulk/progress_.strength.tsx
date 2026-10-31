@@ -13,7 +13,8 @@ import { useProgressPeriod, useTrackedLifts } from "@/lib/progress-view";
 import { useActiveTrainingPlan } from "@/lib/training-plans-query";
 import { useProgressMode, useStrengthModel } from "@/lib/progress-model";
 import { trackedLiftSummary } from "@/lib/progress-presentation";
-import { fmt, signed } from "@/lib/calc";
+import { ExerciseRecordSummary } from "@/components/ExerciseRecordSummary";
+import { groupExerciseRecords, resolveExerciseRecord } from "@/lib/exercise-records";
 import { useAppData } from "@/lib/store";
 import {
   progressRange,
@@ -22,7 +23,6 @@ import {
   type ProgressPeriod,
 } from "@/lib/progress-period";
 import {
-  strengthProgress,
   workingPerformanceLabel,
   progressRecordEvents,
   trainingAdherence,
@@ -62,22 +62,12 @@ function StrengthBody({ data, period }: { data: AppData; period: ProgressPeriod 
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState(false);
 
-  const estimates = trackedNames.flatMap<{
-    name: string;
-    key: string;
-    record: import("@/lib/personal-records").PersonalRecord | null;
-    progress: ReturnType<typeof strengthProgress> | null;
-  }>((name) => {
-    const matching = records.filter((r) => r.name === name);
-    return matching.length
-      ? matching.map((record) => ({
-          name,
-          key: record.key,
-          record,
-          progress: strengthProgress(record, range),
-        }))
-      : [{ name, key: name, record: null, progress: null }];
-  });
+  const groups = groupExerciseRecords(records);
+  const estimates = trackedNames.map((key) => ({
+    key,
+    group: resolveExerciseRecord(groups, key),
+    name: candidates.labels?.[key] ?? resolveExerciseRecord(groups, key)?.name ?? key,
+  }));
   const summary = trackedLiftSummary(records, trackedNames, range);
   const adherence = trainingAdherence(
     workoutRecords,
@@ -165,7 +155,7 @@ function StrengthBody({ data, period }: { data: AppData; period: ProgressPeriod 
               },
             ].map((group) => {
               const names = group.names.filter((name) =>
-                name.toLowerCase().includes(search.toLowerCase()),
+                (candidates.labels?.[name] ?? name).toLowerCase().includes(search.toLowerCase()),
               );
               return names.length ? (
                 <section key={group.label}>
@@ -187,7 +177,7 @@ function StrengthBody({ data, period }: { data: AppData; period: ProgressPeriod 
                           )
                         }
                       />
-                      {exerciseLabel(name)}
+                      {exerciseLabel(candidates.labels?.[name] ?? name)}
                     </label>
                   ))}
                 </section>
@@ -209,40 +199,25 @@ function StrengthBody({ data, period }: { data: AppData; period: ProgressPeriod 
         <>
           <div className="rounded-[20px] bg-card px-4">
             {estimates.length ? (
-              estimates.map(({ name, key, record, progress }) => (
+              estimates.map(({ name, key, group }) => (
                 <Link
                   key={key}
                   to="/bulk/progress/strength/$lift"
-                  params={{ lift: name }}
+                  params={{ lift: key }}
                   preload="intent"
-                  className="block min-h-[88px] border-t border-border py-3 first:border-t-0 active:opacity-80"
+                  className="block min-h-[88px] min-w-0 border-t border-border py-3 first:border-t-0 active:opacity-80"
                 >
-                  <p className="break-words text-[15px] font-medium">
-                    {exerciseLabel(name)}
-                    {record?.side ? ` · ${record.side}` : ""}
-                  </p>
-                  <p className="num mt-1 text-lg font-semibold">
-                    {record
-                      ? workingPerformanceLabel(record, progress?.latest ?? null)
-                      : "No data yet"}
-                  </p>
-                  <p className="mt-0.5 text-sm text-muted-foreground">
-                    {progress?.changeKg != null
-                      ? `${signed(progress.changeKg, 1)} kg vs start of period · same ${progress.latest!.reps} reps`
-                      : progress?.sessions === 1
-                        ? "One session"
-                        : progress?.latest
-                          ? "No comparable previous session yet"
-                          : "Complete a workout to start tracking"}
-                  </p>
-                  {progress?.estimate.current != null ? (
-                    <p className="num mt-1 text-xs text-muted-foreground">
-                      Estimated 1RM {fmt(progress.estimate.current, 1)} kg
-                      {progress.estimate.changePct != null
-                        ? ` · ${signed(progress.estimate.changePct, 0)}%`
-                        : ""}
-                    </p>
-                  ) : null}
+                  <p className="mb-1 break-words text-[15px] font-medium">{exerciseLabel(name)}</p>
+                  {group ? (
+                    <ExerciseRecordSummary group={group} range={range} />
+                  ) : (
+                    <>
+                      <p className="text-lg font-semibold">No data yet</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Complete a workout to start tracking
+                      </p>
+                    </>
+                  )}
                 </Link>
               ))
             ) : (
