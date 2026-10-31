@@ -244,7 +244,37 @@ html[data-tempo-ready="true"] .tempo-startup {
 }
 
 .tempo-route-content {
-  animation: tempo-route-enter 0.15s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+  min-width: 0;
+}
+
+/* The primary-page fade replaces the heading's separate entrance motion. */
+.tempo-route-content[data-primary-page="true"] header.fade-up {
+  animation: none;
+}
+
+.tempo-tab-icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+.tempo-tab-icon::before {
+  content: "";
+  position: absolute;
+  inset: -4px -8px;
+  border-radius: 12px;
+  background: color-mix(in oklch, var(--color-primary) 12%, transparent);
+  opacity: 0;
+  transform: scale(0.94);
+  transition:
+    opacity 150ms ease-out,
+    transform 150ms ease-out;
+}
+
+.tempo-tab-link[aria-current="page"] .tempo-tab-icon::before,
+.tempo-tab-link:active .tempo-tab-icon::before {
+  opacity: 1;
+  transform: none;
 }
 
 .tempo-pull-surface {
@@ -280,8 +310,13 @@ html[data-tempo-ready="true"] .tempo-startup {
     animation: none;
   }
 
-  .tempo-route-content {
-    animation: none;
+  .tempo-tab-icon::before {
+    transition: none;
+    transform: none;
+  }
+
+  .tempo-tab-link:active {
+    transform: none;
   }
 
   .tempo-pull-surface {
@@ -305,17 +340,6 @@ html[data-tempo-ready="true"] .tempo-startup {
   from {
     opacity: 0;
     transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-@keyframes tempo-route-enter {
-  from {
-    opacity: 0.92;
-    transform: translateY(3px);
   }
   to {
     opacity: 1;

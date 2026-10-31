@@ -159,13 +159,14 @@ test("authenticated sibling routes share one persistent shell and transition onl
   assert.match(shell, /const AppShellMountedContext = createContext\(false\)/);
   assert.match(shell, /if \(shellMounted\) return <>\{children\}<\/>/);
   assert.match(shell, /<AppShellMountedContext\.Provider value>/);
-  assert.match(shell, /<div key=\{pathname\} className="tempo-route-content">/);
+  assert.match(shell, /<PrimaryTabTransition primaryPaths=\{MAIN_TAB_PATHS\}>/);
+  assert.doesNotMatch(shell, /key=\{pathname\}/);
   assert.doesNotMatch(authenticatedLayout, /key=\{(?:pathname|location)/);
-  assert.match(styles, /\.tempo-route-content\s*\{[\s\S]*tempo-route-enter 0\.15s/);
-  assert.match(styles, /@keyframes tempo-route-enter[\s\S]*translateY\(3px\)/);
+  assert.match(styles, /\.tempo-route-content\s*\{\s*min-width: 0;/);
+  assert.doesNotMatch(styles, /tempo-route-enter/);
   assert.match(
     styles,
-    /@media \(prefers-reduced-motion: reduce\)[\s\S]*\.tempo-route-content\s*\{\s*animation: none;/,
+    /@media \(prefers-reduced-motion: reduce\)[\s\S]*\.tempo-tab-icon::before\s*\{\s*transition: none;/,
   );
 });
 

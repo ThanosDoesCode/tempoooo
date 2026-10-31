@@ -10,6 +10,7 @@ import { PullToRefresh } from "./PullToRefresh";
 import { LogSheet } from "./LogSheet";
 import { HistoryBackLink } from "./HistoryBackLink";
 import { NotificationBell } from "./NotificationBell";
+import { PrimaryTabTransition } from "./PrimaryTabTransition";
 
 const TAB_ICONS: Record<MainTab, LucideIcon> = {
   today: Home,
@@ -74,9 +75,7 @@ function AppChrome({ children }: { children: ReactNode }) {
         <main
           className={`mx-auto w-full ${widerDailyLayout ? "max-w-2xl" : "max-w-lg"} px-5 ${isAccountOnboarding ? "pb-6 pt-0" : `${focusScreen ? "pb-10" : "pb-28"} ${topSpacing}`}`}
         >
-          <div key={pathname} className="tempo-route-content">
-            {children}
-          </div>
+          <PrimaryTabTransition primaryPaths={MAIN_TAB_PATHS}>{children}</PrimaryTabTransition>
         </main>
       </PullToRefresh>
 
@@ -164,14 +163,17 @@ function TabLink({
     <Link
       to={item.to}
       preload="intent"
+      activeOptions={{ exact: true, includeSearch: false }}
       aria-label={item.label}
       aria-current={active ? "page" : undefined}
       onPointerDown={onIntent}
       onPointerEnter={onIntent}
       onFocus={onIntent}
-      className={`relative flex min-h-11 min-w-0 flex-col items-center justify-center gap-1 px-1 py-1 transition-[color,transform,opacity] duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring active:scale-95 active:opacity-80 ${active ? "text-primary" : "text-muted-foreground"}`}
+      className={`tempo-tab-link relative flex min-h-11 min-w-0 flex-col items-center justify-center gap-1 px-1 py-1 transition-[color,transform,opacity] duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring active:scale-95 active:opacity-80 active:text-primary ${active ? "text-primary" : "text-muted-foreground"}`}
     >
-      <Icon className="h-6 w-6" strokeWidth={1.8} aria-hidden="true" />
+      <span className="tempo-tab-icon h-6 w-6" aria-hidden="true">
+        <Icon className="relative h-6 w-6" strokeWidth={1.8} />
+      </span>
       <span className="max-w-full truncate text-[10px] font-medium">{item.label}</span>
       {badge}
     </Link>
