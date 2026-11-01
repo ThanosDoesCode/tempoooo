@@ -10,6 +10,7 @@ import {
   startOfMonth,
   startOfWeek,
 } from "date-fns";
+import { parseDurationToSeconds } from "./duration.ts";
 import { parseDecimal } from "./numeric.ts";
 
 // Activity Planner model. A planned item is an intention, never activity history: completion is
@@ -254,15 +255,15 @@ export function parsePlannedDistance(raw: string): ParsedField<number> {
   return { value: Math.round(parsed.value * 100) / 100, error: null };
 }
 
-/** Optional whole minutes, stored canonically as seconds. */
+/** Optional duration, using the shared clock grammar; existing 1 minute–24 hour bounds remain. */
 export function parsePlannedMinutes(raw: string): ParsedField<number> {
   const text = raw.trim();
   if (!text) return { value: null, error: null };
-  if (!/^\d+$/.test(text)) return { value: null, error: "Enter whole minutes, like 30." };
-  const minutes = Number(text);
-  if (minutes < 1 || minutes > 1440)
+  const seconds = parseDurationToSeconds(text);
+  if (text === "0" || (seconds !== null && (seconds < 60 || seconds > 86400)))
     return { value: null, error: "Duration must be between 1 and 1440 minutes." };
-  return { value: minutes * 60, error: null };
+  if (seconds === null) return { value: null, error: "Enter a duration like 30 or 15,35." };
+  return { value: seconds, error: null };
 }
 
 export function parsePlannedNote(raw: string): ParsedField<string> {

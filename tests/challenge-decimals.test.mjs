@@ -272,11 +272,11 @@ for (const raw of ["7,25", "7.25"])
     assert.equal(f.rows[0].distance_km, 7.25);
     assert.equal(f.rows[0].duration_seconds, 1845);
   });
-test("duration uses punctuation-capable text input and preserves partial/invalid clock text", () => {
+test("duration uses the decimal keypad and preserves partial/invalid clock text", () => {
   const f = fixture("7,25", "30:");
   const input = f.nodes.find((n) => n.type === "input" && n.props.value === "30:");
   assert.equal(input.props.type, "text");
-  assert.equal(input.props.inputMode, "text");
+  assert.equal(input.props.inputMode, "decimal");
   assert.equal(input.props.autoCapitalize, "none");
   assert.equal(input.props.autoCorrect, "off");
   input.props.onChange({ target: { value: "30:" } });
@@ -285,3 +285,39 @@ test("duration uses punctuation-capable text input and preserves partial/invalid
   assert.deepEqual(f.updates.at(-1), [3, "30:"]);
   assert.equal(durationLib.parseDurationToSeconds("30:"), null);
 });
+
+for (const type of ["run", "cycle"]) {
+  for (const [raw, seconds] of [
+    ["15,35", 935],
+    ["15.35", 935],
+    ["15:35", 935],
+    ["5,09", 309],
+    ["0,45", 45],
+    ["45", 2700],
+  ]) {
+    test(`${type} saves ${raw} as ${seconds} whole seconds`, async () => {
+      const f = fixture("5", raw, type);
+      await f.submit();
+      assert.equal(f.rows[0].duration_seconds, seconds);
+    });
+  }
+  for (const raw of ["15,60", "15.60", "15:60"]) {
+    test(`${type} rejects out-of-range seconds ${raw} before upload`, async () => {
+      const f = fixture("5", raw, type);
+      await f.submit();
+      assert.equal(f.rows.length, 0);
+      assert.equal(f.uploads, 0);
+    });
+  }
+}
+for (const raw of ["15,", "15.", "15:", ",35", ".35"]) {
+  test(`duration preserves ${raw} while typing; canonicalizes only valid text on blur`, () => {
+    const f = fixture("5", raw);
+    const input = f.nodes.find((node) => node.type === "input" && node.props.value === raw);
+    input.props.onChange({ target: { value: raw } });
+    assert.deepEqual(f.updates.at(-1), [3, raw]);
+    input.props.onBlur();
+    assert.deepEqual(f.updates.at(-1), [3, durationLib.canonicalDuration(raw)]);
+    assert.equal(durationLib.canonicalDuration(raw), raw.endsWith("35") ? "0:35" : raw);
+  });
+}

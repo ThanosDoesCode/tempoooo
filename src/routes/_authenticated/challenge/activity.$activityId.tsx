@@ -221,7 +221,9 @@ function ActivityDetail() {
           </>
         ) : (
           <p className="text-center text-[13px] text-muted-foreground">
-            This week is finalized, so the activity is locked.
+            {activity.user_id !== user?.id
+              ? "Only the person who logged this activity can edit it."
+              : "This week is finalized, so the activity is locked."}
           </p>
         )}
       </div>

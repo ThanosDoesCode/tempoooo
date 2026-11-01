@@ -6,6 +6,7 @@ import { TempoDatePicker, TempoTimePicker } from "@/components/TempoDateTimePick
 import { planningDisclaimer } from "@/components/PlannerParts";
 import { useAuth } from "@/lib/auth";
 import { backWithinApp } from "@/lib/in-app-back";
+import { canonicalDuration, formatClock } from "@/lib/duration";
 import { userFacingError } from "@/lib/network-errors";
 import {
   ACTIVITY_LABEL,
@@ -64,8 +65,7 @@ export function PlanActivityForm({
   const [details, setDetails] = useState<Record<"run" | "ride", Details>>(() => {
     const own: Details = {
       distance: editing?.distanceKm != null ? String(editing.distanceKm) : "",
-      minutes:
-        editing?.durationSeconds != null ? String(Math.round(editing.durationSeconds / 60)) : "",
+      minutes: editing?.durationSeconds != null ? formatClock(editing.durationSeconds) : "",
       note: editing?.note ?? "",
     };
     return {
@@ -294,17 +294,19 @@ export function PlanActivityForm({
                 />
               </DetailRow>
               {fieldError("distance")}
-              <DetailRow label="Duration" unit="min" htmlFor={`${id}-minutes`}>
+              <DetailRow label="Duration" htmlFor={`${id}-minutes`}>
                 <input
                   id={`${id}-minutes`}
                   type="text"
-                  inputMode="numeric"
+                  inputMode="decimal"
                   autoComplete="off"
-                  placeholder="0"
+                  placeholder="e.g. 15,35"
+                  aria-label="Planned duration (minutes:seconds, optional)"
                   value={draft.minutes}
                   aria-invalid={!!errors.minutes}
                   aria-describedby={errors.minutes ? errorId("minutes") : undefined}
                   onChange={(event) => setDraft({ minutes: event.target.value })}
+                  onBlur={() => setDraft({ minutes: canonicalDuration(draft.minutes) })}
                   className={inputClass}
                 />
               </DetailRow>

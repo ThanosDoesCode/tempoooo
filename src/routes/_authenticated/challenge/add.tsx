@@ -587,14 +587,15 @@ function AddActivity() {
             <div className="flex h-14 items-center gap-2 rounded-[14px] border border-input bg-card px-4">
               <input
                 type="text"
-                inputMode="text"
+                inputMode="decimal"
+                autoComplete="off"
                 autoCapitalize="none"
                 autoCorrect="off"
                 spellCheck={false}
                 aria-label="Duration (minutes:seconds)"
                 value={duration}
                 disabled={busy}
-                placeholder="e.g. 22:20"
+                placeholder="e.g. 15,35"
                 onChange={(e) => setDuration(e.target.value)}
                 onBlur={() => setDuration(canonicalDuration(duration))}
                 className="num min-w-0 flex-1 bg-transparent text-xl font-semibold outline-none placeholder:font-normal placeholder:text-muted-foreground/50"

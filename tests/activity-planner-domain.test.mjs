@@ -218,7 +218,7 @@ test("distance accepts comma or dot and is optional; minutes are whole and store
 
   assert.deepEqual(parsePlannedMinutes(""), { value: null, error: null });
   assert.deepEqual(parsePlannedMinutes("30"), { value: 1800, error: null });
-  assert.match(parsePlannedMinutes("30.5").error, /whole minutes/);
+  assert.deepEqual(parsePlannedMinutes("30.5"), { value: 1805, error: null });
   assert.match(parsePlannedMinutes("0").error, /between/);
   assert.match(parsePlannedMinutes("1441").error, /between/);
 
@@ -281,4 +281,15 @@ test("rows map through one model; a link whose history is gone never reads as co
   assert.equal(plannedStatus(ride), "planned");
   // Linked history is embedded as status/raw values only: no sets, exercises or evidence paths.
   assert.doesNotMatch(PLANNER_COLUMNS, /exercise_name|sets|evidence|signed/);
+});
+
+test("planned duration shares clock separators while retaining optional/minimum/maximum rules", () => {
+  for (const raw of ["15,35", "15.35", "15:35"])
+    assert.deepEqual(parsePlannedMinutes(raw), { value: 935, error: null });
+  assert.deepEqual(parsePlannedMinutes("45"), { value: 2700, error: null });
+  assert.deepEqual(parsePlannedMinutes(""), { value: null, error: null });
+  assert.deepEqual(parsePlannedMinutes("24:00:00"), { value: 86400, error: null });
+  for (const raw of ["0,45", "24:00:01"]) assert.match(parsePlannedMinutes(raw).error, /between/);
+  for (const raw of ["15,60", "15.", "15,", "15:"])
+    assert.match(parsePlannedMinutes(raw).error, /duration/);
 });
