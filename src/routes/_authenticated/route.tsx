@@ -18,14 +18,14 @@ import { isExpectedQueryCancellation } from "@/lib/query-cancellation";
 import { QueryCancellationRecovery } from "@/components/QueryCancellationRecovery";
 import { startupDiagnostic, withStartupDeadline } from "@/lib/startup";
 import { rememberDestination, sanitizeDestination } from "@/lib/pending-destination";
-import { isLegacyGenericLaunch } from "@/lib/launch-intent";
+import { isGenericLaunch, recordLaunch } from "@/lib/launch-intent";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
   beforeLoad: async ({ context, location, cause }) => {
-    // A cold launch of a pre-2026-10-07 install opens the old start_url; treat it as a generic launch
-    // (/today: Today for fitness, Challenge for core) before sign-in could remember it as a destination.
-    if (cause !== "preload" && isLegacyGenericLaunch(location.href))
+    // An unmarked home-screen launch (often the old "/challenge" start_url) is generic: /today picks
+    // Today for fitness, Challenge for core. Runs before sign-in can remember it as a destination.
+    if (cause !== "preload" && isGenericLaunch(location.href))
       throw redirect({ to: "/today", replace: true });
     const user = await withStartupDeadline(
       context.queryClient.fetchQuery(authenticatedUserQueryOptions()),
@@ -63,6 +63,7 @@ export const Route = createFileRoute("/_authenticated")({
     startupDiagnostic("profile_resolved", { present: initialProfile !== null });
     startupDiagnostic("memberships_resolved", { present: memberships.length > 0 });
     startupDiagnostic("mode_resolved", { mode: accountProductMode(memberships) });
+    recordLaunch(() => ({ mode: accountProductMode(memberships) }));
     let profile = initialProfile;
     if (!profile) {
       await withStartupDeadline(syncProfile(user), "profile sync");

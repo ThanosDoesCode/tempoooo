@@ -9,7 +9,6 @@ import { PullToRefresh } from "./PullToRefresh";
 import { LogSheet } from "./LogSheet";
 import { HistoryBackLink } from "./HistoryBackLink";
 import { NotificationBell } from "./NotificationBell";
-import { PrimaryTabTransition } from "./PrimaryTabTransition";
 
 const TAB_ICONS: Record<MainTab, LucideIcon> = {
   today: Home,
@@ -18,7 +17,7 @@ const TAB_ICONS: Record<MainTab, LucideIcon> = {
 };
 
 const AppShellMountedContext = createContext(false);
-// Only the bottom-tab pages slide; Profile is account-level and opens as a normal nested screen.
+// Bottom-tab pages render instantly (no entrance motion); Profile is account-level and nested.
 const MAIN_TAB_PATHS = new Set(["/bulk", "/challenge", "/bulk/progress"]);
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -71,9 +70,10 @@ function AppChrome({ children }: { children: ReactNode }) {
       />
       <PullToRefresh>
         <main
+          data-primary-page={mainTabPage || undefined}
           className={`mx-auto w-full ${widerDailyLayout ? "max-w-2xl" : "max-w-lg"} px-5 ${isAccountOnboarding ? "pb-6 pt-0" : `${focusScreen ? "pb-10" : "pb-28"} ${topSpacing}`}`}
         >
-          <PrimaryTabTransition primaryPaths={MAIN_TAB_PATHS}>{children}</PrimaryTabTransition>
+          {children}
         </main>
       </PullToRefresh>
 

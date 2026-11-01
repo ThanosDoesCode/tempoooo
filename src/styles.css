@@ -243,35 +243,8 @@ html[data-tempo-ready="true"] .tempo-startup {
   animation: fade-up 0.16s cubic-bezier(0.2, 0.7, 0.3, 1) both;
 }
 
-.tempo-route-content {
-  min-width: 0;
-}
-
-.tempo-route-content[data-primary-page="true"] {
-  overflow-x: clip;
-  background: var(--color-background);
-}
-
-.tempo-tab-live {
-  min-width: 0;
-}
-
-.tempo-tab-snapshot {
-  position: fixed;
-  z-index: 20;
-  overflow: hidden;
-  pointer-events: none;
-  user-select: none;
-  contain: layout paint;
-  background: var(--color-background);
-}
-
-.tempo-tab-snapshot-visual header.fade-up {
-  animation: none;
-}
-
-/* The primary-page transition replaces the heading's separate entrance motion. */
-.tempo-route-content[data-primary-page="true"] header.fade-up {
+/* Bottom-tab switches render the destination instantly: no entrance motion on primary pages. */
+main[data-primary-page="true"] .fade-up {
   animation: none;
 }
 
@@ -331,10 +304,6 @@ html[data-tempo-ready="true"] .tempo-startup {
 
   .fade-up {
     animation: none;
-  }
-
-  .tempo-tab-snapshot {
-    display: none;
   }
 
   .tempo-tab-icon::before {

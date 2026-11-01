@@ -27,16 +27,6 @@ export function presentationComponent(file, modules = {}, globals = {}) {
           },
           globals,
         );
-      if (name === "@/lib/primary-tab-motion") return require("../src/lib/primary-tab-motion.ts");
-      if (name === "./PrimaryTabTransition")
-        return presentationComponent(
-          "src/components/PrimaryTabTransition.tsx",
-          {
-            ...modules,
-            react: { ...require("react"), ...modules.react },
-          },
-          globals,
-        );
       if (name === "./query-pagination")
         return presentationComponent("src/lib/query-pagination.ts");
       if (name === "@/lib/utils") return presentationComponent("src/lib/utils.ts");

@@ -148,7 +148,7 @@ test("the shared Log sheet replaces the dropdown as the add surface", async () =
   assert.match(nav, /to: "\/bulk\/training"/); // Workout -> existing Training flow
 });
 
-test("authenticated sibling routes share one persistent shell and transition only route content", async () => {
+test("authenticated sibling routes share one persistent shell and render route content directly", async () => {
   const [shell, authenticatedLayout, styles] = await Promise.all([
     read("src/components/AppShell.tsx"),
     read("src/routes/_authenticated/route.tsx"),
@@ -159,10 +159,10 @@ test("authenticated sibling routes share one persistent shell and transition onl
   assert.match(shell, /const AppShellMountedContext = createContext\(false\)/);
   assert.match(shell, /if \(shellMounted\) return <>\{children\}<\/>/);
   assert.match(shell, /<AppShellMountedContext\.Provider value>/);
-  assert.match(shell, /<PrimaryTabTransition primaryPaths=\{MAIN_TAB_PATHS\}>/);
+  assert.match(shell, /\{children\}\s*<\/main>/);
+  assert.doesNotMatch(shell, /PrimaryTabTransition/);
   assert.doesNotMatch(shell, /key=\{pathname\}/);
   assert.doesNotMatch(authenticatedLayout, /key=\{(?:pathname|location)/);
-  assert.match(styles, /\.tempo-route-content\s*\{\s*min-width: 0;/);
   assert.doesNotMatch(styles, /tempo-route-enter/);
   assert.match(
     styles,
