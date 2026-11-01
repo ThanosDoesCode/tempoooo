@@ -9,13 +9,23 @@ import {
   Scripts,
   type ErrorComponentProps,
 } from "@tanstack/react-router";
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { ChallengePushSession } from "../components/ChallengePushSession";
 import { Toaster } from "../components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { observeAuthIdentity, readStartupSession } from "@/lib/auth";
 import { clearBulk } from "@/lib/store";
 import { AppCrashBoundary } from "@/components/AppCrashBoundary";
 import { QueryCancellationRecovery } from "@/components/QueryCancellationRecovery";
@@ -26,12 +36,8 @@ import {
   resetUserScopedQueries,
 } from "@/lib/query-cancellation";
 import { clearAccountScopedBrowserData } from "@/lib/browser-data";
-import {
-  resolveStartupPhase,
-  shouldArmStartupDeadline,
-  STARTUP_DEADLINE_MS,
-  startupDiagnostic,
-} from "@/lib/startup";
+import { isOffline } from "@/lib/network-errors";
+import { StartupLifecycle, watchStartupRedirects } from "@/lib/startup";
 
 function NotFoundComponent() {
   return (
@@ -161,16 +167,110 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     ],
   }),
   shellComponent: RootShell,
+  // Keep root suspension inside the persistent shell (and its cold-start watchdog).
+  wrapInSuspense: true,
   component: RootComponent,
   notFoundComponent: NotFoundComponent,
   errorComponent: ErrorComponent,
 });
 
 function RootShell({ children }: { children: ReactNode }) {
-  const [startupCoverVisible, setStartupCoverVisible] = useState(true);
+  const router = useRouter();
+  const { queryClient } = router.options.context;
+  const [startup] = useState(() => new StartupLifecycle());
+  const snapshot = useSyncExternalStore(
+    startup.subscribe,
+    startup.getSnapshot,
+    startup.getSnapshot,
+  );
+  const authEventRevision = useRef(0);
+  const previousUserId = useRef<string | null | undefined>(undefined);
+  const route = useRouterState({
+    select: (state) => ({
+      pending: state.status === "pending" || state.isLoading,
+      pathname: state.location.pathname,
+      failed: state.matches.some(
+        (match) => match.status === "error" && !isExpectedQueryCancellation(match.error),
+      ),
+    }),
+  });
+  const startupCoverVisible = snapshot.phase === "restoring";
+  const startupFailed = snapshot.phase.startsWith("recoverable-");
+
+  const restoreSession = useCallback(
+    (attempt: number) => {
+      const revision = authEventRevision.current;
+      void readStartupSession()
+        .then(({ data }) => {
+          if (revision !== authEventRevision.current || !startup.isCurrent(attempt)) return;
+          const userId = data.session?.user.id ?? null;
+          observeAuthIdentity(userId);
+          previousUserId.current = userId;
+          startup.session(attempt, userId);
+        })
+        .catch(() => {
+          if (revision === authEventRevision.current) startup.fail(attempt);
+        });
+    },
+    [startup],
+  );
+
+  useEffect(() => {
+    // The shell survives route pending/error boundaries. A route must not own its own watchdog.
+    const attempt = startup.begin();
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      authEventRevision.current += 1;
+      const nextUserId = session?.user.id ?? null;
+      observeAuthIdentity(nextUserId);
+      startup.session(startup.getSnapshot().attempt, nextUserId);
+      if (!authenticatedUserChanged(previousUserId.current, nextUserId)) {
+        previousUserId.current = nextUserId;
+        return;
+      }
+      previousUserId.current = nextUserId;
+      clearAccountScopedBrowserData();
+      clearBulk();
+      const eventRevision = authEventRevision.current;
+      const eventAttempt = startup.getSnapshot().attempt;
+      void resetUserScopedQueries(queryClient).catch(() => {
+        if (eventRevision === authEventRevision.current) startup.fail(eventAttempt);
+      });
+    });
+    restoreSession(attempt);
+    // WebKit may suspend timers in the background. Check the absolute deadline on return.
+    document.addEventListener("visibilitychange", startup.checkDeadline);
+    window.addEventListener("pageshow", startup.checkDeadline);
+    return () => {
+      data.subscription.unsubscribe();
+      startup.stop();
+      document.removeEventListener("visibilitychange", startup.checkDeadline);
+      window.removeEventListener("pageshow", startup.checkDeadline);
+    };
+  }, [queryClient, restoreSession, startup]);
+
+  useEffect(() => {
+    if (route.failed) startup.fail(snapshot.attempt);
+    else startup.route(snapshot.attempt, route.pending, route.pathname);
+  }, [
+    startup,
+    snapshot.attempt,
+    snapshot.sessionRestored,
+    snapshot.sessionUserId,
+    route.failed,
+    route.pending,
+    route.pathname,
+  ]);
+
+  const retryStartup = () => {
+    // Synchronous generation change makes rapid double taps a single retry.
+    const attempt = startup.retry();
+    if (attempt === null) return;
+    restoreSession(attempt);
+    void router.invalidate().catch(() => startup.fail(attempt));
+  };
 
   return (
-    <StartupCoverContext.Provider value={setStartupCoverVisible}>
+    <StartupContext.Provider value={startup}>
       <html lang="en" data-tempo-ready={startupCoverVisible ? undefined : "true"}>
         <head>
           <HeadContent />
@@ -184,155 +284,67 @@ function RootShell({ children }: { children: ReactNode }) {
               <span className="tempo-startup-label">Loading Tempo</span>
             </div>
           </div>
-          {children}
+          {startupFailed ? (
+            <main className="fixed inset-0 z-[101] grid place-items-center bg-background px-6 text-center">
+              <div className="w-full max-w-sm" role="alert">
+                <div className="mx-auto grid size-16 place-items-center rounded-full border border-primary/30 text-3xl font-extrabold italic text-primary">
+                  T
+                </div>
+                <h1 className="mt-5 text-xl font-semibold text-foreground">
+                  Tempo couldn&apos;t start
+                </h1>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {isOffline()
+                    ? "You're offline. Reconnect and retry. Your session and saved data are unchanged."
+                    : "Check your connection and retry. Your session and saved data are unchanged."}
+                </p>
+                <button
+                  type="button"
+                  onClick={retryStartup}
+                  className="mt-6 inline-flex min-h-11 items-center justify-center rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground active:opacity-80"
+                >
+                  Retry
+                </button>
+              </div>
+            </main>
+          ) : (
+            children
+          )}
           <Scripts />
         </body>
       </html>
-    </StartupCoverContext.Provider>
+    </StartupContext.Provider>
   );
 }
 
-const StartupCoverContext = createContext<(visible: boolean) => void>(() => undefined);
+const StartupContext = createContext<StartupLifecycle | null>(null);
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const router = useRouter();
-  const routePending = useRouterState({ select: (state) => state.status === "pending" });
-  const pathname = useRouterState({ select: (state) => state.location.pathname });
-  const setStartupCoverVisible = useContext(StartupCoverContext);
-  const authEventRevision = useRef(0);
-  const previousUserId = useRef<string | null | undefined>(undefined);
-  const [startupComplete, setStartupComplete] = useState(false);
-  const [startupAttempt, setStartupAttempt] = useState(0);
-  const [startupError, setStartupError] = useState<Error | null>(null);
-  const [startupSession, setStartupSession] = useState<{
-    restored: boolean;
-    userId: string | null;
-  }>({ restored: false, userId: null });
-
+  const startup = useContext(StartupContext);
   useEffect(() => {
-    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-      authEventRevision.current += 1;
-      const nextUserId = session?.user.id ?? null;
-      setStartupError(null);
-      setStartupSession({ restored: true, userId: nextUserId });
-      if (!authenticatedUserChanged(previousUserId.current, nextUserId)) {
-        previousUserId.current = nextUserId;
-        return;
-      }
-      previousUserId.current = nextUserId;
-      clearAccountScopedBrowserData();
-      clearBulk();
-      void resetUserScopedQueries(queryClient);
-    });
-    return () => data.subscription.unsubscribe();
-  }, [queryClient]);
-
-  useEffect(() => {
-    let active = true;
-    const revision = authEventRevision.current;
-    setStartupSession({ restored: false, userId: null });
-    void supabase.auth
-      .getSession()
-      .then(({ data: sessionData, error }) => {
-        if (!active || revision !== authEventRevision.current) return;
-        if (error) throw error;
-        setStartupError(null);
-        setStartupSession({ restored: true, userId: sessionData.session?.user.id ?? null });
-        startupDiagnostic("auth_resolved", { signedIn: !!sessionData.session?.user });
-      })
-      .catch((error: unknown) => {
-        if (active && revision === authEventRevision.current)
-          setStartupError(error instanceof Error ? error : new Error("Session failed"));
-      });
-    return () => {
-      active = false;
-    };
-  }, [startupAttempt]);
-
-  const startupPhase = resolveStartupPhase({
-    startupComplete,
-    sessionRestored: startupSession.restored,
-    sessionUserId: startupSession.userId,
-    routePending,
-    pathname,
-    recoverableError: startupError !== null,
-  });
-
-  useEffect(() => {
-    if (
-      !shouldArmStartupDeadline({
-        startupComplete,
-        sessionRestored: startupSession.restored,
-        recoverableError: startupError !== null,
-      })
-    )
-      return;
-    const deadline = window.setTimeout(() => {
-      setStartupError(new Error("Tempo session restoration timed out"));
-    }, STARTUP_DEADLINE_MS);
-    return () => window.clearTimeout(deadline);
-  }, [startupAttempt, startupComplete, startupError, startupSession.restored]);
-
-  useEffect(() => {
-    if (startupComplete || startupPhase === "restoring") return;
-
-    const frame = window.requestAnimationFrame(() => {
-      setStartupCoverVisible(false);
-      if (startupPhase !== "recoverable-error") setStartupComplete(true);
-      startupDiagnostic("startup_cover_hidden", { state: startupPhase });
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [setStartupCoverVisible, startupComplete, startupPhase]);
-
-  const retryStartup = () => {
-    if (!startupComplete) setStartupCoverVisible(true);
-    setStartupError(null);
-    setStartupAttempt((attempt) => attempt + 1);
-    void router.invalidate();
-  };
-
+    // Wait for the root content's hydration commit before repairing an early redirect.
+    return startup ? watchStartupRedirects(router, startup) : undefined;
+  }, [router, startup]);
   return (
     <QueryClientProvider client={queryClient}>
-      {startupPhase === "recoverable-error" ? (
-        <main className="fixed inset-0 z-[101] grid place-items-center bg-background px-6 text-center">
-          <div className="w-full max-w-sm" role="alert">
-            <div className="mx-auto grid size-16 place-items-center rounded-full border border-primary/30 text-3xl font-extrabold italic text-primary">
-              T
-            </div>
-            <h1 className="mt-5 text-xl font-semibold text-foreground">
-              Tempo couldn&apos;t start
-            </h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Check your connection and retry. Your session and saved data are unchanged.
-            </p>
-            <button
-              type="button"
-              onClick={retryStartup}
-              className="mt-6 inline-flex min-h-11 items-center justify-center rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground active:opacity-80"
-            >
-              Retry
-            </button>
-          </div>
-        </main>
-      ) : (
-        <AppCrashBoundary
-          onRetry={() => {
-            void queryClient.refetchQueries({ type: "active" });
-          }}
-          onChallengeHome={() =>
-            recoverChallengeRoute(
-              (options) => router.navigate(options),
-              () => router.invalidate(),
-            )
-          }
-        >
-          <ChallengePushSession />
-          {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-          <Outlet />
-          <Toaster position="bottom-center" />
-        </AppCrashBoundary>
-      )}
+      <AppCrashBoundary
+        onRetry={() => {
+          void queryClient.refetchQueries({ type: "active" });
+        }}
+        onChallengeHome={() =>
+          recoverChallengeRoute(
+            (options) => router.navigate(options),
+            () => router.invalidate(),
+          )
+        }
+      >
+        <ChallengePushSession />
+        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+        <Outlet />
+        <Toaster position="bottom-center" />
+      </AppCrashBoundary>
     </QueryClientProvider>
   );
 }

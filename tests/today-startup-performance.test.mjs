@@ -423,6 +423,7 @@ function routeFixture() {
     },
     "@/components/PageSkeleton": { PageSkeleton: "PageSkeleton" },
     "@/lib/network-errors": network,
+    "@/lib/startup": { withStartupDeadline: (promise) => promise },
     "@/lib/query-cancellation": {},
     "@/components/QueryCancellationRecovery": {},
   });
@@ -435,6 +436,7 @@ function routeFixture() {
     "@/components/AppShell": {},
     "@/components/ui-kit": {},
     "@/lib/network-errors": network,
+    "@/lib/startup": { withStartupDeadline: (promise) => promise },
     "@/lib/query-cancellation": {},
     "@/components/QueryCancellationRecovery": {},
   }).Route;

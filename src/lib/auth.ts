@@ -1,11 +1,46 @@
 import { useEffect, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
-import { queryOptions } from "@tanstack/react-query";
+import { CancelledError, queryOptions } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { clearAccountScopedBrowserData } from "@/lib/browser-data";
 import { readRetryDelay, shouldRetryRead, errorStatus } from "@/lib/network-errors";
 
-import { withStartupDeadline } from "@/lib/startup";
+import { startupDiagnostic, withStartupDeadline } from "@/lib/startup";
+
+// One identity revision shared with the existing root auth listener. Token refreshes
+// for the same account do not invalidate work; logout/account switches do.
+let authIdentityRevision = 0;
+let observedUserId: string | null | undefined;
+export function observeAuthIdentity(userId: string | null) {
+  if (observedUserId !== userId) authIdentityRevision += 1;
+  observedUserId = userId;
+}
+export const captureAuthIdentity = () => authIdentityRevision;
+export function assertCurrentAuthIdentity(
+  revision: number,
+  signal?: AbortSignal,
+  userId?: string | null,
+) {
+  if (
+    signal?.aborted ||
+    revision !== authIdentityRevision ||
+    (userId !== undefined && observedUserId !== undefined && userId !== observedUserId)
+  )
+    throw new CancelledError();
+}
+
+/** Bounded local-session reads for public entry routes as well as the shell. */
+export async function readStartupSession(signal?: AbortSignal) {
+  const revision = captureAuthIdentity();
+  const result = await withStartupDeadline(supabase.auth.getSession(), "session");
+  assertCurrentAuthIdentity(
+    revision,
+    signal,
+    result.error ? undefined : (result.data.session?.user.id ?? null),
+  );
+  if (result.error) throw result.error;
+  return result;
+}
 
 export function isInvalidSessionError(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
@@ -27,7 +62,9 @@ export function isInvalidSessionError(error: unknown): boolean {
 export const authenticatedUserQueryOptions = () =>
   queryOptions({
     queryKey: ["authenticated-user"],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
+      const revision = captureAuthIdentity();
+      startupDiagnostic("auth_validation_begin");
       // Three attempts plus backoff fit inside the route's existing 10s deadline.
       const { data, error } = await withStartupDeadline(
         supabase.auth.getUser(),
@@ -35,6 +72,7 @@ export const authenticatedUserQueryOptions = () =>
         undefined,
         2500,
       );
+      assertCurrentAuthIdentity(revision, signal, data.user?.id);
       if (error && !data.user && isInvalidSessionError(error)) {
         await supabase.auth.signOut({ scope: "local" });
         return null;

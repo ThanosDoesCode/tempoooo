@@ -3,7 +3,14 @@ import { HistoryBackLink } from "@/components/HistoryBackLink";
 import { useCallback, useEffect, useState } from "react";
 import { lovable } from "@/integrations/lovable";
 import { supabase } from "@/integrations/supabase/client";
-import { syncProfile } from "@/lib/auth";
+import {
+  assertCurrentAuthIdentity,
+  captureAuthIdentity,
+  readStartupSession,
+  syncProfile,
+} from "@/lib/auth";
+import { withStartupDeadline } from "@/lib/startup";
+import { isExpectedQueryCancellation } from "@/lib/query-cancellation";
 import { userFacingError } from "@/lib/network-errors";
 import {
   rememberDestination,
@@ -25,9 +32,9 @@ export const Route = createFileRoute("/auth")({
     );
     return { ...(mode ? { mode } : {}), ...(redirect ? { redirect } : {}) };
   },
-  beforeLoad: async ({ search }) => {
+  beforeLoad: async ({ search, abortController }) => {
     // Signed-in visitors (including a swipe back in the installed app) never see this screen.
-    const { data } = await supabase.auth.getSession();
+    const { data } = await readStartupSession(abortController.signal);
     if (!data.session) return;
     const destination = takeDestination(search.redirect ?? null);
     if (destination) throw redirect({ href: destination, replace: true });
@@ -74,15 +81,24 @@ function AuthPage() {
     // Remove credentials written by releases that predated browser-managed password saving.
     localStorage.removeItem("saved-credentials");
     if (search.redirect) rememberDestination(search.redirect);
-    void supabase.auth.getSession().then(async ({ data }) => {
-      if (!data.session?.user) return;
-      try {
-        await syncProfile(data.session.user);
+    let active = true;
+    const revision = captureAuthIdentity();
+    void readStartupSession()
+      .then(async ({ data }) => {
+        if (!active || !data.session?.user) return;
+        assertCurrentAuthIdentity(revision, undefined, data.session.user.id);
+        await withStartupDeadline(syncProfile(data.session.user), "profile sync");
+        if (!active) return;
+        assertCurrentAuthIdentity(revision, undefined, data.session.user.id);
         await goAfterAuth();
-      } catch (error) {
-        setNotice({ kind: "error", text: userFacingError(error, "restore your account") });
-      }
-    });
+      })
+      .catch((error: unknown) => {
+        if (active && !isExpectedQueryCancellation(error))
+          setNotice({ kind: "error", text: userFacingError(error, "restore your account") });
+      });
+    return () => {
+      active = false;
+    };
   }, [goAfterAuth, search.redirect]);
 
   const submit = async (e: React.FormEvent) => {

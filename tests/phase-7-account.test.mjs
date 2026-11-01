@@ -90,7 +90,7 @@ function editor(name, save, role = "owner") {
 }
 
 test("Phase 7 landing has genuine signup/sign-in routes and optional fitness copy", () => {
-  const ui = accountUI("src/routes/index.tsx", "Route", { "@/integrations/supabase/client": {} });
+  const ui = accountUI("src/routes/index.tsx", "Route", { "@/lib/auth": {} });
   assert.match(ui.text(), /Keep each other moving/);
   assert.match(ui.text(), /if you want/);
   const links = ui.find("Link");
@@ -699,7 +699,12 @@ test("Phase 7 auth still exposes labelled credentials and Google provider with r
       },
     },
     "@/integrations/lovable": { lovable: {} },
-    "@/lib/auth": { syncProfile: async () => {} },
+    "@/lib/auth": {
+      syncProfile: async () => {},
+      readStartupSession: async () => ({ data: {} }),
+      captureAuthIdentity: () => 0,
+      assertCurrentAuthIdentity() {},
+    },
     "@/lib/network-errors": { userFacingError: () => "Unable to sign in. Try again." },
     "@/lib/pending-destination": {
       takeDestination: () => null,
@@ -771,6 +776,12 @@ for (const flow of ["restored session", "password", "Google"]) {
           lovable: { auth: { signInWithOAuth: async () => ({ error: null }) } },
         },
         "@/lib/auth": {
+          captureAuthIdentity: () => 0,
+          assertCurrentAuthIdentity() {},
+          readStartupSession: async () => {
+            sessionReads++;
+            return { data: { session: flow === "restored session" ? session : null } };
+          },
           syncProfile: async () => {
             profileSyncs++;
             await profile.promise;

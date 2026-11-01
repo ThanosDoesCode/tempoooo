@@ -9,6 +9,8 @@ export function accountUI(file, exportName, modules = {}, props = {}, globals = 
   let effects = [];
   const same = (a, b) => a && b && a.length === b.length && a.every((v, i) => Object.is(v, b[i]));
   const react = {
+    createContext: (value) => ({ Provider: "Context.Provider", value }),
+    useContext: (context) => context.value,
     useState(initial) {
       const i = cursor++;
       if (!slots[i]) slots[i] = { value: typeof initial === "function" ? initial() : initial };
@@ -35,6 +37,11 @@ export function accountUI(file, exportName, modules = {}, props = {}, globals = 
     },
     useCallback(fn, deps) {
       return react.useMemo(() => fn, deps);
+    },
+    useSyncExternalStore(subscribe, getSnapshot) {
+      const [, setSnapshot] = react.useState(getSnapshot);
+      react.useEffect(() => subscribe(() => setSnapshot(getSnapshot())), [subscribe, getSnapshot]);
+      return getSnapshot();
     },
     useEffect(fn, deps) {
       const i = cursor++;

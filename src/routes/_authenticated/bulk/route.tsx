@@ -22,12 +22,16 @@ import { AppShell, PageHeader } from "@/components/AppShell";
 import { DataError } from "@/components/ui-kit";
 import { developmentErrorDiagnostic, userFacingError } from "@/lib/network-errors";
 import { isExpectedQueryCancellation } from "@/lib/query-cancellation";
+import { withStartupDeadline } from "@/lib/startup";
 import { QueryCancellationRecovery } from "@/components/QueryCancellationRecovery";
 
 export const Route = createFileRoute("/_authenticated/bulk")({
   beforeLoad: async ({ context, location }) => {
     const preferred = preferredBulkMembership(
-      await context.queryClient.ensureQueryData(bulkOwnerQueryOptions()),
+      await withStartupDeadline(
+        context.queryClient.ensureQueryData(bulkOwnerQueryOptions()),
+        "memberships",
+      ),
     );
     const today = location.pathname === "/bulk" || location.pathname === "/bulk/";
     if (!preferred && today) return;
@@ -36,7 +40,10 @@ export const Route = createFileRoute("/_authenticated/bulk")({
     // explicit "Start My Goal" action instead; onboarding stays opt-in.
     if (!preferred) throw redirect({ to: "/bulk-access-denied", replace: true });
     // Historical screens retain lazy compatibility hydration; Today has bounded readers.
-    if (!today) await prefetchBulk(preferred.bulk_profile_id);
+    if (!today)
+      void prefetchBulk(preferred.bulk_profile_id).catch(() => {
+        // BulkLayout owns snapshot loading/error UI; history never holds the global cover.
+      });
   },
   component: BulkLayout,
   errorComponent: BulkRouteError,

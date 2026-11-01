@@ -102,12 +102,12 @@ test("authenticated cold start retries transient identity/profile reads without 
   assert.match(profile, /abortSignal\(signal\)/);
   assert.match(route, /startupDiagnostic\("profile_resolved"/);
   assert.match(route, /startupDiagnostic\("memberships_resolved"/);
-  assert.match(root, /routePending/);
-  assert.match(root, /resolveStartupPhase/);
-  assert.match(root, /shouldArmStartupDeadline/);
-  assert.match(root, /Tempo session restoration timed out/);
-  assert.doesNotMatch(root, /queryClient\.cancelQueries\(\{\s*predicate/);
-  assert.match(root, /startupPhase === "recoverable-error"/);
+  assert.match(root, /state.status === "pending" \|\| state.isLoading/);
+  assert.match(root, /new StartupLifecycle\(\)/);
+  assert.match(root, /startupCoverVisible = snapshot.phase === "restoring"/);
+  assert.match(root, /startupFailed = snapshot.phase.startsWith\("recoverable-"\)/);
+  assert.match(root, /shellComponent: RootShell/);
+  assert.doesNotMatch(root, /requestAnimationFrame/);
 });
 
 test("same-user token refresh does not reset active queries", () => {

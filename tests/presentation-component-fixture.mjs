@@ -31,6 +31,8 @@ export function presentationComponent(file, modules = {}, globals = {}) {
           },
           globals,
         );
+      if (name === "@/lib/startup") return require("../src/lib/startup.ts");
+      if (name === "@/lib/query-cancellation") return require("../src/lib/query-cancellation.ts");
       if (name === "./query-pagination")
         return presentationComponent("src/lib/query-pagination.ts");
       if (name === "@/lib/utils") return presentationComponent("src/lib/utils.ts");

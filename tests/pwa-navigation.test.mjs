@@ -18,13 +18,12 @@ test("PWA launch cover follows real session and route readiness", async () => {
 
   assert.match(root, /className="tempo-startup" role="status" aria-label="Loading Tempo"/);
   assert.match(root, /className="tempo-startup-mark">T</);
-  assert.match(root, /supabase\.auth\s*\.getSession\(\)/);
+  assert.match(root, /readStartupSession\(\)/);
   assert.match(root, /state\.status === "pending"/);
   assert.match(root, /data-tempo-ready=\{startupCoverVisible \? undefined : "true"\}/);
-  assert.match(root, /startupComplete/);
-  assert.match(root, /requestAnimationFrame/);
-  assert.match(root, /window\.setTimeout/);
-  assert.match(root, /STARTUP_DEADLINE_MS/);
+  assert.match(root, /new StartupLifecycle\(\)/);
+  assert.doesNotMatch(root, /requestAnimationFrame/);
+  assert.match(root, /snapshot.phase === "restoring"/);
   assert.match(root, /Tempo couldn&apos;t start/);
   assert.match(root, />\s*Retry\s*</);
   assert.doesNotMatch(root, /location\.reload/);
@@ -130,7 +129,7 @@ test("startup state always leaves restoring after settled data or its deadline",
   );
 });
 
-test("the root startup deadline never races authenticated route reads", () => {
+test("the cold-start deadline also covers routes after local session restoration", () => {
   assert.equal(
     shouldArmStartupDeadline({
       startupComplete: false,
@@ -145,7 +144,7 @@ test("the root startup deadline never races authenticated route reads", () => {
       sessionRestored: true,
       recoverableError: false,
     }),
-    false,
+    true,
   );
   assert.equal(
     shouldArmStartupDeadline({
@@ -261,7 +260,7 @@ test("refresh revalidates data without a destructive browser reload", async () =
   assert.doesNotMatch(source, /Updated/);
   assert.doesNotMatch(source, /location\.reload/);
   assert.doesNotMatch(source, /setStartup|tempoReady|tempo-startup/);
-  assert.match(root, /startupComplete,\s*sessionRestored:/);
+  assert.match(root, /startupCoverVisible = snapshot.phase === "restoring"/);
   assert.doesNotMatch(root, /delete document\.documentElement\.dataset\["tempoReady"\]/);
   assert.doesNotMatch(await read("src/routes/index.tsx"), /location\.reload/);
   const styles = await read("src/styles.css");

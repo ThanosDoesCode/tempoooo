@@ -7,7 +7,12 @@ import {
 } from "@tanstack/react-router";
 import { PageSkeleton } from "@/components/PageSkeleton";
 import { AppShell } from "@/components/AppShell";
-import { authenticatedUserQueryOptions, syncProfile } from "@/lib/auth";
+import {
+  assertCurrentAuthIdentity,
+  captureAuthIdentity,
+  authenticatedUserQueryOptions,
+  syncProfile,
+} from "@/lib/auth";
 import { accountProfileQueryOptions } from "@/lib/account-profile";
 import { DataError } from "@/components/ui-kit";
 import { isNetworkError, userFacingError } from "@/lib/network-errors";
@@ -22,11 +27,14 @@ import { isGenericLaunch, recordLaunch } from "@/lib/launch-intent";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
-  beforeLoad: async ({ context, location, cause }) => {
+  beforeLoad: async ({ context, location, cause, abortController }) => {
     // An unmarked home-screen launch (often the old "/challenge" start_url) is generic: /today picks
     // Today for fitness, Challenge for core. Runs before sign-in can remember it as a destination.
     if (cause !== "preload" && isGenericLaunch(location.href))
       throw redirect({ to: "/today", replace: true });
+    const revision = captureAuthIdentity();
+    const assertCurrent = (userId?: string | null) =>
+      assertCurrentAuthIdentity(revision, abortController.signal, userId);
     const user = await withStartupDeadline(
       context.queryClient.fetchQuery(authenticatedUserQueryOptions()),
       "authentication",
@@ -34,6 +42,7 @@ export const Route = createFileRoute("/_authenticated")({
         void context.queryClient.cancelQueries({ queryKey: ["authenticated-user"], exact: true });
       },
     );
+    assertCurrent(user?.id ?? null);
     if (!user) {
       // Keep where they were heading (an invitation link, typically) through sign-in.
       const destination = sanitizeDestination(location.href);
@@ -45,6 +54,7 @@ export const Route = createFileRoute("/_authenticated")({
       });
     }
     startupDiagnostic("auth_resolved", { signedIn: true });
+    startupDiagnostic("profile_begin");
     const [initialProfile, memberships] = await Promise.all([
       withStartupDeadline(
         context.queryClient.ensureQueryData(accountProfileQueryOptions(user.id)),
@@ -64,6 +74,7 @@ export const Route = createFileRoute("/_authenticated")({
         },
       ),
     ]);
+    assertCurrent(user.id);
     startupDiagnostic("profile_resolved", { present: initialProfile !== null });
     startupDiagnostic("memberships_resolved", { present: memberships.length > 0 });
     startupDiagnostic("mode_resolved", { mode: accountProductMode(memberships) });
@@ -71,7 +82,12 @@ export const Route = createFileRoute("/_authenticated")({
     let profile = initialProfile;
     if (!profile) {
       await withStartupDeadline(syncProfile(user), "profile sync");
-      await context.queryClient.invalidateQueries({ queryKey: ["account-profile", user.id] });
+      assertCurrent(user.id);
+      // Mark stale only: the explicit bounded fetch below owns the refresh.
+      await context.queryClient.invalidateQueries({
+        queryKey: ["account-profile", user.id],
+        refetchType: "none",
+      });
       profile = await withStartupDeadline(
         context.queryClient.fetchQuery(accountProfileQueryOptions(user.id)),
         "profile refresh",
@@ -82,6 +98,7 @@ export const Route = createFileRoute("/_authenticated")({
           });
         },
       );
+      assertCurrent(user.id);
       startupDiagnostic("profile_resolved", { present: profile !== null });
     }
     const onboardingRequired = !profile?.account_onboarded_at || !profile.username;
