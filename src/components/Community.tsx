@@ -283,7 +283,7 @@ export function CommunityPersonRow({
         <Link
           to="/community/$userId"
           params={{ userId: person.user_id }}
-          className={`flex min-h-11 min-w-0 items-center gap-2.5 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${!actions ? "col-span-full" : ""}`}
+          className={`flex min-h-11 min-w-0 items-center gap-2.5 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${!actions ? "col-span-full" : "max-[359px]:col-span-full"}`}
         >
           {identity}
           {!actions ? (
@@ -294,7 +294,11 @@ export function CommunityPersonRow({
           ) : null}
         </Link>
       )}
-      {actions || blocked ? <CommunityActions person={person} blocked={blocked} compact /> : null}
+      {actions || blocked ? (
+        <div className="max-[359px]:col-span-full max-[359px]:justify-self-end">
+          <CommunityActions person={person} blocked={blocked} compact />
+        </div>
+      ) : null}
     </li>
   );
 }
@@ -527,7 +531,7 @@ export function CommunityProfilePage({ userId }: { userId: string }) {
         </>
       ) : (
         <section className="relative min-w-0 space-y-4 pb-6 pt-4">
-          <div className="flex min-w-0 flex-col items-center gap-4 px-11 text-center">
+          <div className="flex min-w-0 flex-col items-center gap-4 px-2 text-center">
             <Initials username={query.data.username} large />
             <h1 className="min-w-0 max-w-full break-all text-2xl font-semibold tracking-tight">
               @{query.data.username}

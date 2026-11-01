@@ -326,7 +326,8 @@ function markup(exportName, props = {}, options = {}) {
   const api = presentationComponent("src/components/Community.tsx", {
     react: React,
     "@tanstack/react-router": {
-      Link: ({ children, ...p }) => React.createElement("a", { "data-to": p.to, className: p.className }, children),
+      Link: ({ children, ...p }) =>
+        React.createElement("a", { "data-to": p.to, className: p.className }, children),
     },
     "@tanstack/react-query": {
       useQueryClient: () => ({}),
@@ -357,8 +358,7 @@ function markup(exportName, props = {}, options = {}) {
     "./ui/drawer": Object.fromEntries(
       Object.keys(drawers).map((key) => [
         key,
-        ({ children }) =>
-          React.createElement("div", {}, children),
+        ({ children }) => React.createElement("div", {}, children),
       ]),
     ),
     "./ui/alert-dialog": Object.fromEntries(

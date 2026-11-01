@@ -59,13 +59,6 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "account_notification_events_community_relationship_id_fkey"
-            columns: ["community_relationship_id"]
-            isOneToOne: false
-            referencedRelation: "community_relationships"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "account_notification_events_challenge_id_fkey"
             columns: ["challenge_id"]
             isOneToOne: false
@@ -2060,6 +2053,93 @@ export type Database = {
           weekly_target_km?: number
         }
         Relationships: []
+      }
+      community_blocks: {
+        Row: {
+          blocked_id: string
+          blocker_id: string
+          created_at: string
+        }
+        Insert: {
+          blocked_id: string
+          blocker_id: string
+          created_at?: string
+        }
+        Update: {
+          blocked_id?: string
+          blocker_id?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_blocks_blocked_id_fkey"
+            columns: ["blocked_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_blocks_blocker_id_fkey"
+            columns: ["blocker_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      community_relationships: {
+        Row: {
+          created_at: string
+          id: string
+          pair_high: string | null
+          pair_low: string | null
+          recipient_id: string
+          request_id: string
+          requester_id: string
+          responded_at: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          pair_high?: never
+          pair_low?: never
+          recipient_id: string
+          request_id: string
+          requester_id: string
+          responded_at?: string | null
+          status: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          pair_high?: never
+          pair_low?: never
+          recipient_id?: string
+          request_id?: string
+          requester_id?: string
+          responded_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_relationships_recipient_id_fkey"
+            columns: ["recipient_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_relationships_requester_id_fkey"
+            columns: ["requester_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
