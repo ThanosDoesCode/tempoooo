@@ -85,14 +85,14 @@ test("deep routes select the correct parent product", () => {
     assert.equal(productAreaForPath(path), null, path);
 });
 
-test("bottom bar is Today, Challenge, +, Progress and preserves browser history", async () => {
+test("bottom bar is Today, Challenge, +, Community, Progress and preserves browser history", async () => {
   const [shell, nav] = await Promise.all([
     read("src/components/AppShell.tsx"),
     read("src/lib/main-navigation.ts"),
   ]);
   assert.deepEqual(
     [...nav.matchAll(/label: "([^"]+)", to:/g)].map((m) => m[1]),
-    ["Today", "Challenge", "Progress"],
+    ["Today", "Challenge", "Community", "Progress"],
   );
   // Training, Meals and Goal are no longer bottom tabs.
   assert.doesNotMatch(nav, /label: "(Training|Meals|Goal)"/);

@@ -12,10 +12,10 @@ import {
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 const exists = (path) => existsSync(new URL(`../${path}`, import.meta.url));
 
-test("bottom bar is exactly Today, Challenge, +, Progress (Profile lives in the header)", async () => {
+test("bottom bar is exactly Today, Challenge, +, Community, Progress (Profile lives in the header)", async () => {
   assert.deepEqual(
     MAIN_TABS.map((t) => t.label),
-    ["Today", "Challenge", "Progress"],
+    ["Today", "Challenge", "Community", "Progress"],
   );
   const shell = await read("src/components/AppShell.tsx");
   // The "+" is an action with an accessible label, between Challenge and Progress.

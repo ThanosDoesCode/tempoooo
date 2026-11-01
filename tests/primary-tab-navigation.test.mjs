@@ -128,15 +128,15 @@ test("tab switches render the one live outlet directly: no transition layer, sna
   assert.match(css, /\.tempo-tab-link\[aria-current="page"\] \.tempo-tab-icon::before/);
 });
 
-test("Challenge-only bar is Challenge / +; Log is an action outside the page content", () => {
+test("Challenge-only bar is Challenge / + / Community; Log is an action outside the page content", () => {
   const f = shellFixture(true);
   assert.deepEqual(
     f.tabs().map((node) => node.props.to),
-    ["/challenge"],
+    ["/challenge", "/community"],
   );
   const tree = f.render();
   const nav = nodes(tree).find((node) => node.type === "nav");
-  assert.match(nav.props.children[1].props.className, /grid-cols-2/);
+  assert.match(nav.props.children[1].props.className, /grid-cols-3/);
   const plus = nodes(nav).find(
     (node) => node.type === "button" && node.props["aria-label"] === "Log",
   );

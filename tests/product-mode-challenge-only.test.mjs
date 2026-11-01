@@ -72,7 +72,7 @@ test("home resolves by product mode: Challenge-only → Challenge, fitness → T
 
 import { mainTabForPath, MAIN_TABS, LOG_ACTIONS } from "../src/lib/main-navigation.ts";
 
-test("core bottom nav is Challenge · + only; fitness keeps the 4-slot bar", async () => {
+test("core bottom nav is Challenge · + · Community; fitness keeps the 5-slot bar", async () => {
   const shell = await read("src/components/AppShell.tsx");
   // Mode split: Challenge-only drops Today and Progress; Profile is the header avatar for both.
   assert.match(shell, /const coreNav = !hasFitnessTools/);
@@ -80,8 +80,11 @@ test("core bottom nav is Challenge · + only; fitness keeps the 4-slot bar", asy
     shell,
     /leftTabs = coreNav\s*\?\s*MAIN_TABS\.filter\(\(item\) => item\.tab === "challenge"\)\s*:\s*MAIN_TABS\.slice\(0, 2\)/s,
   );
-  assert.match(shell, /rightTabs = coreNav \? \[\] : MAIN_TABS\.slice\(2\)/);
-  assert.match(shell, /\$\{coreNav \? "grid-cols-2" : "grid-cols-4"\}/);
+  assert.match(
+    shell,
+    /rightTabs = coreNav[\s\S]*?MAIN_TABS\.filter\(\(item\) => item\.tab === "community"\)[\s\S]*?MAIN_TABS\.slice\(2\)/,
+  );
+  assert.match(shell, /\$\{coreNav \? "grid-cols-3" : "grid-cols-5"\}/);
   assert.match(shell, /\{leftTabs\.map/);
   assert.match(shell, /\{rightTabs\.map/);
   // The center + stays prominent for both modes.
@@ -89,7 +92,7 @@ test("core bottom nav is Challenge · + only; fitness keeps the 4-slot bar", asy
   // Fitness bar still includes Today and Progress.
   assert.deepEqual(
     MAIN_TABS.map((t) => t.tab),
-    ["today", "challenge", "progress"],
+    ["today", "challenge", "community", "progress"],
   );
 });
 

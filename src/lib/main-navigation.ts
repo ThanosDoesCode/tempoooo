@@ -1,13 +1,14 @@
-// Navigation model: one bottom bar for the daily workflows (Today · Challenge · + · Progress),
+// Navigation model: one bottom bar for the daily workflows (Today · Challenge · + · Community · Progress),
 // a shared Log sheet, and centralized active-tab + focus-screen mapping. Profile is account-level:
 // it opens from the header avatar beside Notifications and is not a bottom tab.
 
-export type MainTab = "today" | "challenge" | "progress";
+export type MainTab = "today" | "challenge" | "community" | "progress";
 
 /** The real destination tabs, in bar order. The "+" is an action, not a tab. */
 export const MAIN_TABS = [
   { tab: "today", label: "Today", to: "/bulk" },
   { tab: "challenge", label: "Challenge", to: "/challenge" },
+  { tab: "community", label: "Community", to: "/community" },
   { tab: "progress", label: "Progress", to: "/bulk/progress" },
 ] as const satisfies ReadonlyArray<{ tab: MainTab; label: string; to: string }>;
 
@@ -19,6 +20,8 @@ export const MAIN_TABS = [
 export function mainTabForPath(pathname: string): MainTab | null {
   if (pathname.startsWith("/challenge") || pathname.startsWith("/invite/challenge/"))
     return "challenge";
+
+  if (pathname === "/community" || pathname.startsWith("/community/")) return "community";
 
   // Progress owns weight, training and nutrition history plus the weekly review.
   if (

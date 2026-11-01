@@ -69,6 +69,7 @@ export function inAppBackLabel(path: string): string | undefined {
     "/today": "Today",
     "/profile": "You",
     "/you": "You",
+    "/community": "Community",
     "/notifications": "Notifications",
     "/bulk/morning": "Morning check-in",
     "/bulk/training": "Training",

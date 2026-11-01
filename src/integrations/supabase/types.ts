@@ -14,6 +14,93 @@ export type Database = {
   }
   public: {
     Tables: {
+      community_relationships: {
+        Row: {
+          id: string
+          requester_id: string
+          recipient_id: string
+          pair_low: string | null
+          pair_high: string | null
+          request_id: string
+          status: string
+          created_at: string
+          updated_at: string
+          responded_at: string | null
+        }
+        Insert: {
+          id?: string
+          requester_id: string
+          recipient_id: string
+          pair_low?: never
+          pair_high?: never
+          request_id: string
+          status: string
+          created_at?: string
+          updated_at?: string
+          responded_at?: string | null
+        }
+        Update: {
+          id?: string
+          requester_id?: string
+          recipient_id?: string
+          pair_low?: never
+          pair_high?: never
+          request_id?: string
+          status?: string
+          created_at?: string
+          updated_at?: string
+          responded_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_relationships_requester_id_fkey"
+            columns: ["requester_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_relationships_recipient_id_fkey"
+            columns: ["recipient_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      community_blocks: {
+        Row: {
+          blocker_id: string
+          blocked_id: string
+          created_at: string
+        }
+        Insert: {
+          blocker_id: string
+          blocked_id: string
+          created_at?: string
+        }
+        Update: {
+          blocker_id?: string
+          blocked_id?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_blocks_blocker_id_fkey"
+            columns: ["blocker_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_blocks_blocked_id_fkey"
+            columns: ["blocked_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       account_notification_events: {
         Row: {
           actor_user_id: string
@@ -2463,6 +2550,50 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      send_community_friend_request: {
+        Args: { _user: string; _request_id: string }
+        Returns: undefined
+      }
+      accept_community_friend_request: {
+        Args: { _user: string; _request_id: string }
+        Returns: undefined
+      }
+      decline_community_friend_request: {
+        Args: { _user: string; _request_id: string }
+        Returns: undefined
+      }
+      cancel_community_friend_request: {
+        Args: { _user: string; _request_id: string }
+        Returns: undefined
+      }
+      remove_community_friend: {
+        Args: { _user: string; _request_id: string }
+        Returns: undefined
+      }
+      block_community_user: {
+        Args: { _user: string }
+        Returns: undefined
+      }
+      unblock_community_user: {
+        Args: { _user: string }
+        Returns: undefined
+      }
+      get_community_profile: {
+        Args: { _user: string }
+        Returns: { user_id: string; username: string; relationship_state: string; request_id: string | null }[]
+      }
+      search_community_people: {
+        Args: { _query: string }
+        Returns: { user_id: string; username: string; relationship_state: string; request_id: string | null }[]
+      }
+      list_community_people: {
+        Args: { _kind: string; _after?: string }
+        Returns: Json
+      }
+      community_incoming_count: {
+        Args: {  }
+        Returns: number
+      }
       accept_bulk_invitation: {
         Args: { _caller: string; _email: string; _token: string }
         Returns: string

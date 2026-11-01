@@ -303,7 +303,7 @@ test("Tempo navigation exposes optional fitness areas only after persisted activ
   ]);
   assert.deepEqual(
     [...nav.matchAll(/label: "([^"]+)", to:/g)].map((m) => m[1]),
-    ["Today", "Challenge", "Progress"],
+    ["Today", "Challenge", "Community", "Progress"],
   );
   assert.match(shell, /aria-label=\{item\.label\}/);
   assert.match(shell, /min-h-11/);
@@ -354,10 +354,10 @@ test("default landing resolves to Today; deep links and notification destination
 test("bottom navbar is modestly taller with lifted items and preserved safe area + touch targets", async () => {
   const shell = await read("src/components/AppShell.tsx");
   const bar = shell.match(/grid max-w-lg [^`]*pt-2\.5/)[0];
-  // Fitness = 4 slots (Today, Challenge, +, Progress); Challenge-only (core) = 2 (Challenge, +).
+  // Fitness = 4 slots (Today, Challenge, +, Community, Progress); Challenge-only (core) = 2 (Challenge, +).
   // Equal horizontal distribution either way, never an empty slot.
-  assert.match(bar, /grid-cols-4/);
-  assert.match(bar, /coreNav \? "grid-cols-2" : "grid-cols-4"/);
+  assert.match(bar, /grid-cols-5/);
+  assert.match(bar, /coreNav \? "grid-cols-3" : "grid-cols-5"/);
   assert.match(bar, /items-start/); // items anchored to the top of the bar
   assert.match(bar, /pt-2\.5/); // top gap unchanged, so items are not pushed down
   // Measured: pt-2.5 + pb-1rem lifts items (16px breathing room below vs 8px) while the bar grows
@@ -380,7 +380,7 @@ test("product areas expose distinct contextual destinations and preserve legacy/
   // The three bottom tabs (+ is an action); Training/Meals/Goal/Check-In/Payments/You are not tabs.
   assert.deepEqual(
     [...nav.matchAll(/label: "([^"]+)", to:/g)].map((m) => m[1]),
-    ["Today", "Challenge", "Progress"],
+    ["Today", "Challenge", "Community", "Progress"],
   );
   assert.doesNotMatch(nav, /label: "(Training|Meals|Goal|Check-In|Payments)"/);
   assert.doesNotMatch(more, /to="\/bulk\/(?:progress|check-in)"/);

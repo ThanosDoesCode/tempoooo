@@ -25,13 +25,28 @@ test("a table is introduced by only one forward migration", async () => {
   const creators = new Map();
   for (const file of files) {
     const sql = await readFile(new URL(file, root), "utf8");
-    for (const match of sql.matchAll(
-      /\bCREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:public\.)?([a-z_][a-z0-9_]*)/gi,
-    )) {
-      const table = match[1].toLowerCase();
+    for (const table of createdTables(sql)) {
       const previous = creators.get(table);
       assert.equal(previous, undefined, `${table} is created in both ${previous} and ${file}`);
       creators.set(table, file);
     }
   }
+});
+
+// Include the schema: otherwise CREATE TABLE private.foo is incorrectly parsed as a
+// table named "private", and a second, different private table fails this guard.
+function createdTables(sql) {
+  return [
+    ...sql.matchAll(
+      /\bCREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:([a-z_][a-z0-9_]*)\.)?([a-z_][a-z0-9_]*)/gi,
+    ),
+  ].map((match) => `${match[1] ?? "public"}.${match[2]}`.toLowerCase());
+}
+test("migration table guard distinguishes qualified private tables and unqualified public tables", () => {
+  assert.deepEqual(
+    createdTables(
+      "CREATE TABLE private.one (); CREATE TABLE IF NOT EXISTS private.two (); CREATE TABLE public.one (); CREATE TABLE one ();",
+    ),
+    ["private.one", "private.two", "public.one", "public.one"],
+  );
 });

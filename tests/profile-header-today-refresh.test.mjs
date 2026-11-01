@@ -80,8 +80,8 @@ test("Today no longer renders the large rings list or ring-progress queries", as
 // ---------------------------------------------------------------- navigation model
 const nav = presentationComponent("src/lib/main-navigation.ts");
 
-test("bottom nav is Today · Challenge · Progress (the + is an action); Profile is not a tab", () => {
-  assert.equal(nav.MAIN_TABS.map((tab) => tab.tab).join(","), "today,challenge,progress");
+test("bottom nav is Today · Challenge · Community · Progress (the + is an action); Profile is not a tab", () => {
+  assert.equal(nav.MAIN_TABS.map((tab) => tab.tab).join(","), "today,challenge,community,progress");
   assert.equal(
     nav.MAIN_TABS.some((tab) => tab.to === "/profile"),
     false,
@@ -96,10 +96,10 @@ test("account-level routes never falsely activate a bottom tab", () => {
   assert.equal(nav.mainTabForPath("/bulk/progress"), "progress");
 });
 
-test("AppShell: 4-slot fitness bar, 2-slot core bar, Profile excluded from tab transitions", async () => {
+test("AppShell: 5-slot fitness bar, 3-slot core bar, Profile excluded from tab transitions", async () => {
   const shell = await read("src/components/AppShell.tsx");
-  assert.match(shell, /coreNav \? "grid-cols-2" : "grid-cols-4"/);
-  assert.match(shell, /new Set\(\["\/bulk", "\/challenge", "\/bulk\/progress"\]\)/);
+  assert.match(shell, /coreNav \? "grid-cols-3" : "grid-cols-5"/);
+  assert.match(shell, /new Set\(\["\/bulk", "\/challenge", "\/community", "\/bulk\/progress"\]\)/);
   assert.doesNotMatch(shell, /"you"|\/profile/);
 });
 

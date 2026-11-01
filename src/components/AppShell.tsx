@@ -1,5 +1,5 @@
 import { Link, useLocation, useRouterState } from "@tanstack/react-router";
-import { Home, LineChart, Plus, Trophy, type LucideIcon } from "lucide-react";
+import { Home, LineChart, Plus, Trophy, Users, type LucideIcon } from "lucide-react";
 
 import { createContext, useContext, useState, type ReactNode } from "react";
 import { preferredBulkMembership, useMemberships } from "@/lib/bulk-access";
@@ -8,17 +8,19 @@ import { isFocusScreen, mainTabForPath, MAIN_TABS, type MainTab } from "@/lib/ma
 import { PullToRefresh } from "./PullToRefresh";
 import { LogSheet } from "./LogSheet";
 import { HistoryBackLink } from "./HistoryBackLink";
+import { CommunityBadge } from "./CommunityBadge";
 import { NotificationBell } from "./NotificationBell";
 
 const TAB_ICONS: Record<MainTab, LucideIcon> = {
   today: Home,
   challenge: Trophy,
   progress: LineChart,
+  community: Users,
 };
 
 const AppShellMountedContext = createContext(false);
 // Bottom-tab pages render instantly (no entrance motion); Profile is account-level and nested.
-const MAIN_TAB_PATHS = new Set(["/bulk", "/challenge", "/bulk/progress"]);
+const MAIN_TAB_PATHS = new Set(["/bulk", "/challenge", "/community", "/bulk/progress"]);
 
 export function AppShell({ children }: { children: ReactNode }) {
   const shellMounted = useContext(AppShellMountedContext);
@@ -45,13 +47,15 @@ function AppChrome({ children }: { children: ReactNode }) {
 
   const owner = preferredBulkMembership(memberships);
   const hasFitnessTools = owner !== null;
-  // Challenge-only (core) accounts have one real destination plus the Log action (Challenge · +);
+  // Core accounts use Challenge · + · Community;
   // the fitness-only Today and Progress tabs are not advertised.
   const coreNav = !hasFitnessTools;
   const leftTabs = coreNav
     ? MAIN_TABS.filter((item) => item.tab === "challenge")
     : MAIN_TABS.slice(0, 2);
-  const rightTabs = coreNav ? [] : MAIN_TABS.slice(2);
+  const rightTabs = coreNav
+    ? MAIN_TABS.filter((item) => item.tab === "community")
+    : MAIN_TABS.slice(2);
   const activeTab = mainTabForPath(pathname);
   const widerDailyLayout =
     pathname.startsWith("/bulk/training") ||
@@ -90,7 +94,7 @@ function AppChrome({ children }: { children: ReactNode }) {
               <span className="block h-full w-1/2 animate-pulse rounded-full bg-primary" />
             </div>
             <div
-              className={`mx-auto grid max-w-lg ${coreNav ? "grid-cols-2" : "grid-cols-4"} items-start px-2 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2.5`}
+              className={`mx-auto grid max-w-lg ${coreNav ? "grid-cols-3" : "grid-cols-5"} items-start px-2 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2.5`}
             >
               {leftTabs.map((item) => (
                 <TabLink
@@ -147,14 +151,16 @@ function TabLink({
       preload="intent"
       activeOptions={{ exact: true, includeSearch: false }}
       aria-label={item.label}
+      aria-describedby={item.tab === "community" ? "community-request-count" : undefined}
       aria-current={active ? "page" : undefined}
       onPointerDown={onIntent}
       onPointerEnter={onIntent}
       onFocus={onIntent}
-      className={`tempo-tab-link relative flex min-h-11 min-w-0 flex-col items-center justify-center gap-1 px-1 py-1 transition-[color,transform,opacity] duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring active:scale-95 active:opacity-80 active:text-primary ${active ? "text-primary" : "text-muted-foreground"}`}
+      className={`tempo-tab-link relative flex min-h-11 min-w-0 flex-col items-center justify-center gap-1 px-0.5 py-1 transition-[color,transform,opacity] duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring active:scale-95 active:opacity-80 active:text-primary ${active ? "text-primary" : "text-muted-foreground"}`}
     >
-      <span className="tempo-tab-icon h-6 w-6" aria-hidden="true">
-        <Icon className="relative h-6 w-6" strokeWidth={1.8} />
+      <span className="tempo-tab-icon relative h-6 w-6">
+        <Icon className="relative h-6 w-6" strokeWidth={1.8} aria-hidden="true" />
+        {item.tab === "community" ? <CommunityBadge /> : null}
       </span>
       <span className="max-w-full truncate text-[10px] font-medium">{item.label}</span>
     </Link>

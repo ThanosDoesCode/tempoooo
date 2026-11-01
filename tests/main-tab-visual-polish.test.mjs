@@ -23,7 +23,7 @@ const { ChallengeParticipantHeading, ChallengeStatus } = presentationComponent(
 const html = (component, props) => renderToStaticMarkup(React.createElement(component, props));
 
 test("all main headings use a compact first-row title/bell baseline without a metadata slot", () => {
-  for (const title of ["Today", "Challenge", "Progress"]) {
+  for (const title of ["Today", "Challenge", "Community", "Progress"]) {
     const markup = html(MainPageHeader, {
       title,
     });
@@ -43,7 +43,7 @@ test("all main headings use a compact first-row title/bell baseline without a me
   const shell = read("src/components/AppShell.tsx");
   assert.match(
     shell,
-    /MAIN_TAB_PATHS = new Set\(\["\/bulk", "\/challenge", "\/bulk\/progress"\]\)/,
+    /MAIN_TAB_PATHS = new Set\(\["\/bulk", "\/challenge", "\/community", "\/bulk\/progress"\]\)/,
   );
   assert.match(shell, /MAIN_TAB_PATHS\.has\(pathname\.replace/);
   assert.match(shell, /pt-\[max\(1rem,env\(safe-area-inset-top\)\)\]/);

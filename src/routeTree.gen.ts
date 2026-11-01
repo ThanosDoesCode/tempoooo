@@ -15,6 +15,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedBulkRouteRouteImport } from './routes/_authenticated/bulk/route'
 import { Route as AuthenticatedBulkAccessDeniedRouteImport } from './routes/_authenticated/bulk-access-denied'
 import { Route as AuthenticatedBulkOnboardingRouteImport } from './routes/_authenticated/bulk-onboarding'
+import { Route as AuthenticatedCommunityRouteImport } from './routes/_authenticated/community'
 import { Route as AuthenticatedNotificationsRouteImport } from './routes/_authenticated/notifications'
 import { Route as AuthenticatedOnboardingRouteImport } from './routes/_authenticated/onboarding'
 import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated/profile'
@@ -44,6 +45,7 @@ import { Route as AuthenticatedChallengePaymentsRouteImport } from './routes/_au
 import { Route as AuthenticatedChallengeRulesRouteImport } from './routes/_authenticated/challenge/rules'
 import { Route as AuthenticatedChallengeTargetsRouteImport } from './routes/_authenticated/challenge/targets'
 import { Route as AuthenticatedChallengeTermsRouteImport } from './routes/_authenticated/challenge/terms'
+import { Route as AuthenticatedCommunityUserIdRouteImport } from './routes/_authenticated/community_.$userId'
 import { Route as AuthenticatedProfileNotificationsRouteImport } from './routes/_authenticated/profile_.notifications'
 import { Route as AuthenticatedProfileSettingsRouteImport } from './routes/_authenticated/profile_.settings'
 import { Route as AuthenticatedBulkMealsAddRouteImport } from './routes/_authenticated/bulk/meals_.add'
@@ -99,6 +101,11 @@ const AuthenticatedBulkOnboardingRoute =
     path: '/bulk-onboarding',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedCommunityRoute = AuthenticatedCommunityRouteImport.update({
+  id: '/community',
+  path: '/community',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedNotificationsRoute =
   AuthenticatedNotificationsRouteImport.update({
     id: '/notifications',
@@ -263,6 +270,12 @@ const AuthenticatedChallengeTermsRoute =
     path: '/challenge/terms',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedCommunityUserIdRoute =
+  AuthenticatedCommunityUserIdRouteImport.update({
+    id: '/community_/$userId',
+    path: '/community/$userId',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedProfileNotificationsRoute =
   AuthenticatedProfileNotificationsRouteImport.update({
     id: '/profile_/notifications',
@@ -408,6 +421,7 @@ export interface FileRoutesByFullPath {
   '/bulk': typeof AuthenticatedBulkRouteRouteWithChildren
   '/bulk-access-denied': typeof AuthenticatedBulkAccessDeniedRoute
   '/bulk-onboarding': typeof AuthenticatedBulkOnboardingRoute
+  '/community': typeof AuthenticatedCommunityRoute
   '/notifications': typeof AuthenticatedNotificationsRoute
   '/onboarding': typeof AuthenticatedOnboardingRoute
   '/profile': typeof AuthenticatedProfileRoute
@@ -435,6 +449,7 @@ export interface FileRoutesByFullPath {
   '/challenge/rules': typeof AuthenticatedChallengeRulesRoute
   '/challenge/targets': typeof AuthenticatedChallengeTargetsRoute
   '/challenge/terms': typeof AuthenticatedChallengeTermsRoute
+  '/community/$userId': typeof AuthenticatedCommunityUserIdRoute
   '/profile/notifications': typeof AuthenticatedProfileNotificationsRoute
   '/profile/settings': typeof AuthenticatedProfileSettingsRoute
   '/bulk/': typeof AuthenticatedBulkIndexRoute
@@ -466,6 +481,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/bulk-access-denied': typeof AuthenticatedBulkAccessDeniedRoute
   '/bulk-onboarding': typeof AuthenticatedBulkOnboardingRoute
+  '/community': typeof AuthenticatedCommunityRoute
   '/notifications': typeof AuthenticatedNotificationsRoute
   '/onboarding': typeof AuthenticatedOnboardingRoute
   '/profile': typeof AuthenticatedProfileRoute
@@ -493,6 +509,7 @@ export interface FileRoutesByTo {
   '/challenge/rules': typeof AuthenticatedChallengeRulesRoute
   '/challenge/targets': typeof AuthenticatedChallengeTargetsRoute
   '/challenge/terms': typeof AuthenticatedChallengeTermsRoute
+  '/community/$userId': typeof AuthenticatedCommunityUserIdRoute
   '/profile/notifications': typeof AuthenticatedProfileNotificationsRoute
   '/profile/settings': typeof AuthenticatedProfileSettingsRoute
   '/bulk': typeof AuthenticatedBulkIndexRoute
@@ -527,6 +544,7 @@ export interface FileRoutesById {
   '/_authenticated/bulk': typeof AuthenticatedBulkRouteRouteWithChildren
   '/_authenticated/bulk-access-denied': typeof AuthenticatedBulkAccessDeniedRoute
   '/_authenticated/bulk-onboarding': typeof AuthenticatedBulkOnboardingRoute
+  '/_authenticated/community': typeof AuthenticatedCommunityRoute
   '/_authenticated/notifications': typeof AuthenticatedNotificationsRoute
   '/_authenticated/onboarding': typeof AuthenticatedOnboardingRoute
   '/_authenticated/profile': typeof AuthenticatedProfileRoute
@@ -554,6 +572,7 @@ export interface FileRoutesById {
   '/_authenticated/challenge/rules': typeof AuthenticatedChallengeRulesRoute
   '/_authenticated/challenge/targets': typeof AuthenticatedChallengeTargetsRoute
   '/_authenticated/challenge/terms': typeof AuthenticatedChallengeTermsRoute
+  '/_authenticated/community_/$userId': typeof AuthenticatedCommunityUserIdRoute
   '/_authenticated/profile_/notifications': typeof AuthenticatedProfileNotificationsRoute
   '/_authenticated/profile_/settings': typeof AuthenticatedProfileSettingsRoute
   '/_authenticated/bulk/': typeof AuthenticatedBulkIndexRoute
@@ -588,6 +607,7 @@ export interface FileRouteTypes {
     | '/bulk'
     | '/bulk-access-denied'
     | '/bulk-onboarding'
+    | '/community'
     | '/notifications'
     | '/onboarding'
     | '/profile'
@@ -615,6 +635,7 @@ export interface FileRouteTypes {
     | '/challenge/rules'
     | '/challenge/targets'
     | '/challenge/terms'
+    | '/community/$userId'
     | '/profile/notifications'
     | '/profile/settings'
     | '/bulk/'
@@ -646,6 +667,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/bulk-access-denied'
     | '/bulk-onboarding'
+    | '/community'
     | '/notifications'
     | '/onboarding'
     | '/profile'
@@ -673,6 +695,7 @@ export interface FileRouteTypes {
     | '/challenge/rules'
     | '/challenge/targets'
     | '/challenge/terms'
+    | '/community/$userId'
     | '/profile/notifications'
     | '/profile/settings'
     | '/bulk'
@@ -706,6 +729,7 @@ export interface FileRouteTypes {
     | '/_authenticated/bulk'
     | '/_authenticated/bulk-access-denied'
     | '/_authenticated/bulk-onboarding'
+    | '/_authenticated/community'
     | '/_authenticated/notifications'
     | '/_authenticated/onboarding'
     | '/_authenticated/profile'
@@ -733,6 +757,7 @@ export interface FileRouteTypes {
     | '/_authenticated/challenge/rules'
     | '/_authenticated/challenge/targets'
     | '/_authenticated/challenge/terms'
+    | '/_authenticated/community_/$userId'
     | '/_authenticated/profile_/notifications'
     | '/_authenticated/profile_/settings'
     | '/_authenticated/bulk/'
@@ -808,6 +833,13 @@ declare module '@tanstack/react-router' {
       path: '/bulk-onboarding'
       fullPath: '/bulk-onboarding'
       preLoaderRoute: typeof AuthenticatedBulkOnboardingRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/community': {
+      id: '/_authenticated/community'
+      path: '/community'
+      fullPath: '/community'
+      preLoaderRoute: typeof AuthenticatedCommunityRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/notifications': {
@@ -1011,6 +1043,13 @@ declare module '@tanstack/react-router' {
       path: '/challenge/terms'
       fullPath: '/challenge/terms'
       preLoaderRoute: typeof AuthenticatedChallengeTermsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/community_/$userId': {
+      id: '/_authenticated/community_/$userId'
+      path: '/community/$userId'
+      fullPath: '/community/$userId'
+      preLoaderRoute: typeof AuthenticatedCommunityUserIdRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/profile_/notifications': {
@@ -1257,6 +1296,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedBulkRouteRoute: typeof AuthenticatedBulkRouteRouteWithChildren
   AuthenticatedBulkAccessDeniedRoute: typeof AuthenticatedBulkAccessDeniedRoute
   AuthenticatedBulkOnboardingRoute: typeof AuthenticatedBulkOnboardingRoute
+  AuthenticatedCommunityRoute: typeof AuthenticatedCommunityRoute
   AuthenticatedNotificationsRoute: typeof AuthenticatedNotificationsRoute
   AuthenticatedOnboardingRoute: typeof AuthenticatedOnboardingRoute
   AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute
@@ -1273,6 +1313,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedChallengeRulesRoute: typeof AuthenticatedChallengeRulesRoute
   AuthenticatedChallengeTargetsRoute: typeof AuthenticatedChallengeTargetsRoute
   AuthenticatedChallengeTermsRoute: typeof AuthenticatedChallengeTermsRoute
+  AuthenticatedCommunityUserIdRoute: typeof AuthenticatedCommunityUserIdRoute
   AuthenticatedProfileNotificationsRoute: typeof AuthenticatedProfileNotificationsRoute
   AuthenticatedProfileSettingsRoute: typeof AuthenticatedProfileSettingsRoute
   AuthenticatedChallengeIndexRoute: typeof AuthenticatedChallengeIndexRoute
@@ -1287,6 +1328,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedBulkRouteRoute: AuthenticatedBulkRouteRouteWithChildren,
   AuthenticatedBulkAccessDeniedRoute: AuthenticatedBulkAccessDeniedRoute,
   AuthenticatedBulkOnboardingRoute: AuthenticatedBulkOnboardingRoute,
+  AuthenticatedCommunityRoute: AuthenticatedCommunityRoute,
   AuthenticatedNotificationsRoute: AuthenticatedNotificationsRoute,
   AuthenticatedOnboardingRoute: AuthenticatedOnboardingRoute,
   AuthenticatedProfileRoute: AuthenticatedProfileRoute,
@@ -1303,6 +1345,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedChallengeRulesRoute: AuthenticatedChallengeRulesRoute,
   AuthenticatedChallengeTargetsRoute: AuthenticatedChallengeTargetsRoute,
   AuthenticatedChallengeTermsRoute: AuthenticatedChallengeTermsRoute,
+  AuthenticatedCommunityUserIdRoute: AuthenticatedCommunityUserIdRoute,
   AuthenticatedProfileNotificationsRoute:
     AuthenticatedProfileNotificationsRoute,
   AuthenticatedProfileSettingsRoute: AuthenticatedProfileSettingsRoute,
