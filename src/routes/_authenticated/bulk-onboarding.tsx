@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { Check, Dumbbell } from "lucide-react";
 import { BackButton } from "@/components/BackControl";
+import { HistoryBackLink } from "@/components/HistoryBackLink";
 import { AppShell } from "@/components/AppShell";
 import { PendingLabel } from "@/components/ui-kit";
 import { activeBulkMemberships, bulkOwnerQueryOptions } from "@/lib/bulk-access";
@@ -245,9 +246,7 @@ function BulkOnboarding() {
       <div className="mx-auto max-w-md">
         <div className="mb-4 flex min-h-11 items-center justify-between gap-3">
           {step === 1 ? (
-            // First fitness step: no Back. There is no prior setup step, and a contextual Back
-            // here (e.g. to Challenge) would be misleading.
-            <span className="text-sm font-semibold text-primary">Tempo</span>
+            <HistoryBackLink fallback="/profile" fallbackLabel="Profile" />
           ) : (
             <BackButton disabled={busy} onClick={() => setStep((step - 1) as Step)} />
           )}
@@ -316,6 +315,15 @@ function BulkOnboarding() {
                 )}
               </button>
             )}
+            {step > 1 && !busy ? (
+              <div className="mt-2 flex justify-center">
+                <HistoryBackLink
+                  fallback="/profile"
+                  fallbackLabel="Profile"
+                  labelOverride="Cancel setup"
+                />
+              </div>
+            ) : null}
           </div>
         </section>
       </div>

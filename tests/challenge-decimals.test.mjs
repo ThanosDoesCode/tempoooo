@@ -234,15 +234,14 @@ for (const [dist, duration] of [
     assert.equal(f.uploads, 0);
     assert.ok(f.updates.some(([i, value]) => i === 9 && typeof value === "string"));
   });
-test("Challenge decimal inputs preserve raw comma text until blur", () => {
+test("Challenge decimal inputs preserve raw comma text until validation/submission", () => {
   const f = fixture("61,");
   const input = f.nodes.find((n) => n.type === "input" && n.props.value === "61,");
   assert.equal(input.props.type, "text");
   assert.equal(input.props.inputMode, "decimal");
   input.props.onChange({ target: { value: "61," } });
   assert.deepEqual(f.updates.at(-1), [1, "61,"]);
-  input.props.onBlur();
-  assert.deepEqual(f.updates.at(-1), [1, "61"]);
+  assert.equal(input.props.onBlur, undefined, "focus changes do not rewrite partial text");
 });
 test("Challenge form keeps duration visible and optional details collapsed", () => {
   const f = fixture("7.25", "40");
@@ -255,4 +254,34 @@ test("Challenge form keeps duration visible and optional details collapsed", () 
     false,
   );
   assert.ok(f.nodes.some((node) => node.type === "input" && node.props.value === "40"));
+});
+
+for (const raw of ["7,", "7.", ",5", ".5", "7,25", "7.25"])
+  test(`activity distance preserves raw ${raw} while typing/focus changes`, () => {
+    const f = fixture(raw, "30:");
+    const input = f.nodes.find((n) => n.type === "input" && n.props.value === raw);
+    assert.equal(input.props.inputMode, "decimal");
+    assert.equal(input.props.onBlur, undefined);
+    input.props.onChange({ target: { value: raw } });
+    assert.deepEqual(f.updates.at(-1), [1, raw]);
+  });
+for (const raw of ["7,25", "7.25"])
+  test(`${raw} km and 30:45 submit unchanged real values`, async () => {
+    const f = fixture(raw, "30:45");
+    await f.submit();
+    assert.equal(f.rows[0].distance_km, 7.25);
+    assert.equal(f.rows[0].duration_seconds, 1845);
+  });
+test("duration uses punctuation-capable text input and preserves partial/invalid clock text", () => {
+  const f = fixture("7,25", "30:");
+  const input = f.nodes.find((n) => n.type === "input" && n.props.value === "30:");
+  assert.equal(input.props.type, "text");
+  assert.equal(input.props.inputMode, "text");
+  assert.equal(input.props.autoCapitalize, "none");
+  assert.equal(input.props.autoCorrect, "off");
+  input.props.onChange({ target: { value: "30:" } });
+  assert.deepEqual(f.updates.at(-1), [3, "30:"]);
+  input.props.onBlur();
+  assert.deepEqual(f.updates.at(-1), [3, "30:"]);
+  assert.equal(durationLib.parseDurationToSeconds("30:"), null);
 });

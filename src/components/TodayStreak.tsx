@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
-import { ChevronRight, Flame } from "lucide-react";
+import { ChevronRight } from "lucide-react";
+import { StreakHeadline } from "./StreakHeadline";
 import type { RingKey, StreakData } from "@/lib/streak-model";
 
 const RING_LABEL: Record<RingKey, string> = { run: "Run", train: "Train", eat: "Eat" };
@@ -25,12 +26,9 @@ export function TodayStreak({ data }: { data: StreakData }) {
     <Link
       to="/streak"
       aria-label={`Streak, ${weeks}. ${summary}`}
-      className="card-surface flex items-center gap-3 rounded-[20px] px-4 py-3"
+      className="card-surface flex min-h-11 items-center gap-3 rounded-[20px] px-4 py-3"
     >
-      <span className="inline-flex shrink-0 items-center gap-1">
-        <Flame className="h-4 w-4 text-orange-400" aria-hidden="true" />
-        <span className="num text-[17px] font-semibold">{data.current}</span>
-      </span>
+      <StreakHeadline current={data.current} />
       <span className="min-w-0 flex-1">
         <span className="num block text-[13px] text-muted-foreground">{summary}</span>
         {rings.length && !paused ? (

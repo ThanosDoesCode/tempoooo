@@ -88,7 +88,7 @@ function click(link, history, href, modifiers = {}) {
     !event.shiftKey &&
     !event.altKey
   )
-    history.push(href(link));
+    history[link.props.replace ? "replace" : "push"](href(link));
   return event;
 }
 
@@ -420,4 +420,64 @@ test("compact Meals header retains contextual Back, accessible origin label and 
   assert.equal(history.location.href, "/bulk?date=2026-10-08");
   const direct = controls(createMemoryHistory({ initialEntries: ["/bulk/meals"] }));
   assert.equal(direct.href(direct.HistoryBackLink(back.props)), "/bulk");
+});
+
+test("a synthesized parent replaces a direct query detail instead of creating a Back-to-detail loop", () => {
+  for (const path of ["/bulk/prs", "/bulk/training/history"]) {
+    const history = createMemoryHistory({ initialEntries: ["/bulk/progress?period=3#records"] });
+    trackInAppHistory(history);
+    history.push(`${path}?session=deep-link`);
+    const { HistoryBackLink, href } = controls(history);
+    const detail = HistoryBackLink({ fallback: path, parentPath: path });
+    assert.equal(detail.props.replace, true);
+    click(detail, history, href);
+    assert.equal(history.location.href, path);
+    const list = HistoryBackLink({ fallback: "/bulk/training" });
+    assert.equal(list.props.replace, false);
+    click(list, history, href);
+    assert.equal(history.location.href, "/bulk/progress?period=3#records");
+    history.forward();
+    assert.equal(history.location.href, path);
+  }
+});
+
+for (const [origin, destination] of [
+  ["/bulk", "/bulk/training"],
+  ["/profile", "/profile/settings"],
+  ["/profile", "/bulk-onboarding"],
+  ["/bulk-access-denied", "/bulk-onboarding"],
+  ["/notifications", "/community/friend"],
+  ["/community?q=alice#people", "/community/friend"],
+])
+  test(`logical Back preserves ${origin} from ${destination}, with Forward intact`, () => {
+    const history = createMemoryHistory({ initialEntries: [origin] });
+    trackInAppHistory(history);
+    history.push(destination);
+    const { HistoryBackLink, href } = controls(history);
+    const link = HistoryBackLink({
+      fallback: destination === "/bulk-onboarding" ? "/profile" : "/community",
+    });
+    assert.equal(link.props.replace, false);
+    assert.equal(href(link), origin);
+    click(link, history, href);
+    assert.equal(history.location.href, origin);
+    history.forward();
+    assert.equal(history.location.href, destination);
+  });
+
+test("all unobserved direct entries use replace-only safe parents, including setup", () => {
+  for (const [entry, parent] of [
+    ["/bulk-onboarding", "/profile"],
+    ["/community/person", "/community"],
+    ["/bulk/training", "/bulk"],
+  ]) {
+    const history = createMemoryHistory({ initialEntries: ["https://outside.test", entry] });
+    trackInAppHistory(history);
+    const { HistoryBackLink, href } = controls(history);
+    const link = HistoryBackLink({ fallback: parent });
+    assert.equal(link.props.replace, true);
+    assert.equal(href(link), parent);
+    click(link, history, href);
+    assert.equal(history.location.pathname, parent);
+  }
 });

@@ -11,6 +11,7 @@ export function HistoryBackLink({
   fallbackSearch,
   parentPath,
   iconOnly = false,
+  labelOverride,
 }: {
   fallback: string;
   fallbackLabel?: string;
@@ -21,6 +22,8 @@ export function HistoryBackLink({
   parentPath?: string;
   /** Compact headers retain the same contextual destination with an icon-only presentation. */
   iconOnly?: boolean;
+  /** Explicit exit wording for a local wizard; destination still uses contextual history. */
+  labelOverride?: string;
 }) {
   const router = useRouter();
   useRouterState({ select: (state) => state.location.href });
@@ -39,6 +42,7 @@ export function HistoryBackLink({
           : (fallbackSearch ?? {})
       }
       hash={location?.hash.replace(/^#/, "") ?? ""}
+      replace={!location}
       preload="intent"
       aria-label={iconOnly ? `Back to ${label}` : undefined}
       className={cn(backControlClassName, iconOnly ? "mb-0 h-11 w-11 justify-center pr-0" : "mb-2")}
@@ -48,7 +52,9 @@ export function HistoryBackLink({
         if (backWithinApp(router.history, parentPath)) event.preventDefault();
       }}
     >
-      <BackLabel>{iconOnly ? <span className="sr-only">{label}</span> : label}</BackLabel>
+      <BackLabel>
+        {iconOnly ? <span className="sr-only">{label}</span> : (labelOverride ?? label)}
+      </BackLabel>
     </Link>
   );
 }

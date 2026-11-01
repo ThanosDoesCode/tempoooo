@@ -96,19 +96,21 @@ export async function syncProfile(user: User) {
   if (error) throw error;
 }
 
-export async function signOut() {
+export async function signOut({ onError }: { onError?: (message: string) => void } = {}) {
+  // Account screens can show failures locally without changing the cleanup/auth sequence.
+  const reportFailure = onError ?? ((message: string) => window.alert(message));
   const { detachChallengePush } = await import("./challenge-push");
   try {
     await detachChallengePush();
   } catch {
-    window.alert(
+    reportFailure(
       "Could not safely disconnect this device's notifications. Please retry signing out when connected.",
     );
     return false;
   }
   const { error } = await supabase.auth.signOut();
   if (error) {
-    window.alert("Could not sign out. Please check your connection and try again.");
+    reportFailure("Could not sign out. Please check your connection and try again.");
     return false;
   }
   clearAccountScopedBrowserData();

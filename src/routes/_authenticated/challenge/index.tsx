@@ -158,12 +158,12 @@ function ChallengeHome() {
   if (!challenge) {
     return (
       <AppShell>
-        <ChallengeHeader subtitle="A private two-person endurance bet." />
+        <ChallengeHeader />
         <ChallengeInvitations />
         <Card className="mt-3 space-y-3 p-[18px]">
-          <p className="text-[15px] leading-relaxed">
-            Start a private challenge with one friend: a weekly km target, running and cycling, and
-            a penalty when someone falls short.
+          <h2 className="text-xl font-semibold">No active challenge</h2>
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            Set a weekly distance target with a friend and keep each other accountable.
           </p>
           <Link
             to="/challenge/new"
@@ -171,10 +171,7 @@ function ChallengeHome() {
           >
             Create a challenge
           </Link>
-          <Note>
-            Joining is invite-only. If a friend invited you, open your notification inbox or accept
-            here.
-          </Note>
+          <p className="text-xs text-muted-foreground">Invitations appear in Notifications.</p>
         </Card>
       </AppShell>
     );

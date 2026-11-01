@@ -512,7 +512,6 @@ function AddActivity() {
                 disabled={busy}
                 placeholder="0.0"
                 onChange={(e) => setDistance(e.target.value)}
-                onBlur={() => setDistance(normalizeDecimal(distance))}
                 className="num min-w-0 flex-1 bg-transparent text-xl font-semibold outline-none placeholder:font-normal placeholder:text-muted-foreground/50"
               />
               <span className="text-sm text-muted-foreground">km</span>
@@ -522,7 +521,11 @@ function AddActivity() {
             <div className="flex h-14 items-center gap-2 rounded-[14px] border border-input bg-card px-4">
               <input
                 type="text"
-                inputMode="numeric"
+                inputMode="text"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                aria-label="Duration (minutes:seconds)"
                 value={duration}
                 disabled={busy}
                 placeholder="e.g. 22:20"
@@ -530,7 +533,7 @@ function AddActivity() {
                 onBlur={() => setDuration(canonicalDuration(duration))}
                 className="num min-w-0 flex-1 bg-transparent text-xl font-semibold outline-none placeholder:font-normal placeholder:text-muted-foreground/50"
               />
-              <span className="text-sm text-muted-foreground">min</span>
+              <span className="sr-only">minutes:seconds</span>
             </div>
           </Field>
         </div>

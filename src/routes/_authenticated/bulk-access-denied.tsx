@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ShieldAlert } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { HistoryBackLink } from "@/components/HistoryBackLink";
 import { Card } from "@/components/ui-kit";
 
 export const Route = createFileRoute("/_authenticated/bulk-access-denied")({
@@ -19,7 +20,8 @@ export const Route = createFileRoute("/_authenticated/bulk-access-denied")({
 function BulkAccessDeniedPage() {
   return (
     <AppShell>
-      <Card className="mx-auto mt-8 max-w-sm text-center">
+      <HistoryBackLink fallback="/profile" fallbackLabel="Profile" />
+      <Card className="mx-auto mt-3 max-w-sm text-center">
         <span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-warn/10 text-warn">
           <ShieldAlert className="h-6 w-6" aria-hidden="true" />
         </span>

@@ -149,7 +149,7 @@ test("settings route is account-level with contextual Back to Profile and the mo
   assert.match(settings, /label: "Goal settings"/);
   assert.match(settings, /to: "\/bulk\/more"/);
   assert.match(settings, /<ChallengeDataExport \/>/);
-  assert.match(settings, /Sign out/);
+  assert.match(settings, /<SignOutButton \/>/);
   // Destructive actions are separated into a danger zone.
   assert.match(settings, /Danger zone/);
   assert.match(settings, /text-destructive/);

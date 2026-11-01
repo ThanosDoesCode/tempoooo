@@ -288,16 +288,16 @@ test("Goal discovery is persisted on the self-owned profile and activation ackno
 test("nested navigation, evidence recovery and sign-out stay local and responsive", async () => {
   const [shell, profile, evidence, backLink] = await Promise.all([
     read("src/components/AppShell.tsx"),
-    read("src/routes/_authenticated/profile_.settings.tsx"), // sign-out moved to Settings
+    read("src/components/SignOutButton.tsx"), // shared by Profile and Settings
     read("src/components/ChallengeEvidenceViewer.tsx"),
     read("src/components/HistoryBackLink.tsx"),
   ]);
   assert.match(shell, /HistoryBackLink/);
   assert.match(backLink, /BackLabel/);
   assert.match(shell, /min-h-11/);
-  assert.match(profile, /setSigningOut\(true\)/);
+  assert.match(profile, /setPending\(true\)/);
   assert.match(profile, /Signing out…/);
-  assert.match(profile, /disabled=\{signingOut\}/);
+  assert.match(profile, /disabled=\{pending\}/);
   assert.doesNotMatch(profile, /location\.reload/);
   assert.match(evidence, /phase: "local_recovery"/);
   assert.match(evidence, /setState\(\{ status: "unavailable"/);

@@ -7,10 +7,13 @@ const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 test("the auth gate preserves the page a signed-out visitor opened", async () => {
   const source = await read("src/routes/_authenticated/route.tsx");
   assert.match(source, /rememberDestination, sanitizeDestination/);
-  assert.match(source, /throw redirect\(\{ to: "\/auth", search: destination/);
   assert.match(
     source,
-    /rememberDestination\(location\.href\);\s*\n\s*throw redirect\(\{ to: "\/onboarding" \}\)/,
+    /throw redirect\(\{\s*to: "\/auth",\s*search: destination[\s\S]*?replace: true/,
+  );
+  assert.match(
+    source,
+    /rememberDestination\(location\.href\);\s*\n\s*throw redirect\(\{ to: "\/onboarding", replace: true \}\)/,
   );
 });
 

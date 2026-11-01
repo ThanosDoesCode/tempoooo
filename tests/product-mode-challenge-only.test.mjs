@@ -23,16 +23,14 @@ test("Challenge-only is the canonical 'core' mode; a fitness plan makes it publi
   assert.equal(accountProductMode([membership()]), "legacy");
 });
 
-test("the first fitness onboarding step shows no Back and no misleading Challenge destination", async () => {
+test("fitness onboarding has contextual escape on step one and keeps later step Back local", async () => {
   const onboarding = await read("src/routes/_authenticated/bulk-onboarding.tsx");
-  // No contextual Back on the first step; a plain brand label instead.
-  assert.doesNotMatch(onboarding, /HistoryBackLink/);
   assert.match(
     onboarding,
-    /step === 1 \? \(\s*(?:\/\/[^\n]*\n\s*)*<span className="text-sm font-semibold text-primary">Tempo<\/span>/,
+    /step === 1 \? \(\s*<HistoryBackLink fallback="\/profile" fallbackLabel="Profile" \/>/,
   );
-  // Later steps can still go Back within the wizard.
   assert.match(onboarding, /<BackButton disabled=\{busy\} onClick=\{\(\) => setStep\(\(step - 1\)/);
+  assert.match(onboarding, /labelOverride="Cancel setup"/);
 });
 
 test("Challenge-only users hitting a fitness surface get the gated screen, never auto-launched onboarding", async () => {
@@ -104,7 +102,7 @@ test("core + menu hides fitness-only actions and keeps challenge run/ride", asyn
   assert.match(shell, /showFitnessActions=\{hasFitnessTools\}/); // off for core
   assert.match(sheet, /showFitnessActions \? \(/); // gates the "Your day" fitness group
   assert.match(sheet, /Your day/);
-  // The run/ride (challenge) group is always available; fitness actions are the hidden "day" group.
+  // Run/ride definitions remain shared; the sheet gates their usability on an active Challenge.
   assert.deepEqual(
     LOG_ACTIONS.filter((a) => a.group === "challenge")
       .map((a) => a.key)

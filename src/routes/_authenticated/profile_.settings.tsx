@@ -1,15 +1,16 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { ChevronRight, LogOut } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import * as Dialog from "@radix-ui/react-dialog";
+import { SignOutButton } from "@/components/SignOutButton";
 import { DeleteAccountDialog } from "@/components/DeleteAccountDialog";
 import { NavRows } from "@/components/NavRows";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { PageSkeleton } from "@/components/PageSkeleton";
 import { Card, SectionTitle } from "@/components/ui-kit";
 import { ChallengeDataExport } from "@/components/ChallengeDataExport";
-import { clearDeletedAccountSession, signOut, useAuth } from "@/lib/auth";
+import { clearDeletedAccountSession, useAuth } from "@/lib/auth";
 import { preferredBulkMembership, useBulkAdmin, useMemberships } from "@/lib/bulk-access";
 import {
   normalizeUsername,
@@ -35,8 +36,6 @@ function SettingsPage() {
     refetch: refetchBulkAccess,
   } = useMemberships();
   const { data: isAdmin } = useBulkAdmin();
-  const [signingOut, setSigningOut] = useState(false);
-  const [signOutError, setSignOutError] = useState<string | null>(null);
   const [editingUsername, setEditingUsername] = useState(false);
   const [username, setUsername] = useState("");
   const [usernameBusy, setUsernameBusy] = useState(false);
@@ -272,37 +271,7 @@ function SettingsPage() {
       ) : null}
 
       <section aria-label="Account actions" className="mt-6 space-y-3">
-        <button
-          type="button"
-          disabled={signingOut}
-          onClick={() => {
-            if (signingOut) return;
-            setSigningOut(true);
-            setSignOutError(null);
-            void signOut()
-              .then((signedOut) => {
-                if (signedOut) {
-                  void navigate({ to: "/auth", replace: true });
-                  return;
-                }
-                setSignOutError("Could not sign out. Please try again.");
-                setSigningOut(false);
-              })
-              .catch(() => {
-                setSignOutError("Could not sign out. Please try again.");
-                setSigningOut(false);
-              });
-          }}
-          className="flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm font-medium text-muted-foreground hover:bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
-        >
-          <LogOut className="h-4 w-4" aria-hidden="true" />{" "}
-          {signingOut ? "Signing out…" : "Sign out"}
-        </button>
-        {signOutError ? (
-          <p role="alert" className="text-sm text-warn">
-            {signOutError}
-          </p>
-        ) : null}
+        <SignOutButton />
         <div className="border-t border-border pt-4">
           <h2 className="px-1 pb-2 text-[13px] font-medium text-destructive">Danger zone</h2>
           <DeleteAccountDialog

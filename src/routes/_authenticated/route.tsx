@@ -38,7 +38,11 @@ export const Route = createFileRoute("/_authenticated")({
       // Keep where they were heading (an invitation link, typically) through sign-in.
       const destination = sanitizeDestination(location.href);
       if (destination) rememberDestination(destination);
-      throw redirect({ to: "/auth", search: destination ? { redirect: destination } : {} });
+      throw redirect({
+        to: "/auth",
+        search: destination ? { redirect: destination } : {},
+        replace: true,
+      });
     }
     startupDiagnostic("auth_resolved", { signedIn: true });
     const [initialProfile, memberships] = await Promise.all([
@@ -85,7 +89,7 @@ export const Route = createFileRoute("/_authenticated")({
     if (onboardingRequired && location.pathname !== "/onboarding") {
       // Onboarding runs first, then we come back to the page they opened.
       rememberDestination(location.href);
-      throw redirect({ to: "/onboarding" });
+      throw redirect({ to: "/onboarding", replace: true });
     }
     return { user };
   },

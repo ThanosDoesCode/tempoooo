@@ -347,7 +347,7 @@ test("default landing resolves to Today; deep links and notification destination
   assert.match(guard, /sanitizeDestination\(location\.href\)/);
   assert.match(
     guard,
-    /redirect\(\{ to: "\/auth", search: destination \? \{ redirect: destination \}/,
+    /redirect\(\{\s*to: "\/auth",\s*search: destination \? \{ redirect: destination \} : \{\},\s*replace: true/,
   );
 });
 

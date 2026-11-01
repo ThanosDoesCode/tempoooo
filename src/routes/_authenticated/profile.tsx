@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { ChevronRight, Flame, Settings } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { SignOutButton } from "@/components/SignOutButton";
 import { HistoryBackLink } from "@/components/HistoryBackLink";
 import { PageSkeleton } from "@/components/PageSkeleton";
 import { useAuth } from "@/lib/auth";
@@ -270,6 +271,9 @@ function ProfilePage() {
           ) : null}
         </nav>
       )}
+      <div className="mt-5 border-t border-border pt-3">
+        <SignOutButton />
+      </div>
     </AppShell>
   );
 }
