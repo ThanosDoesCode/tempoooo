@@ -72,19 +72,16 @@ test("home resolves by product mode: Challenge-only → Challenge, fitness → T
 
 import { mainTabForPath, MAIN_TABS, LOG_ACTIONS } from "../src/lib/main-navigation.ts";
 
-test("core bottom nav is Challenge · + · You only; fitness keeps the 5-item bar", async () => {
+test("core bottom nav is Challenge · + only; fitness keeps the 4-slot bar", async () => {
   const shell = await read("src/components/AppShell.tsx");
-  // Mode split: Challenge-only drops Today and Progress and renders a 3-column bar.
+  // Mode split: Challenge-only drops Today and Progress; Profile is the header avatar for both.
   assert.match(shell, /const coreNav = !hasFitnessTools/);
   assert.match(
     shell,
     /leftTabs = coreNav\s*\?\s*MAIN_TABS\.filter\(\(item\) => item\.tab === "challenge"\)\s*:\s*MAIN_TABS\.slice\(0, 2\)/s,
   );
-  assert.match(
-    shell,
-    /rightTabs = coreNav \? MAIN_TABS\.filter\(\(item\) => item\.tab === "you"\) : MAIN_TABS\.slice\(2\)/,
-  );
-  assert.match(shell, /\$\{coreNav \? "grid-cols-3" : "grid-cols-5"\}/);
+  assert.match(shell, /rightTabs = coreNav \? \[\] : MAIN_TABS\.slice\(2\)/);
+  assert.match(shell, /\$\{coreNav \? "grid-cols-2" : "grid-cols-4"\}/);
   assert.match(shell, /\{leftTabs\.map/);
   assert.match(shell, /\{rightTabs\.map/);
   // The center + stays prominent for both modes.
@@ -92,7 +89,7 @@ test("core bottom nav is Challenge · + · You only; fitness keeps the 5-item ba
   // Fitness bar still includes Today and Progress.
   assert.deepEqual(
     MAIN_TABS.map((t) => t.tab),
-    ["today", "challenge", "progress", "you"],
+    ["today", "challenge", "progress"],
   );
 });
 
@@ -115,12 +112,12 @@ test("core + menu hides fitness-only actions and keeps challenge run/ride", asyn
     assert.match(action.to, /^\/bulk\//); // fitness-only destinations
 });
 
-test("active tab: Challenge routes (incl. deep routes) highlight Challenge; profile highlights You", () => {
+test("active tab: Challenge routes (incl. deep routes) highlight Challenge; profile lights no tab", () => {
   assert.equal(mainTabForPath("/challenge"), "challenge");
   assert.equal(mainTabForPath("/challenge/activity/abc"), "challenge");
   assert.equal(mainTabForPath("/challenge/money"), "challenge");
-  assert.equal(mainTabForPath("/profile"), "you");
-  assert.equal(mainTabForPath("/profile/notifications"), "you");
+  assert.equal(mainTabForPath("/profile"), null);
+  assert.equal(mainTabForPath("/profile/notifications"), null);
 });
 
 test("fresh Challenge-only user is never prompted into fitness setup anywhere in the core flow", async () => {
@@ -144,14 +141,18 @@ test("fresh Challenge-only user is never prompted into fitness setup anywhere in
   // (4) Challenge-only lands on Challenge, not any fitness screen.
   assert.match(today, /accountProductMode\(memberships\) === "core"[\s\S]*to: "\/challenge"/);
 
-  // (5) Every visible core bottom-nav destination is Challenge or You — no Today/Progress/fitness.
+  // (5) The only core bottom-nav destination is Challenge — no Today/Progress/fitness. Profile
+  // stays reachable from the header avatar, never a setup prompt.
   assert.match(shell, /const coreNav = !hasFitnessTools/);
   for (const tab of ["today", "progress"]) {
     const item = MAIN_TABS.find((t) => t.tab === tab);
     assert.match(item.to, /^\/bulk/); // these are the fitness surfaces the core bar omits
   }
   assert.equal(MAIN_TABS.find((t) => t.tab === "challenge").to, "/challenge");
-  assert.equal(MAIN_TABS.find((t) => t.tab === "you").to, "/profile");
+  assert.equal(
+    MAIN_TABS.some((t) => t.to === "/profile"),
+    false,
+  );
 
   // (6) The + menu for core hides meal/weight/workout actions.
   assert.match(sheet, /showFitnessActions \? \(/);

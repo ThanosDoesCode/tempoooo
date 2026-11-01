@@ -272,9 +272,10 @@ test("the five-step UI submits one atomic RPC while optional Goal remains discov
   assert.match(onboarding, /bulkOwnerQueryOptions/);
   assert.match(profile, /Set up fitness tools/);
   assert.match(guard, /redirect\(\{ to: "\/bulk-access-denied", replace: true \}\)/);
-  // Optional fitness tools stay discoverable through the "You" tab badge, not a filtered bar.
-  assert.match(shell, /New Fitness tools/);
-  assert.match(shell, /goal_seen_at == null/);
+  // Optional fitness tools stay discoverable through the header Profile control dot, not a filtered bar.
+  const profileButton = await read("src/components/ProfileButton.tsx");
+  assert.match(profileButton, /New Fitness tools/);
+  assert.match(profileButton, /goal_seen_at == null/);
   assert.match(shell, /MAIN_TABS/); // Today (the daily/goal screen) is a bottom tab
   assert.doesNotMatch(shell, /label: "Bulk"/);
 });

@@ -575,6 +575,7 @@ test("Today tab intent never prefetches the legacy snapshot; historical destinat
     "./PullToRefresh": {},
     "./LogSheet": {},
     "./HistoryBackLink": {},
+    "./ProfileButton": { ProfileButton: () => null },
     "./NotificationBell": {},
   });
   const shell = api.AppShell({ children: "content" });

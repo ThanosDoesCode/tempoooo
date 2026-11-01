@@ -47,10 +47,12 @@ export function presentationComponent(file, modules = {}, globals = {}) {
           "src/components/MainPageHeader.tsx",
           {
             "./NotificationBell": { NotificationBell: "NotificationBell" },
+            "./ProfileButton": { ProfileButton: "ProfileButton" },
             ...modules,
           },
           globals,
         );
+      if (name === "@/components/TodayStreak") return { TodayStreak: "TodayStreak" };
       if (name === "./ChallengeParticipant" || name === "@/components/ChallengeParticipant")
         return presentationComponent("src/components/ChallengeParticipant.tsx", modules, globals);
       return require(name);

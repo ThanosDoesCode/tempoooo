@@ -539,10 +539,10 @@ test("Phase 7 Notifications denied and temporary SDK failure remain distinct and
   assert.match(failed.text(), /Retry notifications/);
 });
 
-test("Phase 7 subpage and Goal settings Back fallbacks are You; focus screens retain existing chrome rules", () => {
+test("Phase 7 subpage and Goal settings Back fallbacks are Profile; focus screens retain existing chrome rules", () => {
   const route = read("src/routes/_authenticated/profile_.notifications.tsx");
   assert.match(route, /backTo="\/profile"/);
-  assert.match(route, /backLabel="You"/);
+  assert.match(route, /backLabel="Profile"/);
   assert.match(route, /useAuth/);
   assert.match(
     read("src/routes/_authenticated/bulk/more.tsx"),

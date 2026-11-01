@@ -325,6 +325,30 @@ export const completedSessionDatesQueryOptions = (
     retryDelay: readRetryDelay,
   });
 
+/** Lifetime completed-session count (head-only: no rows are transferred). */
+export const completedWorkoutCountQueryOptions = (bulkProfileId: string | null) =>
+  queryOptions({
+    queryKey: ["bulk-training-sessions", "completed-count", bulkProfileId],
+    enabled: !!bulkProfileId,
+    queryFn: async () => {
+      if (!bulkProfileId) return 0;
+      const { count, error } = await supabase
+        .from("bulk_training_sessions")
+        .select("id", { count: "exact", head: true })
+        .eq("bulk_profile_id", bulkProfileId)
+        .eq("status", "completed");
+      if (error) throw error;
+      return count ?? 0;
+    },
+    staleTime: 60_000,
+    retry: shouldRetryRead,
+    retryDelay: readRetryDelay,
+  });
+
+export function useCompletedWorkoutCount(bulkProfileId: string | null) {
+  return useQuery(completedWorkoutCountQueryOptions(bulkProfileId));
+}
+
 export function useCompletedSessionDates(
   bulkProfileId: string | null,
   fromDate: string,

@@ -34,6 +34,7 @@ function nutritionHistoryLink(history, mode = "public") {
     "./PullToRefresh": {},
     "./LogSheet": {},
     "./HistoryBackLink": { HistoryBackLink },
+    "./ProfileButton": { ProfileButton: () => null },
     "./NotificationBell": { NotificationBell: () => null },
   });
   const { Route } = presentationComponent("src/routes/_authenticated/bulk/meals_.history.tsx", {

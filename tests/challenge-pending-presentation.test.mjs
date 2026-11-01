@@ -82,6 +82,7 @@ function load(source, modules = {}, globals = {}) {
           },
         };
       if (name === "date-fns") return require(name);
+      if (name === "./ProfileButton") return { ProfileButton: "ProfileButton" };
       if (name === "@/components/NotificationBell" || name === "./NotificationBell")
         return { NotificationBell: "NotificationBell" };
       if (name === "@/components/ChallengeInvitations")
@@ -93,6 +94,7 @@ function load(source, modules = {}, globals = {}) {
       if (name.endsWith("/MainPageHeader") || name === "./MainPageHeader")
         return presentationComponent("src/components/MainPageHeader.tsx", {
           "react/jsx-runtime": { jsx, jsxs: jsx, Fragment: "fragment" },
+          "./ProfileButton": { ProfileButton: "ProfileButton" },
           "./NotificationBell": { NotificationBell: "NotificationBell" },
         });
       if (name.endsWith("/ChallengeParticipant") || name === "./ChallengeParticipant")

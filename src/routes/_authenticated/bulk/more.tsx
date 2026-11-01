@@ -60,7 +60,7 @@ function BulkMorePage() {
         title="Goal settings"
         subtitle="Your goal, daily targets and weekly workouts."
         backTo="/profile"
-        backLabel="You"
+        backLabel="Profile"
       />
       <UnsavedSettingsDialog dirty={(nutritionDirty || weeklyDirty) && !switching} />
       <div className="space-y-3">

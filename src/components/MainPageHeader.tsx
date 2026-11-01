@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 import { NotificationBell } from "./NotificationBell";
+import { ProfileButton } from "./ProfileButton";
 
-/** One compact title/bell baseline for the four main tabs. Context belongs in the content. */
+/** One compact title + account-actions baseline (Notifications, Profile) for the main tabs. */
 export function MainPageHeader({
   title,
   children,
@@ -24,6 +25,7 @@ export function MainPageHeader({
       >
         <NotificationBell />
         {actions}
+        <ProfileButton />
       </div>
       {children ? (
         <div className="col-span-full row-start-2 mt-1 flex min-w-0 justify-end min-[400px]:col-span-1 min-[400px]:col-start-2 min-[400px]:row-start-1 min-[400px]:mt-0">

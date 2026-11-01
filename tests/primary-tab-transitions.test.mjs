@@ -137,13 +137,17 @@ function animationFixture() {
   };
 }
 
-test("only distinct primary tab pages animate; direction follows Today / Challenge / Progress / You, including core mode", () => {
+test("only distinct primary tab pages animate; direction follows Today / Challenge / Progress, including core mode", () => {
   for (const from of paths)
     for (const to of paths) assert.equal(isPrimaryTabChange(from, to, paths), from !== to);
   assert.equal(primaryTabDirection("/bulk", "/challenge", paths), 1);
-  assert.equal(primaryTabDirection("/profile", "/challenge", paths), -1);
-  assert.equal(primaryTabDirection("/challenge", "/profile", paths), 1);
-  assert.equal(isPrimaryTabChange("/bulk/", "/profile/", paths), true);
+  assert.equal(primaryTabDirection("/bulk/progress", "/challenge", paths), -1);
+  assert.equal(primaryTabDirection("/challenge", "/bulk/progress", paths), 1);
+  assert.equal(isPrimaryTabChange("/bulk/", "/bulk/progress/", paths), true);
+  // Profile is account-level: opening or leaving it never runs a primary-tab transition.
+  assert.equal(paths.has("/profile"), false);
+  assert.equal(isPrimaryTabChange("/bulk", "/profile", paths), false);
+  assert.equal(isPrimaryTabChange("/profile", "/challenge", paths), false);
   for (const path of [
     "/bulk/training/more",
     "/bulk/prs/press",
@@ -219,7 +223,7 @@ test("reverse switches enter from -6px and exit +4px; snapshots preserve the old
     assert.equal(snapshot.layer.style.top, "0px");
     assert.equal(snapshot.layer.style.height, "780px");
     assert.equal(snapshot.visual.style.top, "-764px");
-    const cleanup = animatePrimaryTabChange(f.element, "/profile", "/bulk", paths, snapshot);
+    const cleanup = animatePrimaryTabChange(f.element, "/bulk/progress", "/bulk", paths, snapshot);
     assert.equal(f.calls[0].frames[0].transform, "translateX(-6px)");
     assert.equal(f.calls[1].frames[1].transform, "translateX(4px)");
     cleanup();
@@ -424,6 +428,7 @@ function shellFixture(core = false) {
     "./PullToRefresh": { PullToRefresh: "PullToRefresh" },
     "./LogSheet": { LogSheet: "LogSheet" },
     "./HistoryBackLink": {},
+    "./ProfileButton": { ProfileButton: () => null },
     "./NotificationBell": {},
     "./PrimaryTabTransition": { PrimaryTabTransition: "PrimaryTabTransition" },
   });
@@ -454,8 +459,9 @@ test("tab selection responds to the router's pending destination immediately, in
       .filter((node) => node.props["aria-current"] === "page")
       .map((node) => node.props.to);
   assert.deepEqual(active(), ["/bulk"]);
+  // Profile is account-level: navigating there lights no bottom tab (no false Progress/Today).
   f.navigate("/profile", true);
-  assert.deepEqual(active(), ["/profile"]);
+  assert.deepEqual(active(), []);
   f.navigate("/challenge", true);
   assert.deepEqual(active(), ["/challenge"]);
   f.navigate("/bulk/progress/strength");
@@ -472,15 +478,15 @@ test("tab selection responds to the router's pending destination immediately, in
   );
 });
 
-test("Challenge-only bar remains Challenge / + / You; Log is an action outside the transition content", () => {
+test("Challenge-only bar is Challenge / +; Log is an action outside the transition content", () => {
   const f = shellFixture(true);
   assert.deepEqual(
     f.tabs().map((node) => node.props.to),
-    ["/challenge", "/profile"],
+    ["/challenge"],
   );
   const tree = f.render();
   const nav = nodes(tree).find((node) => node.type === "nav");
-  assert.match(nav.props.children[1].props.className, /grid-cols-3/);
+  assert.match(nav.props.children[1].props.className, /grid-cols-2/);
   const plus = nodes(nav).find(
     (node) => node.type === "button" && node.props["aria-label"] === "Log",
   );
@@ -542,15 +548,17 @@ test("real TanStack links never mark both Today and Progress active; nested owne
     "./PullToRefresh": { PullToRefresh: ({ children }) => children },
     "./LogSheet": { LogSheet: () => null },
     "./HistoryBackLink": {},
+    "./ProfileButton": { ProfileButton: () => null },
     "./NotificationBell": {},
     "./PrimaryTabTransition": {
       PrimaryTabTransition: ({ children }) => React.createElement("div", {}, children),
     },
   });
+  // null = an account-level screen: no bottom tab may claim it.
   for (const [pathname, label] of [
     ["/bulk/progress", "Progress"],
     ["/bulk/training", "Today"],
-    ["/profile/settings", "You"],
+    ["/profile/settings", null],
   ]) {
     const root = routerApi.createRootRoute({
       component: () => React.createElement(AppShell, {}, React.createElement(routerApi.Outlet)),
@@ -576,7 +584,7 @@ test("real TanStack links never mark both Today and Progress active; nested owne
     await router.load();
     const markup = renderToStaticMarkup(React.createElement(routerApi.RouterProvider, { router }));
     const active = markup.match(/<a\b[^>]*aria-current="page"[^>]*>/g) ?? [];
-    assert.equal(active.length, 1, pathname);
-    assert.ok(active[0].includes(`aria-label="${label}"`), active[0]);
+    assert.equal(active.length, label ? 1 : 0, pathname);
+    if (label) assert.ok(active[0].includes(`aria-label="${label}"`), active[0]);
   }
 });

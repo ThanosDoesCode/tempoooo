@@ -62,8 +62,16 @@ for (const mode of ["public", "legacy"]) {
   });
 }
 
-test("You groups Settings beside the unchanged bell, without the responsive secondary control row", () => {
+test("main header keeps Notifications, actions and Profile in one row, without a secondary control row", () => {
   const { MainPageHeader } = presentationComponent("src/components/MainPageHeader.tsx", {
+    "./ProfileButton": {
+      ProfileButton: () =>
+        React.createElement(
+          "a",
+          { href: "/profile", "aria-label": "Profile", className: "h-11 w-11" },
+          "TC",
+        ),
+    },
     "./NotificationBell": {
       NotificationBell: () =>
         React.createElement(
@@ -79,23 +87,23 @@ test("You groups Settings beside the unchanged bell, without the responsive seco
   });
   const html = renderToStaticMarkup(
     React.createElement(MainPageHeader, {
-      title: "You",
+      title: "Progress",
       actions: React.createElement(
         "a",
-        { href: "/profile/settings", className: "h-11 w-11" },
-        "Settings",
+        { href: "/bulk/progress/photos", className: "h-11 w-11" },
+        "Photos",
       ),
     }),
   );
   assert.match(html, /row-start-1 flex items-center gap-1/);
   assert.match(html, /\/notifications/);
   assert.match(html, /Notifications, 2 unread/);
-  assert.match(html, /\/profile\/settings/);
+  assert.match(html, /\/bulk\/progress\/photos/);
+  // Account actions: Notifications first, Profile last, all in the same first row.
+  assert.ok(html.indexOf("/notifications") < html.indexOf('href="/profile"'));
   assert.doesNotMatch(html, /row-start-2|col-span-full/);
-  assert.match(
-    read("src/routes/_authenticated/profile.tsx"),
-    /<MainPageHeader\s+title="You"\s+actions=/,
-  );
+  // Profile is an account screen now, not a main-tab header page.
+  assert.doesNotMatch(read("src/routes/_authenticated/profile.tsx"), /MainPageHeader/);
 });
 
 const domain = presentationComponent("src/lib/challenge.ts", {

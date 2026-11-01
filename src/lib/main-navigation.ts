@@ -1,16 +1,14 @@
-// Phase 1 navigation model: one bottom bar (Today · Challenge · + · Progress · You),
-// a shared Log sheet, and centralized active-tab + focus-screen mapping. The old per-area
-// dropdown (SecondaryNavigation) and the Training/Meals/Goal bottom tabs are removed; those
-// routes stay reachable through Today, the Log sheet, deep links and redirect aliases.
+// Navigation model: one bottom bar for the daily workflows (Today · Challenge · + · Progress),
+// a shared Log sheet, and centralized active-tab + focus-screen mapping. Profile is account-level:
+// it opens from the header avatar beside Notifications and is not a bottom tab.
 
-export type MainTab = "today" | "challenge" | "progress" | "you";
+export type MainTab = "today" | "challenge" | "progress";
 
-/** The four real destination tabs, in bar order. The center "+" is an action, not a tab. */
+/** The real destination tabs, in bar order. The "+" is an action, not a tab. */
 export const MAIN_TABS = [
   { tab: "today", label: "Today", to: "/bulk" },
   { tab: "challenge", label: "Challenge", to: "/challenge" },
   { tab: "progress", label: "Progress", to: "/bulk/progress" },
-  { tab: "you", label: "You", to: "/profile" },
 ] as const satisfies ReadonlyArray<{ tab: MainTab; label: string; to: string }>;
 
 /**
@@ -37,7 +35,7 @@ export function mainTabForPath(pathname: string): MainTab | null {
   )
     return "progress";
 
-  // You owns the profile, goal settings, fitness setup and diagnostics.
+  // Account-level screens (Profile, goal settings, setup, diagnostics) never light up a tab.
   if (
     pathname === "/you" ||
     pathname.startsWith("/you/") ||
@@ -49,7 +47,7 @@ export function mainTabForPath(pathname: string): MainTab | null {
     pathname === "/bulk-access-denied" ||
     pathname.startsWith("/setup/")
   )
-    return "you";
+    return null;
 
   // Today owns the daily screen plus Training and Meals (opened from Today / the Log sheet).
   if (

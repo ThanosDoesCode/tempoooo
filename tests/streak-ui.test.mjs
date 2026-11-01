@@ -250,16 +250,21 @@ test("two concurrent Run legs never sum kilometres; completed count comes from s
 });
 
 // ----------------------------------------------------------------- entry points + routing
-test("the fitness Today screen shows a flame entry and this-week rings linking to /streak", async () => {
-  const [today, flame] = await Promise.all([
+test("the fitness Today screen shows a compact flame entry linking to /streak (rings detail lives on /streak)", async () => {
+  const [today, compact, flame, detail] = await Promise.all([
     read("src/routes/_authenticated/bulk/index.tsx"),
+    read("src/components/TodayStreak.tsx"),
     read("src/components/StreakFlame.tsx"),
+    read("src/routes/_authenticated/streak.tsx"),
   ]);
-  // Flame + week count live in a content card (header stays self-closing per the main-tab contract).
-  assert.match(today, /<StreakRings/);
-  assert.match(today, /to="\/streak"/);
-  assert.match(today, /<Flame /);
+  // A compact row in content (header stays self-closing per the main-tab contract).
+  assert.match(today, /<TodayStreak data=\{streak\.data\} \/>/);
+  assert.doesNotMatch(today, /<StreakRings/);
+  assert.match(compact, /to="\/streak"/);
+  assert.match(compact, /<Flame /);
   assert.match(flame, /to="\/streak"/);
+  // The full rings view is preserved on the streak detail screen.
+  assert.match(detail, /<StreakRings/);
 });
 
 test("core users reach the streak from Challenge (flame gated to core), not from a Today tab", async () => {

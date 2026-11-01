@@ -48,6 +48,7 @@ function controls(history) {
     "./PullToRefresh": {},
     "./LogSheet": {},
     "./HistoryBackLink": { HistoryBackLink },
+    "./ProfileButton": { ProfileButton: () => null },
     "./NotificationBell": { NotificationBell: () => null },
   });
   const href = (link) =>

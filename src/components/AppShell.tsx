@@ -1,10 +1,9 @@
 import { Link, useLocation, useRouterState } from "@tanstack/react-router";
-import { Home, LineChart, Plus, Trophy, User, type LucideIcon } from "lucide-react";
+import { Home, LineChart, Plus, Trophy, type LucideIcon } from "lucide-react";
 
 import { createContext, useContext, useState, type ReactNode } from "react";
 import { preferredBulkMembership, useMemberships } from "@/lib/bulk-access";
 import { prefetchBulk } from "@/lib/store";
-import { useGoalDiscovery } from "@/lib/goal-discovery";
 import { isFocusScreen, mainTabForPath, MAIN_TABS, type MainTab } from "@/lib/main-navigation";
 import { PullToRefresh } from "./PullToRefresh";
 import { LogSheet } from "./LogSheet";
@@ -16,11 +15,11 @@ const TAB_ICONS: Record<MainTab, LucideIcon> = {
   today: Home,
   challenge: Trophy,
   progress: LineChart,
-  you: User,
 };
 
 const AppShellMountedContext = createContext(false);
-const MAIN_TAB_PATHS = new Set(["/bulk", "/challenge", "/bulk/progress", "/profile"]);
+// Only the bottom-tab pages slide; Profile is account-level and opens as a normal nested screen.
+const MAIN_TAB_PATHS = new Set(["/bulk", "/challenge", "/bulk/progress"]);
 
 export function AppShell({ children }: { children: ReactNode }) {
   const shellMounted = useContext(AppShellMountedContext);
@@ -43,18 +42,17 @@ function AppChrome({ children }: { children: ReactNode }) {
     ? "pt-[max(1rem,env(safe-area-inset-top))]"
     : "pt-[max(1.5rem,env(safe-area-inset-top))]";
   const { data: memberships } = useMemberships();
-  const goalDiscovery = useGoalDiscovery();
   const [logOpen, setLogOpen] = useState(false);
 
   const owner = preferredBulkMembership(memberships);
   const hasFitnessTools = owner !== null;
-  // Challenge-only (core) accounts get an intentional 3-item bar (Challenge · + · You); the
-  // fitness-only Today and Progress tabs are not advertised.
+  // Challenge-only (core) accounts have one real destination plus the Log action (Challenge · +);
+  // the fitness-only Today and Progress tabs are not advertised.
   const coreNav = !hasFitnessTools;
   const leftTabs = coreNav
     ? MAIN_TABS.filter((item) => item.tab === "challenge")
     : MAIN_TABS.slice(0, 2);
-  const rightTabs = coreNav ? MAIN_TABS.filter((item) => item.tab === "you") : MAIN_TABS.slice(2);
+  const rightTabs = coreNav ? [] : MAIN_TABS.slice(2);
   const activeTab = mainTabForPath(pathname);
   const widerDailyLayout =
     pathname.startsWith("/bulk/training") ||
@@ -92,7 +90,7 @@ function AppChrome({ children }: { children: ReactNode }) {
               <span className="block h-full w-1/2 animate-pulse rounded-full bg-primary" />
             </div>
             <div
-              className={`mx-auto grid max-w-lg ${coreNav ? "grid-cols-3" : "grid-cols-5"} items-start px-2 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2.5`}
+              className={`mx-auto grid max-w-lg ${coreNav ? "grid-cols-2" : "grid-cols-4"} items-start px-2 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2.5`}
             >
               {leftTabs.map((item) => (
                 <TabLink
@@ -122,20 +120,6 @@ function AppChrome({ children }: { children: ReactNode }) {
                   item={item}
                   active={activeTab === item.tab}
                   onIntent={() => prefetchDestination(item.to)}
-                  badge={
-                    item.tab === "you" ? (
-                      <>
-                        {!hasFitnessTools &&
-                        goalDiscovery.isSuccess &&
-                        goalDiscovery.data?.goal_seen_at == null ? (
-                          <span
-                            aria-label="New Fitness tools"
-                            className="absolute right-[28%] top-1 h-2 w-2 rounded-full bg-primary ring-2 ring-background"
-                          />
-                        ) : null}
-                      </>
-                    ) : null
-                  }
                 />
               ))}
             </div>
@@ -151,12 +135,10 @@ function TabLink({
   item,
   active,
   onIntent,
-  badge,
 }: {
   item: { tab: MainTab; label: string; to: string };
   active: boolean;
   onIntent: () => void;
-  badge?: ReactNode;
 }) {
   const Icon = TAB_ICONS[item.tab];
   return (
@@ -175,7 +157,6 @@ function TabLink({
         <Icon className="relative h-6 w-6" strokeWidth={1.8} />
       </span>
       <span className="max-w-full truncate text-[10px] font-medium">{item.label}</span>
-      {badge}
     </Link>
   );
 }

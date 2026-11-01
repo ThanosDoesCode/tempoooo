@@ -12,16 +12,16 @@ import {
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 const exists = (path) => existsSync(new URL(`../${path}`, import.meta.url));
 
-test("bottom bar is exactly Today, Challenge, +, Progress, You", async () => {
+test("bottom bar is exactly Today, Challenge, +, Progress (Profile lives in the header)", async () => {
   assert.deepEqual(
     MAIN_TABS.map((t) => t.label),
-    ["Today", "Challenge", "Progress", "You"],
+    ["Today", "Challenge", "Progress"],
   );
   const shell = await read("src/components/AppShell.tsx");
-  // The center "+" is an action with an accessible label, between Challenge and Progress.
+  // The "+" is an action with an accessible label, between Challenge and Progress.
   assert.match(shell, /aria-label="Log"/);
   assert.match(shell, /MAIN_TABS\.slice\(0, 2\)/); // Today, Challenge
-  assert.match(shell, /MAIN_TABS\.slice\(2\)/); // Progress, You
+  assert.match(shell, /MAIN_TABS\.slice\(2\)/); // Progress
 });
 
 test("Training, Meals and Goal are absent from the bottom bar", () => {
@@ -76,7 +76,7 @@ test("focus screens do not render the bottom navigation", () => {
     assert.equal(isFocusScreen(path), false, path);
 });
 
-test("active tab is correct for Today, Challenge, Progress and You", () => {
+test("active tab is correct for Today, Challenge and Progress; account screens light no tab", () => {
   assert.equal(mainTabForPath("/bulk"), "today");
   assert.equal(mainTabForPath("/today"), "today");
   assert.equal(mainTabForPath("/bulk/training"), "today");
@@ -88,9 +88,10 @@ test("active tab is correct for Today, Challenge, Progress and You", () => {
   assert.equal(mainTabForPath("/bulk/prs"), "progress");
   assert.equal(mainTabForPath("/bulk/training/history"), "progress");
   assert.equal(mainTabForPath("/bulk/meals/history"), "progress");
-  assert.equal(mainTabForPath("/profile"), "you");
-  assert.equal(mainTabForPath("/you"), "you");
-  assert.equal(mainTabForPath("/bulk/more"), "you"); // goal settings
+  // Profile is account-level (opened from the header avatar), not a bottom tab.
+  assert.equal(mainTabForPath("/profile"), null);
+  assert.equal(mainTabForPath("/you"), null);
+  assert.equal(mainTabForPath("/bulk/more"), null); // goal settings
 });
 
 test("legacy and new canonical routes both resolve (aliases redirect, old routes stay)", async () => {
@@ -115,10 +116,10 @@ test("legacy and new canonical routes both resolve (aliases redirect, old routes
     assert.ok(tree.includes(route), route);
 });
 
-test("pre-setup Goal/fitness destinations highlight You, never another tab", () => {
-  // The old bug highlighted Profile/Progress incorrectly. Setup is You-owned now.
-  assert.equal(mainTabForPath("/bulk-onboarding"), "you");
-  assert.equal(mainTabForPath("/bulk-access-denied"), "you");
+test("pre-setup Goal/fitness destinations never highlight a tab", () => {
+  // The old bug highlighted Progress incorrectly. Setup is account-level: no tab is active.
+  assert.equal(mainTabForPath("/bulk-onboarding"), null);
+  assert.equal(mainTabForPath("/bulk-access-denied"), null);
   assert.notEqual(mainTabForPath("/bulk-onboarding"), "progress");
   // And it is a focus screen, so no bottom bar is shown mid-setup.
   assert.equal(isFocusScreen("/bulk-onboarding"), true);

@@ -33,6 +33,8 @@ export type AccountProfile = {
   id: string;
   username: string | null;
   account_onboarded_at: string | null;
+  /** Synced from the OAuth provider by syncProfile; null for email accounts. */
+  avatar_url: string | null;
 };
 
 export const accountProfileQueryOptions = (userId: string | undefined) =>
@@ -42,7 +44,7 @@ export const accountProfileQueryOptions = (userId: string | undefined) =>
     queryFn: async ({ signal }) => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id,username,account_onboarded_at")
+        .select("id,username,account_onboarded_at,avatar_url")
         .eq("id", userId!)
         .abortSignal(signal)
         .maybeSingle();

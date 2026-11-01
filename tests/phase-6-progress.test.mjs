@@ -642,6 +642,7 @@ async function progressFixture(options = {}) {
   const data = appData({ targets: { calories: 2500, weeklyWorkoutGoal: 4, ...options.targets } });
   const modules = {
     react: React,
+    "./ProfileButton": { ProfileButton: () => null },
     "./NotificationBell": { NotificationBell: () => null },
     "react/jsx-runtime": require("react/jsx-runtime"),
     "@tanstack/react-router": {

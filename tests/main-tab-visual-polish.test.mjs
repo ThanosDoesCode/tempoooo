@@ -7,6 +7,7 @@ import { presentationComponent } from "./presentation-component-fixture.mjs";
 
 const read = (file) => readFileSync(new URL(`../${file}`, import.meta.url), "utf8");
 const { MainPageHeader } = presentationComponent("src/components/MainPageHeader.tsx", {
+  "./ProfileButton": { ProfileButton: () => null },
   "./NotificationBell": {
     NotificationBell: () =>
       React.createElement(
@@ -22,7 +23,7 @@ const { ChallengeParticipantHeading, ChallengeStatus } = presentationComponent(
 const html = (component, props) => renderToStaticMarkup(React.createElement(component, props));
 
 test("all main headings use a compact first-row title/bell baseline without a metadata slot", () => {
-  for (const title of ["Today", "Challenge", "Progress", "You"]) {
+  for (const title of ["Today", "Challenge", "Progress"]) {
     const markup = html(MainPageHeader, {
       title,
     });
@@ -35,7 +36,6 @@ test("all main headings use a compact first-row title/bell baseline without a me
   for (const file of [
     "src/routes/_authenticated/bulk/index.tsx",
     "src/routes/_authenticated/challenge/index.tsx",
-    "src/routes/_authenticated/profile.tsx",
     "src/components/ChallengeWaiting.tsx",
     "src/components/ProgressChrome.tsx",
   ])
@@ -43,7 +43,7 @@ test("all main headings use a compact first-row title/bell baseline without a me
   const shell = read("src/components/AppShell.tsx");
   assert.match(
     shell,
-    /MAIN_TAB_PATHS = new Set\(\["\/bulk", "\/challenge", "\/bulk\/progress", "\/profile"\]\)/,
+    /MAIN_TAB_PATHS = new Set\(\["\/bulk", "\/challenge", "\/bulk\/progress"\]\)/,
   );
   assert.match(shell, /MAIN_TAB_PATHS\.has\(pathname\.replace/);
   assert.match(shell, /pt-\[max\(1rem,env\(safe-area-inset-top\)\)\]/);

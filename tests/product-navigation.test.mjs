@@ -85,14 +85,14 @@ test("deep routes select the correct parent product", () => {
     assert.equal(productAreaForPath(path), null, path);
 });
 
-test("bottom bar is Today, Challenge, +, Progress, You and preserves browser history", async () => {
+test("bottom bar is Today, Challenge, +, Progress and preserves browser history", async () => {
   const [shell, nav] = await Promise.all([
     read("src/components/AppShell.tsx"),
     read("src/lib/main-navigation.ts"),
   ]);
   assert.deepEqual(
     [...nav.matchAll(/label: "([^"]+)", to:/g)].map((m) => m[1]),
-    ["Today", "Challenge", "Progress", "You"],
+    ["Today", "Challenge", "Progress"],
   );
   // Training, Meals and Goal are no longer bottom tabs.
   assert.doesNotMatch(nav, /label: "(Training|Meals|Goal)"/);
@@ -104,11 +104,11 @@ test("bottom bar is Today, Challenge, +, Progress, You and preserves browser his
   assert.doesNotMatch(shell, /sticky top-0/);
 });
 
-test("You is selected explicitly and there is no contextual product dropdown", async () => {
+test("account screens select no tab and there is no contextual product dropdown", async () => {
   const shell = await read("src/components/AppShell.tsx");
-  // The You tab owns the profile, goal settings, fitness setup and diagnostics.
+  // Profile, goal settings, fitness setup and diagnostics are account-level (header avatar).
   for (const path of ["/profile", "/profile/security", "/bulk/more", "/bulk-onboarding"])
-    assert.equal(mainTabForPath(path), "you", path);
+    assert.equal(mainTabForPath(path), null, path);
   assert.equal(mainTabForPath("/challenge"), "challenge");
   assert.equal(mainTabForPath("/bulk"), "today");
   assert.equal(mainTabForPath("/bulk/progress"), "progress");

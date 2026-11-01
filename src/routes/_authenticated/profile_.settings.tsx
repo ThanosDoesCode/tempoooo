@@ -72,7 +72,7 @@ function SettingsPage() {
 
   return (
     <AppShell>
-      <PageHeader title="Settings" backTo="/profile" backLabel="You" />
+      <PageHeader title="Settings" backTo="/profile" backLabel="Profile" />
 
       <section aria-label="Account" className="space-y-3">
         <h2 className="px-1 text-[13px] font-medium text-muted-foreground">Account</h2>

@@ -85,9 +85,8 @@ function fixture(source, exportName, props, options = {}) {
     "@/components/NotificationBell": { NotificationBell: "NotificationBell" },
     "@/lib/streak": {
       useStreak: () => ({ data: undefined }),
-      useThisWeekRingProgress: () => ({}),
     },
-    "@/components/StreakRings": { StreakRings: "StreakRings" },
+    "@/components/TodayStreak": { TodayStreak: "TodayStreak" },
     "@/lib/daily-check-in": { checkInDraft, validateCheckIn },
     "@/lib/calc": { iso },
     "@/lib/bulk-today-query": {
@@ -134,6 +133,7 @@ function fixture(source, exportName, props, options = {}) {
       if (name.endsWith("/MainPageHeader") || name === "./MainPageHeader")
         return presentationComponent("src/components/MainPageHeader.tsx", {
           "react/jsx-runtime": { jsx, jsxs: jsx, Fragment: "fragment" },
+          "./ProfileButton": { ProfileButton: () => null },
           "./NotificationBell": { NotificationBell: "NotificationBell" },
         });
       if (name.endsWith("/ChallengeParticipant") || name === "./ChallengeParticipant")

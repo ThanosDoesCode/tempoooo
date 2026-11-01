@@ -82,7 +82,7 @@ function BulkHistoryPage() {
         title="History"
         subtitle={format(parseISO(date), "EEEE, d MMMM yyyy")}
         backTo="/profile"
-        backLabel="You"
+        backLabel="Profile"
       />
 
       <div className="mb-3 grid grid-cols-[44px_1fr_44px] items-center gap-2" data-no-pull>
