@@ -3,7 +3,11 @@ import { useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { ChallengeInvitations } from "./ChallengeInvitations";
 import { useNotificationInbox } from "@/lib/account-notifications";
-import { notificationMessage, type AccountNotification } from "@/lib/account-notification-model";
+import {
+  isCommunityNotification,
+  notificationMessage,
+  type AccountNotification,
+} from "@/lib/account-notification-model";
 import { supabase } from "@/integrations/supabase/client";
 
 export function AccountNotificationInbox() {
@@ -17,7 +21,7 @@ export function AccountNotificationInbox() {
     events.data?.filter(
       (event) =>
         event.event_type !== "challenge_invitation_received" ||
-        !actionable.has(event.invitation_id),
+        !(event.invitation_id && actionable.has(event.invitation_id)),
     ) ?? [];
 
   const read = async (event: AccountNotification, open = false) => {
@@ -26,13 +30,22 @@ export function AccountNotificationInbox() {
     setError(null);
     try {
       if (!event.read_at) {
-        const result = await (supabase.rpc as unknown as UntypedRpc)("mark_account_notification_read", {
-          _notification: event.id,
-        });
+        const result = await (supabase.rpc as unknown as UntypedRpc)(
+          "mark_account_notification_read",
+          {
+            _notification: event.id,
+          },
+        );
         if (result.error || !result.data) throw new Error("Read receipt unavailable");
         await queryClient.invalidateQueries({ queryKey: ["account-notifications"] });
       }
-      if (open) await navigate({ to: "/challenge", search: { challenge: event.challenge_id } });
+      if (open) {
+        if (isCommunityNotification(event)) {
+          await navigate({ to: "/community/$userId", params: { userId: event.actor_user_id } });
+        } else if (event.challenge_id) {
+          await navigate({ to: "/challenge", search: { challenge: event.challenge_id } });
+        }
+      }
     } catch {
       setError("Could not update this notification. Please try again.");
     } finally {
@@ -96,7 +109,7 @@ export function AccountNotificationInbox() {
                 className="min-h-11 text-sm font-semibold text-primary disabled:opacity-50"
                 onClick={() => void read(event, true)}
               >
-                Open Challenge
+                {isCommunityNotification(event) ? "Open profile" : "Open Challenge"}
               </button>
             ) : null}
             {!event.read_at ? (

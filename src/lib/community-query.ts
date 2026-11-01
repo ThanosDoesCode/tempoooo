@@ -121,6 +121,10 @@ export async function changeCommunityRelationship(
   if (error) throw error;
 }
 export async function refreshCommunity(client: QueryClient, userId: string) {
-  // Nothing outside this account's Community cache is invalidated.
-  await client.invalidateQueries({ queryKey: communityKey(userId) });
+  // Keep relationship state and the same account's inbox/read state in sync.
+  await Promise.all([
+    client.invalidateQueries({ queryKey: communityKey(userId) }),
+    // The same successful transaction can create or resolve in-app friend events.
+    client.invalidateQueries({ queryKey: ["account-notifications", userId] }),
+  ]);
 }

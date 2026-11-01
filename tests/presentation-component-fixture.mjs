@@ -15,7 +15,6 @@ export function presentationComponent(file, modules = {}, globals = {}) {
       if (modules[name]) return modules[name];
       if (name === "./workout-plan-copy" || name === "@/lib/workout-plan-copy")
         return require("../src/lib/workout-plan-copy.ts");
-      if (name === "./CommunityBadge") return { CommunityBadge: () => null };
       if (name === "./MealDeleteDialog") return { MealDeleteDialog: "MealDeleteDialog" };
       if (name === "./exercise-records.ts" || name === "@/lib/exercise-records")
         return require("../src/lib/exercise-records.ts");

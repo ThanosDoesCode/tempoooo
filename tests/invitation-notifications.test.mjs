@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import {
+  isCommunityNotification,
   notificationBadgeCount,
   notificationMessage,
 } from "../src/lib/account-notification-model.ts";
@@ -84,7 +85,7 @@ function fixture({ rows = [event()], invitations = [], failure = false } = {}) {
     "@/lib/account-notifications": {
       useNotificationInbox: () => ({ events, invitations: invitationQuery }),
     },
-    "@/lib/account-notification-model": { notificationMessage },
+    "@/lib/account-notification-model": { notificationMessage, isCommunityNotification },
     "@/integrations/supabase/client": {
       supabase: {
         rpc: async (name, args) => {

@@ -140,7 +140,7 @@ test("writes use RPCs only, lifecycle tokens, no client actor or username", asyn
   }
   await assert.rejects(api.changeCommunityRelationship("accept", person()), /Request changed/);
 });
-test("mutation refresh touches all own Community surfaces only; cached count dedupes", async () => {
+test("mutation refresh touches own Community and inbox only; cached count dedupes", async () => {
   const { api, calls, result } = apiFixture();
   result({ data: 3, error: null });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -155,41 +155,29 @@ test("mutation refresh touches all own Community surfaces only; cached count ded
     ["community", "b", "incoming-count"],
     ["today", "a"],
     ["account-notifications", "a"],
+    ["account-notifications", "b"],
   ])
     client.setQueryData(key, "cached");
   await api.refreshCommunity(client, "a");
   assert.equal(client.getQueryState(["community", "a", "profile", "other"]).isInvalidated, true);
+  assert.equal(client.getQueryState(["account-notifications", "a"]).isInvalidated, true);
   for (const key of [
     ["community", "b", "incoming-count"],
     ["today", "a"],
-    ["account-notifications", "a"],
+    ["account-notifications", "b"],
   ])
     assert.equal(client.getQueryState(key).isInvalidated, false);
   client.clear();
 });
-test("badge counts incoming only, caps 9+, and is deferred until shell mount", () => {
-  const { api } = apiFixture();
-  assert.equal(api.communityBadgeLabel(2), "2");
-  assert.equal(api.communityBadgeLabel(10), "9+");
-  const calls = [];
-  const ui = accountUI("src/components/CommunityBadge.tsx", "CommunityBadge", {
-    "@/lib/auth": { useAuth: () => ({ user: { id: "a" } }) },
-    "@/lib/community-query": {
-      communityBadgeLabel: api.communityBadgeLabel,
-      useCommunityCount: (id, enabled) => {
-        calls.push([id, enabled]);
-        return { data: 10 };
-      },
-    },
-  });
-  assert.match(ui.text(), /9\+/);
-  assert.deepEqual(calls[0], ["a", false]);
-  assert.ok(calls.some((c) => c[1] === true));
-  assert.equal(ui.find("span")[0].props["aria-label"], "9 or more incoming friend requests");
-  const sql = read("supabase/migrations/20261023120000_tempo_community.sql");
-  assert.match(sql, /r\.recipient_id = auth\.uid\(\) AND r\.status = 'pending' LIMIT 10/);
+test("Community nav has no request badge or count dependency", () => {
+  const shell = read("src/components/AppShell.tsx");
+  assert.doesNotMatch(shell, /CommunityBadge|community-request-count|useCommunityCount/);
+  assert.doesNotMatch(read("src/components/Community.tsx"), /useCommunityCount|Manage connections/);
 });
 
+const drawers = Object.fromEntries(
+  ["Drawer", "DrawerClose", "DrawerContent", "DrawerTitle", "DrawerTrigger"].map((x) => [x, x]),
+);
 const alerts = Object.fromEntries(
   [
     "AlertDialog",
@@ -225,6 +213,8 @@ function actionsFixture(state = "none", props = {}) {
         },
       },
       "./ui/alert-dialog": alerts,
+      "./ui/drawer": drawers,
+      "./ui/tabs": {},
       "./MainPageHeader": { MainPageHeader: "MainPageHeader" },
       "./HistoryBackLink": { HistoryBackLink: "HistoryBackLink" },
       "./ui-kit": { DataError: "DataError" },
@@ -294,7 +284,7 @@ test("remove/block/unblock require Tempo confirmation; cancelling runs no action
     if (!blocked)
       f.ui
         .find("button")
-        .find((b) => b.props["aria-label"] === "Connection actions")
+        .find((b) => b.props["aria-label"] === "More options")
         .props.onClick();
     let focused = false;
     const trigger = {
@@ -303,6 +293,8 @@ test("remove/block/unblock require Tempo confirmation; cancelling runs no action
         focused = true;
       },
     };
+    const moreButton = f.ui.find("button").find((b) => b.props["aria-label"] === "More options");
+    if (moreButton) moreButton.props.ref.current = trigger;
     f.ui.button(label).props.onClick({ currentTarget: trigger });
     assert.equal(f.calls.length, 0);
     assert.equal(f.ui.find("AlertDialog")[0].props.open, true);
@@ -318,6 +310,7 @@ test("remove/block/unblock require Tempo confirmation; cancelling runs no action
     assert.equal(focused, true);
     assert.equal(prevented, true);
     assert.equal(f.calls.length, 0);
+    if (moreButton) moreButton.props.onClick();
     f.ui.button(label).props.onClick({ currentTarget: trigger });
     const action = f.ui.find("AlertDialogAction")[0];
     assert.equal(textOf(action), confirm);
@@ -333,7 +326,7 @@ function markup(exportName, props = {}, options = {}) {
   const api = presentationComponent("src/components/Community.tsx", {
     react: React,
     "@tanstack/react-router": {
-      Link: ({ children, ...p }) => React.createElement("a", { "data-to": p.to }, children),
+      Link: ({ children, ...p }) => React.createElement("a", { "data-to": p.to, className: p.className }, children),
     },
     "@tanstack/react-query": {
       useQueryClient: () => ({}),
@@ -360,6 +353,14 @@ function markup(exportName, props = {}, options = {}) {
     "./ui-kit": {
       DataError: ({ message }) => React.createElement("p", { role: "alert" }, message),
     },
+    "./ui/tabs": presentationComponent("src/components/ui/tabs.tsx"),
+    "./ui/drawer": Object.fromEntries(
+      Object.keys(drawers).map((key) => [
+        key,
+        ({ children }) =>
+          React.createElement("div", {}, children),
+      ]),
+    ),
     "./ui/alert-dialog": Object.fromEntries(
       Object.keys(alerts).map((key) => [
         key,
@@ -376,7 +377,10 @@ test("landing defaults to requests/friends, labelled search, no giant zero-reque
   assert.match(html, /No friends yet/);
   assert.match(html, /Search for people to add on Tempo/);
   assert.doesNotMatch(html, /Friend requests/);
-  assert.match(html, /Manage connections/);
+  assert.doesNotMatch(html, /Manage connections|Sent requests|Blocked users/);
+  assert.match(html, /role="tablist"/);
+  assert.match(html, /Friends/);
+  assert.match(html, /Plans/);
   assert.doesNotMatch(html, /email|bodyweight|calorie|avatar_url|display_name/);
 });
 test("incoming requests and friends render real handles and actions", () => {
@@ -400,7 +404,7 @@ test("search short/no-results/results/error/loading states are compact and truth
   for (const [search, query, expected] of [
     ["a", {}, /Enter 2/],
     ["ab", { data: [] }, /No people found/],
-    ["ab", { data: [person()] }, /Add friend/],
+    ["ab", { data: [person()] }, /Add/],
     ["ab", { isError: true }, /Could not search people/],
     ["ab", { isPending: true }, /Searching/],
   ]) {
@@ -441,7 +445,7 @@ test("full/core nav puts + in physical middle, nested Community ownership exact 
   assert.match(shell, /grid-cols-3.*grid-cols-5/);
   assert.doesNotMatch(shell, /PrimaryTabTransition|primary-tab-motion/);
   assert.match(shell, /activeOptions=\{\{ exact: true/);
-  assert.match(shell, /<CommunityBadge/);
+  assert.doesNotMatch(shell, /CommunityBadge|community-request-count/);
 });
 test("search replaces history; profile pushes, Back restores search and direct entry has Community fallback", () => {
   const history = createMemoryHistory({ initialEntries: ["/bulk"] });
@@ -464,7 +468,7 @@ test("search replaces history; profile pushes, Back restores search and direct e
   trackInAppHistory(deep);
   assert.equal(backWithinApp(deep), false);
 });
-test("Community stays independent of fitness, Challenge invitations and notification/startup paths", () => {
+test("Community stays independent of fitness, Challenge invitations, push and startup paths", () => {
   for (const file of [
     "src/routes/_authenticated/community.tsx",
     "src/routes/_authenticated/community_.$userId.tsx",
@@ -473,8 +477,12 @@ test("Community stays independent of fitness, Challenge invitations and notifica
   ])
     assert.doesNotMatch(
       read(file),
-      /preferredBulkMembership|accountProductMode|bulk_profile_id|sendChallenge|challenge-invitation|account-notification|Push/,
+      /preferredBulkMembership|accountProductMode|bulk_profile_id|sendChallenge|challenge-invitation|Push/,
     );
+  assert.doesNotMatch(
+    read("src/lib/community-query.ts").split("export async function refreshCommunity")[0],
+    /account-notifications/,
+  );
   for (const file of [
     "src/routes/_authenticated/route.tsx",
     "src/routes/_authenticated/bulk/route.tsx",
@@ -482,3 +490,112 @@ test("Community stays independent of fitness, Challenge invitations and notifica
   ])
     assert.doesNotMatch(read(file), /community/i);
 });
+
+test("Plans is a truthful placeholder with no public cards, filters or sharing controls", () => {
+  const html = markup("CommunityPlansPlaceholder");
+  assert.match(html, /Community plans/);
+  assert.match(html, /Coming soon/);
+  assert.match(html, /Discover and share training plans/);
+  assert.doesNotMatch(html, /<button|Popular|Hybrid|using|leaderboard|kcal|km/);
+});
+
+test("empty incoming/sent/blocked lists disappear, friends empty state stays compact", () => {
+  for (const kind of ["incoming", "outgoing", "blocked"])
+    assert.equal(markup("CommunityListSection", { kind, title: "Should be hidden" }), "");
+  assert.match(
+    markup("CommunityListSection", { kind: "friends", title: "Friends" }),
+    /No friends yet/,
+  );
+  assert.equal(markup("CommunityBlockedUsers"), "");
+});
+
+test("friend row is one whole accessible profile link with chevron and no destructive actions", () => {
+  const html = markup("CommunityPersonRow", { person: person("friends") });
+  assert.match(html, /col-span-full/);
+  assert.match(html, /min-h-11/);
+  assert.match(html, /focus-visible:ring-2/);
+  assert.match(html, /lucide-chevron-right/);
+  assert.equal((html.match(/<a /g) ?? []).length, 1);
+  assert.doesNotMatch(html, /<button|Remove friend|Block user/);
+});
+
+test("compact search relationship states stay concise and have specific action labels", () => {
+  for (const [state, expected] of [
+    ["none", "Add"],
+    ["outgoing_pending", "Requested"],
+    ["friends", "Friends"],
+    ["incoming_pending", "Accept"],
+  ]) {
+    const html = markup("CommunityPersonRow", { person: person(state), actions: true });
+    assert.match(html, new RegExp(expected));
+    assert.doesNotMatch(html, /Remove friend|Block user|Cancel request/);
+    assert.match(html, /grid-cols-\[minmax\(0,1fr\)_auto\]/);
+    if (state === "none") assert.match(html, /aria-label="Add friend @long_username_twenty"/);
+  }
+});
+
+test("profile is centered open layout with large initials and top-right named overflow", () => {
+  const html = markup(
+    "CommunityProfilePage",
+    { userId: "other" },
+    { query: { data: person("friends") } },
+  );
+  assert.match(html, /flex-col items-center/);
+  assert.match(html, /h-20 w-20/);
+  assert.match(html, /aria-label="More options"/);
+  assert.match(html, /absolute right-0 top-0/);
+  assert.doesNotMatch(html, /border border-border bg-card|Remove friend|Block user/);
+});
+
+test("overflow is sheet-only, non-friends cannot remove, closing does not mutate", () => {
+  for (const state of ["none", "incoming_pending", "outgoing_pending", "friends"]) {
+    const f = actionsFixture(state, { detail: true });
+    assert.equal(f.ui.find("DrawerContent").length, 0);
+    f.ui
+      .find("button")
+      .find((b) => b.props["aria-label"] === "More options")
+      .props.onClick();
+    const sheet = f.ui.find("DrawerContent")[0];
+    assert.match(sheet.props.className, /env\(safe-area-inset-bottom\)/);
+    assert.match(sheet.props.className, /max-h-\[80dvh\]/);
+    assert.equal(
+      f.ui.find("button").some((b) => textOf(b) === "Remove friend"),
+      state === "friends",
+    );
+    assert.ok(f.ui.button("Block user"));
+    f.ui.find("Drawer")[0].props.onOpenChange(false);
+    assert.equal(f.ui.find("DrawerContent").length, 0);
+    assert.equal(f.calls.length, 0);
+  }
+});
+
+test("cached list rows remain visible during background refetch errors, uncached errors are recoverable", () => {
+  const cached = markup(
+    "CommunityListSection",
+    { kind: "friends", title: "Friends" },
+    { people: [person("friends")], query: { isError: true } },
+  );
+  assert.match(cached, /@long_username_twenty/);
+  const error = markup(
+    "CommunityListSection",
+    { kind: "friends", title: "Friends" },
+    { query: { isError: true, data: undefined } },
+  );
+  assert.match(error, /Could not load friends/);
+});
+
+for (const width of [320, 375, 390, 430])
+  test(`Community ${width}px presentation contracts keep long handles flexible and touch targets intact`, () => {
+    const row = markup("CommunityPersonRow", {
+      person: person("incoming_pending", { username: "abcdefghijklmnopqrst" }),
+      actions: true,
+    });
+    assert.match(row, /min-w-0/);
+    assert.match(row, /break-all/);
+    assert.match(row, /min-h-11/);
+    assert.match(row, /items-center/);
+    assert.doesNotMatch(row, /min-w-\[|whitespace-nowrap/);
+    const source = read("src/components/Community.tsx");
+    assert.match(source, /grid-cols-2/);
+    assert.match(source, /pb-\[max\(1rem,env\(safe-area-inset-bottom\)\)\]/);
+  });

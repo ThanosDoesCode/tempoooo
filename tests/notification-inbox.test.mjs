@@ -75,7 +75,7 @@ function bellFixture(pathname, query) {
   });
 }
 
-for (const path of ["/bulk", "/challenge", "/bulk/progress", "/profile"]) {
+for (const path of ["/bulk", "/challenge", "/community", "/bulk/progress", "/profile"]) {
   test(`global bell on ${path} opens inbox with a 44px target and accessible count`, () => {
     const ui = bellFixture(path, { data: [invitation] });
     const bell = ui.find("Link")[0];

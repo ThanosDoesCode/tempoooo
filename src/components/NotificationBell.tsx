@@ -6,6 +6,7 @@ const MAIN_HEADERS = new Set([
   "/bulk",
   "/today",
   "/challenge",
+  "/community",
   "/bulk/progress",
   "/progress",
   "/profile",

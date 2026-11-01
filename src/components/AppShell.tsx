@@ -8,7 +8,6 @@ import { isFocusScreen, mainTabForPath, MAIN_TABS, type MainTab } from "@/lib/ma
 import { PullToRefresh } from "./PullToRefresh";
 import { LogSheet } from "./LogSheet";
 import { HistoryBackLink } from "./HistoryBackLink";
-import { CommunityBadge } from "./CommunityBadge";
 import { NotificationBell } from "./NotificationBell";
 
 const TAB_ICONS: Record<MainTab, LucideIcon> = {
@@ -151,7 +150,6 @@ function TabLink({
       preload="intent"
       activeOptions={{ exact: true, includeSearch: false }}
       aria-label={item.label}
-      aria-describedby={item.tab === "community" ? "community-request-count" : undefined}
       aria-current={active ? "page" : undefined}
       onPointerDown={onIntent}
       onPointerEnter={onIntent}
@@ -160,7 +158,6 @@ function TabLink({
     >
       <span className="tempo-tab-icon relative h-6 w-6">
         <Icon className="relative h-6 w-6" strokeWidth={1.8} aria-hidden="true" />
-        {item.tab === "community" ? <CommunityBadge /> : null}
       </span>
       <span className="max-w-full truncate text-[10px] font-medium">{item.label}</span>
     </Link>
