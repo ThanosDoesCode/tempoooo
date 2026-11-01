@@ -6,7 +6,12 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import * as routerApi from "@tanstack/react-router";
 import { createMemoryHistory } from "@tanstack/history";
-import { animatePrimaryTabChange, isPrimaryTabChange } from "../src/lib/primary-tab-motion.ts";
+import {
+  animatePrimaryTabChange,
+  capturePrimaryTabSnapshot,
+  isPrimaryTabChange,
+  primaryTabDirection,
+} from "../src/lib/primary-tab-motion.ts";
 import { MAIN_TABS, mainTabForPath, isFocusScreen } from "../src/lib/main-navigation.ts";
 import { backWithinApp, trackInAppHistory } from "../src/lib/in-app-back.ts";
 import { presentationComponent } from "./presentation-component-fixture.mjs";
@@ -29,24 +34,101 @@ function animationFixture() {
     addEventListener: (_event, fn) => listeners.add(fn),
     removeEventListener: (_event, fn) => listeners.delete(fn),
   };
-  const element = {
+  const document = { createElement: (tag) => new Node(tag) };
+  class Node {
+    constructor(tag = "div") {
+      this.tagName = tag;
+      this.children = [];
+      this.attrs = new Map();
+      this.style = {};
+      this.ownerDocument = document;
+      this.textContent = "outgoing Today";
+      this.className = "";
+      this.classList = {
+        add: (name) => {
+          this.className += " " + name;
+        },
+        remove: (name) => {
+          this.className = this.className
+            .split(" ")
+            .filter((value) => value !== name)
+            .join(" ");
+        },
+      };
+    }
+    get id() {
+      return this.attrs.get("id") ?? "";
+    }
+    set id(value) {
+      this.attrs.set("id", value);
+    }
+    get attributes() {
+      return [...this.attrs].map(([name, value]) => ({ name, value }));
+    }
+    setAttribute(name, value) {
+      this.attrs.set(name, String(value));
+    }
+    removeAttribute(name) {
+      this.attrs.delete(name);
+    }
+    append(child) {
+      child.parent = this;
+      this.children.push(child);
+    }
+    remove() {
+      if (this.parent)
+        this.parent.children = this.parent.children.filter((child) => child !== this);
+      this.parent = null;
+    }
+    querySelectorAll(selector) {
+      const all = this.children.flatMap((child) => [child, ...child.querySelectorAll("*")]);
+      return all.filter((node) =>
+        selector
+          .split(",")
+          .some(
+            (part) =>
+              part === "*" ||
+              (part.startsWith("[") ? node.attrs.has(part.slice(1, -1)) : node.tagName === part),
+          ),
+      );
+    }
+    cloneNode() {
+      const clone = new Node(this.tagName);
+      clone.attrs = new Map(this.attrs);
+      clone.style = { ...this.style };
+      clone.textContent = this.textContent;
+      for (const child of this.children) clone.append(child.cloneNode(true));
+      return clone;
+    }
+    getBoundingClientRect() {
+      return { left: 20, top: 16, bottom: 1200, width: 280, height: 1184 };
+    }
     animate(frames, options) {
       const animation = {
         cancelled: false,
+        onfinish: null,
         cancel() {
-          animation.cancelled = true;
+          this.cancelled = true;
+        },
+        finish() {
+          this.onfinish?.();
         },
       };
-      calls.push({ frames, options, animation });
+      calls.push({ node: this, frames, options, animation });
       return animation;
-    },
-  };
+    }
+  }
+  document.body = new Node("body");
+  const element = new Node();
   return {
     calls,
     listeners,
     media,
     element,
+    document,
+    node: (tag) => new Node(tag),
     browser: {
+      innerHeight: 780,
       matchMedia: (query) => {
         assert.equal(query, "(prefers-reduced-motion: reduce)");
         return media;
@@ -55,9 +137,12 @@ function animationFixture() {
   };
 }
 
-test("only distinct primary tab pages animate, never deep routes, direct entry, same-tab search or +", () => {
+test("only distinct primary tab pages animate; direction follows Today / Challenge / Progress / You, including core mode", () => {
   for (const from of paths)
     for (const to of paths) assert.equal(isPrimaryTabChange(from, to, paths), from !== to);
+  assert.equal(primaryTabDirection("/bulk", "/challenge", paths), 1);
+  assert.equal(primaryTabDirection("/profile", "/challenge", paths), -1);
+  assert.equal(primaryTabDirection("/challenge", "/profile", paths), 1);
   assert.equal(isPrimaryTabChange("/bulk/", "/profile/", paths), true);
   for (const path of [
     "/bulk/training/more",
@@ -66,74 +151,153 @@ test("only distinct primary tab pages animate, never deep routes, direct entry, 
     "/profile/settings",
     "/bulk/workout/id",
     "/challenge/add",
-    "/bulk/meals?date=2026-10-08",
   ]) {
     assert.equal(isPrimaryTabChange("/bulk", path, paths), false);
     assert.equal(isPrimaryTabChange(path, "/bulk", paths), false);
   }
-  assert.equal(isPrimaryTabChange("/profile", "/profile", paths), false);
 });
 
-test("fade uses one existing element for 160ms, with opacity only and no navigation/cache side effects", () => {
-  const f = animationFixture();
-  const previous = globalThis.window;
+test("outgoing snapshot and incoming content overlap for 180ms without query/cache effects; finishing removes every layer", () => {
+  const f = animationFixture(),
+    previous = globalThis.window,
+    client = new QueryClient();
   globalThis.window = f.browser;
-  const client = new QueryClient();
-  client.setQueryData(["cached-workout"], { id: "stable", rpe: 8 });
+  client.setQueryData(["workout"], { id: "stable", rpe: 8 });
   try {
-    const cleanup = animatePrimaryTabChange(f.element, "/bulk", "/challenge", paths);
-    assert.equal(f.calls.length, 1);
-    assert.deepEqual(f.calls[0].frames, [{ opacity: 0 }, { opacity: 1 }]);
-    assert.deepEqual(f.calls[0].options, { duration: 160, easing: "ease-out" });
-    assert.equal(client.getQueryState(["cached-workout"]).isInvalidated, false);
-    assert.deepEqual(client.getQueryData(["cached-workout"]), { id: "stable", rpe: 8 });
-    cleanup();
-    assert.equal(f.calls[0].animation.cancelled, true);
+    f.element.className = "tempo-tab-live";
+    const snapshot = capturePrimaryTabSnapshot(f.element);
+    assert.equal(snapshot.visual.className.includes("tempo-tab-live"), false);
+    assert.equal(snapshot.layer.attrs.has("inert"), true);
+    assert.equal(
+      snapshot.layer.parent,
+      undefined,
+      "capture is detached until the incoming DOM commits",
+    );
+    assert.equal(snapshot.layer.inert, true);
+    assert.equal(snapshot.layer.attrs.get("aria-hidden"), "true");
+    f.element.textContent = "incoming Challenge";
+    const cleanup = animatePrimaryTabChange(f.element, "/bulk", "/challenge", paths, snapshot);
+    assert.equal(f.calls.length, 3);
+    assert.deepEqual(f.calls[0].frames, [
+      { opacity: 0.88, transform: "translateX(6px)" },
+      { opacity: 1, transform: "translateX(0)" },
+    ]);
+    assert.deepEqual(f.calls[1].frames, [
+      { opacity: 1, transform: "translateX(0)" },
+      { opacity: 0.88, transform: "translateX(-4px)" },
+    ]);
+    assert.deepEqual(f.calls[2].frames, [{ opacity: 1 }, { opacity: 0 }]);
+    assert.ok(f.calls.every((call) => call.options.duration === 180));
+    assert.equal(snapshot.visual.textContent, "outgoing Today");
+    assert.equal(f.document.body.children.length, 1);
+    assert.equal(client.getQueryState(["workout"]).isInvalidated, false);
+    assert.deepEqual(client.getQueryData(["workout"]), { id: "stable", rpe: 8 });
+    f.calls[2].animation.finish();
+    assert.equal(f.document.body.children.length, 0);
+    assert.ok(f.calls.every((call) => call.animation.cancelled));
     assert.equal(f.listeners.size, 0);
+    cleanup();
   } finally {
     globalThis.window = previous;
     client.clear();
   }
 });
 
-test("reduced motion is instant and enabling it during a fade cancels the current animation", () => {
+test("reverse switches enter from -6px and exit +4px; snapshots preserve the old visible viewport without document-height changes", () => {
   const f = animationFixture(),
     previous = globalThis.window;
   globalThis.window = f.browser;
   try {
-    f.media.matches = true;
-    assert.equal(animatePrimaryTabChange(f.element, "/bulk", "/challenge", paths), undefined);
-    assert.equal(f.calls.length, 0);
-    f.media.matches = false;
-    const cleanup = animatePrimaryTabChange(f.element, "/bulk", "/challenge", paths);
-    f.media.matches = true;
-    for (const listener of f.listeners) listener();
-    assert.equal(f.calls[0].animation.cancelled, true);
+    f.element.getBoundingClientRect = () => ({
+      left: 20,
+      top: -764,
+      bottom: 900,
+      width: 280,
+      height: 1664,
+    });
+    const snapshot = capturePrimaryTabSnapshot(f.element);
+    assert.equal(snapshot.layer.style.top, "0px");
+    assert.equal(snapshot.layer.style.height, "780px");
+    assert.equal(snapshot.visual.style.top, "-764px");
+    const cleanup = animatePrimaryTabChange(f.element, "/profile", "/bulk", paths, snapshot);
+    assert.equal(f.calls[0].frames[0].transform, "translateX(-6px)");
+    assert.equal(f.calls[1].frames[1].transform, "translateX(4px)");
     cleanup();
   } finally {
     globalThis.window = previous;
   }
 });
 
-test("server rendering and browsers without Web Animations safely use an instant transition", () => {
-  const previous = globalThis.window;
+test("snapshot is noninteractive, removes embedded execution/media/autofocus and remaps IDs plus SVG references", () => {
+  const f = animationFixture(),
+    previous = globalThis.window;
+  globalThis.window = f.browser;
+  try {
+    for (const tag of ["script", "iframe", "object", "video", "audio", "link"])
+      f.element.append(f.node(tag));
+    const gradient = f.node("linearGradient");
+    gradient.id = "gradient";
+    f.element.append(gradient);
+    const shape = f.node("rect");
+    shape.setAttribute("fill", "url(#gradient)");
+    f.element.append(shape);
+    const input = f.node("input");
+    input.id = "weight";
+    input.setAttribute("autofocus", "");
+    input.setAttribute("name", "weight");
+    input.setAttribute("onfocus", "bad()");
+    f.element.append(input);
+    const snapshot = capturePrimaryTabSnapshot(f.element);
+    assert.equal(
+      snapshot.visual.querySelectorAll("script,iframe,object,video,audio,link").length,
+      0,
+    );
+    const copy = snapshot.visual.querySelectorAll("input")[0];
+    assert.notEqual(copy.id, "weight");
+    assert.equal(copy.tabIndex, -1);
+    assert.equal(copy.attrs.has("autofocus"), false);
+    assert.equal(copy.attrs.has("name"), false);
+    assert.equal(copy.attrs.has("onfocus"), false);
+    assert.equal(
+      snapshot.visual.querySelectorAll("rect")[0].attrs.get("fill"),
+      `url(#${snapshot.visual.querySelectorAll("linearGradient")[0].id})`,
+    );
+  } finally {
+    globalThis.window = previous;
+  }
+});
+
+test("reduced motion never clones or translates, and changing the preference removes an in-flight snapshot immediately", () => {
+  const f = animationFixture(),
+    previous = globalThis.window;
+  globalThis.window = f.browser;
+  try {
+    f.media.matches = true;
+    assert.equal(capturePrimaryTabSnapshot(f.element), null);
+    assert.equal(animatePrimaryTabChange(f.element, "/bulk", "/challenge", paths, null), undefined);
+    assert.equal(f.calls.length, 0);
+    f.media.matches = false;
+    const snapshot = capturePrimaryTabSnapshot(f.element);
+    animatePrimaryTabChange(f.element, "/bulk", "/challenge", paths, snapshot);
+    f.media.matches = true;
+    for (const listener of f.listeners) listener();
+    assert.equal(f.document.body.children.length, 0);
+    assert.ok(f.calls.every((call) => call.animation.cancelled));
+  } finally {
+    globalThis.window = previous;
+  }
+});
+
+test("SSR, hidden content and browsers without Web Animations safely skip capture", () => {
+  const f = animationFixture(),
+    previous = globalThis.window;
   try {
     delete globalThis.window;
-    assert.doesNotThrow(() =>
-      animatePrimaryTabChange(
-        {
-          animate() {
-            throw new Error("SSR must not animate");
-          },
-        },
-        "/bulk",
-        "/profile",
-        paths,
-      ),
-    );
-    globalThis.window = {};
-    assert.equal(animatePrimaryTabChange({}, "/bulk", "/profile", paths), undefined);
-    assert.equal(animatePrimaryTabChange(null, "/bulk", "/profile", paths), undefined);
+    assert.equal(capturePrimaryTabSnapshot(f.element), null);
+    globalThis.window = f.browser;
+    assert.equal(capturePrimaryTabSnapshot({}), null);
+    f.element.getBoundingClientRect = () => ({ left: 0, top: 1000, bottom: 1200, width: 320 });
+    assert.equal(capturePrimaryTabSnapshot(f.element), null);
   } finally {
     globalThis.window = previous;
   }
@@ -141,97 +305,88 @@ test("server rendering and browsers without Web Animations safely use an instant
 
 function transitionFixture() {
   const f = animationFixture();
-  const slots = [];
-  let index = 0,
-    effects = [],
-    committed = "/bulk",
-    location = "/bulk";
-  const react = {
-    useRef(value) {
-      return (slots[index++] ??= { current: value });
-    },
-    useLayoutEffect(fn, deps) {
-      const n = index++;
-      const old = slots[n];
-      if (!old || deps.some((dep, i) => dep !== old.deps[i])) {
-        slots[n] = { deps };
-        effects.push(() => {
-          old?.cleanup?.();
-          slots[n].cleanup = fn();
-        });
-      }
-    },
-  };
+  let committed = "/bulk",
+    pending = "/bulk",
+    instance;
   const api = presentationComponent("src/components/PrimaryTabTransition.tsx", {
-    react,
+    react: React,
     "react/jsx-runtime": { jsx, jsxs: jsx },
     "@tanstack/react-router": {
       useRouterState: ({ select }) =>
-        select({ matches: [{ pathname: committed }], location: { pathname: location } }),
+        select({ matches: [{ pathname: committed }], location: { pathname: pending } }),
     },
-    "@/lib/primary-tab-motion": { animatePrimaryTabChange, isPrimaryTabChange },
+    "@/lib/primary-tab-motion": {
+      animatePrimaryTabChange,
+      capturePrimaryTabSnapshot,
+      isPrimaryTabChange,
+    },
   });
   const previous = globalThis.window;
   globalThis.window = f.browser;
   return {
     ...f,
-    render(next = committed, pending = next) {
+    render(next = committed, url = next) {
       committed = next;
-      location = pending;
-      index = 0;
-      effects = [];
-      const tree = api.PrimaryTabTransition({ primaryPaths: paths, children: "same outlet" });
-      tree.props.ref.current = f.element;
-      for (const run of effects) run();
-      return tree;
+      pending = url;
+      const node = api.PrimaryTabTransition({ primaryPaths: paths, children: "one outlet" });
+      if (!instance) {
+        instance = new node.type(node.props);
+        const tree = instance.render();
+        tree.props.children.props.ref.current = f.element;
+        return tree;
+      }
+      const previousProps = instance.props;
+      instance.props = node.props;
+      const snapshot = instance.getSnapshotBeforeUpdate(previousProps);
+      f.element.textContent = next;
+      instance.componentDidUpdate(previousProps, {}, snapshot);
+      return instance.render();
     },
     close() {
-      for (const slot of slots) slot?.cleanup?.();
+      instance?.componentWillUnmount();
       globalThis.window = previous;
     },
   };
 }
 
-test("transition follows rendered matches, not an outgoing page during a delayed load, and never keys the outlet", () => {
+test("snapshot lifecycle captures the outgoing content before DOM replacement, waits for rendered matches, and excludes nested navigation", () => {
   const f = transitionFixture();
   try {
     const initial = f.render();
     assert.equal(initial.key, undefined);
-    assert.equal(initial.props["data-primary-page"], true);
     f.render("/bulk", "/challenge");
-    assert.equal(f.calls.length, 0, "a pending URL must not fade the outgoing Today content");
+    assert.equal(f.calls.length, 0);
     const committed = f.render("/challenge");
-    assert.equal(f.calls.length, 1);
-    assert.equal(committed.props.ref, initial.props.ref);
-    assert.equal(committed.key, undefined);
+    assert.equal(f.calls.length, 3);
+    assert.equal(f.document.body.children[0].children[0].textContent, "/bulk");
+    assert.equal(committed.props.children.props.ref, initial.props.children.props.ref);
     const nested = f.render("/challenge/history");
-    assert.equal(f.calls.length, 1);
+    assert.equal(f.calls.length, 3);
+    assert.equal(f.document.body.children.length, 0);
     assert.equal(nested.props["data-primary-page"], undefined);
     f.render("/challenge");
-    assert.equal(
-      f.calls.length,
-      1,
-      "Back from a nested route does not trigger primary-tab animation",
-    );
+    assert.equal(f.calls.length, 3);
   } finally {
     f.close();
   }
 });
 
-test("rapid primary switches cancel prior animations without retained pages; search/refetch/sheet renders do not restart motion", () => {
+test("rapid switches keep at most one inert snapshot and cancel prior motion; same-route refetch/sheet renders do not restart it", () => {
   const f = transitionFixture();
   try {
     f.render();
-    f.render("/challenge");
-    f.render("/profile");
-    f.render("/bulk/progress");
-    assert.equal(f.calls.length, 3);
-    assert.equal(f.calls[0].animation.cancelled, true);
-    assert.equal(f.calls[1].animation.cancelled, true);
-    assert.equal(f.calls[2].animation.cancelled, false);
-    f.render("/bulk/progress");
-    f.render("/bulk/progress");
-    assert.equal(f.calls.length, 3);
+    for (const next of ["/challenge", "/bulk/progress", "/bulk"]) {
+      f.render(next);
+      assert.equal(f.document.body.children.length, 1);
+    }
+    assert.equal(f.calls.length, 9);
+    assert.ok(f.calls.slice(0, 6).every((call) => call.animation.cancelled));
+    assert.ok(f.calls.slice(6).every((call) => !call.animation.cancelled));
+    f.render();
+    f.render();
+    assert.equal(f.calls.length, 9);
+    f.close();
+    assert.equal(f.document.body.children.length, 0);
   } finally {
     f.close();
   }
@@ -360,6 +515,11 @@ test("motion does not change contextual history, scroll restoration or route/que
   assert.equal((shell.match(/<nav/g) ?? []).length, 1);
   const css = read("src/styles.css");
   assert.match(css, /\.tempo-route-content\s*\{\s*min-width: 0;/);
+  assert.match(css, /overflow-x: clip/);
+  assert.match(
+    css,
+    /\.tempo-tab-snapshot\s*\{[^}]*position: fixed;[^}]*overflow: hidden;[^}]*pointer-events: none;/,
+  );
   assert.match(css, /\.tempo-tab-icon::before\s*\{[^}]*inset: -4px -8px/);
   assert.match(
     css,
