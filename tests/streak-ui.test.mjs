@@ -261,7 +261,7 @@ test("the fitness Today screen shows a compact flame entry linking to /streak (r
   assert.match(today, /<TodayStreak data=\{streak\.data\} \/>/);
   assert.doesNotMatch(today, /<StreakRings/);
   assert.match(compact, /to="\/streak"/);
-  assert.match(compact, /<StreakHeadline current=\{data.current\} \/>/);
+  assert.match(compact, /data\.current === 1 \? "week" : "weeks"/);
   assert.match(flame, /<StreakHeadline current=\{current\} \/>/);
   assert.match(flame, /to="\/streak"/);
   // The full rings view is preserved on the streak detail screen.

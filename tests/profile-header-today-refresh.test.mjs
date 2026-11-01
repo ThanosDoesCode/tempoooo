@@ -42,6 +42,11 @@ function todayStreak(data) {
   return accountUI("src/components/TodayStreak.tsx", "TodayStreak", {}, { data });
 }
 const ring = (key, state, active = true) => ({ key, active, state });
+const goals = (ui) =>
+  ui
+    .find("span")
+    .filter((node) => node.props["data-goal"])
+    .map((node) => `${node.props["data-goal"]}:${node.props["data-status"]}`);
 
 test("Today streak is compact: count, this-week done/active, links to /streak", () => {
   const ui = todayStreak({
@@ -49,26 +54,54 @@ test("Today streak is compact: count, this-week done/active, links to /streak", 
     activeRings: [ring("run", "closed"), ring("train", "open"), ring("eat", "open")],
   });
   assert.match(ui.text(), /6/);
-  assert.match(ui.text(), /This week 1\/3/);
+  // Minimal visible text: just the count; the week's wording lives in the link label.
+  assert.equal(ui.text().trim(), "6 weeks");
   const link = ui.find("Link")[0];
   assert.equal(link.props.to, "/streak");
-  assert.match(link.props["aria-label"], /Streak, 6 weeks/);
-  // Run is done (✓), the rest are still to do.
-  assert.match(ui.text(), /✓ Run/);
+  assert.equal(
+    link.props["aria-label"],
+    "Streak, 6 weeks. 1 of 3 this week: Run done, Train to do, Eat to do",
+  );
+  // Goal icons mirror /streak: Run is done, the rest are still to do.
+  assert.deepEqual(goals(ui), ["run:done", "train:to do", "eat:to do"]);
 });
 
 test("Today streak shows only the frozen active goals, never inactive ones", () => {
   const ui = todayStreak({ current: 2, activeRings: [ring("run", "open")] });
-  assert.match(ui.text(), /Run/);
-  assert.doesNotMatch(ui.text(), /Train|Eat/);
+  assert.deepEqual(goals(ui), ["run:to do"]);
+  assert.doesNotMatch(ui.find("Link")[0].props["aria-label"], /Train|Eat/);
 });
 
 test("Today streak handles paused and no-goal weeks without failure wording", () => {
-  assert.match(
-    todayStreak({ current: 4, activeRings: [ring("run", "skipped")] }).text(),
-    /Paused this week/,
+  const label = (data) => todayStreak(data).find("Link")[0].props["aria-label"];
+  assert.match(label({ current: 4, activeRings: [ring("run", "skipped")] }), /Paused this week/);
+  assert.match(label({ current: 0, activeRings: [] }), /No streak goals this week/);
+});
+
+test("a paused week shows one muted Pause icon instead of the goal icons, with no extra text", () => {
+  const ui = todayStreak({
+    current: 4,
+    activeRings: [ring("run", "skipped"), ring("train", "skipped"), ring("eat", "skipped")],
+  });
+  assert.deepEqual(goals(ui), []);
+  const pause = ui.find("span").filter((node) => node.props["data-paused"]);
+  assert.equal(pause.length, 1);
+  assert.equal(ui.find("Pause").length, 1);
+  assert.match(pause[0].props.className, /border-border text-muted-foreground/);
+  assert.equal(ui.text().trim(), "4 weeks");
+  assert.equal(ui.find("Flame").length, 1);
+  assert.equal(ui.find("ChevronRight").length, 1);
+  assert.equal(
+    ui.find("Link")[0].props["aria-label"],
+    "Streak, 4 weeks. Paused this week: Run paused, Train paused, Eat paused",
   );
-  assert.match(todayStreak({ current: 0, activeRings: [] }).text(), /No streak goals this week/);
+  // A week with only some goals skipped is still active: all goal icons, no Pause.
+  const partial = todayStreak({
+    current: 4,
+    activeRings: [ring("run", "skipped"), ring("eat", "closed")],
+  });
+  assert.deepEqual(goals(partial), ["run:paused", "eat:done"]);
+  assert.equal(partial.find("Pause").length, 0);
 });
 
 test("Today no longer renders the large rings list or ring-progress queries", async () => {
