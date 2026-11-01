@@ -49,6 +49,9 @@ export function presentationComponent(file, modules = {}, globals = {}) {
           globals,
         );
       if (name === "@/components/TodayStreak") return { TodayStreak: "TodayStreak" };
+      if (name === "@/components/TodayUpcoming") return { TodayUpcoming: "TodayUpcoming" };
+      if (name === "@/lib/planner-start")
+        return presentationComponent("src/lib/planner-start.ts", modules, globals);
       if (name === "./ChallengeParticipant" || name === "@/components/ChallengeParticipant")
         return presentationComponent("src/components/ChallengeParticipant.tsx", modules, globals);
       return require(name);

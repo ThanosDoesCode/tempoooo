@@ -33,7 +33,7 @@ test("the + opens the Log sheet", async () => {
   const shell = await read("src/components/AppShell.tsx");
   assert.match(shell, /const \[logOpen, setLogOpen\] = useState\(false\)/);
   assert.match(shell, /onClick=\{\(\) => setLogOpen\(true\)\}/);
-  assert.match(shell, /<LogSheet open=\{logOpen\} onOpenChange=\{setLogOpen\}/);
+  assert.match(shell, /<LogSheet\s+open=\{logOpen\}\s+onOpenChange=\{setLogOpen\}/);
 });
 
 test("the Log sheet shows Run, Ride, Weigh-in & sleep, Meal, Workout", async () => {

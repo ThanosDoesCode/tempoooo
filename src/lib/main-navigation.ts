@@ -52,9 +52,11 @@ export function mainTabForPath(pathname: string): MainTab | null {
   )
     return null;
 
-  // Today owns the daily screen plus Training and Meals (opened from Today / the Log sheet).
+  // Today owns the daily screen plus Training, Meals and the Planner (opened from Today / the Log sheet).
   if (
     pathname === "/today" ||
+    pathname === "/planner" ||
+    pathname.startsWith("/planner/") ||
     pathname === "/bulk" ||
     pathname === "/bulk/morning" ||
     pathname === "/bulk/daily-log" ||
@@ -83,7 +85,10 @@ export function isFocusScreen(pathname: string): boolean {
     pathname.startsWith("/setup/") ||
     pathname === "/challenge/new" ||
     pathname.startsWith("/challenge/new/") ||
-    pathname.startsWith("/bulk/workout/")
+    pathname.startsWith("/bulk/workout/") ||
+    // The Plan activity form owns the bottom of the screen with its sticky submit.
+    pathname === "/planner/new" ||
+    /^\/planner\/[^/]+\/edit$/.test(pathname)
   );
 }
 

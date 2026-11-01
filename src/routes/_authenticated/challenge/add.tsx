@@ -20,7 +20,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { normalizeDecimal, parseDecimal } from "@/lib/numeric";
 import { canonicalDuration, formatClock, parseDurationToSeconds } from "@/lib/duration";
-import { userFacingError } from "@/lib/network-errors";
+import { developmentErrorDiagnostic, userFacingError } from "@/lib/network-errors";
+import { invalidatePlanner, linkPlannedChallengeActivity } from "@/lib/planner-query";
 import { reportLovableError } from "@/lib/lovable-error-reporting";
 import { safeStravaUrl } from "@/lib/safe-url";
 import { optimizeEvidenceImage } from "@/lib/challenge-evidence";
@@ -41,13 +42,44 @@ import {
 const MAX_EVIDENCE_FILES = 4;
 const MAX_EVIDENCE_FILE_BYTES = PRIVATE_IMAGE_MAX_BYTES;
 
-type AddSearch = { type?: "run" | "cycle" | undefined; edit?: string | undefined };
+type AddSearch = {
+  type?: "run" | "cycle" | undefined;
+  edit?: string | undefined;
+  /** Planner prefill: raw planned values only. Evidence and an explicit Save stay required. */
+  planned?: string | undefined;
+  distance?: string | undefined;
+  duration?: number | undefined;
+  note?: string | undefined;
+};
+
+const PLANNED_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export const Route = createFileRoute("/_authenticated/challenge/add")({
-  validateSearch: (search: Record<string, unknown>): AddSearch => ({
-    type: search["type"] === "cycle" ? "cycle" : search["type"] === "run" ? "run" : undefined,
-    edit: typeof search["edit"] === "string" && search["edit"] ? search["edit"] : undefined,
-  }),
+  validateSearch: (search: Record<string, unknown>): AddSearch => {
+    const planned =
+      typeof search["planned"] === "string" && PLANNED_ID.test(search["planned"])
+        ? search["planned"]
+        : undefined;
+    const distance = Number(search["distance"]);
+    const duration = Number(search["duration"]);
+    return {
+      type: search["type"] === "cycle" ? "cycle" : search["type"] === "run" ? "run" : undefined,
+      edit: typeof search["edit"] === "string" && search["edit"] ? search["edit"] : undefined,
+      planned,
+      distance:
+        planned && Number.isFinite(distance) && distance > 0 && distance <= 1000
+          ? String(distance)
+          : undefined,
+      duration:
+        planned && Number.isInteger(duration) && duration > 0 && duration <= 86400
+          ? duration
+          : undefined,
+      note:
+        planned && typeof search["note"] === "string" && search["note"].length <= 200
+          ? search["note"]
+          : undefined,
+    };
+  },
   head: () => ({
     meta: [
       { title: "Tempo" },
@@ -63,8 +95,15 @@ export const Route = createFileRoute("/_authenticated/challenge/add")({
 });
 
 function AddActivity() {
-  const { type: searchType, edit: editId } = Route.useSearch();
+  const search = Route.useSearch();
+  const { type: searchType, edit: editId } = search;
   const editing = !!editId;
+  const planned = editing ? undefined : search.planned;
+  const prefill = {
+    distance: planned ? (search.distance ?? "") : "",
+    duration: planned && search.duration ? formatClock(search.duration) : "",
+    note: planned ? (search.note ?? "") : "",
+  };
   const { user } = useAuth();
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -96,7 +135,7 @@ function AddActivity() {
   // An edit has its own owner/challenge/activity key; it never reads the generic new draft.
   const draftKey =
     challenge && user
-      ? `challenge-activity-draft:${user.id}:${challenge.id}${editing ? `:edit:${editId}` : ""}`
+      ? `challenge-activity-draft:${user.id}:${challenge.id}${editing ? `:edit:${editId}` : ""}${planned ? `:planned:${planned}` : ""}`
       : null;
   const draftContext = draftKey ? `${draftKey}:${searchType ?? ""}` : null;
   const lockedForEdit =
@@ -108,11 +147,12 @@ function AddActivity() {
   const unsaved =
     files.length > 0 ||
     type !== (original?.activity_type ?? searchType ?? "run") ||
-    distance !== (original ? String(Number(original.distance_km)) : "") ||
-    duration !== (original?.duration_seconds ? formatClock(original.duration_seconds) : "") ||
+    distance !== (original ? String(Number(original.distance_km)) : prefill.distance) ||
+    duration !==
+      (original?.duration_seconds ? formatClock(original.duration_seconds) : prefill.duration) ||
     date !== (original?.activity_date ?? today) ||
     url !== (original?.external_activity_url ?? "") ||
-    note !== (original?.note ?? "");
+    note !== (original?.note ?? prefill.note);
   const blocker = useBlocker({
     shouldBlockFn: ({ current, next }) =>
       !draftClosed.current && unsaved && current.pathname !== next.pathname,
@@ -153,16 +193,18 @@ function AddActivity() {
     setDraftReady(null);
     // Reset fields before restoring this context. A type-only sheet choice keeps selected files.
     setType(activity?.activity_type ?? searchType ?? "run");
-    setDistance(activity ? String(Number(activity.distance_km)) : "");
-    setDuration(activity?.duration_seconds ? formatClock(activity.duration_seconds) : "");
+    setDistance(activity ? String(Number(activity.distance_km)) : prefill.distance);
+    setDuration(
+      activity?.duration_seconds ? formatClock(activity.duration_seconds) : prefill.duration,
+    );
     setDate(activity?.activity_date ?? today);
     setUrl(activity?.external_activity_url ?? "");
-    setNote(activity?.note ?? "");
+    setNote(activity?.note ?? prefill.note);
     if (hydratedDraftKey.current !== draftKey) setFiles([]);
     hydratedDraftKey.current = draftKey;
     setValidationError(null);
     setRequestError(null);
-    setMoreOpen(!!(activity?.external_activity_url || activity?.note));
+    setMoreOpen(!!(activity?.external_activity_url || activity?.note || prefill.note));
     try {
       const raw = sessionStorage.getItem(draftKey);
       if (raw) {
@@ -192,7 +234,17 @@ function AddActivity() {
       }
     }
     setDraftReady(draftContext);
-  }, [draftKey, draftContext, today, searchType, editing, editQuery.data]);
+  }, [
+    draftKey,
+    draftContext,
+    today,
+    searchType,
+    editing,
+    editQuery.data,
+    prefill.distance,
+    prefill.duration,
+    prefill.note,
+  ]);
 
   const clearDraft = () => {
     // Close persistence synchronously before state updates/navigation can run another effect.
@@ -366,7 +418,10 @@ function AddActivity() {
         return;
       }
 
+      // A planned log knows its new id up front, so linking never needs a read-back.
+      const activityId = planned ? crypto.randomUUID() : undefined;
       const { error } = await supabase.from("challenge_activities").insert({
+        ...(activityId ? { id: activityId } : {}),
         challenge_id: challenge.id,
         user_id: user.id,
         ...fields,
@@ -378,6 +433,17 @@ function AddActivity() {
       clearDraft();
       void qc.invalidateQueries({ queryKey: ["challenge-activities"] });
       toast.success("Activity saved.");
+      if (planned && activityId) {
+        // Only after the real save succeeded. A failed link leaves the plan planned, never fake-complete.
+        try {
+          await linkPlannedChallengeActivity(planned, activityId);
+        } catch (linkError) {
+          developmentErrorDiagnostic("planner_activity_link", linkError);
+        }
+        void invalidatePlanner(qc);
+        void navigate({ to: "/planner", search: { item: planned }, replace: true });
+        return;
+      }
       void navigate({ to: "/challenge" });
     } catch (e) {
       if (paths.length) {

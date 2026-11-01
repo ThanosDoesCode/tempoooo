@@ -18,6 +18,7 @@ import { Route as AuthenticatedBulkOnboardingRouteImport } from './routes/_authe
 import { Route as AuthenticatedCommunityRouteImport } from './routes/_authenticated/community'
 import { Route as AuthenticatedNotificationsRouteImport } from './routes/_authenticated/notifications'
 import { Route as AuthenticatedOnboardingRouteImport } from './routes/_authenticated/onboarding'
+import { Route as AuthenticatedPlannerRouteImport } from './routes/_authenticated/planner'
 import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated/profile'
 import { Route as AuthenticatedProgressRouteImport } from './routes/_authenticated/progress'
 import { Route as AuthenticatedStreakRouteImport } from './routes/_authenticated/streak'
@@ -46,6 +47,7 @@ import { Route as AuthenticatedChallengeRulesRouteImport } from './routes/_authe
 import { Route as AuthenticatedChallengeTargetsRouteImport } from './routes/_authenticated/challenge/targets'
 import { Route as AuthenticatedChallengeTermsRouteImport } from './routes/_authenticated/challenge/terms'
 import { Route as AuthenticatedCommunityUserIdRouteImport } from './routes/_authenticated/community_.$userId'
+import { Route as AuthenticatedPlannerNewRouteImport } from './routes/_authenticated/planner_.new'
 import { Route as AuthenticatedProfileNotificationsRouteImport } from './routes/_authenticated/profile_.notifications'
 import { Route as AuthenticatedProfileSettingsRouteImport } from './routes/_authenticated/profile_.settings'
 import { Route as AuthenticatedBulkMealsAddRouteImport } from './routes/_authenticated/bulk/meals_.add'
@@ -65,6 +67,7 @@ import { Route as AuthenticatedChallengeActivityActivityIdRouteImport } from './
 import { Route as AuthenticatedChallengeTermsOverrideRouteImport } from './routes/_authenticated/challenge/terms_.override'
 import { Route as AuthenticatedChallengeTermsPauseRouteImport } from './routes/_authenticated/challenge/terms_.pause'
 import { Route as AuthenticatedInviteChallengeTokenRouteImport } from './routes/_authenticated/invite.challenge.$token'
+import { Route as AuthenticatedPlannerPlannedIdEditRouteImport } from './routes/_authenticated/planner_.$plannedId.edit'
 import { Route as AuthenticatedBulkProgressBodyFoodRouteImport } from './routes/_authenticated/bulk/progress_.body_.food'
 import { Route as AuthenticatedBulkProgressStrengthLiftRouteImport } from './routes/_authenticated/bulk/progress_.strength_.$lift'
 import { Route as AuthenticatedBulkTrainingWorkoutsWorkoutIdRouteImport } from './routes/_authenticated/bulk/training_.workouts_.$workoutId'
@@ -115,6 +118,11 @@ const AuthenticatedNotificationsRoute =
 const AuthenticatedOnboardingRoute = AuthenticatedOnboardingRouteImport.update({
   id: '/onboarding',
   path: '/onboarding',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedPlannerRoute = AuthenticatedPlannerRouteImport.update({
+  id: '/planner',
+  path: '/planner',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedProfileRoute = AuthenticatedProfileRouteImport.update({
@@ -276,6 +284,11 @@ const AuthenticatedCommunityUserIdRoute =
     path: '/community/$userId',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedPlannerNewRoute = AuthenticatedPlannerNewRouteImport.update({
+  id: '/planner_/new',
+  path: '/planner/new',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedProfileNotificationsRoute =
   AuthenticatedProfileNotificationsRouteImport.update({
     id: '/profile_/notifications',
@@ -390,6 +403,12 @@ const AuthenticatedInviteChallengeTokenRoute =
     path: '/invite/challenge/$token',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedPlannerPlannedIdEditRoute =
+  AuthenticatedPlannerPlannedIdEditRouteImport.update({
+    id: '/planner_/$plannedId/edit',
+    path: '/planner/$plannedId/edit',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedBulkProgressBodyFoodRoute =
   AuthenticatedBulkProgressBodyFoodRouteImport.update({
     id: '/progress_/body_/food',
@@ -424,6 +443,7 @@ export interface FileRoutesByFullPath {
   '/community': typeof AuthenticatedCommunityRoute
   '/notifications': typeof AuthenticatedNotificationsRoute
   '/onboarding': typeof AuthenticatedOnboardingRoute
+  '/planner': typeof AuthenticatedPlannerRoute
   '/profile': typeof AuthenticatedProfileRoute
   '/progress': typeof AuthenticatedProgressRoute
   '/streak': typeof AuthenticatedStreakRoute
@@ -450,6 +470,7 @@ export interface FileRoutesByFullPath {
   '/challenge/targets': typeof AuthenticatedChallengeTargetsRoute
   '/challenge/terms': typeof AuthenticatedChallengeTermsRoute
   '/community/$userId': typeof AuthenticatedCommunityUserIdRoute
+  '/planner/new': typeof AuthenticatedPlannerNewRoute
   '/profile/notifications': typeof AuthenticatedProfileNotificationsRoute
   '/profile/settings': typeof AuthenticatedProfileSettingsRoute
   '/bulk/': typeof AuthenticatedBulkIndexRoute
@@ -471,6 +492,7 @@ export interface FileRoutesByFullPath {
   '/challenge/terms/override': typeof AuthenticatedChallengeTermsOverrideRoute
   '/challenge/terms/pause': typeof AuthenticatedChallengeTermsPauseRoute
   '/invite/challenge/$token': typeof AuthenticatedInviteChallengeTokenRoute
+  '/planner/$plannedId/edit': typeof AuthenticatedPlannerPlannedIdEditRoute
   '/bulk/progress/body/food': typeof AuthenticatedBulkProgressBodyFoodRoute
   '/bulk/progress/strength/$lift': typeof AuthenticatedBulkProgressStrengthLiftRoute
   '/bulk/training/workouts/$workoutId': typeof AuthenticatedBulkTrainingWorkoutsWorkoutIdRoute
@@ -484,6 +506,7 @@ export interface FileRoutesByTo {
   '/community': typeof AuthenticatedCommunityRoute
   '/notifications': typeof AuthenticatedNotificationsRoute
   '/onboarding': typeof AuthenticatedOnboardingRoute
+  '/planner': typeof AuthenticatedPlannerRoute
   '/profile': typeof AuthenticatedProfileRoute
   '/progress': typeof AuthenticatedProgressRoute
   '/streak': typeof AuthenticatedStreakRoute
@@ -510,6 +533,7 @@ export interface FileRoutesByTo {
   '/challenge/targets': typeof AuthenticatedChallengeTargetsRoute
   '/challenge/terms': typeof AuthenticatedChallengeTermsRoute
   '/community/$userId': typeof AuthenticatedCommunityUserIdRoute
+  '/planner/new': typeof AuthenticatedPlannerNewRoute
   '/profile/notifications': typeof AuthenticatedProfileNotificationsRoute
   '/profile/settings': typeof AuthenticatedProfileSettingsRoute
   '/bulk': typeof AuthenticatedBulkIndexRoute
@@ -531,6 +555,7 @@ export interface FileRoutesByTo {
   '/challenge/terms/override': typeof AuthenticatedChallengeTermsOverrideRoute
   '/challenge/terms/pause': typeof AuthenticatedChallengeTermsPauseRoute
   '/invite/challenge/$token': typeof AuthenticatedInviteChallengeTokenRoute
+  '/planner/$plannedId/edit': typeof AuthenticatedPlannerPlannedIdEditRoute
   '/bulk/progress/body/food': typeof AuthenticatedBulkProgressBodyFoodRoute
   '/bulk/progress/strength/$lift': typeof AuthenticatedBulkProgressStrengthLiftRoute
   '/bulk/training/workouts/$workoutId': typeof AuthenticatedBulkTrainingWorkoutsWorkoutIdRoute
@@ -547,6 +572,7 @@ export interface FileRoutesById {
   '/_authenticated/community': typeof AuthenticatedCommunityRoute
   '/_authenticated/notifications': typeof AuthenticatedNotificationsRoute
   '/_authenticated/onboarding': typeof AuthenticatedOnboardingRoute
+  '/_authenticated/planner': typeof AuthenticatedPlannerRoute
   '/_authenticated/profile': typeof AuthenticatedProfileRoute
   '/_authenticated/progress': typeof AuthenticatedProgressRoute
   '/_authenticated/streak': typeof AuthenticatedStreakRoute
@@ -573,6 +599,7 @@ export interface FileRoutesById {
   '/_authenticated/challenge/targets': typeof AuthenticatedChallengeTargetsRoute
   '/_authenticated/challenge/terms': typeof AuthenticatedChallengeTermsRoute
   '/_authenticated/community_/$userId': typeof AuthenticatedCommunityUserIdRoute
+  '/_authenticated/planner_/new': typeof AuthenticatedPlannerNewRoute
   '/_authenticated/profile_/notifications': typeof AuthenticatedProfileNotificationsRoute
   '/_authenticated/profile_/settings': typeof AuthenticatedProfileSettingsRoute
   '/_authenticated/bulk/': typeof AuthenticatedBulkIndexRoute
@@ -594,6 +621,7 @@ export interface FileRoutesById {
   '/_authenticated/challenge/terms_/override': typeof AuthenticatedChallengeTermsOverrideRoute
   '/_authenticated/challenge/terms_/pause': typeof AuthenticatedChallengeTermsPauseRoute
   '/_authenticated/invite/challenge/$token': typeof AuthenticatedInviteChallengeTokenRoute
+  '/_authenticated/planner_/$plannedId/edit': typeof AuthenticatedPlannerPlannedIdEditRoute
   '/_authenticated/bulk/progress_/body_/food': typeof AuthenticatedBulkProgressBodyFoodRoute
   '/_authenticated/bulk/progress_/strength_/$lift': typeof AuthenticatedBulkProgressStrengthLiftRoute
   '/_authenticated/bulk/training_/workouts_/$workoutId': typeof AuthenticatedBulkTrainingWorkoutsWorkoutIdRoute
@@ -610,6 +638,7 @@ export interface FileRouteTypes {
     | '/community'
     | '/notifications'
     | '/onboarding'
+    | '/planner'
     | '/profile'
     | '/progress'
     | '/streak'
@@ -636,6 +665,7 @@ export interface FileRouteTypes {
     | '/challenge/targets'
     | '/challenge/terms'
     | '/community/$userId'
+    | '/planner/new'
     | '/profile/notifications'
     | '/profile/settings'
     | '/bulk/'
@@ -657,6 +687,7 @@ export interface FileRouteTypes {
     | '/challenge/terms/override'
     | '/challenge/terms/pause'
     | '/invite/challenge/$token'
+    | '/planner/$plannedId/edit'
     | '/bulk/progress/body/food'
     | '/bulk/progress/strength/$lift'
     | '/bulk/training/workouts/$workoutId'
@@ -670,6 +701,7 @@ export interface FileRouteTypes {
     | '/community'
     | '/notifications'
     | '/onboarding'
+    | '/planner'
     | '/profile'
     | '/progress'
     | '/streak'
@@ -696,6 +728,7 @@ export interface FileRouteTypes {
     | '/challenge/targets'
     | '/challenge/terms'
     | '/community/$userId'
+    | '/planner/new'
     | '/profile/notifications'
     | '/profile/settings'
     | '/bulk'
@@ -717,6 +750,7 @@ export interface FileRouteTypes {
     | '/challenge/terms/override'
     | '/challenge/terms/pause'
     | '/invite/challenge/$token'
+    | '/planner/$plannedId/edit'
     | '/bulk/progress/body/food'
     | '/bulk/progress/strength/$lift'
     | '/bulk/training/workouts/$workoutId'
@@ -732,6 +766,7 @@ export interface FileRouteTypes {
     | '/_authenticated/community'
     | '/_authenticated/notifications'
     | '/_authenticated/onboarding'
+    | '/_authenticated/planner'
     | '/_authenticated/profile'
     | '/_authenticated/progress'
     | '/_authenticated/streak'
@@ -758,6 +793,7 @@ export interface FileRouteTypes {
     | '/_authenticated/challenge/targets'
     | '/_authenticated/challenge/terms'
     | '/_authenticated/community_/$userId'
+    | '/_authenticated/planner_/new'
     | '/_authenticated/profile_/notifications'
     | '/_authenticated/profile_/settings'
     | '/_authenticated/bulk/'
@@ -779,6 +815,7 @@ export interface FileRouteTypes {
     | '/_authenticated/challenge/terms_/override'
     | '/_authenticated/challenge/terms_/pause'
     | '/_authenticated/invite/challenge/$token'
+    | '/_authenticated/planner_/$plannedId/edit'
     | '/_authenticated/bulk/progress_/body_/food'
     | '/_authenticated/bulk/progress_/strength_/$lift'
     | '/_authenticated/bulk/training_/workouts_/$workoutId'
@@ -854,6 +891,13 @@ declare module '@tanstack/react-router' {
       path: '/onboarding'
       fullPath: '/onboarding'
       preLoaderRoute: typeof AuthenticatedOnboardingRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/planner': {
+      id: '/_authenticated/planner'
+      path: '/planner'
+      fullPath: '/planner'
+      preLoaderRoute: typeof AuthenticatedPlannerRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/profile': {
@@ -1052,6 +1096,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedCommunityUserIdRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/planner_/new': {
+      id: '/_authenticated/planner_/new'
+      path: '/planner/new'
+      fullPath: '/planner/new'
+      preLoaderRoute: typeof AuthenticatedPlannerNewRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/profile_/notifications': {
       id: '/_authenticated/profile_/notifications'
       path: '/profile/notifications'
@@ -1185,6 +1236,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedInviteChallengeTokenRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/planner_/$plannedId/edit': {
+      id: '/_authenticated/planner_/$plannedId/edit'
+      path: '/planner/$plannedId/edit'
+      fullPath: '/planner/$plannedId/edit'
+      preLoaderRoute: typeof AuthenticatedPlannerPlannedIdEditRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/bulk/progress_/body_/food': {
       id: '/_authenticated/bulk/progress_/body_/food'
       path: '/progress/body/food'
@@ -1299,6 +1357,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedCommunityRoute: typeof AuthenticatedCommunityRoute
   AuthenticatedNotificationsRoute: typeof AuthenticatedNotificationsRoute
   AuthenticatedOnboardingRoute: typeof AuthenticatedOnboardingRoute
+  AuthenticatedPlannerRoute: typeof AuthenticatedPlannerRoute
   AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute
   AuthenticatedProgressRoute: typeof AuthenticatedProgressRoute
   AuthenticatedStreakRoute: typeof AuthenticatedStreakRoute
@@ -1314,6 +1373,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedChallengeTargetsRoute: typeof AuthenticatedChallengeTargetsRoute
   AuthenticatedChallengeTermsRoute: typeof AuthenticatedChallengeTermsRoute
   AuthenticatedCommunityUserIdRoute: typeof AuthenticatedCommunityUserIdRoute
+  AuthenticatedPlannerNewRoute: typeof AuthenticatedPlannerNewRoute
   AuthenticatedProfileNotificationsRoute: typeof AuthenticatedProfileNotificationsRoute
   AuthenticatedProfileSettingsRoute: typeof AuthenticatedProfileSettingsRoute
   AuthenticatedChallengeIndexRoute: typeof AuthenticatedChallengeIndexRoute
@@ -1321,6 +1381,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedChallengeTermsOverrideRoute: typeof AuthenticatedChallengeTermsOverrideRoute
   AuthenticatedChallengeTermsPauseRoute: typeof AuthenticatedChallengeTermsPauseRoute
   AuthenticatedInviteChallengeTokenRoute: typeof AuthenticatedInviteChallengeTokenRoute
+  AuthenticatedPlannerPlannedIdEditRoute: typeof AuthenticatedPlannerPlannedIdEditRoute
   AuthenticatedChallengeHistoryWeekWeekNumberRoute: typeof AuthenticatedChallengeHistoryWeekWeekNumberRoute
 }
 
@@ -1331,6 +1392,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedCommunityRoute: AuthenticatedCommunityRoute,
   AuthenticatedNotificationsRoute: AuthenticatedNotificationsRoute,
   AuthenticatedOnboardingRoute: AuthenticatedOnboardingRoute,
+  AuthenticatedPlannerRoute: AuthenticatedPlannerRoute,
   AuthenticatedProfileRoute: AuthenticatedProfileRoute,
   AuthenticatedProgressRoute: AuthenticatedProgressRoute,
   AuthenticatedStreakRoute: AuthenticatedStreakRoute,
@@ -1346,6 +1408,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedChallengeTargetsRoute: AuthenticatedChallengeTargetsRoute,
   AuthenticatedChallengeTermsRoute: AuthenticatedChallengeTermsRoute,
   AuthenticatedCommunityUserIdRoute: AuthenticatedCommunityUserIdRoute,
+  AuthenticatedPlannerNewRoute: AuthenticatedPlannerNewRoute,
   AuthenticatedProfileNotificationsRoute:
     AuthenticatedProfileNotificationsRoute,
   AuthenticatedProfileSettingsRoute: AuthenticatedProfileSettingsRoute,
@@ -1357,6 +1420,8 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedChallengeTermsPauseRoute: AuthenticatedChallengeTermsPauseRoute,
   AuthenticatedInviteChallengeTokenRoute:
     AuthenticatedInviteChallengeTokenRoute,
+  AuthenticatedPlannerPlannedIdEditRoute:
+    AuthenticatedPlannerPlannedIdEditRoute,
   AuthenticatedChallengeHistoryWeekWeekNumberRoute:
     AuthenticatedChallengeHistoryWeekWeekNumberRoute,
 }

@@ -7,6 +7,7 @@ import { DataError } from "@/components/ui-kit";
 import { TodayChallenge } from "@/components/TodayChallenge";
 import { MainPageHeader } from "@/components/MainPageHeader";
 import { TodayStreak } from "@/components/TodayStreak";
+import { TodayUpcoming } from "@/components/TodayUpcoming";
 import { useStreak } from "@/lib/streak";
 import { iso } from "@/lib/calc";
 import { useActions } from "@/lib/store";
@@ -283,6 +284,8 @@ function TodayPage() {
             </div>
           </>
         )}
+        {/* Full fitness only; one bounded read that never gates the habits above. */}
+        <TodayUpcoming profileId={publicGoal ? id : null} today={today} />
         <TodayChallenge hideDiscovery={invitations.isLoading || !!invitations.data?.length} />
       </div>
     </AppShell>

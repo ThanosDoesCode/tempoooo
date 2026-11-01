@@ -136,7 +136,7 @@ test("the shared Log sheet replaces the dropdown as the add surface", async () =
     read("src/components/LogSheet.tsx"),
     read("src/lib/main-navigation.ts"),
   ]);
-  assert.match(shell, /<LogSheet open=\{logOpen\} onOpenChange=\{setLogOpen\}/);
+  assert.match(shell, /<LogSheet\s+open=\{logOpen\}\s+onOpenChange=\{setLogOpen\}/);
   assert.match(shell, /aria-label="Log"/);
   // Two groups in the sheet, and the five actions each routing to an existing functional flow.
   assert.match(sheet, /Counts toward your challenge/);
