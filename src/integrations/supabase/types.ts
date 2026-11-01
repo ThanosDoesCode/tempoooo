@@ -2041,6 +2041,93 @@ export type Database = {
         }
         Relationships: []
       }
+      community_blocks: {
+        Row: {
+          blocked_id: string
+          blocker_id: string
+          created_at: string
+        }
+        Insert: {
+          blocked_id: string
+          blocker_id: string
+          created_at?: string
+        }
+        Update: {
+          blocked_id?: string
+          blocker_id?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_blocks_blocked_id_fkey"
+            columns: ["blocked_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_blocks_blocker_id_fkey"
+            columns: ["blocker_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      community_relationships: {
+        Row: {
+          created_at: string
+          id: string
+          pair_high: string | null
+          pair_low: string | null
+          recipient_id: string
+          request_id: string
+          requester_id: string
+          responded_at: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          pair_high?: string | null
+          pair_low?: string | null
+          recipient_id: string
+          request_id: string
+          requester_id: string
+          responded_at?: string | null
+          status: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          pair_high?: string | null
+          pair_low?: string | null
+          recipient_id?: string
+          request_id?: string
+          requester_id?: string
+          responded_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_relationships_recipient_id_fkey"
+            columns: ["recipient_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_relationships_requester_id_fkey"
+            columns: ["requester_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           account_onboarded_at: string | null
@@ -2388,6 +2475,10 @@ export type Database = {
         Args: { _caller: string; _invitation: string }
         Returns: string
       }
+      accept_community_friend_request: {
+        Args: { _request_id: string; _user: string }
+        Returns: undefined
+      }
       activate_bulk_training_plan: {
         Args: { _plan_id: string }
         Returns: undefined
@@ -2401,6 +2492,7 @@ export type Database = {
         Args: { _expected_current_calories: number; _new_calories: number }
         Returns: boolean
       }
+      block_community_user: { Args: { _user: string }; Returns: undefined }
       bulk_nutrition_targets_for_day: {
         Args: { _log_date: string; _profile: string; _timezone: string }
         Returns: Json
@@ -2408,6 +2500,10 @@ export type Database = {
       cancel_challenge_week_exception: {
         Args: { _adjustment: string }
         Returns: boolean
+      }
+      cancel_community_friend_request: {
+        Args: { _request_id: string; _user: string }
+        Returns: undefined
       }
       cancel_pending_challenge: {
         Args: { _caller: string; _challenge: string }
@@ -2464,6 +2560,7 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      community_incoming_count: { Args: never; Returns: number }
       complete_bulk_onboarding: {
         Args: {
           _available_equipment: string[]
@@ -2620,6 +2717,10 @@ export type Database = {
         Args: { _caller: string; _invitation: string }
         Returns: boolean
       }
+      decline_community_friend_request: {
+        Args: { _request_id: string; _user: string }
+        Returns: undefined
+      }
       delete_bulk_meal_preset: { Args: { _meal: string }; Returns: boolean }
       delete_bulk_nutrition_entry:
         | { Args: { _entry: string }; Returns: boolean }
@@ -2664,11 +2765,24 @@ export type Database = {
         Args: { _activity: string; _lease: string; _succeeded: boolean }
         Returns: boolean
       }
+      get_community_profile: {
+        Args: { _user: string }
+        Returns: {
+          relationship_state: string
+          request_id: string
+          user_id: string
+          username: string
+        }[]
+      }
       instantiate_bulk_training_plan: {
         Args: { _plan_type: string; _request_id?: string; _template_id: string }
         Returns: string
       }
       is_bulk_admin: { Args: never; Returns: boolean }
+      list_community_people: {
+        Args: { _after?: string; _kind: string }
+        Returns: Json
+      }
       list_my_challenge_invitations: {
         Args: { _caller: string }
         Returns: {
@@ -2774,6 +2888,10 @@ export type Database = {
         Args: { _session: string; _set: string }
         Returns: boolean
       }
+      remove_community_friend: {
+        Args: { _request_id: string; _user: string }
+        Returns: undefined
+      }
       repeat_completed_bulk_training_session: {
         Args: { _session: string; _workout_date: string }
         Returns: string
@@ -2864,9 +2982,22 @@ export type Database = {
           username: string
         }[]
       }
+      search_community_people: {
+        Args: { _query: string }
+        Returns: {
+          relationship_state: string
+          request_id: string
+          user_id: string
+          username: string
+        }[]
+      }
       send_challenge_username_invitation: {
         Args: { _caller: string; _challenge: string; _invited_username: string }
         Returns: string
+      }
+      send_community_friend_request: {
+        Args: { _request_id: string; _user: string }
+        Returns: undefined
       }
       set_account_username: {
         Args: {
@@ -2914,6 +3045,7 @@ export type Database = {
         Args: { _name: string }
         Returns: string
       }
+      unblock_community_user: { Args: { _user: string }; Returns: undefined }
       update_bulk_meal_preset: {
         Args: {
           _calories: number
