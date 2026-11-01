@@ -18,10 +18,15 @@ import { isExpectedQueryCancellation } from "@/lib/query-cancellation";
 import { QueryCancellationRecovery } from "@/components/QueryCancellationRecovery";
 import { startupDiagnostic, withStartupDeadline } from "@/lib/startup";
 import { rememberDestination, sanitizeDestination } from "@/lib/pending-destination";
+import { isLegacyGenericLaunch } from "@/lib/launch-intent";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
-  beforeLoad: async ({ context, location }) => {
+  beforeLoad: async ({ context, location, cause }) => {
+    // A cold launch of a pre-2026-10-07 install opens the old start_url; treat it as a generic launch
+    // (/today: Today for fitness, Challenge for core) before sign-in could remember it as a destination.
+    if (cause !== "preload" && isLegacyGenericLaunch(location.href))
+      throw redirect({ to: "/today", replace: true });
     const user = await withStartupDeadline(
       context.queryClient.fetchQuery(authenticatedUserQueryOptions()),
       "authentication",

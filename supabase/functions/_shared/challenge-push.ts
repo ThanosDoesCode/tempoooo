@@ -75,6 +75,17 @@ export function isInvitationPush(event: PushEvent): boolean {
   ].includes(event.kind);
 }
 
+/**
+ * Marks every tap destination as an explicit notification launch, so the app never mistakes it for
+ * the legacy bare "/challenge" start_url that pre-2026-10-07 home-screen installs open (see
+ * src/lib/launch-intent.ts).
+ */
+export function notificationUrl(path: string, siteUrl: string): string {
+  const url = new URL(path, siteUrl);
+  url.searchParams.set("from", "notification");
+  return url.href;
+}
+
 /** No membership shortcut: verify the queue against both the stored event and invitation. */
 export function invitationRecipient(
   event: PushEvent,
@@ -242,14 +253,14 @@ export class OneSignal {
         target_channel: "push",
         headings: { en: text.title },
         contents: { en: text.body },
-        url: new URL(
+        url: notificationUrl(
           event.kind === "challenge_invitation_received"
             ? "/notifications"
             : isInvitationPush(event)
               ? `/challenge?challenge=${encodeURIComponent(event.challenge_id)}`
               : "/challenge",
           this.siteUrl,
-        ).href,
+        ),
         chrome_web_icon: new URL("/icons/challenge-notification.png", this.siteUrl).href,
         idempotency_key: event.id,
         // Limit lock-screen exposure and stale delivery after membership changes.

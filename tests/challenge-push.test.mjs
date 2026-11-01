@@ -91,7 +91,8 @@ test("A's activity targets only B with a minimal payload", async () => {
   assert.equal(f.sent[0].data, undefined);
   assert.equal(f.sent[0].include_aliases, undefined);
   assert.equal(f.sent[0].included_segments, undefined);
-  assert.equal(f.sent[0].url, "https://example.com/challenge");
+  // Explicitly marked, so it is never mistaken for the legacy bare "/challenge" start_url.
+  assert.equal(f.sent[0].url, "https://example.com/challenge?from=notification");
 });
 test("B's activity targets only A", async () => {
   const f = fixture({
@@ -262,8 +263,8 @@ for (const kind of [
     assert.equal(
       f.sent[0].url,
       kind === "challenge_invitation_received"
-        ? "https://example.com/notifications"
-        : `https://example.com/challenge?challenge=${challenge}`,
+        ? "https://example.com/notifications?from=notification"
+        : `https://example.com/challenge?challenge=${challenge}&from=notification`,
     );
   });
 }
