@@ -194,9 +194,9 @@ test("debug flag records the startup decision without private data", () => {
 });
 
 // ---------------------------------------------------------------- manifest and routing wiring
-test("current manifest: stable identity kept, start_url /today, scope /", async () => {
+test("current manifest: root identity, start_url /today, scope /", async () => {
   const manifest = JSON.parse(await read("public/manifest.webmanifest"));
-  assert.equal(manifest.id, "/challenge"); // changing it would make installs a different app
+  assert.equal(manifest.id, "/"); // stable root identity; existing installs must reinstall
   assert.equal(manifest.start_url, "/today");
   assert.equal(manifest.scope, "/");
   assert.equal(manifest.display, "standalone");
