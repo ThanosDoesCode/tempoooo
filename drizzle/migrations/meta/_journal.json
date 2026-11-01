@@ -64,6 +64,13 @@
       "when": 1792648029463,
       "tag": "0008_fix_week_adjustments_read_policy",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793510529024,
+      "tag": "0009_community_account_notifications",
+      "breakpoints": true
     }
   ]
 }

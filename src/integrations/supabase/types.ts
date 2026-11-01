@@ -18,36 +18,42 @@ export type Database = {
         Row: {
           actor_user_id: string
           actor_username: string | null
-          challenge_id: string
+          challenge_id: string | null
+          community_relationship_id: string | null
+          community_request_id: string | null
           created_at: string
           dedupe_key: string
           event_type: string
           id: string
-          invitation_id: string
+          invitation_id: string | null
           read_at: string | null
           recipient_user_id: string
         }
         Insert: {
           actor_user_id: string
           actor_username?: string | null
-          challenge_id: string
+          challenge_id?: string | null
+          community_relationship_id?: string | null
+          community_request_id?: string | null
           created_at?: string
           dedupe_key: string
           event_type: string
           id?: string
-          invitation_id: string
+          invitation_id?: string | null
           read_at?: string | null
           recipient_user_id: string
         }
         Update: {
           actor_user_id?: string
           actor_username?: string | null
-          challenge_id?: string
+          challenge_id?: string | null
+          community_relationship_id?: string | null
+          community_request_id?: string | null
           created_at?: string
           dedupe_key?: string
           event_type?: string
           id?: string
-          invitation_id?: string
+          invitation_id?: string | null
           read_at?: string | null
           recipient_user_id?: string
         }
@@ -57,6 +63,13 @@ export type Database = {
             columns: ["challenge_id"]
             isOneToOne: false
             referencedRelation: "challenges"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "account_notification_events_community_relationship_id_fkey"
+            columns: ["community_relationship_id"]
+            isOneToOne: false
+            referencedRelation: "community_relationships"
             referencedColumns: ["id"]
           },
           {
