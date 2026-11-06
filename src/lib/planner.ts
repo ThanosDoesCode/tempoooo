@@ -2,8 +2,6 @@ import {
   addDays,
   addMonths,
   differenceInCalendarDays,
-  endOfMonth,
-  endOfWeek,
   format,
   isValid,
   parseISO,
@@ -206,19 +204,19 @@ export function groupPlannerWeeks(items: PlannedActivity[], today: string): Plan
 
 export type CalendarDay = { date: string; inMonth: boolean };
 
-/** Monday-first weeks covering `month` (YYYY-MM), built from local dates only. */
+/**
+ * Monday-first weeks covering `month` (YYYY-MM), built from local dates only. Always 6 weeks
+ * (42 days) so the month view keeps one height while navigating.
+ */
 export function calendarGrid(month: string): CalendarDay[][] {
   const first = local(`${month}-01`);
   const start = startOfWeek(first, { weekStartsOn: 1 });
-  const end = endOfWeek(endOfMonth(first), { weekStartsOn: 1 });
-  const weeks: CalendarDay[][] = [];
-  for (let day = start; day <= end; day = addDays(day, 1)) {
-    if (weeks.length === 0 || weeks.at(-1)!.length === 7) weeks.push([]);
-    weeks
-      .at(-1)!
-      .push({ date: format(day, "yyyy-MM-dd"), inMonth: day.getMonth() === first.getMonth() });
-  }
-  return weeks;
+  return Array.from({ length: 6 }, (_, week) =>
+    Array.from({ length: 7 }, (_, weekday) => {
+      const day = addDays(start, week * 7 + weekday);
+      return { date: format(day, "yyyy-MM-dd"), inMonth: day.getMonth() === first.getMonth() };
+    }),
+  );
 }
 
 export const monthOf = (date: string) => date.slice(0, 7);

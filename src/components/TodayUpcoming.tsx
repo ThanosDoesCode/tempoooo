@@ -36,16 +36,6 @@ export function TodayUpcoming({ profileId, today }: { profileId: string | null; 
             />
           </Link>
         ))}
-        <Link
-          to="/planner"
-          className={`${plannerRowClass} min-h-[56px] justify-between font-semibold text-primary`}
-        >
-          View planner
-          <ChevronRight
-            className="control-chevron flex-none text-muted-foreground"
-            aria-hidden="true"
-          />
-        </Link>
       </PlannerCard>
     </section>
   );

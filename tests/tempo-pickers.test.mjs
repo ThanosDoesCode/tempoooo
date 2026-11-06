@@ -5,6 +5,7 @@ import { spawnSync } from "node:child_process";
 import { format } from "date-fns";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { DayPicker } from "react-day-picker";
 import * as values from "../src/lib/tempo-picker.ts";
 import { presentationComponent } from "./presentation-component-fixture.mjs";
 
@@ -124,6 +125,82 @@ test("date picker opens one Monday-first calendar, reflects selection and update
   }
   nodes(f.render(), "Calendar")[0].props.onSelect(values.pickerDate("2024-02-29"));
   assert.equal(saved, "2024-02-29");
+  assert.equal(nodes(f.render(), "Dialog")[0].props.open, false);
+});
+
+// Render the real react-day-picker with exactly the props the picker passes to Calendar.
+function pickerMonthMarkup(month, value = "2026-10-05", today = "2026-10-02") {
+  const f = fixture("TempoDatePicker", { value, onChange() {} });
+  const { className, classNames, autoFocus, ...props } = nodes(f.render(), "Calendar")[0].props;
+  return renderToStaticMarkup(
+    React.createElement(DayPicker, {
+      ...props,
+      month: values.pickerDate(month),
+      today: values.pickerDate(today),
+      onMonthChange() {},
+    }),
+  );
+}
+const dayCells = (html) => [...html.matchAll(/<td[^>]*data-day="([^"]+)"[^>]*>/g)];
+
+test("date picker always renders 6 Monday-first weeks (42 cells) so its height never changes", () => {
+  const f = fixture("TempoDatePicker", { value: "2026-10-05", onChange() {} });
+  const calendar = nodes(f.render(), "Calendar")[0];
+  assert.equal(calendar.props.fixedWeeks, true);
+  assert.equal(calendar.props.showOutsideDays, true);
+  for (let year = 2024; year <= 2030; year++) {
+    for (let m = 1; m <= 12; m++) {
+      const month = `${year}-${String(m).padStart(2, "0")}-01`;
+      const html = pickerMonthMarkup(month);
+      const cells = dayCells(html);
+      assert.equal(cells.length, 42, month);
+      assert.equal((html.match(/<tr[^>]*class="(?:[^"]* )?rdp-week[ "]/g) ?? []).length, 6, month);
+      assert.equal(new Date(`${cells[0][1]}T12:00:00`).getDay(), 1, month);
+      assert.equal(new Date(`${cells[41][1]}T12:00:00`).getDay(), 0, month);
+    }
+  }
+  // Non-leap February 2027 starts on Monday: no leading days, two outside March weeks.
+  const feb2027 = dayCells(pickerMonthMarkup("2027-02-01"));
+  assert.equal(feb2027[0][1], "2027-02-01");
+  assert.equal(feb2027.at(-1)[1], "2027-03-14");
+  assert.ok(feb2027.slice(28).every(([cell]) => cell.includes("data-outside")));
+  assert.ok(feb2027.slice(0, 28).every(([cell]) => !cell.includes("data-outside")));
+  // Leap February 2028 leads with 31 January and includes 29 February.
+  const feb2028 = dayCells(pickerMonthMarkup("2028-02-01"));
+  assert.equal(feb2028[0][1], "2028-01-31");
+  assert.ok(feb2028[0][0].includes("data-outside"));
+  assert.ok(feb2028.some(([cell, day]) => day === "2028-02-29" && !cell.includes("data-outside")));
+  assert.equal(feb2028.at(-1)[1], "2028-03-12");
+  // 5-row October 2026 and 6-row August 2026.
+  const oct = dayCells(pickerMonthMarkup("2026-10-01"));
+  assert.deepEqual([oct[0][1], oct.at(-1)[1]], ["2026-09-28", "2026-11-08"]);
+  const aug = dayCells(pickerMonthMarkup("2026-08-01"));
+  assert.deepEqual(
+    [aug[0][1], aug[35][1], aug.at(-1)[1]],
+    ["2026-07-27", "2026-08-31", "2026-09-06"],
+  );
+
+  // Today and selected modifiers still apply, also on outside filler days.
+  const sept = pickerMonthMarkup("2026-09-01");
+  assert.match(sept, /<td[^>]*data-day="2026-10-02"[^>]*data-outside="true"[^>]*data-today="true"/);
+  assert.match(
+    sept,
+    /<td[^>]*data-day="2026-10-05"[^>]*data-selected="true"[^>]*data-outside="true"/,
+  );
+  // Every day keeps an accessible full-date label.
+  const labels = [...sept.matchAll(/<button[^>]*aria-label="([^"]+)"[^>]*>/g)].map((m) => m[1]);
+  assert.ok(labels.some((label) => /October 2nd, 2026/.test(label) && /Today/.test(label)));
+  assert.ok(labels.some((label) => /October 5th, 2026/.test(label) && /selected/.test(label)));
+  assert.equal(labels.filter((label) => /\d{4}/.test(label)).length, 42);
+});
+
+test("choosing an outside-month date saves that exact local date and closes, as before", () => {
+  const saved = [];
+  const f = fixture("TempoDatePicker", { value: "2027-02-10", onChange: (v) => saved.push(v) });
+  nodes(f.render(), "Dialog")[0].props.onOpenChange(true);
+  assert.equal(values.pickerDateValue(nodes(f.render(), "Calendar")[0].props.month), "2027-02-10");
+  nodes(f.render(), "Calendar")[0].props.onSelect(values.pickerDate("2027-03-14"));
+  assert.deepEqual(saved, ["2027-03-14"]);
   assert.equal(nodes(f.render(), "Dialog")[0].props.open, false);
 });
 

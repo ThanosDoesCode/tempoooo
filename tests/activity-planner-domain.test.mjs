@@ -3,6 +3,7 @@ process.env.TZ = "Pacific/Pago_Pago";
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { presentationComponent } from "./presentation-component-fixture.mjs";
 
 const planner = await import("../src/lib/planner.ts");
@@ -180,10 +181,10 @@ test("calendar grid is Monday-first, includes outside-month days, and handles le
   const october = calendarGrid("2026-10");
   assert.equal(october[0][0].date, "2026-09-28");
   assert.equal(october[0][0].inMonth, false);
-  assert.equal(october.at(-1).at(-1).date, "2026-11-01");
+  assert.equal(october.at(-1).at(-1).date, "2026-11-08");
   assert.ok(october.every((week) => week.length === 7));
   assert.equal(october.flat().filter((day) => day.inMonth).length, 31);
-  assert.deepEqual(gridRange("2026-10"), { from: "2026-09-28", to: "2026-11-01" });
+  assert.deepEqual(gridRange("2026-10"), { from: "2026-09-28", to: "2026-11-08" });
 
   assert.equal(
     calendarGrid("2028-02")
@@ -202,6 +203,112 @@ test("calendar grid is Monday-first, includes outside-month days, and handles le
   assert.equal(monthTitle("2026-10"), "October 2026");
   // A month starting on Monday has no leading days.
   assert.equal(calendarGrid("2027-02")[0][0].date, "2027-02-01");
+});
+
+const flatDates = (month) =>
+  calendarGrid(month)
+    .flat()
+    .map((day) => day.date);
+
+test("every month renders a fixed 6x7 grid: 42 consecutive local days starting on a Monday", () => {
+  for (let year = 2024; year <= 2030; year++) {
+    for (let m = 1; m <= 12; m++) {
+      const month = `${year}-${String(m).padStart(2, "0")}`;
+      const weeks = calendarGrid(month);
+      assert.equal(weeks.length, 6, month);
+      assert.ok(
+        weeks.every((week) => week.length === 7),
+        month,
+      );
+      const days = weeks.flat();
+      assert.equal(days.length, 42, month);
+      // Monday-first, consecutive, no duplicates, local dates only.
+      assert.equal(new Date(`${days[0].date}T12:00:00`).getDay(), 1, month);
+      for (let i = 1; i < days.length; i++) {
+        const prev = new Date(`${days[i - 1].date}T12:00:00`);
+        prev.setDate(prev.getDate() + 1);
+        const expected = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, "0")}-${String(prev.getDate()).padStart(2, "0")}`;
+        assert.equal(days[i].date, expected, `${month} cell ${i}`);
+      }
+      // The month itself is contiguous: leading = previous month, trailing = next month.
+      const first = days.findIndex((day) => day.inMonth);
+      const inMonth = days.filter((day) => day.inMonth);
+      const daysInMonth = new Date(year, m, 0).getDate();
+      assert.equal(inMonth.length, daysInMonth, month);
+      assert.equal(inMonth[0].date, `${month}-01`, month);
+      assert.equal(inMonth.at(-1).date, `${month}-${daysInMonth}`, month);
+      assert.ok(first < 7, month);
+      assert.ok(
+        days.slice(0, first).every((day) => !day.inMonth && day.date < `${month}-01`),
+        month,
+      );
+      assert.ok(
+        days.slice(first + daysInMonth).every((day) => !day.inMonth && day.date > `${month}-31`),
+        month,
+      );
+      assert.equal(
+        days.slice(first, first + daysInMonth).every((day) => day.inMonth),
+        true,
+      );
+    }
+  }
+});
+
+test("short, leap, 5-row and 6-row months all fill to 42 with correct filler dates", () => {
+  // February 2027 (non-leap) starts on a Monday: no leading days, 14 trailing March days.
+  const feb2027 = flatDates("2027-02");
+  assert.equal(feb2027[0], "2027-02-01");
+  assert.equal(feb2027[27], "2027-02-28");
+  assert.deepEqual(feb2027.slice(28), [
+    ...Array.from({ length: 14 }, (_, i) => `2027-03-${String(i + 1).padStart(2, "0")}`),
+  ]);
+  // February 2028 (leap) starts on a Tuesday: 31 January leads, 29 February is present.
+  const feb2028 = calendarGrid("2028-02").flat();
+  assert.equal(feb2028[0].date, "2028-01-31");
+  assert.equal(feb2028[0].inMonth, false);
+  assert.ok(feb2028.some((day) => day.date === "2028-02-29" && day.inMonth));
+  assert.equal(feb2028[30].date, "2028-03-01");
+  assert.equal(feb2028.at(-1).date, "2028-03-12");
+  // October 2026 needs 5 rows: one extra trailing week of November is added.
+  const oct2026 = flatDates("2026-10");
+  assert.deepEqual(oct2026.slice(0, 3), ["2026-09-28", "2026-09-29", "2026-09-30"]);
+  assert.deepEqual(oct2026.slice(-8), [
+    "2026-11-01",
+    "2026-11-02",
+    "2026-11-03",
+    "2026-11-04",
+    "2026-11-05",
+    "2026-11-06",
+    "2026-11-07",
+    "2026-11-08",
+  ]);
+  // August 2026 needs 6 rows on its own: Saturday start, Monday 31 August.
+  const aug2026 = flatDates("2026-08");
+  assert.equal(aug2026[0], "2026-07-27");
+  assert.equal(aug2026[5], "2026-08-01");
+  assert.equal(aug2026[35], "2026-08-31");
+  assert.equal(aug2026.at(-1), "2026-09-06");
+  // Year boundaries: December fills into January, January leads from December.
+  assert.equal(flatDates("2026-12").at(-1), "2027-01-10");
+  assert.equal(flatDates("2027-01")[0], "2026-12-28");
+  assert.deepEqual(gridRange("2027-02"), { from: "2027-02-01", to: "2027-03-14" });
+});
+
+test("the 42-day grid never shifts dates in extreme UTC offsets", () => {
+  const expected = JSON.stringify(["2028-01-31", "2028-03-12", "2026-07-27", "2026-09-06"]);
+  for (const zone of ["Pacific/Kiritimati", "Pacific/Pago_Pago", "Europe/Stockholm"]) {
+    const child = spawnSync(
+      process.execPath,
+      [
+        "--input-type=module",
+        "-e",
+        'import {calendarGrid} from "./src/lib/planner.ts"; const d=(m)=>calendarGrid(m).flat(); const a=d("2028-02"), b=d("2026-08"); console.log(JSON.stringify([a[0].date,a.at(-1).date,b[0].date,b.at(-1).date]))',
+      ],
+      { cwd: new URL("..", import.meta.url), env: { ...process.env, TZ: zone }, encoding: "utf8" },
+    );
+    assert.equal(child.status, 0, `${zone}: ${child.stderr}`);
+    assert.equal(child.stdout.trim(), expected, zone);
+  }
 });
 
 // ---------------------------------------------------------------- form parsing

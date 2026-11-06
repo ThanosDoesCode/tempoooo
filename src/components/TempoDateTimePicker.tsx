@@ -84,6 +84,9 @@ export function TempoDatePicker({
         <Calendar
           mode="single"
           weekStartsOn={1}
+          // Always 6 weeks so the dialog keeps one height while navigating months.
+          fixedWeeks
+          showOutsideDays
           month={month}
           onMonthChange={setMonth}
           selected={pickerDate(value)}

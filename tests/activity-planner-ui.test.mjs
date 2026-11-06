@@ -7,6 +7,7 @@ import { MAIN_TABS, isFocusScreen, mainTabForPath } from "../src/lib/main-naviga
 import { inAppBackLabel } from "../src/lib/in-app-back.ts";
 
 const planner = await import("../src/lib/planner.ts");
+const dateFns = await import("date-fns");
 const read = (file) => readFileSync(new URL(`../${file}`, import.meta.url), "utf8");
 const TODAY = "2026-10-02";
 // Values built inside the component sandbox come from another realm: compare their JSON shape.
@@ -259,7 +260,7 @@ function upcoming(data) {
   );
 }
 
-test("Today Upcoming shows real items with when-labels and View planner; nothing when empty", () => {
+test("Today Upcoming shows real items with when-labels and one header Planner link; nothing when empty", () => {
   const ui = upcoming([
     item({ distanceKm: 5 }),
     item({ id: "b", type: "ride", date: "2026-10-04", time: null, distanceKm: 20 }),
@@ -268,9 +269,15 @@ test("Today Upcoming shows real items with when-labels and View planner; nothing
   assert.match(ui.text(), /Run · 5 km\|Tomorrow · 09:00;/);
   assert.match(ui.text(), /Ride · 20 km\|Sunday · any time;/);
   assert.match(ui.text(), /Lower A\|Monday · 18:00;/);
-  assert.match(ui.text(), /View planner/);
-  const rows = ui.find("Link").filter((node) => node.props.search?.item);
+  assert.doesNotMatch(ui.text(), /View planner/);
+  const links = ui.find("Link");
+  const rows = links.filter((node) => node.props.search?.item);
   assert.equal(rows.length, 3);
+  // Only the header "Planner" link goes to /planner without an item; the card ends at the last row.
+  const plain = links.filter((node) => node.props.to === "/planner" && !node.props.search);
+  assert.equal(plain.length, 1);
+  assert.equal(textOf(plain[0]), "Planner");
+  assert.equal(links.length, 4);
   assert.equal(upcoming([]).render(), null);
   assert.equal(upcoming(undefined).render(), null);
 });
@@ -426,6 +433,111 @@ test("Log or plan adds Plan ahead → Schedule activity for full fitness only", 
     false,
   );
   assert.match(read("src/components/AppShell.tsx"), /showPlanner=\{owner\?\.is_public === true\}/);
+});
+
+// ---------------------------------------------------------------- calendar view
+// Executes the real Planner route with a capturing JSX runtime so the month grid's cells and
+// handlers can be inspected for any month without a DOM.
+function plannerCalendar(search) {
+  const navigations = [];
+  const jsx = (type, props) => ({ type, props });
+  const route = presentationComponent("src/routes/_authenticated/planner.tsx", {
+    "react/jsx-runtime": { jsx, jsxs: jsx, Fragment: "Fragment" },
+    "@tanstack/react-router": {
+      createFileRoute: () => (options) => ({ options, useSearch: () => search }),
+      Link: "Link",
+      redirect: () => {},
+      useNavigate: () => (to) => navigations.push(to),
+      useRouter: () => ({ history: undefined }),
+    },
+    "date-fns": dateFns,
+    "lucide-react": new Proxy({}, { get: (_, name) => String(name) }),
+    "@/components/AppShell": { AppShell: "AppShell" },
+    "@/components/HistoryBackLink": { HistoryBackLink: "HistoryBackLink" },
+    "@/components/PageSkeleton": { PageSkeleton: "PageSkeleton" },
+    "@/components/ui-kit": { DataError: "DataError" },
+    "@/components/PlannerParts": new Proxy({}, { get: (_, name) => String(name) }),
+    "@/components/PlannedItemSheet": { PlannedItemSheet: "PlannedItemSheet" },
+    "@/lib/planner-start": { usePlannedWorkoutStart: () => ({}) },
+    "@/lib/bulk-access": {
+      bulkOwnerQueryOptions() {},
+      bulkPlanModeFor() {},
+      preferredBulkMembership: () => ({ bulk_profile_id: "profile" }),
+      useMemberships: () => ({ data: [] }),
+    },
+    "@/lib/in-app-back": { backWithinApp: () => false },
+    "@/lib/use-local-day": { useLocalDay: () => TODAY },
+    "@/lib/planner": planner,
+    "@/lib/planner-query": {
+      usePlannerRange: () => ({ data: [], isLoading: false }),
+      usePlannedItem: () => ({ data: null }),
+    },
+  }).Route;
+  const expand = (node) =>
+    !node || typeof node !== "object"
+      ? []
+      : Array.isArray(node)
+        ? node.flatMap(expand)
+        : typeof node.type === "function"
+          ? expand(node.type(node.props))
+          : [node, ...expand(node.props?.children)];
+  const all = expand(route.options.component());
+  const cells = all.filter((node) => node.type === "button" && "aria-pressed" in node.props);
+  return { cells, navigations, all };
+}
+
+test("Planner calendar always renders 42 Monday-first cells with fixed-height rows", () => {
+  const rowClasses = new Set();
+  for (const month of ["2027-02", "2028-02", "2026-10", "2026-08", "2026-12", "2027-01"]) {
+    const { cells, all } = plannerCalendar({ view: "calendar", month });
+    assert.equal(cells.length, 42, month);
+    const grid = all.find(
+      (node) => node.type === "div" && node.props.className === "grid grid-cols-7 gap-y-1",
+    );
+    assert.ok(grid, month);
+    // First cell is always a Monday; labels stay full local dates.
+    assert.match(cells[0].props["aria-label"], /^Monday /, month);
+    assert.match(cells[41].props["aria-label"], /^Sunday /, month);
+    for (const cell of cells) rowClasses.add(cell.props.className.match(/min-h-\[\d+px\]/)?.[0]);
+  }
+  // Every cell in every month uses the same fixed minimum height: 6 rows x one height.
+  same([...rowClasses], ["min-h-[52px]"]);
+
+  // February 2027 starts on a Monday and needs only 4 weeks: two muted March weeks fill it.
+  const feb = plannerCalendar({ view: "calendar", month: "2027-02", date: "2027-02-10" }).cells;
+  assert.match(feb[0].props["aria-label"], /^Monday 1 February, nothing planned$/);
+  assert.match(feb[41].props["aria-label"], /^Sunday 14 March, nothing planned$/);
+  assert.ok(
+    feb.slice(28).every((cell) => cell.props.className.includes("text-muted-foreground/50")),
+  );
+  assert.ok(
+    feb.slice(0, 28).every((cell) => !cell.props.className.includes("text-muted-foreground/50")),
+  );
+  // Selected styling is unchanged.
+  assert.equal(feb[9].props["aria-pressed"], true);
+  assert.match(feb[9].props.className, /bg-elevated/);
+  assert.equal(feb.filter((cell) => cell.props["aria-pressed"]).length, 1);
+
+  // Today styling and label are unchanged, including when today is a muted filler cell.
+  const sept = plannerCalendar({ view: "calendar", month: "2026-09" }).cells;
+  const todayCell = sept.find((cell) => cell.props["aria-label"].includes(", today,"));
+  assert.match(todayCell.props["aria-label"], /^Friday 2 October, today, nothing planned$/);
+  assert.match(todayCell.props.className, /text-muted-foreground\/50/);
+  const todayNumber = todayCell.props.children[0];
+  assert.match(todayNumber.props.className, /bg-primary/);
+});
+
+test("clicking a filler date selects it and moves the visible month, as before", () => {
+  const { cells, navigations } = plannerCalendar({ view: "calendar", month: "2026-10" });
+  // Leading filler: Monday 28 September. Trailing filler: Sunday 8 November.
+  cells[0].props.onClick();
+  cells[41].props.onClick();
+  const searches = navigations.map((to) => plain(to.search({})));
+  same(searches, [
+    { date: "2026-09-28", month: "2026-09" },
+    { date: "2026-11-08", month: "2026-11" },
+  ]);
+  assert.ok(cells.every((cell) => !cell.props.disabled));
 });
 
 // ---------------------------------------------------------------- navigation
