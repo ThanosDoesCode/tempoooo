@@ -197,7 +197,9 @@ function ChallengeHome() {
     week && opponent
       ? resolvedTargetForWeek(challenge, weekTargets, travelPauses, opponent.userId, week.n)
       : commonTarget;
-  const myActivities = activities.filter((activity) => activity.user_id === user?.id);
+  const activityParticipants = [...(members ?? [])].sort((a, b) =>
+    a.userId === user?.id ? -1 : b.userId === user?.id ? 1 : 0,
+  );
   const needsOpponent = !membersLoading && (members?.length ?? 0) < (challenge.max_members ?? 2);
   const progressLoading =
     membersLoading || summaryQuery.isLoading || pausesLoading || weekTargetsLoading;
@@ -371,17 +373,38 @@ function ChallengeHome() {
       </Link>
 
       <section className="mt-5">
-        <p className="mx-1 mb-1.5 text-[13px] font-medium text-muted-foreground">Your activities</p>
+        <h2 className="mx-1 mb-2 text-[13px] font-medium text-muted-foreground">Activities</h2>
         {activitiesLoading ? (
           <ActivityFeedSkeleton />
-        ) : myActivities.length ? (
-          <div className="rounded-[20px] bg-card px-4">
-            {myActivities.map((activity) => (
-              <ActivityRow key={activity.id} activity={activity} today={today} />
-            ))}
-          </div>
         ) : (
-          <Note>No runs or rides yet this week. Add one when you have its screenshot.</Note>
+          <div className="space-y-3">
+            {activityParticipants.map((participant) => {
+              const rows = activities.filter(
+                (activity) =>
+                  activity.challenge_id === challenge.id && activity.user_id === participant.userId,
+              );
+              return (
+                <div key={participant.userId} className="min-w-0 rounded-[20px] bg-card px-4">
+                  <h3 className="break-words py-3 text-[13px] font-semibold text-muted-foreground">
+                    {participant.userId === user?.id ? "You" : participant.name}
+                  </h3>
+                  {rows.length ? (
+                    rows.map((activity) => (
+                      <ActivityRow key={activity.id} activity={activity} today={today} />
+                    ))
+                  ) : (
+                    <p className="pb-3 text-[13px] text-muted-foreground">
+                      {activitiesQuery.hasNextPage
+                        ? "Load older to see any remaining activities."
+                        : activitiesError
+                          ? "Activities could not be loaded. Try again above."
+                          : "No runs or rides yet this week."}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         )}
         {activitiesQuery.hasNextPage ? (
           <button
@@ -535,10 +558,8 @@ function ActivityRow({ activity, today }: { activity: Activity; today: string })
             : ""}
         </p>
       </div>
-      <span
-        className={`num text-[15px] font-semibold ${metrics.qualified ? "" : "text-muted-foreground"}`}
-      >
-        {metrics.qualified ? `+${eq.toFixed(1)}` : "0"}
+      <span className={`num text-[15px] font-semibold ${eq > 0 ? "" : "text-muted-foreground"}`}>
+        {eq > 0 ? `+${eq.toFixed(1)}` : "0"}
       </span>
       <ChevronRight className="control-chevron text-muted-foreground" aria-hidden="true" />
     </Link>

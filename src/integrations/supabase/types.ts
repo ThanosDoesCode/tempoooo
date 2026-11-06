@@ -2420,6 +2420,102 @@ export type Database = {
           },
         ]
       }
+      planned_activities: {
+        Row: {
+          activity_type: string
+          bulk_profile_id: string
+          challenge_activity_id: string | null
+          created_at: string
+          exercise_count_snapshot: number | null
+          id: string
+          note: string | null
+          planned_date: string
+          planned_distance_km: number | null
+          planned_duration_seconds: number | null
+          planned_time: string | null
+          training_plan_day_id: string | null
+          updated_at: string
+          workout_name_snapshot: string | null
+          workout_session_id: string | null
+          workout_source_type: string | null
+          workout_template_id: string | null
+        }
+        Insert: {
+          activity_type: string
+          bulk_profile_id: string
+          challenge_activity_id?: string | null
+          created_at?: string
+          exercise_count_snapshot?: number | null
+          id?: string
+          note?: string | null
+          planned_date: string
+          planned_distance_km?: number | null
+          planned_duration_seconds?: number | null
+          planned_time?: string | null
+          training_plan_day_id?: string | null
+          updated_at?: string
+          workout_name_snapshot?: string | null
+          workout_session_id?: string | null
+          workout_source_type?: string | null
+          workout_template_id?: string | null
+        }
+        Update: {
+          activity_type?: string
+          bulk_profile_id?: string
+          challenge_activity_id?: string | null
+          created_at?: string
+          exercise_count_snapshot?: number | null
+          id?: string
+          note?: string | null
+          planned_date?: string
+          planned_distance_km?: number | null
+          planned_duration_seconds?: number | null
+          planned_time?: string | null
+          training_plan_day_id?: string | null
+          updated_at?: string
+          workout_name_snapshot?: string | null
+          workout_session_id?: string | null
+          workout_source_type?: string | null
+          workout_template_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "planned_activities_bulk_profile_id_fkey"
+            columns: ["bulk_profile_id"]
+            isOneToOne: false
+            referencedRelation: "bulk_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "planned_activities_challenge_activity_id_fkey"
+            columns: ["challenge_activity_id"]
+            isOneToOne: false
+            referencedRelation: "challenge_activities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "planned_activities_training_plan_day_id_fkey"
+            columns: ["training_plan_day_id"]
+            isOneToOne: false
+            referencedRelation: "bulk_training_plan_days"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "planned_activities_workout_session_id_fkey"
+            columns: ["workout_session_id"]
+            isOneToOne: false
+            referencedRelation: "bulk_training_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "planned_activities_workout_template_id_fkey"
+            columns: ["workout_template_id"]
+            isOneToOne: false
+            referencedRelation: "workout_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workout_templates: {
         Row: {
           bulk_profile_id: string | null
@@ -2476,6 +2572,28 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_planned_activity: {
+        Args: { _request_id: string; _activity_type: string; _planned_date: string; _planned_time?: string | null; _workout_source_type?: string | null; _training_plan_day_id?: string | null; _workout_template_id?: string | null; _distance_km?: number | null; _duration_seconds?: number | null; _note?: string | null }
+        Returns: string
+      }
+      update_planned_activity: {
+        Args: { _id: string; _expected_updated_at: string; _planned_date: string; _planned_time?: string | null; _workout_source_type?: string | null; _training_plan_day_id?: string | null; _workout_template_id?: string | null; _distance_km?: number | null; _duration_seconds?: number | null; _note?: string | null }
+        Returns: string
+      }
+      reschedule_planned_activity: {
+        Args: { _id: string; _planned_date: string; _planned_time?: string | null }
+        Returns: string
+      }
+      planner_upcoming: {
+        Args: { _profile: string; _from: string; _limit?: number }
+        Returns: Database["public"]["Tables"]["planned_activities"]["Row"][]
+      }
+      delete_planned_activity: { Args: { _id: string }; Returns: boolean }
+      link_planned_activity_session: { Args: { _id: string; _session: string }; Returns: boolean }
+      link_planned_activity_challenge_activity: {
+        Args: { _id: string; _activity: string }
+        Returns: boolean
+      }
       send_community_friend_request: {
         Args: { _user: string; _request_id: string }
         Returns: undefined

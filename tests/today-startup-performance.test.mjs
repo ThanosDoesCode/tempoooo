@@ -634,3 +634,57 @@ test("Today streak nutrition bounds day headers to one seven-row request but sti
   assert.equal(headers[0].limit, 7);
   assert.equal(t.calls.filter((r) => r.table === "bulk_nutrition_entries").length, 3);
 });
+
+test("Today's Planner read is one bounded server read that skips completed rows before its limit", async () => {
+  const planner = await import("../src/lib/planner.ts");
+  const calls = [];
+  const builder = {
+    select(fields) {
+      calls.push(["select", fields]);
+      return builder;
+    },
+    then(resolve) {
+      resolve({ data: [], error: null });
+    },
+  };
+  const query = presentationComponent("src/lib/planner-query.ts", {
+    "@tanstack/react-query": { queryOptions: (options) => options, useQuery() {} },
+    "@/integrations/supabase/client": {
+      supabase: {
+        rpc(name, args) {
+          calls.push(["rpc", name, plain(args)]);
+          return builder;
+        },
+        from(table) {
+          throw new Error(`Today must not scan ${table}`);
+        },
+      },
+    },
+    "@/lib/network-errors": network,
+    "./planner": planner,
+  });
+  assert.deepEqual(plain(await query.plannerUpcomingQueryOptions(profile, day).queryFn()), []);
+  assert.equal(calls.length, 2, "exactly one Planner request");
+  assert.deepEqual(calls[0], [
+    "rpc",
+    "planner_upcoming",
+    { _profile: profile, _from: day, _limit: 3 },
+  ]);
+  assert.doesNotMatch(calls[1][1], /exercise_name|sets|evidence/);
+
+  // Core/legacy (null profile) makes no Planner request at all.
+  const disabled = query.plannerUpcomingQueryOptions(null, day);
+  assert.equal(disabled.enabled, false);
+  assert.deepEqual(plain(await disabled.queryFn()), []);
+  assert.equal(calls.length, 2);
+
+  // Never part of the route/startup path: no loader, prefetch or readiness gate depends on it.
+  for (const file of [
+    "src/routes/_authenticated/bulk/route.tsx",
+    "src/routes/_authenticated/route.tsx",
+    "src/routes/__root.tsx",
+  ])
+    assert.doesNotMatch(read(file), /planner/i, file);
+  const today = read("src/routes/_authenticated/bulk/index.tsx");
+  assert.doesNotMatch(today.slice(0, today.indexOf("return (")), /usePlannerUpcoming|planned/i);
+});

@@ -87,6 +87,7 @@ function fixture(source, exportName, props, options = {}) {
       useStreak: () => ({ data: undefined }),
     },
     "@/components/TodayStreak": { TodayStreak: "TodayStreak" },
+    "@/components/TodayUpcoming": { TodayUpcoming: "TodayUpcoming" },
     "@/lib/daily-check-in": { checkInDraft, validateCheckIn },
     "@/lib/calc": { iso },
     "@/lib/bulk-today-query": {

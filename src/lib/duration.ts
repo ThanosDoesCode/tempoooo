@@ -4,9 +4,9 @@
  *
  * Grammar (first matching rule wins):
  *  - Unit-based ("30s", "15m", "1h 5m 30s", "1 hour 15 minutes"): sum h/m/s, overflow allowed.
- *  - Clock-based with ":" or "." (one separator kind only):
- *      2 parts  "mm:ss" / "mm.ss"  -> minutes:seconds (seconds < 60; minutes unbounded)
- *      3 parts  "h:mm:ss" / "h.mm.ss" -> hours:minutes:seconds (minutes < 60, seconds < 60)
+ *  - Clock-based with ":", "." or "," (one separator kind only):
+ *      2 parts  "mm:ss" / "mm.ss" / "mm,ss"  -> minutes:seconds (seconds < 60; minutes unbounded)
+ *      3 parts  "h:mm:ss" / "h.mm.ss" / "h,mm,ss" -> hours:minutes:seconds (minutes < 60, seconds < 60)
  *  - A plain number with no unit and no separator is MINUTES ("15" = 15 min, "90" = 1h30m).
  * Returns whole seconds, or null for anything invalid/non-positive.
  */
@@ -17,14 +17,18 @@ export function parseDurationToSeconds(raw: string): number | null {
   // Unit-based input (anything with a letter must be a valid unit expression).
   if (/[a-z]/.test(value)) return parseUnitDuration(value);
 
-  const hasColon = value.includes(":");
-  const hasDot = value.includes(".");
+  const separators = [":", ".", ","].filter((separator) => value.includes(separator));
 
-  // Clock-based input. Mixing ":" and "." is rejected.
-  if (hasColon || hasDot) {
-    if (hasColon && hasDot) return null;
-    const parts = value.split(hasColon ? ":" : ".");
+  // A decimal-keypad separator separates minutes/seconds, never decimal minutes.
+  if (separators.length) {
+    if (separators.length !== 1) return null;
+    const separator = separators[0]!;
+    const parts = value.split(separator);
+    // The keypad also permits entering seconds directly as ",35" / ".35".
+    // A trailing separator stays incomplete and is left untouched on blur.
+    if (parts.length === 2 && separator !== ":" && parts[0] === "") parts[0] = "0";
     if (!parts.every((p) => /^\d+$/.test(p))) return null;
+    if (!/^\d{1,2}$/.test(parts.at(-1)!)) return null;
     const nums = parts.map(Number);
     if (nums.length === 2) {
       const [m, s] = nums as [number, number];

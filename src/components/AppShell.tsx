@@ -127,7 +127,12 @@ function AppChrome({ children }: { children: ReactNode }) {
               ))}
             </div>
           </nav>
-          <LogSheet open={logOpen} onOpenChange={setLogOpen} showFitnessActions={hasFitnessTools} />
+          <LogSheet
+            open={logOpen}
+            onOpenChange={setLogOpen}
+            showFitnessActions={hasFitnessTools}
+            showPlanner={owner?.is_public === true}
+          />
         </>
       ) : null}
     </div>

@@ -215,7 +215,7 @@ function fixture({ storage = new Map(), search = {}, activities = {}, fail = fal
   }
   function fill() {
     input("0.0").props.onChange({ target: { value: "7,25" } });
-    input("e.g. 22:20").props.onChange({ target: { value: "40:00" } });
+    input("e.g. 15,35").props.onChange({ target: { value: "40:00" } });
     nodes()
       .find((n) => n.type === "input" && n.props.type === "file")
       .props.onChange({
@@ -303,7 +303,7 @@ test("unsaved activity restores fields after navigation/reload", () => {
   f.fill();
   f.remount();
   assert.equal(f.input("0.0").props.value, "7,25");
-  assert.equal(f.input("e.g. 22:20").props.value, "40:00");
+  assert.equal(f.input("e.g. 15,35").props.value, "40:00");
 });
 test("confirmed save closes persistence and clears fields/evidence; next activity is blank", async () => {
   const f = fixture();
@@ -318,7 +318,7 @@ test("confirmed save closes persistence and clears fields/evidence; next activit
   );
   f.remount();
   assert.equal(f.input("0.0").props.value, "");
-  assert.equal(f.input("e.g. 22:20").props.value, "");
+  assert.equal(f.input("e.g. 15,35").props.value, "");
 });
 test("confirmed edit clears only its scoped edit draft", async () => {
   const storage = new Map([[newKey, JSON.stringify({ distance: "99" })]]);
@@ -378,7 +378,7 @@ test("unsaved edit restores only its activity-scoped changes on reload", () => {
   f.fill();
   f.remount();
   assert.equal(f.input("0.0").props.value, "7,25");
-  assert.equal(f.input("e.g. 22:20").props.value, "40:00");
+  assert.equal(f.input("e.g. 15,35").props.value, "40:00");
 });
 
 test("custom discard confirmation keeps all draft values and evidence on Keep editing or Escape", () => {
@@ -399,7 +399,7 @@ test("custom discard confirmation keeps all draft values and evidence on Keep ed
     cancel();
     assert.equal(f.storage.get(newKey), before);
     assert.equal(f.input("0.0").props.value, "7,25");
-    assert.equal(f.input("e.g. 22:20").props.value, "40:00");
+    assert.equal(f.input("e.g. 15,35").props.value, "40:00");
     assert.ok(f.nodes().some((n) => n.type === "img"));
     assert.equal(f.destinations.length, 0);
     assert.equal(f.nodes().find((n) => n.type === "AlertDialog").props.open, false);
@@ -485,3 +485,19 @@ test("Tempo discard dialog uses existing accessible primitives and compact two-c
   assert.equal(typeof content.props.onOpenAutoFocus, "function");
   assert.equal(typeof content.props.onCloseAutoFocus, "function");
 });
+
+for (const type of ["run", "cycle"]) {
+  test(`Planner ${type} duration prefills the Challenge clock without changing its seconds`, () => {
+    const f = fixture({
+      search: {
+        type,
+        planned: "11111111-1111-4111-8111-111111111111",
+        duration: 935,
+        distance: "5",
+      },
+    });
+    assert.equal(f.input("e.g. 15,35").props.value, "15:35");
+    assert.equal(f.input("e.g. 15,35").props.inputMode, "decimal");
+    assert.equal(duration.parseDurationToSeconds(f.input("e.g. 15,35").props.value), 935);
+  });
+}

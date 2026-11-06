@@ -254,13 +254,28 @@ test("leaving a Challenge keeps the already-frozen Run obligation (leg survives 
   const db = await freshDatabase();
   const owner = await makeUser(db);
   const uid = await makeUser(db);
-  // Current in-progress week so recompute freezes a pending leg for the live account week.
-  const cid = await createChallenge(db, { createdBy: owner, startDate: "2026-10-05", duration: 4 });
+  // Week 1 is the current in-progress account week, so recompute freezes a pending leg for the
+  // live account week. Anchored to the database clock that recompute_streak and the leave trigger
+  // read (now()); a hard-coded date stops being "current" once the Challenge has ended.
+  const { start, joined } = (
+    await db.query(
+      `SELECT d::text AS start, (d::timestamp AT TIME ZONE 'Europe/Athens')::text AS joined
+       FROM (SELECT date_trunc('week', (now() AT TIME ZONE 'Europe/Athens')::date)::date AS d) t`,
+    )
+  ).rows[0];
+  const cid = await createChallenge(db, { createdBy: owner, startDate: start, duration: 4 });
   await addMember(db, cid, owner, "owner");
-  await addMember(db, cid, uid, "member", "2026-10-05T00:00:00+03");
+  await addMember(db, cid, uid, "member", joined); // at the Monday 00:00 Athens start
   await recompute(db, uid);
   const before = await legsOf(db, uid);
   assert.ok(before.length >= 1);
+  assert.ok(
+    before.some(
+      (l) =>
+        l.week_start === start && l.challenge_week_number === 1 && l.settlement_state === "pending",
+    ),
+    "the live week's pending leg is frozen before leaving",
+  );
   // Voluntary leave (non-owner) -> BEFORE DELETE trigger must keep the frozen leg.
   await asUser(db, uid);
   await db.query("DELETE FROM public.challenge_members WHERE challenge_id=$1 AND user_id=$2", [
@@ -270,6 +285,7 @@ test("leaving a Challenge keeps the already-frozen Run obligation (leg survives 
   await asService(db);
   const after = await legsOf(db, uid);
   assert.equal(after.length, before.length, "frozen leg must remain after leaving");
+  assert.deepEqual(after, before, "leaving neither drops nor adds a leg");
 });
 
 test("voluntary leave => a required leg with no canonical settlement after cutoff resolves missed", async () => {

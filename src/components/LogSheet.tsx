@@ -1,5 +1,15 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Bike, Dumbbell, Footprints, Moon, Utensils, X, type LucideIcon } from "lucide-react";
+import {
+  Bike,
+  CalendarDays,
+  ChevronRight,
+  Dumbbell,
+  Footprints,
+  Moon,
+  Utensils,
+  X,
+  type LucideIcon,
+} from "lucide-react";
 import { Drawer, DrawerClose, DrawerContent, DrawerTitle } from "@/components/ui/drawer";
 import { useMyChallenge } from "@/lib/challenge";
 import { LOG_ACTIONS, type LogAction } from "@/lib/main-navigation";
@@ -21,16 +31,23 @@ export function LogSheet({
   open,
   onOpenChange,
   showFitnessActions = true,
+  showPlanner = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** Challenge-only (core) accounts hide the fitness-only "Your day" actions. */
   showFitnessActions?: boolean;
+  /** Planner is full-fitness only. */
+  showPlanner?: boolean;
 }) {
   return (
     <Drawer open={open} onOpenChange={onOpenChange} shouldScaleBackground={false}>
       {open ? (
-        <LogSheetContent onOpenChange={onOpenChange} showFitnessActions={showFitnessActions} />
+        <LogSheetContent
+          onOpenChange={onOpenChange}
+          showFitnessActions={showFitnessActions}
+          showPlanner={showPlanner}
+        />
       ) : null}
     </Drawer>
   );
@@ -39,9 +56,11 @@ export function LogSheet({
 export function LogSheetContent({
   onOpenChange,
   showFitnessActions,
+  showPlanner = false,
 }: {
   onOpenChange: (open: boolean) => void;
   showFitnessActions: boolean;
+  showPlanner?: boolean;
 }) {
   const navigate = useNavigate();
   const challengeQuery = useMyChallenge();
@@ -61,7 +80,7 @@ export function LogSheetContent({
     >
       <div className="flex items-center justify-between">
         <DrawerTitle className="text-[22px] font-semibold tracking-tight">
-          What do you want to log?
+          {showPlanner ? "Log or plan" : "What do you want to log?"}
         </DrawerTitle>
         <DrawerClose
           aria-label="Close"
@@ -162,6 +181,30 @@ export function LogSheetContent({
               );
             })}
           </div>
+        </>
+      ) : null}
+      {showPlanner ? (
+        <>
+          <p className="mx-1 text-[13px] font-medium text-muted-foreground">Plan ahead</p>
+          <button
+            type="button"
+            onClick={() => {
+              onOpenChange(false);
+              void navigate({ to: "/planner/new" });
+            }}
+            className="flex min-h-[64px] w-full items-center gap-3.5 rounded-[18px] bg-elevated px-4 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:opacity-80"
+          >
+            <span className="grid h-9 w-9 flex-none place-items-center rounded-[11px] bg-muted">
+              <CalendarDays className="h-5 w-5" strokeWidth={1.8} aria-hidden="true" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[15px] font-medium">Schedule activity</span>
+              <span className="mt-0.5 block text-[13px] text-muted-foreground">
+                A workout, run or ride on a future day
+              </span>
+            </span>
+            <ChevronRight className="control-chevron text-muted-foreground" aria-hidden="true" />
+          </button>
         </>
       ) : null}
     </DrawerContent>

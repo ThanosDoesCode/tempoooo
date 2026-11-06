@@ -30,6 +30,9 @@ export function accountUI(file, exportName, modules = {}, props = {}, globals = 
       if (!slots[i]) slots[i] = { current: initial };
       return slots[i];
     },
+    useId() {
+      return react.useRef("fixture-id").current;
+    },
     useMemo(fn, deps) {
       const i = cursor++;
       if (!slots[i] || !same(slots[i].deps, deps)) slots[i] = { value: fn(), deps };

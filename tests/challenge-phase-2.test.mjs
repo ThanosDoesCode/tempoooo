@@ -5,7 +5,7 @@ import vm from "node:vm";
 import ts from "typescript";
 import * as dateFns from "date-fns";
 import { LOG_ACTIONS } from "../src/lib/main-navigation.ts";
-import { parseDurationToSeconds, formatClock } from "../src/lib/duration.ts";
+import { parseDurationToSeconds, formatClock, canonicalDuration } from "../src/lib/duration.ts";
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
@@ -420,5 +420,20 @@ test("legacy Challenge deep links redirect to the new canonical routes", async (
       new RegExp(`redirect\\(\\{ to: "${target}"`),
       file,
     );
+  }
+});
+
+test("decimal-keypad duration separators mean seconds, never decimal minutes", () => {
+  for (const raw of ["15,35", "15.35", "15:35"]) {
+    assert.equal(parseDurationToSeconds(raw), 935);
+    assert.equal(canonicalDuration(raw), "15:35");
+  }
+  assert.equal(parseDurationToSeconds("5,09"), 309);
+  assert.equal(canonicalDuration("5,09"), "5:09");
+  assert.equal(canonicalDuration("0,45"), "0:45");
+  assert.equal(parseDurationToSeconds("45"), 2700);
+  for (const raw of ["15,60", "15.60", "15:60", "15,", "15.", "15:", "15,3.5", "15:3,5"]) {
+    assert.equal(parseDurationToSeconds(raw), null, raw);
+    assert.equal(canonicalDuration(raw), raw, raw);
   }
 });

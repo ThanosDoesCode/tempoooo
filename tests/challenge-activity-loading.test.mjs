@@ -231,3 +231,20 @@ test("dashboard initially fetches 5 plus sentinel, then 10 plus sentinel without
   assert.equal(page.rows.length, 4);
   assert.equal(small.options().getNextPageParam(page), undefined);
 });
+
+test("one bounded week page includes both users, excludes other Challenges and has no per-activity reads", async () => {
+  const mixed = [
+    { ...rows[0], user_id: "me" },
+    { ...rows[1], user_id: "opponent", activity_type: "cycle" },
+    { ...rows[2], challenge_id: "another", user_id: "opponent" },
+  ];
+  const { api, calls } = fixture(mixed);
+  const page = await api.fetchActivityPage("challenge", null, {
+    start: "2026-10-01",
+    end: "2026-10-04",
+  });
+  assert.deepEqual(new Set(page.rows.map((row) => row.user_id)), new Set(["me", "opponent"]));
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].limit, 21);
+  assert.equal(calls[0].user_id, undefined);
+});
