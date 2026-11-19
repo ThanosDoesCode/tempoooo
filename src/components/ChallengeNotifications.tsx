@@ -1,315 +1,427 @@
 import { useEffect, useRef, useState } from "react";
-import { Bell, ChevronDown, TriangleAlert } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Bell } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { PendingLabel } from "@/components/ui-kit";
 import {
-  disableChallengePush,
-  enableChallengePush,
+  connectChallengePushDevice,
   pushAvailability,
-  type PushAvailability,
+  pushDeviceIsRegistered,
   reconcileChallengePush,
+  setChallengePushAccountEnabled,
+  type PushAvailability,
   type PushSdk,
 } from "@/lib/challenge-push";
+import {
+  notificationAccountKey,
+  notificationPreferencesKey,
+  saveNotificationPreference,
+  useNotificationSettings,
+  type ChallengePushAccount,
+  type NotificationCategory,
+  type NotificationPreferences,
+} from "@/lib/notification-settings";
 
-export function ChallengeNotifications({
-  userId,
-  expanded = false,
-}: {
-  userId: string;
-  expanded?: boolean;
-}) {
-  const [sdk, setSdk] = useState<PushSdk | null>(null);
-  const [on, setOn] = useState(false);
-  const [serviceState, setServiceState] = useState<
-    "checking" | "ready" | Exclude<PushAvailability["kind"], "supported"> | "temporary-failure"
-  >("checking");
-  const [phase, setPhase] = useState<"checking" | "enabling" | "disabling" | null>("checking");
-  const [feedback, setFeedback] = useState<{
-    text: string;
-    tone: "info" | "success" | "error";
-  } | null>(null);
-  const mutationPending = useRef(false);
-  const operationVersion = useRef(0);
+type DeviceState = {
+  availability: PushAvailability;
+  permission: NotificationPermission | null;
+  registered: boolean | null;
+  sdk: PushSdk | null;
+  error?: string;
+};
+
+const categories = [
+  ["week_penalties", "Week penalties", "When a finalized week creates a cash penalty"],
+  ["payments", "Payments", "When a payment is marked as paid"],
+] as const satisfies readonly (readonly [NotificationCategory, string, string])[];
+
+const permission = () => (typeof Notification === "undefined" ? null : Notification.permission);
+const statusUnavailable = "Notification status is temporarily unavailable. Please retry.";
+const recoverablePushError = (error: unknown, fallback: string) => {
+  const message = error && typeof error === "object" && "message" in error ? error.message : null;
+  return message === "Update Tempo, then try enabling notifications again." ||
+    message === "Device registration was cancelled. Reconnect this device."
+    ? message
+    : fallback;
+};
+
+export function ChallengeNotifications({ userId }: { userId: string }) {
+  const queryClient = useQueryClient();
+  const { account: accountQuery, preferences: preferenceQuery } = useNotificationSettings(userId);
+  const account = accountQuery.data;
+  const preferences = preferenceQuery.data;
+  const hasChallenge = account?.hasChallenge;
+  const [device, setDevice] = useState<DeviceState | null>(null);
   const [retryKey, setRetryKey] = useState(0);
+  const [pushPending, setPushPending] = useState<"device" | "account" | null>(null);
+  const [preferencePending, setPreferencePending] = useState<NotificationCategory | null>(null);
+  const [accountError, setAccountError] = useState<string | null>(null);
+  const [preferenceError, setPreferenceError] = useState<string | null>(null);
+  const pushBusy = useRef(false);
+  const preferenceBusy = useRef(false);
+  const version = useRef(0);
+
   useEffect(() => {
     let alive = true;
-    let current: PushSdk | null = null;
     let refreshing = false;
+    let observedSdk: PushSdk | null = null;
+    const availability = pushAvailability();
+    const base = { availability, permission: permission(), registered: null, sdk: null };
+    setDevice(base);
+
     const refresh = async (force = false) => {
-      if (refreshing || mutationPending.current) return;
-      const version = operationVersion.current;
+      if (refreshing || pushBusy.current) return;
+      const operation = version.current;
+      const current = () => alive && operation === version.current;
+      const snapshot = { ...base, permission: permission() };
+      if (availability.kind !== "supported" || !hasChallenge) {
+        setDevice(snapshot);
+        return;
+      }
       refreshing = true;
       try {
         const result = await reconcileChallengePush(userId, { force });
-        current = result.sdk;
-        if (alive && version === operationVersion.current && !mutationPending.current) {
-          setSdk(result.sdk);
-          setOn(result.enabled);
-          setServiceState("ready");
-          setFeedback(null);
+        const registered = result.enabled || (await pushDeviceIsRegistered(result.sdk, userId));
+        if (!current()) return;
+        if (observedSdk !== result.sdk) {
+          observedSdk?.User.PushSubscription.removeEventListener("change", onChange);
+          observedSdk = result.sdk;
+          observedSdk.User.PushSubscription.addEventListener("change", onChange);
         }
+        setDevice({ ...snapshot, permission: permission(), registered, sdk: result.sdk });
       } catch {
-        if (alive && version === operationVersion.current && !mutationPending.current) {
-          setServiceState("temporary-failure");
-          setFeedback({
-            text: "Notification status is temporarily unavailable. Retry notifications in a moment.",
-            tone: "error",
-          });
-        }
+        if (current()) setDevice({ ...snapshot, error: statusUnavailable });
       } finally {
         refreshing = false;
       }
     };
-    const onChange = () => {
-      void refresh(true);
-    };
-    setSdk(null);
-    setOn(false);
-    setServiceState("checking");
-    setPhase("checking");
-    const availability = pushAvailability();
-    const reason = availability.reason;
-    setFeedback(reason ? { text: reason, tone: "info" } : null);
-    if (!reason) {
-      void (async () => {
-        try {
-          const value = await reconcileChallengePush(userId, { force: retryKey > 0 });
-          if (!alive) return;
-          current = value.sdk;
-          setSdk(() => value.sdk);
-          setOn(value.enabled);
-          setServiceState("ready");
-          setFeedback(null);
-          if (alive) {
-            value.sdk.User.PushSubscription.addEventListener("change", onChange);
-            window.addEventListener("focus", onChange);
-          }
-        } catch (error) {
-          if (alive) {
-            setServiceState("temporary-failure");
-            setFeedback({ text: (error as Error).message, tone: "error" });
-          }
-        } finally {
-          if (alive) setPhase(null);
-        }
-      })();
-    } else {
-      setServiceState(availability.kind);
-      setPhase(null);
-    }
+    const onChange = () => void refresh(true);
+    void refresh(retryKey > 0);
+    window.addEventListener("focus", onChange);
     return () => {
       alive = false;
-      operationVersion.current += 1;
-      mutationPending.current = false;
-      current?.User.PushSubscription.removeEventListener("change", onChange);
+      version.current += 1;
+      observedSdk?.User.PushSubscription.removeEventListener("change", onChange);
       window.removeEventListener("focus", onChange);
     };
-  }, [userId, retryKey]);
-  const enable = async () => {
-    if (!sdk || mutationPending.current) return;
-    mutationPending.current = true;
-    const version = ++operationVersion.current;
-    setPhase("enabling");
-    setFeedback({
-      text: "Registering this device. This can take a few seconds.",
-      tone: "info",
-    });
-    try {
-      await enableChallengePush(sdk, userId);
-      if (version !== operationVersion.current) return;
-      setServiceState("ready");
-      setOn(true);
-      setFeedback({ text: "Challenge notifications enabled on this device.", tone: "success" });
-    } catch (error) {
-      if (version !== operationVersion.current) return;
-      setOn(false);
-      setFeedback({ text: (error as Error).message, tone: "error" });
-    } finally {
-      if (version === operationVersion.current) {
-        mutationPending.current = false;
-        setPhase(null);
-      }
-    }
-  };
-  const disable = async () => {
-    if (mutationPending.current) return;
-    mutationPending.current = true;
-    const version = ++operationVersion.current;
-    setPhase("disabling");
-    setFeedback({ text: "Disabling challenge notifications…", tone: "info" });
-    try {
-      await disableChallengePush(sdk);
-      if (version !== operationVersion.current) return;
-      setOn(false);
-      setFeedback({
-        text: "Challenge notifications disabled on all devices.",
-        tone: "success",
-      });
-    } catch (error) {
-      if (version !== operationVersion.current) return;
-      setFeedback({ text: (error as Error).message, tone: "error" });
-    } finally {
-      if (version === operationVersion.current) {
-        mutationPending.current = false;
-        setPhase(null);
-      }
-    }
-  };
-  const permissionMissing =
-    typeof Notification !== "undefined" && Notification.permission === "default";
-  const permissionDenied =
-    typeof Notification !== "undefined" && Notification.permission === "denied";
-  return (
-    <div className="card-surface overflow-hidden">
-      <details className="group" open={expanded || undefined}>
-        <summary className="disclosure-summary min-h-14 px-4 py-3">
-          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-elevated text-muted-foreground">
-            <Bell className="h-4 w-4" aria-hidden="true" />
-          </span>
-          <span className="min-w-0 text-sm font-medium">Notifications</span>
-          <span
-            role="status"
-            className={`ml-auto min-w-0 text-right text-xs ${
-              feedback?.tone === "error" ? "text-warn" : on ? "text-good" : "text-muted-foreground"
-            }`}
-          >
-            {phase === "checking"
-              ? "Checking…"
-              : phase === "enabling"
-                ? "Enabling…"
-                : phase === "disabling"
-                  ? "Disabling…"
-                  : feedback?.tone === "error"
-                    ? serviceState === "temporary-failure"
-                      ? "Temporarily unavailable"
-                      : "Needs attention"
-                    : serviceState === "configuration-unavailable"
-                      ? "Not configured"
-                      : serviceState === "home-screen-required"
-                        ? "Open from Home Screen"
-                        : serviceState === "unsupported"
-                          ? "Unsupported"
-                          : permissionDenied
-                            ? "Permission denied"
-                            : permissionMissing
-                              ? "Not requested"
-                              : on
-                                ? "On"
-                                : "Off"}
-          </span>
+  }, [userId, hasChallenge, retryKey]);
 
-          <ChevronDown className="disclosure-chevron text-muted-foreground" aria-hidden="true" />
-        </summary>
-        <div className="border-t border-border p-4">
-          <dl className="mb-4 space-y-2 text-[13px]">
-            <div className="flex items-center justify-between gap-3">
-              <dt className="text-muted-foreground">Browser permission</dt>
-              <dd>
-                {typeof Notification === "undefined"
-                  ? "Unavailable"
-                  : permissionDenied
-                    ? "Denied"
-                    : permissionMissing
-                      ? "Not requested"
-                      : "Granted"}
-              </dd>
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <dt className="text-muted-foreground">Tempo notifications</dt>
-              <dd className={on ? "text-good" : "text-muted-foreground"}>
-                {phase
-                  ? phase === "enabling"
-                    ? "Enabling…"
-                    : phase === "disabling"
-                      ? "Disabling…"
-                      : "Checking status"
-                  : serviceState !== "ready"
-                    ? "Unavailable"
-                    : on
-                      ? "On"
-                      : "Off"}
-              </dd>
-            </div>
-          </dl>
-          <p className="text-[13px] leading-relaxed text-muted-foreground">
-            Get updates when your opponent logs activity, completes the week, or changes a payment.
-          </p>
-          {!on &&
-          serviceState === "ready" &&
-          phase === null &&
-          permissionMissing &&
-          feedback?.tone !== "error" ? (
-            <p className="mt-2 text-[13px] leading-relaxed text-muted-foreground">
-              Notification permission has not been granted on this device. Tempo asks only after you
-              tap Enable notifications.
+  const patchSettings = async <T extends object>(key: readonly string[], patch: Partial<T>) => {
+    await queryClient.cancelQueries({ queryKey: key, exact: true });
+    queryClient.setQueryData<T>(key, (old) => (old ? { ...old, ...patch } : old));
+  };
+
+  const connect = async (askPermission = true) => {
+    if (!device?.sdk || pushBusy.current) return;
+    pushBusy.current = true;
+    const operation = ++version.current;
+    setPushPending("device");
+    try {
+      const registered = await connectChallengePushDevice(device.sdk, userId, askPermission);
+      if (operation === version.current)
+        setDevice({
+          availability: device.availability,
+          sdk: device.sdk,
+          permission: permission(),
+          registered,
+        });
+    } catch (error) {
+      if (operation === version.current)
+        setDevice({
+          ...device,
+          permission: permission(),
+          registered: null,
+          error: recoverablePushError(error, statusUnavailable),
+        });
+    } finally {
+      pushBusy.current = false;
+      setPushPending(null);
+    }
+  };
+
+  const setAccount = async (enabled: boolean) => {
+    if (pushBusy.current) return;
+    pushBusy.current = true;
+    const operation = ++version.current;
+    setPushPending("account");
+    setAccountError(null);
+    try {
+      const generation = await setChallengePushAccountEnabled(userId, enabled, device?.sdk ?? null);
+      await patchSettings<ChallengePushAccount>(notificationAccountKey(userId), {
+        accountEnabled: enabled,
+      });
+      if (operation !== version.current) return;
+      if (!device) return;
+      if (!enabled) setDevice({ ...device, permission: permission(), registered: false });
+      // Repair an already-authorized device in the same action after account-wide Disable.
+      // This path never prompts and never changes category preferences.
+      else if (device.sdk && !device.registered && permission() === "granted") {
+        try {
+          const registered = await connectChallengePushDevice(
+            device.sdk,
+            userId,
+            false,
+            generation,
+          );
+          if (operation === version.current)
+            setDevice({ ...device, permission: permission(), registered });
+        } catch (error) {
+          if (operation === version.current)
+            setDevice({
+              ...device,
+              permission: permission(),
+              registered: null,
+              error: recoverablePushError(error, statusUnavailable),
+            });
+        }
+      }
+    } catch (error) {
+      setAccountError(
+        recoverablePushError(error, "Could not update Challenge notifications. Please try again."),
+      );
+    } finally {
+      pushBusy.current = false;
+      setPushPending(null);
+      // Restart an in-flight device read that this explicit account action superseded.
+      if (
+        operation === version.current &&
+        !device?.sdk &&
+        !device?.error &&
+        hasChallenge &&
+        !device?.availability.reason
+      )
+        setRetryKey((key) => key + 1);
+    }
+  };
+
+  const setPreference = async (category: NotificationCategory, enabled: boolean) => {
+    if (preferenceBusy.current) return;
+    preferenceBusy.current = true;
+    setPreferencePending(category);
+    setPreferenceError(null);
+    try {
+      await saveNotificationPreference(userId, category, enabled);
+      await patchSettings<NotificationPreferences>(notificationPreferencesKey(userId), {
+        [category]: enabled,
+      });
+    } catch {
+      setPreferenceError("Could not save this preference. Please try again.");
+    } finally {
+      preferenceBusy.current = false;
+      setPreferencePending(null);
+    }
+  };
+
+  const permissionLabel =
+    device?.permission === "granted"
+      ? "Allowed"
+      : device?.permission === "denied"
+        ? "Permission denied"
+        : device?.permission === "default"
+          ? "Not requested"
+          : "Unavailable";
+  const availabilityLabel =
+    device?.availability.kind === "configuration-unavailable"
+      ? "Not configured"
+      : device?.availability.kind === "home-screen-required"
+        ? "Open from Home Screen"
+        : device?.availability.kind === "unsupported"
+          ? "Unsupported"
+          : null;
+
+  return (
+    <div className="min-w-0 space-y-6">
+      <section aria-labelledby="device-notifications" className="min-w-0 space-y-2">
+        <h2 id="device-notifications" className="text-sm font-semibold">
+          Device notifications
+        </h2>
+        <div className="card-surface min-w-0 space-y-3 p-4">
+          <div className="flex items-center gap-3">
+            <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-elevated text-muted-foreground">
+              <Bell className="size-4" aria-hidden="true" />
+            </span>
+            <dl className="min-w-0 flex-1 space-y-1 text-sm" aria-live="polite">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-2">
+                <dt className="text-muted-foreground">Browser permission</dt>
+                <dd className="font-medium">
+                  {device ? (availabilityLabel ?? permissionLabel) : "Checking…"}
+                </dd>
+              </div>
+              <div className="flex flex-wrap items-baseline justify-between gap-x-2">
+                <dt className="text-muted-foreground">This device</dt>
+                <dd className="font-medium">
+                  {device?.error || (!account && accountQuery.isError)
+                    ? "Temporarily unavailable"
+                    : !device || (!availabilityLabel && hasChallenge !== false && !device.sdk)
+                      ? "Checking…"
+                      : device.registered && device.permission === "granted"
+                        ? "Connected"
+                        : "Not connected"}
+                </dd>
+              </div>
+            </dl>
+          </div>
+          {device?.availability.reason ? (
+            <p className="text-sm text-muted-foreground">{device.availability.reason}</p>
+          ) : device?.permission === "denied" ? (
+            <p className="rounded-xl bg-warn/10 px-3 py-2 text-sm text-warn">
+              Allow Tempo in your browser or iPhone notification settings.
+            </p>
+          ) : hasChallenge === false ? (
+            <p className="text-sm text-muted-foreground">
+              Join a Challenge to connect this device.
             </p>
           ) : null}
-          {!on && serviceState === "ready" && phase === null && permissionDenied ? (
-            <p className="mt-2 text-[13px] leading-relaxed text-muted-foreground">
-              Notification permission is denied on this device. You can allow Tempo in your browser
-              or iPhone notification settings.
-            </p>
-          ) : null}
-          <div className="mt-2 flex flex-wrap gap-2 text-xs">
-            {!on && (serviceState === "ready" || serviceState === "checking") ? (
+          {device?.error ? (
+            <div className="space-y-2">
+              <p role="alert" className="text-sm text-warn">
+                {device.error}
+              </p>
               <button
                 type="button"
-                disabled={!sdk || phase !== null || permissionDenied}
-                onClick={() => void enable()}
-                className="account-primary text-sm"
+                className="account-secondary min-h-11 sm:w-auto"
+                disabled={pushPending !== null}
+                onClick={() =>
+                  device.sdk && device.permission === "granted"
+                    ? void connect(false)
+                    : setRetryKey((key) => key + 1)
+                }
               >
-                {phase === "checking" ? (
-                  <PendingLabel>Checking notifications…</PendingLabel>
-                ) : phase === "enabling" ? (
-                  <PendingLabel>Enabling notifications…</PendingLabel>
+                {pushPending === "device" ? (
+                  <PendingLabel>Connecting…</PendingLabel>
                 ) : (
-                  "Enable notifications"
+                  "Retry notifications"
                 )}
               </button>
-            ) : null}
+            </div>
+          ) : device?.sdk &&
+            (!device.registered || device.permission === "default") &&
+            device.permission !== "denied" ? (
             <button
               type="button"
-              disabled={phase !== null}
-              onClick={() => void disable()}
-              className="account-secondary"
+              className="account-primary min-h-11"
+              disabled={pushPending !== null}
+              onClick={() => void connect()}
             >
-              {phase === "disabling" ? (
-                <PendingLabel>Disabling notifications…</PendingLabel>
+              {pushPending === "device" ? (
+                <PendingLabel>Connecting…</PendingLabel>
+              ) : device.permission === "default" ? (
+                "Allow on this device"
               ) : (
-                "Disable on all devices"
+                "Connect this device"
               )}
             </button>
+          ) : null}
+        </div>
+      </section>
+
+      <section aria-labelledby="challenge-notifications" className="min-w-0 space-y-2">
+        <h2 id="challenge-notifications" className="text-sm font-semibold">
+          Challenge notifications
+        </h2>
+        <div className="card-surface min-w-0 divide-y divide-border overflow-hidden">
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 p-4">
+            <div className="min-w-0 text-sm">
+              <p className="font-semibold">Account-wide push</p>
+              <p className="text-muted-foreground" role="status">
+                {account
+                  ? account.accountEnabled
+                    ? "On"
+                    : "Off"
+                  : accountQuery.isError
+                    ? "Unavailable"
+                    : "Loading…"}
+              </p>
+            </div>
+            {account && (account.hasChallenge || account.accountEnabled) ? (
+              <button
+                type="button"
+                className="account-secondary min-h-11"
+                disabled={pushPending !== null}
+                onClick={() => void setAccount(!account.accountEnabled)}
+              >
+                {pushPending === "account" ? (
+                  <PendingLabel>Updating…</PendingLabel>
+                ) : account.accountEnabled ? (
+                  "Disable on all devices"
+                ) : (
+                  "Enable Challenge push"
+                )}
+              </button>
+            ) : !account && accountQuery.isError ? (
+              <button
+                type="button"
+                className="account-secondary min-h-11"
+                onClick={() => void accountQuery.refetch()}
+              >
+                Retry account status
+              </button>
+            ) : null}
           </div>
-          {feedback && feedback.tone !== "error" ? (
-            <p
-              role="status"
-              className={`mt-2 text-xs ${
-                feedback.tone === "success" ? "text-good" : "text-muted-foreground"
-              }`}
-            >
-              {feedback.text}
+          {accountError ? (
+            <p role="alert" className="px-4 py-2 text-sm text-warn">
+              {accountError}
+            </p>
+          ) : null}
+          {preferences ? (
+            categories.map(([key, title, description]) => (
+              <label
+                key={key}
+                htmlFor={key}
+                className="flex min-h-11 cursor-pointer items-center justify-between gap-3 px-4 py-2"
+              >
+                <span className="min-w-0">
+                  <span id={`${key}-label`} className="block text-sm font-semibold">
+                    {title}
+                  </span>
+                  <span
+                    id={`${key}-description`}
+                    className="block text-sm text-muted-foreground [overflow-wrap:anywhere]"
+                  >
+                    {description}
+                  </span>
+                </span>
+                <Switch
+                  id={key}
+                  aria-labelledby={`${key}-label`}
+                  aria-describedby={`${key}-description`}
+                  checked={preferences[key]}
+                  disabled={preferencePending !== null}
+                  aria-busy={preferencePending === key}
+                  onCheckedChange={(checked) => void setPreference(key, checked)}
+                />
+              </label>
+            ))
+          ) : preferenceQuery.isError ? (
+            <div className="space-y-2 p-4">
+              <p role="alert" className="text-sm text-warn">
+                Could not load notification preferences.
+              </p>
+              <button
+                type="button"
+                className="account-secondary min-h-11"
+                onClick={() => void preferenceQuery.refetch()}
+              >
+                Retry settings
+              </button>
+            </div>
+          ) : (
+            <p role="status" className="px-4 py-3 text-sm text-muted-foreground">
+              Loading preferences…
+            </p>
+          )}
+          {preferenceError ? (
+            <p role="alert" className="px-4 py-2 text-sm text-warn">
+              {preferenceError}
             </p>
           ) : null}
         </div>
-      </details>
-      {feedback?.tone === "error" ? (
-        <div
-          role="alert"
-          className="flex flex-wrap items-center gap-2 border-t border-warn/20 bg-warn/5 px-4 py-3 text-[13px] leading-relaxed text-foreground"
-        >
-          <TriangleAlert className="h-4 w-4 shrink-0 text-warn" aria-hidden="true" />
-          <span className="min-w-0 flex-1">{feedback.text}</span>
-          {serviceState === "temporary-failure" ? (
-            <button
-              type="button"
-              disabled={phase !== null}
-              onClick={() => setRetryKey((key) => key + 1)}
-              className="min-h-11 shrink-0 rounded-xl border border-warn/40 px-3 py-2 font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-            >
-              Retry notifications
-            </button>
-          ) : null}
-        </div>
-      ) : null}
+        {account && !account.accountEnabled ? (
+          <p className="text-xs text-muted-foreground">
+            You can change these preferences while push is off.
+          </p>
+        ) : null}
+      </section>
     </div>
   );
 }

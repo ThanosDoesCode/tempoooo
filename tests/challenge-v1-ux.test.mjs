@@ -54,7 +54,7 @@ test("notification and invitation failures are retryable", async () => {
   const notifications = await read("src/components/ChallengeNotifications.tsx");
   const push = await read("src/lib/challenge-push.ts");
   const invitation = await read("src/routes/_authenticated/invite.challenge.$token.tsx");
-  assert.match(notifications, /Notification permission has not been granted/);
+  assert.match(notifications, /Allow on this device/);
   assert.match(notifications, /Permission denied/);
   assert.match(notifications, /Not requested/);
   assert.match(notifications, /Temporarily unavailable/);

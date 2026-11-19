@@ -280,8 +280,8 @@ test("inbox uses shared contextual Back, while Profile retains a separate push-s
     /to: "\/profile\/notifications"[\s\S]*label: "Notification settings"/,
   );
   const settings = read("src/routes/_authenticated/profile_.notifications.tsx");
-  assert.match(settings, /title="Notification settings"/);
-  assert.match(settings, /<ChallengeNotifications userId=\{user\.id\} expanded/);
+  assert.match(settings, /title="Notifications"/);
+  assert.match(settings, /<ChallengeNotifications key=\{user\.id\} userId=\{user\.id\}/);
   assert.doesNotMatch(settings, /ChallengeInvitations/);
 });
 

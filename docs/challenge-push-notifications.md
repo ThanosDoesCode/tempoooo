@@ -16,6 +16,39 @@ The default target is 15 km. This application already supports future-week targe
 
 Finalization remains lazy: opening the Challenge home page invokes the existing authenticated finalization function for closed weeks. Push does not introduce a new midnight finalizer or change the penalty calculation. If both participants owe a penalty, each gets the result about the other participant, regardless of whose visit initiated finalization.
 
+## Notification settings
+
+In **You → Settings → Notification settings**, browser permission, device registration, and the
+account-wide Challenge push switch are separate. Allowing or connecting this device never turns on
+account-wide push. **Disable on all devices** deactivates the account's subscriptions without changing
+its saved category choices.
+
+Week penalties and Payments default to on within the existing Challenge push opt-in. The worker
+checks the recipient's current choice before every send attempt. Invitation, opponent activity, and
+target-reached pushes keep their existing behavior; the in-app inbox is independent.
+
+For the Stage 1 rollout, apply `20261110120000_account_notification_preferences.sql` with the
+tracked transactional migration runner; do not replay the SQL manually. It initializes one unique
+registration generation per push account and needs a table lock, but changes no existing opt-ins,
+subscription rows, or category choices.
+
+The migration is the cutover barrier: the old registration RPC becomes read-only, and direct
+subscription UPDATE is removed from the service role. Already-running old handlers therefore
+cannot reactivate anything after cutover. The old worker keeps its read access. Until the new
+`challenge-push-subscription` is deployed, legacy Enable and direct-table logout detach fail
+closed; status and account-wide Disable still work. Deploy that function next to restore safe
+detach. Open old clients can read status, detach, and disable, but must update to enable or reconnect.
+Disable remains authoritative even if they never update.
+
+V2 holds one server-issued precondition across a logical Enable and its registration retries.
+Unversioned activation is rejected, never assigned the current generation. After updating the
+subscription function, deploy `challenge-push` and drain old worker invocations before exposing
+category preferences. Subscription draining is not a correctness prerequisite after the database
+barrier; delivery-worker draining still is, because the old worker ignores category opt-outs.
+Do not roll back the database barrier or to a worker that ignores saved choices. An old UI can
+be restored safely but cannot enable push; restore a fence-aware subscription function for a
+functional rollback. No reminder jobs or new notification events are added.
+
 ## Files and database changes
 
 - `supabase/migrations/20260831120000_challenge_push_notifications.sql`: three tables, RLS/grants, event capture, activity-write serialization, safe registration/disable RPCs, and outbox claiming.

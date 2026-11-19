@@ -482,12 +482,21 @@ function notifications({
     "src/components/ChallengeNotifications.tsx",
     "ChallengeNotifications",
     {
+      "@tanstack/react-query": { useQueryClient: () => queryClient },
+      "@/components/ui/switch": { Switch: "Switch" },
+      "@/lib/notification-settings": {
+        useNotificationSettings: () => ({
+          account: { data: { hasChallenge: true, accountEnabled: false } },
+          preferences: { data: { week_penalties: true, payments: true } },
+        }),
+      },
       "@/lib/challenge-push": {
         pushAvailability: () => availability,
         reconcileChallengePush: reconcile,
+        pushDeviceIsRegistered: async () => false,
       },
     },
-    { userId: "owner", expanded: true },
+    { userId: "owner" },
     { Notification: { permission } },
   );
 }
@@ -503,10 +512,11 @@ test("Phase 7 Notifications shows not-requested/off separately from unsupported 
   await ui.flush();
   assert.match(ui.text(), /Not requested/);
   assert.match(ui.text(), /Off/);
-  assert.match(ui.text(), /Enable notifications/);
+  assert.match(ui.text(), /Allow on this device/);
+  assert.match(ui.text(), /Enable Challenge push/);
   assert.doesNotMatch(ui.text(), /Unsupported/);
   assert.equal(reads, 1);
-  assert.equal(ui.find("details")[0].props.open, true);
+  assert.equal(ui.find("section").length, 2);
 });
 
 for (const [kind, header, explanation] of [
@@ -521,7 +531,7 @@ for (const [kind, header, explanation] of [
     });
     assert.match(ui.text(), new RegExp(header));
     assert.match(ui.text(), new RegExp(explanation));
-    assert.doesNotMatch(ui.text(), /permission has not been granted/);
+    assert.doesNotMatch(ui.text(), /Allow on this device/);
   });
 
 test("Phase 7 Notifications denied and temporary SDK failure remain distinct and retryable", async () => {
