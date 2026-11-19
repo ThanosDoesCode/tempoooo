@@ -37,7 +37,8 @@ function fixture(overrides = {}, options = {}) {
   let reads = 0;
   const sent = [],
     finished = [],
-    frozen = [];
+    frozen = [],
+    preferences = [];
   const audience = {
     members: [memberA, memberB],
     user: { user_id: b, external_id: "private-capability", enabled: true },
@@ -52,6 +53,10 @@ function fixture(overrides = {}, options = {}) {
     },
     async freezeDevices(_event, ids) {
       frozen.push(ids);
+    },
+    async preferenceEnabled(userId, category) {
+      preferences.push([userId, category]);
+      return options.preference ? options.preference(category) : true;
     },
     async finish(_event, status, code, messageId) {
       finished.push({ status, code, messageId });
@@ -75,8 +80,68 @@ function fixture(overrides = {}, options = {}) {
     sent,
     finished,
     frozen,
+    preferences,
   };
 }
+
+for (const [kind, category] of [
+  ["week_penalty", "week_penalties"],
+  ["payment_paid", "payments"],
+]) {
+  test(`${kind} honors only the recipient's ${category} preference`, async () => {
+    const payload = event({
+      kind,
+      facts: { amount_eur: 10, evidence_path: "private/receipt.png", note: "private note" },
+    });
+    for (const enabled of [true, false]) {
+      const f = fixture({}, { preference: (key) => key === category && enabled });
+      assert.equal(await deliverEvent(payload, f.store, f.provider), enabled ? "sent" : "skipped");
+      assert.deepEqual(f.preferences, [[b, category]]);
+      assert.equal(f.sent.length, Number(enabled));
+      assert.doesNotMatch(JSON.stringify(f.sent), /receipt\.png|private note|evidence_path/);
+      if (!enabled) assert.equal(f.finished[0].code, "category_disabled");
+    }
+  });
+
+  test(`${kind} stays off when the Challenge master is off`, async () => {
+    const f = fixture({ user: { user_id: b, external_id: "private", enabled: false } });
+    assert.equal(await deliverEvent(event({ kind }), f.store, f.provider), "skipped");
+    assert.deepEqual(f.preferences, []);
+    assert.deepEqual(f.sent, []);
+  });
+}
+
+test("delivery rechecks category on each retry and never sends on a preference read error", async () => {
+  let enabled = true;
+  const f = fixture({}, { fail: 503, preference: () => enabled });
+  const payment = event({ kind: "payment_paid", facts: { amount_eur: 15 } });
+  assert.equal(await deliverEvent(payment, f.store, f.provider), "pending");
+  enabled = false;
+  assert.equal(await deliverEvent({ ...payment, attempts: 2 }, f.store, f.provider), "skipped");
+  assert.deepEqual(f.preferences, [
+    [b, "payments"],
+    [b, "payments"],
+  ]);
+  assert.equal(f.sent.length, 1);
+
+  const unavailable = fixture(
+    {},
+    {
+      preference: () => {
+        throw new Error("database_failed");
+      },
+    },
+  );
+  assert.equal(await deliverEvent(payment, unavailable.store, unavailable.provider), "pending");
+  assert.equal(unavailable.sent.length, 0);
+});
+
+test("opponent activity and target milestones never consult category preferences", async () => {
+  const f = fixture({}, { preference: () => false });
+  assert.equal(await deliverEvent(event(), f.store, f.provider), "sent");
+  assert.equal(await deliverEvent(event({ kind: "target_reached" }), f.store, f.provider), "sent");
+  assert.deepEqual(f.preferences, []);
+});
 
 test("A's activity targets only B with a minimal payload", async () => {
   const f = fixture();
@@ -255,8 +320,12 @@ for (const kind of [
 ]) {
   test(`${kind} validates stored relationship without requiring two Challenge members`, async () => {
     const { e, snapshot } = invitationEventFixture(kind);
-    const f = fixture({ members: [], invitation: snapshot, name: "tempo_user" });
+    const f = fixture(
+      { members: [], invitation: snapshot, name: "tempo_user" },
+      { preference: () => false },
+    );
     assert.equal(await deliverEvent(e, f.store, f.provider), "sent");
+    assert.deepEqual(f.preferences, []);
     assert.deepEqual(f.sent[0].include_subscription_ids, [deviceB.subscription_id]);
     assert.equal(f.sent[0].idempotency_key, e.id);
     assert.match(f.sent[0].contents.en, /@tempo_user/);
@@ -427,4 +496,266 @@ test("real push store refuses a forged queue recipient before any private device
   assert.ok(
     f.calls.every(([table]) => !["challenge_push_users", "push_subscriptions"].includes(table)),
   );
+});
+
+test("real push store defaults missing preferences on and selects only the recipient's row", async () => {
+  const { e, snapshot } = invitationEventFixture();
+  const f = persistedPushStore(e, snapshot);
+  f.tables.account_notification_preferences = [
+    { user_id: a, week_penalties: false, payments: false },
+  ];
+  assert.equal(await f.store.preferenceEnabled(b, "payments"), true);
+  f.tables.account_notification_preferences.push({
+    user_id: b,
+    week_penalties: false,
+    payments: true,
+  });
+  assert.equal(await f.store.preferenceEnabled(b, "week_penalties"), false);
+  assert.equal(await f.store.preferenceEnabled(b, "payments"), true);
+  assert.equal(f.calls.length, 3);
+  for (const [table, columns, filter] of f.calls) {
+    assert.equal(table, "account_notification_preferences");
+    assert.equal(columns, "week_penalties,payments");
+    assert.deepEqual(JSON.parse(JSON.stringify(filter)), [["user_id", b]]);
+  }
+});
+
+function subscriptionEndpoint({
+  member = true,
+  verified = [deviceB.subscription_id],
+  beforeVerification,
+} = {}) {
+  const writes = [];
+  const lookups = [];
+  let handler;
+  const identity = "existing-provider-identity";
+  let generation = randomUUID();
+  let accountEnabled = false;
+  let deviceActive = false;
+  const db = {
+    auth: { getUser: async () => ({ data: { user: { id: b } } }) },
+    from(table) {
+      return {
+        select() {
+          return this;
+        },
+        eq() {
+          return this;
+        },
+        limit() {
+          return { data: member ? [memberB] : [] };
+        },
+        single() {
+          return {
+            data: {
+              external_id: identity,
+              enabled: accountEnabled,
+              registration_generation: generation,
+            },
+          };
+        },
+        maybeSingle() {
+          return {
+            data:
+              table === "push_subscriptions" && deviceActive
+                ? { user_id: b, is_active: true }
+                : null,
+          };
+        },
+        upsert() {
+          return {};
+        },
+      };
+    },
+    async rpc(name, args) {
+      writes.push([name, args]);
+      if (name === "detach_challenge_push_device") {
+        generation = randomUUID();
+        deviceActive = false;
+        return { data: null };
+      }
+      if (args._generation !== generation) return { data: "stale" };
+      if (args._mode === "activate") accountEnabled = true;
+      deviceActive = true;
+      return { data: "registered" };
+    },
+  };
+  presentationComponent(
+    "supabase/functions/challenge-push-subscription/index.ts",
+    {
+      "../_shared/challenge-push.ts": pushModule,
+      "../_shared/push-store.ts": {
+        adminClient: () => db,
+        oneSignal: () => ({
+          subscriptions: async (externalId) => {
+            lookups.push(externalId);
+            await beforeVerification?.();
+            return verified;
+          },
+        }),
+      },
+      "../_shared/observability.ts": {
+        operationalLog() {},
+        safeOperationalCode: () => "safe_code",
+      },
+    },
+    {
+      Deno: {
+        env: { get: () => "https://tempo.test" },
+        serve: (fn) => {
+          handler = fn;
+        },
+      },
+      Response,
+    },
+  );
+  const send = (body) =>
+    handler(
+      new Request("https://edge.test", {
+        method: "POST",
+        headers: { authorization: "Bearer fixture-token" },
+        body: JSON.stringify({ subscription_id: deviceB.subscription_id, ...body }),
+      }),
+    );
+  const register = (expectedUser = b, expectedGeneration = generation) =>
+    send({
+      action: "register_device",
+      expected_user: expectedUser,
+      expected_generation: expectedGeneration,
+      activate: true,
+    });
+  return {
+    register,
+    send,
+    lookups,
+    writes,
+    identity,
+    generation: () => generation,
+    deviceActive: () => deviceActive,
+    disable: () => {
+      generation = randomUUID();
+      deviceActive = false;
+      accountEnabled = false;
+    },
+    accountEnabled: () => accountEnabled,
+  };
+}
+
+test("device-only endpoint enforces session, membership and provider ownership and ignores an activation flag", async () => {
+  const valid = subscriptionEndpoint();
+  const response = await valid.register();
+  assert.deepEqual(await response.json(), { registered: true });
+  assert.deepEqual(valid.lookups, [valid.identity]);
+  assert.deepEqual(JSON.parse(JSON.stringify(valid.writes)), [
+    [
+      "register_challenge_push_device_fenced",
+      {
+        _user: b,
+        _subscription: deviceB.subscription_id,
+        _external_id: valid.identity,
+        _generation: valid.generation(),
+        _observed_owner: null,
+        _mode: "device",
+      },
+    ],
+  ]);
+  for (const [f, uid, status] of [
+    [subscriptionEndpoint(), a, 403],
+    [subscriptionEndpoint({ member: false }), b, 403],
+    [subscriptionEndpoint({ verified: [deviceA.subscription_id] }), b, 409],
+  ]) {
+    assert.equal((await f.register(uid)).status, status);
+    assert.deepEqual(f.writes, []);
+    if (status === 403) assert.deepEqual(f.lookups, []);
+  }
+});
+
+test("the Edge Function passes its original fence after a detach during provider verification", async () => {
+  let release, started;
+  const verified = new Promise((resolve) => {
+    release = resolve;
+  });
+  const verifying = new Promise((resolve) => {
+    started = resolve;
+  });
+  const f = subscriptionEndpoint({
+    beforeVerification: () => {
+      started();
+      return verified;
+    },
+  });
+  const original = f.generation();
+  const pending = f.register();
+  await verifying;
+  assert.deepEqual(await (await f.send({ action: "detach" })).json(), { ok: true });
+  release();
+  assert.deepEqual(await (await pending).json(), {
+    enabled: false,
+    registered: false,
+    stale: true,
+  });
+  assert.equal(f.writes[1][1]._generation, original);
+  assert.equal(f.deviceActive(), false);
+  assert.notEqual(f.generation(), original);
+  const reads = f.lookups.length;
+  assert.equal((await (await f.register(b, original)).json()).stale, true);
+  assert.equal(f.lookups.length, reads);
+  assert.deepEqual(await (await f.register()).json(), { registered: true });
+});
+
+for (const invalidate of ["disable", "detach"]) {
+  test(`pre-V2 activation retries remain fail-closed after ${invalidate} without a client refresh`, async () => {
+    const f = subscriptionEndpoint();
+    // Model the pre-V2 request shape and retry loop, not the upgraded adapter.
+    const legacy = () => f.send({ action: "register", activate: true });
+    const first = await legacy();
+    assert.equal(first.status, 200);
+    assert.deepEqual(await first.json(), {
+      enabled: false,
+      registered: false,
+      code: "notification_upgrade_required",
+    });
+    if (invalidate === "disable") f.disable();
+    else await f.send({ action: "detach" });
+    const writes = f.writes.length;
+    for (let attempt = 0; attempt < 16; attempt++) {
+      const response = await legacy();
+      assert.equal(response.status, 200); // non-auth failure
+      assert.equal((await response.json()).code, "notification_upgrade_required");
+    }
+    assert.equal(f.lookups.length, 0);
+    assert.equal(f.writes.length, writes);
+    assert.equal(f.accountEnabled(), false);
+    assert.equal(f.deviceActive(), false);
+    assert.equal((await f.send({ action: "identity" })).status, 200);
+    assert.equal((await f.send({ action: "status" })).status, 200);
+  });
+}
+
+test("V2 activation reuses a valid original precondition, rejects forged/stale ones and permits a new explicit Enable", async () => {
+  const f = subscriptionEndpoint();
+  const original = f.generation();
+  const activate = (expected = original) =>
+    f.send({ action: "register", activate: true, expected_user: b, expected_generation: expected });
+  assert.deepEqual(await (await activate()).json(), { enabled: true });
+  assert.deepEqual(await (await activate()).json(), { enabled: true });
+  assert.equal(f.accountEnabled(), true);
+  // A signed-in user's other device disables the account without signing this browser out.
+  f.disable();
+  const reads = f.lookups.length;
+  for (const invalid of [original, randomUUID()]) {
+    assert.equal((await (await activate(invalid)).json()).stale, true);
+  }
+  assert.equal(f.lookups.length, reads);
+  assert.equal(f.accountEnabled(), false);
+  assert.equal(f.deviceActive(), false);
+  assert.deepEqual(await (await activate(f.generation())).json(), { enabled: true });
+  // Legacy background traffic can read current status, but cannot reconnect a detached device.
+  const status = await (await f.send({ action: "register", activate: false })).json();
+  assert.equal(status.enabled, true);
+  const writes = f.writes.length;
+  await f.send({ action: "detach" });
+  const off = await (await f.send({ action: "register", activate: false })).json();
+  assert.equal(off.enabled, false);
+  assert.equal(f.writes.length, writes + 1);
 });

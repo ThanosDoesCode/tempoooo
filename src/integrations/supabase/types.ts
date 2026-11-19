@@ -81,6 +81,27 @@ export type Database = {
           },
         ]
       }
+      account_notification_preferences: {
+        Row: {
+          payments: boolean
+          updated_at: string
+          user_id: string
+          week_penalties: boolean
+        }
+        Insert: {
+          payments?: boolean
+          updated_at?: string
+          user_id: string
+          week_penalties?: boolean
+        }
+        Update: {
+          payments?: boolean
+          updated_at?: string
+          user_id?: string
+          week_penalties?: boolean
+        }
+        Relationships: []
+      }
       bulk_admins: {
         Row: {
           created_at: string
@@ -1750,16 +1771,19 @@ export type Database = {
         Row: {
           enabled: boolean
           external_id: string
+          registration_generation: string
           user_id: string
         }
         Insert: {
           enabled?: boolean
           external_id?: string
+          registration_generation?: string
           user_id: string
         }
         Update: {
           enabled?: boolean
           external_id?: string
+          registration_generation?: string
           user_id?: string
         }
         Relationships: []
@@ -2897,6 +2921,10 @@ export type Database = {
         Args: { _template_id: string }
         Returns: boolean
       }
+      detach_challenge_push_device: {
+        Args: { _subscription: string; _user: string }
+        Returns: undefined
+      }
       disable_challenge_push: { Args: { _caller: string }; Returns: undefined }
       discard_bulk_training_session: {
         Args: { _session: string }
@@ -3022,6 +3050,17 @@ export type Database = {
         }
         Returns: boolean
       }
+      register_challenge_push_device_fenced: {
+        Args: {
+          _external_id: string
+          _generation: string
+          _mode: string
+          _observed_owner: string | null
+          _subscription: string
+          _user: string
+        }
+        Returns: string
+      }
       related_profiles: {
         Args: { _caller: string }
         Returns: {
@@ -3128,6 +3167,10 @@ export type Database = {
         Args: { _caller: string; _challenge: string; _invited_username: string }
         Returns: string
       }
+      set_account_notification_preference: {
+        Args: { _category: string; _enabled: boolean; _expected_user: string }
+        Returns: undefined
+      }
       set_account_username: {
         Args: {
           _caller: string
@@ -3148,6 +3191,10 @@ export type Database = {
       set_bulk_meal_preset_quick_add_visibility: {
         Args: { _meal: string; _visible: boolean }
         Returns: boolean
+      }
+      set_challenge_push_account_enabled: {
+        Args: { _enabled: boolean; _expected_generation?: string; _expected_user: string }
+        Returns: undefined
       }
       set_challenge_week_target: {
         Args: {

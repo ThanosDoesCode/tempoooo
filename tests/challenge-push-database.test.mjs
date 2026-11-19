@@ -13,6 +13,10 @@ const a = randomUUID(),
 const x = randomUUID(),
   y = randomUUID();
 const historicalInvitationChallenge = randomUUID();
+const legacyPushOn = randomUUID(),
+  legacyPushOff = randomUUID(),
+  legacyDeviceOn = randomUUID(),
+  legacyDeviceOff = randomUUID();
 const root = new URL("../supabase/migrations/", import.meta.url);
 const platformSchema = `SET TIME ZONE 'UTC';
     CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role BYPASSRLS;
@@ -53,6 +57,21 @@ before(async () => {
         await db.query(
           "INSERT INTO public.challenge_invitations(challenge_id,created_by,invited_user_id,invited_username_snapshot,token_hash,expires_at,accepted_at,revoked_at) VALUES ($1,$2,$3,'historical_user','historical-pending',now()+interval '1 day',NULL,NULL),($1,$2,$3,'historical_user','historical-accepted',now()+interval '1 day',now(),NULL),($1,$2,$3,'historical_user','historical-revoked',now()+interval '1 day',NULL,now())",
           [historicalInvitationChallenge, sender, recipient],
+        );
+      }
+      if (file === "20261110120000_account_notification_preferences.sql") {
+        await db.query("INSERT INTO auth.users VALUES ($1),($2)", [legacyPushOn, legacyPushOff]);
+        await db.query("INSERT INTO public.profiles(id) VALUES ($1),($2)", [
+          legacyPushOn,
+          legacyPushOff,
+        ]);
+        await db.query(
+          "INSERT INTO public.challenge_push_users(user_id, enabled) VALUES ($1,true),($2,false)",
+          [legacyPushOn, legacyPushOff],
+        );
+        await db.query(
+          "INSERT INTO public.push_subscriptions(user_id,subscription_id,is_active) VALUES ($1,$2,true),($3,$4,false)",
+          [legacyPushOn, legacyDeviceOn, legacyPushOff, legacyDeviceOff],
         );
       }
       await db.exec(await readFile(new URL(file, root), "utf8"));
@@ -3821,129 +3840,65 @@ test("own subscription reads/deletes only; device forgery/identity edits/outbox 
     1,
   );
 });
-test("server registration respects account opt-out, rejects forged identity, and cannot be invoked by clients", async () => {
-  const external = (
-    await db.query("SELECT external_id FROM public.challenge_push_users WHERE user_id=$1", [a])
-  ).rows[0].external_id;
+test("legacy activation is retired; fenced registration preserves ownership, consent and input checks", async () => {
   const id = randomUUID();
-  const register = (active, identity = external) =>
+  const account = await pushAccount(a);
+  const legacy = (active) =>
     db.query("SELECT public.register_challenge_push_device($1,$2,$3,$4) AS enabled", [
       a,
       id,
-      identity,
+      account.external_id,
       active,
     ]);
   await assert.rejects(
-    asUser(a, () => register(true)),
+    asUser(a, () => legacy(true)),
     /permission denied/,
   );
-  for (const args of [
-    [null, id, external, true],
-    [a, null, external, true],
-    [a, id, null, true],
-    [a, id, "   ", true],
-    [a, id, external, null],
+  assert.equal((await legacy(true)).rows[0].enabled, false);
+  assert.equal((await legacy(false)).rows[0].enabled, false);
+  assert.equal((await pushAccount(a)).enabled, false);
+  assert.equal(await pushDevice(id), undefined);
+  const snapshot = await snapshotRegistration(a, id, "activate");
+  for (const [index, value] of [
+    [0, null],
+    [1, null],
+    [2, null],
+    [2, "  "],
+    [2, "forged"],
+    [3, null],
+    [3, randomUUID()],
+    [5, null],
   ]) {
-    assert.equal(
-      (await db.query("SELECT public.register_challenge_push_device($1,$2,$3,$4) AS enabled", args))
-        .rows[0].enabled,
-      false,
-    );
+    const invalid = [...snapshot];
+    invalid[index] = value;
+    assert.notEqual(await registerFenced(invalid), "registered");
   }
-  assert.equal((await register(true, "forged")).rows[0].enabled, false);
-  assert.equal((await register(false)).rows[0].enabled, false);
-  assert.equal((await register(true)).rows[0].enabled, true);
-  assert.equal(
-    (await db.query("SELECT enabled FROM public.challenge_push_users WHERE user_id=$1", [a]))
-      .rows[0].enabled,
-    true,
-  );
+  assert.equal(await registerFenced(snapshot), "registered");
+  assert.equal((await pushAccount(a)).enabled, true);
+  // A legacy background request is a read-only status check, never a reactivation.
+  assert.equal((await legacy(false)).rows[0].enabled, true);
   await asService(() => db.query("SELECT public.disable_challenge_push($1)", [a]));
-  assert.equal((await register(false)).rows[0].enabled, false);
-  assert.equal(
-    (await db.query("SELECT enabled FROM public.challenge_push_users WHERE user_id=$1", [a]))
-      .rows[0].enabled,
-    false,
-  );
-  assert.equal(
-    (
-      await db.query("SELECT is_active FROM public.push_subscriptions WHERE subscription_id=$1", [
-        id,
-      ])
-    ).rows[0].is_active,
-    false,
-  );
-  assert.equal((await register(true)).rows[0].enabled, true);
-  assert.equal(
-    (await db.query("SELECT enabled FROM public.challenge_push_users WHERE user_id=$1", [a]))
-      .rows[0].enabled,
-    true,
-  );
+  for (let attempt = 0; attempt < 10; attempt++)
+    assert.equal((await legacy(true)).rows[0].enabled, false);
+  assert.equal(await registerFenced(snapshot), "stale");
+  assert.equal((await pushAccount(a)).enabled, false);
+  assert.equal((await pushDevice(id)).is_active, false);
+  assert.equal(await registerFenced(await snapshotRegistration(a, id, "activate")), "registered");
 });
-test("verified background registration restores detached devices and transfers account ownership safely", async () => {
-  const identities = await db.query(
-    "SELECT user_id, external_id FROM public.challenge_push_users WHERE user_id IN ($1,$2)",
-    [a, b],
-  );
-  const external = new Map(identities.rows.map((row) => [row.user_id, row.external_id]));
+
+test("verified fenced background registration restores detached devices and transfers ownership safely", async () => {
   const id = randomUUID();
   await db.query("UPDATE public.challenge_push_users SET enabled=true WHERE user_id IN ($1,$2)", [
     a,
     b,
   ]);
-  assert.equal(
-    (
-      await db.query("SELECT public.register_challenge_push_device($1,$2,$3,true) AS enabled", [
-        a,
-        id,
-        external.get(a),
-      ])
-    ).rows[0].enabled,
-    true,
-  );
-  await db.query("UPDATE public.push_subscriptions SET is_active=false WHERE subscription_id=$1", [
-    id,
-  ]);
-  assert.equal(
-    (
-      await db.query("SELECT public.register_challenge_push_device($1,$2,$3,false) AS enabled", [
-        a,
-        id,
-        external.get(a),
-      ])
-    ).rows[0].enabled,
-    true,
-  );
-  assert.equal(
-    (
-      await db.query("SELECT public.register_challenge_push_device($1,$2,$3,false) AS enabled", [
-        b,
-        id,
-        external.get(b),
-      ])
-    ).rows[0].enabled,
-    true,
-  );
-  assert.deepEqual(
-    (
-      await db.query(
-        "SELECT user_id, is_active FROM public.push_subscriptions WHERE subscription_id=$1",
-        [id],
-      )
-    ).rows[0],
-    { user_id: b, is_active: true },
-  );
+  assert.equal(await registerFenced(await snapshotRegistration(a, id, "activate")), "registered");
+  await detachFenced(a, id);
+  assert.equal(await registerFenced(await snapshotRegistration(a, id, "background")), "registered");
+  assert.equal(await registerFenced(await snapshotRegistration(b, id, "background")), "registered");
+  assert.deepEqual(await pushDevice(id), { user_id: b, is_active: true });
   await asService(() => db.query("SELECT public.disable_challenge_push($1)", [b]));
-  assert.equal(
-    (
-      await db.query("SELECT public.register_challenge_push_device($1,$2,$3,false) AS enabled", [
-        b,
-        id,
-        external.get(b),
-      ])
-    ).rows[0].enabled,
-    false,
-  );
+  assert.equal(await registerFenced(await snapshotRegistration(b, id, "background")), "rejected");
 });
 test("rollback leaves no event and clients cannot directly override a weekly target", async () => {
   const beforeCount = (
@@ -5490,5 +5445,358 @@ test("invitation push shape preserves required membership snapshots for activity
       db.query("SELECT public.mark_account_notification_read($1)", [randomUUID()]),
       /Not authenticated/,
     ),
+  );
+});
+
+const preferenceSQL = "SELECT public.set_account_notification_preference($1,$2,$3)";
+const masterSQL = "SELECT public.set_challenge_push_account_enabled($1,$2)";
+const enableMaster = async (uid) => {
+  const generation = (await pushAccount(uid)).registration_generation;
+  return asUser(uid, () =>
+    db.query("SELECT public.set_challenge_push_account_enabled($1,true,$2)", [uid, generation]),
+  );
+};
+const readPreferencesSQL =
+  "SELECT week_penalties,payments FROM public.account_notification_preferences WHERE user_id=$1";
+const pushAccountSQL =
+  "SELECT external_id,enabled,registration_generation FROM public.challenge_push_users WHERE user_id=$1";
+const fencedRegistrationSQL =
+  "SELECT public.register_challenge_push_device_fenced($1,$2,$3,$4,$5,$6) AS result";
+const fencedDetachSQL = "SELECT public.detach_challenge_push_device($1,$2)";
+const deviceSQL =
+  "SELECT user_id,is_active FROM public.push_subscriptions WHERE provider='onesignal' AND subscription_id=$1";
+const pushAccount = async (uid) => (await db.query(pushAccountSQL, [uid])).rows[0];
+const pushDevice = async (subscription) => (await db.query(deviceSQL, [subscription])).rows[0];
+const snapshotRegistration = async (uid, subscription, mode = "device") => {
+  const account = await pushAccount(uid);
+  const device = await pushDevice(subscription);
+  return [
+    uid,
+    subscription,
+    account.external_id,
+    account.registration_generation,
+    device?.user_id ?? null,
+    mode,
+  ];
+};
+const registerFenced = async (snapshot) =>
+  (await asService(() => db.query(fencedRegistrationSQL, snapshot))).rows[0].result;
+const detachFenced = (uid, subscription) =>
+  asService(() => db.query(fencedDetachSQL, [uid, subscription]));
+
+test("adding the fence preserves pre-migration rows and the legacy worker's subscription projection", async () => {
+  for (const [user_id, subscription_id, enabled] of [
+    [legacyPushOn, legacyDeviceOn, true],
+    [legacyPushOff, legacyDeviceOff, false],
+  ]) {
+    const {
+      rows: [account],
+    } = await asService(() =>
+      db.query(
+        "SELECT user_id,external_id,enabled FROM public.challenge_push_users WHERE user_id=$1",
+        [user_id],
+      ),
+    );
+    assert.equal(account.user_id, user_id);
+    assert.ok(account.external_id);
+    assert.equal(account.enabled, enabled);
+    assert.match((await pushAccount(user_id)).registration_generation, /^[0-9a-f-]{36}$/);
+    assert.notEqual(
+      (await pushAccount(legacyPushOn)).registration_generation,
+      (await pushAccount(legacyPushOff)).registration_generation,
+    );
+    assert.deepEqual(await pushDevice(subscription_id), { user_id, is_active: enabled });
+    const { rows: destinations } = await asService(() =>
+      db.query(
+        "SELECT user_id,subscription_id,is_active FROM public.push_subscriptions WHERE user_id=$1 AND provider='onesignal' AND is_active",
+        [user_id],
+      ),
+    );
+    assert.deepEqual(destinations, enabled ? [{ user_id, subscription_id, is_active: true }] : []);
+  }
+});
+
+test("notification preference defaults preserve existing master opt-ins and opt-outs without a backfill", async () => {
+  for (const [uid, enabled] of [
+    [legacyPushOn, true],
+    [legacyPushOff, false],
+  ]) {
+    assert.deepEqual((await asUser(uid, () => db.query(readPreferencesSQL, [uid]))).rows, []);
+    assert.equal(
+      (
+        await asUser(uid, () =>
+          db.query("SELECT enabled FROM public.challenge_push_users WHERE user_id=$1", [uid]),
+        )
+      ).rows[0].enabled,
+      enabled,
+    );
+  }
+  const uid = randomUUID();
+  await db.query("INSERT INTO auth.users VALUES ($1)", [uid]);
+  assert.deepEqual(
+    (
+      await db.query(
+        "INSERT INTO public.account_notification_preferences(user_id) VALUES ($1) RETURNING week_penalties,payments",
+        [uid],
+      )
+    ).rows[0],
+    { week_penalties: true, payments: true },
+  );
+  await db.query("DELETE FROM auth.users WHERE id=$1", [uid]);
+  assert.deepEqual((await db.query(readPreferencesSQL, [uid])).rows, []);
+});
+
+test("only the authenticated owner can read and change one preference at a time", async () => {
+  const uid = legacyPushOff;
+  await asUser(uid, async () => {
+    await db.query(preferenceSQL, [uid, "week_penalties", false]);
+    assert.deepEqual((await db.query(readPreferencesSQL, [uid])).rows, [
+      { week_penalties: false, payments: true },
+    ]);
+    await db.query(preferenceSQL, [uid, "payments", false]);
+    await db.query(preferenceSQL, [uid, "payments", false]);
+    assert.deepEqual((await db.query(readPreferencesSQL, [uid])).rows, [
+      { week_penalties: false, payments: false },
+    ]);
+    await assert.rejects(() => db.query(preferenceSQL, [uid, "morning_checkin", true]), {
+      code: "22023",
+    });
+    await assert.rejects(
+      () => db.query("UPDATE public.account_notification_preferences SET payments=true"),
+      { code: "42501" },
+    );
+    await assert.rejects(
+      () =>
+        db.query("INSERT INTO public.account_notification_preferences(user_id) VALUES($1)", [uid]),
+      { code: "42501" },
+    );
+  });
+  await asUser(legacyPushOn, async () => {
+    assert.deepEqual((await db.query(readPreferencesSQL, [uid])).rows, []);
+    await assert.rejects(() => db.query(preferenceSQL, [uid, "week_penalties", true]), {
+      code: "42501",
+    });
+  });
+  await asAnon(async () => {
+    await assert.rejects(() => db.query(readPreferencesSQL, [uid]), { code: "42501" });
+    await assert.rejects(() => db.query(preferenceSQL, [uid, "payments", true]), { code: "42501" });
+  });
+  assert.deepEqual((await asService(() => db.query(readPreferencesSQL, [uid]))).rows, [
+    { week_penalties: false, payments: false },
+  ]);
+  assert.equal(
+    (await db.query("SELECT enabled FROM public.challenge_push_users WHERE user_id=$1", [uid]))
+      .rows[0].enabled,
+    false,
+  );
+});
+
+test("device-only registration preserves master off and account actions never change category preferences", async () => {
+  const uid = legacyPushOff;
+  const device = randomUUID();
+  const challenge = randomUUID();
+  const snapshot = await snapshotRegistration(uid, device);
+  await asUser(uid, async () => {
+    await assert.rejects(() => db.query(masterSQL, [uid, true]), { code: "42501" });
+    await assert.rejects(() => db.query(fencedRegistrationSQL, snapshot), { code: "42501" });
+    await assert.rejects(() => db.query(fencedDetachSQL, [uid, device]), { code: "42501" });
+  });
+  await asAnon(async () => {
+    await assert.rejects(() => db.query(masterSQL, [uid, true]), { code: "42501" });
+    await assert.rejects(() => db.query(fencedRegistrationSQL, snapshot), { code: "42501" });
+    await assert.rejects(() => db.query(fencedDetachSQL, [uid, device]), { code: "42501" });
+  });
+  assert.equal(await registerFenced(snapshot), "rejected");
+  await db.query(
+    "INSERT INTO public.challenges(id,created_by,name,start_date) VALUES($1,$2,'Notification test',CURRENT_DATE)",
+    [challenge, uid],
+  );
+  await db.query("INSERT INTO public.challenge_members(challenge_id,user_id) VALUES($1,$2)", [
+    challenge,
+    uid,
+  ]);
+  const wrongIdentity = [...snapshot];
+  wrongIdentity[2] = "wrong identity";
+  assert.equal(await registerFenced(wrongIdentity), "rejected");
+  assert.equal(await registerFenced(snapshot), "registered");
+  assert.equal((await pushAccount(uid)).enabled, false);
+  assert.equal((await pushDevice(device)).is_active, true);
+  assert.equal(
+    await registerFenced(await snapshotRegistration(uid, device, "background")),
+    "rejected",
+  );
+  await asUser(legacyPushOn, () =>
+    assert.rejects(() => db.query(masterSQL, [uid, true]), { code: "42501" }),
+  );
+  await enableMaster(uid);
+  assert.equal((await pushAccount(uid)).enabled, true);
+  await asUser(uid, () => db.query(masterSQL, [uid, false]));
+  assert.equal((await pushAccount(uid)).enabled, false);
+  assert.equal((await pushDevice(device)).is_active, false);
+  assert.deepEqual((await db.query(readPreferencesSQL, [uid])).rows, [
+    { week_penalties: false, payments: false },
+  ]);
+});
+
+async function fencedMember() {
+  const uid = randomUUID(),
+    challenge = randomUUID();
+  await db.query("INSERT INTO auth.users VALUES ($1)", [uid]);
+  await db.query("INSERT INTO public.profiles(id) VALUES ($1)", [uid]);
+  await db.query(
+    "INSERT INTO public.challenges(id,created_by,name,start_date) VALUES ($1,$2,'Fence fixture',CURRENT_DATE)",
+    [challenge, uid],
+  );
+  await db.query("INSERT INTO public.challenge_members(challenge_id,user_id) VALUES ($1,$2)", [
+    challenge,
+    uid,
+  ]);
+  await db.query("INSERT INTO public.challenge_push_users(user_id,enabled) VALUES ($1,true)", [
+    uid,
+  ]);
+  return uid;
+}
+
+test("logout fences an in-flight first registration and repeated detach preserves inactive state", async () => {
+  const uid = await fencedMember(),
+    device = randomUUID(),
+    otherDevice = randomUUID();
+  assert.equal(await registerFenced(await snapshotRegistration(uid, otherDevice)), "registered");
+  const pending = await snapshotRegistration(uid, device, "background");
+  await detachFenced(uid, device); // No row yet for this device.
+  assert.equal(await registerFenced(pending), "stale");
+  assert.equal(await pushDevice(device), undefined);
+  assert.deepEqual(await pushDevice(otherDevice), { user_id: uid, is_active: true });
+  assert.equal((await pushAccount(uid)).enabled, true);
+
+  assert.equal(await registerFenced(await snapshotRegistration(uid, device)), "registered");
+  const pendingAgain = await snapshotRegistration(uid, device);
+  await detachFenced(uid, device);
+  await detachFenced(uid, device);
+  assert.equal(await registerFenced(pendingAgain), "stale");
+  assert.deepEqual(await pushDevice(device), { user_id: uid, is_active: false });
+  assert.equal(await registerFenced(await snapshotRegistration(uid, device)), "registered");
+});
+
+for (const legacy of [false, true]) {
+  test(`account-wide disable fences all registration modes${legacy ? " via the legacy RPC" : ""}`, async () => {
+    const uid = await fencedMember(),
+      device = randomUUID();
+    assert.equal(await registerFenced(await snapshotRegistration(uid, device)), "registered");
+    const snapshots = await Promise.all(
+      ["device", "background", "activate"].map((mode) => snapshotRegistration(uid, device, mode)),
+    );
+    if (legacy) await asService(() => db.query("SELECT public.disable_challenge_push($1)", [uid]));
+    else await asUser(uid, () => db.query(masterSQL, [uid, false]));
+    for (const pending of snapshots) assert.equal(await registerFenced(pending), "stale");
+    assert.equal((await pushAccount(uid)).enabled, false);
+    assert.equal((await pushDevice(device)).is_active, false);
+    // Account consent turning back on is not itself a new device registration.
+    await enableMaster(uid);
+    assert.equal(await registerFenced(snapshots[0]), "stale");
+    assert.equal((await pushDevice(device)).is_active, false);
+    assert.equal(await registerFenced(await snapshotRegistration(uid, device)), "registered");
+  });
+}
+
+test("a delayed registration cannot overwrite ownership transferred to another account", async () => {
+  const previous = await fencedMember(),
+    next = await fencedMember(),
+    device = randomUUID();
+  assert.equal(await registerFenced(await snapshotRegistration(previous, device)), "registered");
+  const stalePrevious = await snapshotRegistration(previous, device);
+  assert.equal(await registerFenced(await snapshotRegistration(next, device)), "registered");
+  assert.equal(await registerFenced(stalePrevious), "stale");
+  await detachFenced(previous, device);
+  assert.deepEqual(await pushDevice(device), { user_id: next, is_active: true });
+});
+
+test("migration cutover retires old Edge writes while preserving worker reads and safe RPC detach", async () => {
+  const uid = await fencedMember(),
+    device = randomUUID();
+  assert.equal(await registerFenced(await snapshotRegistration(uid, device)), "registered");
+  const source = (
+    await db.query(
+      "SELECT pg_get_functiondef('public.register_challenge_push_device(uuid,uuid,text,boolean)'::regprocedure) AS body",
+    )
+  ).rows[0].body;
+  assert.doesNotMatch(source, /\b(INSERT|UPDATE|DELETE)\b/);
+  await asService(async () => {
+    assert.equal(
+      (
+        await db.query(
+          "SELECT has_table_privilege(current_user,'public.push_subscriptions','UPDATE') AS allowed",
+        )
+      ).rows[0].allowed,
+      false,
+    );
+    await assert.rejects(
+      () =>
+        db.query(
+          "UPDATE public.push_subscriptions SET is_active=false WHERE user_id=$1 AND subscription_id=$2",
+          [uid, device],
+        ),
+      { code: "42501" },
+    );
+    assert.equal(
+      (
+        await db.query(
+          "SELECT user_id,subscription_id,is_active FROM public.push_subscriptions WHERE subscription_id=$1",
+          [device],
+        )
+      ).rows[0].is_active,
+      true,
+    );
+  });
+  for (const invalidate of ["disable", "detach"]) {
+    if (invalidate === "disable")
+      await asService(() => db.query("SELECT public.disable_challenge_push($1)", [uid]));
+    else await detachFenced(uid, device);
+    for (let attempt = 0; attempt < 12; attempt++) {
+      const { external_id } = await pushAccount(uid);
+      const response = await asService(() =>
+        db.query("SELECT public.register_challenge_push_device($1,$2,$3,true) AS enabled", [
+          uid,
+          device,
+          external_id,
+        ]),
+      );
+      assert.equal(response.rows[0].enabled, false);
+    }
+    assert.equal((await pushDevice(device)).is_active, false);
+    assert.equal((await pushAccount(uid)).enabled, false);
+  }
+});
+
+test("master-enable is also generation-bound; another account or a stale retry cannot restore consent", async () => {
+  const uid = await fencedMember(),
+    other = await fencedMember();
+  const original = (await pushAccount(uid)).registration_generation;
+  const otherGeneration = (await pushAccount(other)).registration_generation;
+  const enableSQL = "SELECT public.set_challenge_push_account_enabled($1,true,$2)";
+  await asUser(uid, () => db.query(masterSQL, [uid, false]));
+  await asUser(uid, async () => {
+    await assert.rejects(() => db.query(masterSQL, [uid, true]), { code: "22023" });
+    for (const invalid of [original, randomUUID(), otherGeneration])
+      await assert.rejects(() => db.query(enableSQL, [uid, invalid]), { code: "22023" });
+  });
+  assert.equal((await pushAccount(uid)).enabled, false);
+  await enableMaster(uid);
+  assert.equal((await pushAccount(uid)).enabled, true);
+  const current = (await pushAccount(uid)).registration_generation;
+  assert.equal(
+    await registerFenced([
+      uid,
+      randomUUID(),
+      (await pushAccount(uid)).external_id,
+      (await pushAccount(other)).registration_generation,
+      null,
+      "activate",
+    ]),
+    "stale",
+  );
+  await detachFenced(uid, randomUUID());
+  await asUser(uid, () =>
+    assert.rejects(() => db.query(enableSQL, [uid, current]), { code: "22023" }),
   );
 });

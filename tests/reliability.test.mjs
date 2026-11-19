@@ -256,8 +256,10 @@ test("push observability stays structured while dedupe and sync retry remain int
   const providerVerification = subscription.indexOf(
     "oneSignal().subscriptions(identity.data.external_id)",
   );
-  const registrationRpc = subscription.indexOf('db.rpc("register_challenge_push_device"');
-  assert.ok(providerVerification >= 0 && providerVerification < registrationRpc);
+  const registrationSnapshot = subscription.indexOf('phase = "registration_snapshot"');
+  const registrationRpc = subscription.indexOf('db.rpc("register_challenge_push_device_fenced"');
+  assert.ok(registrationSnapshot >= 0 && registrationSnapshot < providerVerification);
+  assert.ok(providerVerification < registrationRpc);
   assert.match(subscription, /if \(!verified\.includes\(id as string\)\)/);
   assert.match(browser, /Device registration is still pending/);
   assert.doesNotMatch(subscription, /console\.(?:error|warn)\([^\n]*uid/);

@@ -26,6 +26,14 @@ let sdkPromise: Promise<PushSdk> | undefined;
 let loadedSdk: PushSdk | undefined;
 let identifiedUserId: string | undefined;
 const accountPreference = new Map<string, boolean>();
+const registrationGenerations = new Map<string, string | undefined>();
+type PushIdentity = { external_id: string; enabled: boolean; registration_generation?: string };
+type RegistrationResult = {
+  enabled?: boolean;
+  registered?: boolean;
+  stale?: boolean;
+  code?: "notification_upgrade_required";
+};
 let activeReconciliation:
   { userId: string; promise: Promise<{ sdk: PushSdk; enabled: boolean }> } | undefined;
 let lastReconciliation:
@@ -263,11 +271,12 @@ export async function prepareChallengePush(userId: string) {
     identifiedUserId = undefined;
     localStorage.removeItem(markerKey);
   }
-  const identity = await endpoint<{ external_id: string; enabled: boolean }>({
+  const identity = await endpoint<PushIdentity>({
     action: "identity",
   });
   await assertCurrentUser(userId);
   accountPreference.set(userId, identity.enabled);
+  registrationGenerations.set(userId, identity.registration_generation);
   if (identifiedUserId !== userId) {
     await notificationOperation(sdk.login(identity.external_id));
     await assertCurrentUser(userId);
@@ -309,20 +318,68 @@ export async function pushIsEnabled(sdk: PushSdk) {
   return (await endpoint<{ enabled: boolean }>({ action: "status", subscription_id: id })).enabled;
 }
 
+/** This device can be connected while account-wide delivery is off. */
+export async function pushDeviceIsRegistered(sdk: PushSdk, userId: string) {
+  const id = sdk.User.PushSubscription.id;
+  if (Notification.permission !== "granted" || !id || !sdk.User.PushSubscription.optedIn)
+    return false;
+  await assertCurrentUser(userId);
+  const status = await endpoint<{ registered: boolean }>({ action: "status", subscription_id: id });
+  await assertCurrentUser(userId);
+  return status.registered === true;
+}
+
+async function captureRegistrationGeneration(userId: string) {
+  await assertCurrentUser(userId);
+  const { registration_generation } = await endpoint<PushIdentity>({
+    action: "identity",
+    expected_user: userId,
+  });
+  await assertCurrentUser(userId);
+  if (!registration_generation)
+    throw new Error("Update Tempo, then try enabling notifications again.");
+  return registration_generation;
+}
+
+export async function connectChallengePushDevice(
+  sdk: PushSdk,
+  userId: string,
+  askPermission = false,
+  activationGeneration?: string,
+) {
+  // Only the device action may request permission, before the first network await.
+  const permission =
+    askPermission && Notification.permission === "default"
+      ? await Notification.requestPermission()
+      : Notification.permission;
+  if (permission !== "granted") return false;
+  // Pin the server-issued precondition to this action, including transport retries.
+  // A fresh explicit action may get a new one; an interrupted action may not.
+  const generation = activationGeneration ?? (await captureRegistrationGeneration(userId));
+  if (!sdk.User.PushSubscription.optedIn)
+    await notificationOperation(sdk.User.PushSubscription.optIn());
+  const id = await subscriptionId(sdk);
+  await assertCurrentUser(userId);
+  localStorage.setItem(markerKey, JSON.stringify({ userId, id }));
+  await registerWithSynchronizationRetry(id, false, userId, { deviceOnly: true, generation });
+  lastReconciliation = undefined;
+  return true;
+}
+
 export async function enableChallengePush(sdk: PushSdk, userId: string) {
   // Request synchronously from the click handler, before network awaits (Safari).
   const permission =
     Notification.permission === "granted" ? "granted" : await Notification.requestPermission();
   if (permission !== "granted")
     throw new Error("Notifications are off. You can allow them later in your browser settings.");
-  await assertCurrentUser(userId);
+  const generation = await captureRegistrationGeneration(userId);
   await notificationOperation(sdk.User.PushSubscription.optIn());
   const id = await subscriptionId(sdk);
   await assertCurrentUser(userId);
   // Retain the ownership marker even if registration partially succeeds then fails.
   // Logout must still be able to detach this device safely.
   localStorage.setItem(markerKey, JSON.stringify({ userId, id }));
-  const result = await registerWithSynchronizationRetry(id, true, userId);
+  const result = await registerWithSynchronizationRetry(id, true, userId, { generation });
 
   if (!result?.enabled) {
     throw new Error("Could not enable notifications. Please retry notifications.");
@@ -336,17 +393,29 @@ async function registerWithSynchronizationRetry(
   subscriptionId: string,
   activate: boolean,
   userId: string,
+  { deviceOnly = false, generation }: { deviceOnly?: boolean; generation: string | undefined },
 ) {
-  let result: { enabled: boolean } | null = null;
+  if (!generation) throw new Error("Update Tempo, then try enabling notifications again.");
+  let result: RegistrationResult | null = null;
+  const precondition = {
+    subscription_id: subscriptionId,
+    expected_user: userId,
+    expected_generation: generation,
+  };
   for (let attempt = 0; attempt < 8; attempt += 1) {
     await assertCurrentUser(userId);
     try {
-      result = await endpoint<{ enabled: boolean }>({
-        action: "register",
-        subscription_id: subscriptionId,
-        activate,
-      });
-      if (result.enabled || !activate) break;
+      result = await endpoint<RegistrationResult>(
+        deviceOnly
+          ? { action: "register_device", ...precondition }
+          : { action: "register", activate, ...precondition },
+      );
+      if (
+        result?.stale ||
+        result?.code === "notification_upgrade_required" ||
+        (deviceOnly ? result?.registered : result?.enabled || !activate)
+      )
+        break;
       throw new Error("Device registration is still synchronizing");
     } catch {
       if (attempt === 7)
@@ -355,6 +424,9 @@ async function registerWithSynchronizationRetry(
     }
   }
   await assertCurrentUser(userId);
+  if (result?.code === "notification_upgrade_required")
+    throw new Error("Update Tempo, then try enabling notifications again.");
+  if (result?.stale) throw new Error("Device registration was cancelled. Reconnect this device.");
   return result;
 }
 
@@ -367,6 +439,7 @@ export async function refreshChallengePush(sdk: PushSdk, userId: string) {
   logPushDiagnostic("permission", { value: permission });
   if (permission !== "granted") return false;
 
+  const generation = registrationGenerations.get(userId);
   let id = sdk.User.PushSubscription.id;
   const optedIn = Boolean(sdk.User.PushSubscription.optedIn);
   if (!id) {
@@ -375,9 +448,9 @@ export async function refreshChallengePush(sdk: PushSdk, userId: string) {
       subscription_present: false,
       opted_in: optedIn,
     });
-    throw new Error(
-      "Notification status is temporarily unavailable. Retry notifications in a moment.",
-    );
+    // A granted browser permission does not guarantee an existing subscription.
+    // The settings page can offer an explicit device connection in this state.
+    return false;
   }
 
   await assertCurrentUser(userId);
@@ -400,10 +473,9 @@ export async function refreshChallengePush(sdk: PushSdk, userId: string) {
     await assertCurrentUser(userId);
   }
 
-  const result = await registerWithSynchronizationRetry(id, false, userId);
-  if (result?.enabled) {
-    localStorage.setItem(markerKey, JSON.stringify({ userId, id }));
-  }
+  // Logout must be able to fence a first registration even before it inserts a row.
+  localStorage.setItem(markerKey, JSON.stringify({ userId, id }));
+  const result = await registerWithSynchronizationRetry(id, false, userId, { generation });
   logPushDiagnostic("backend_sync", {
     outcome: result?.enabled ? "enabled" : "disabled",
     subscription_present: true,
@@ -456,12 +528,45 @@ export async function disableChallengePush(sdk: PushSdk | null) {
   }
 }
 
+/** Explicit account action only; never requests permission or writes category preferences. */
+export async function setChallengePushAccountEnabled(
+  userId: string,
+  enabled: boolean,
+  sdk: PushSdk | null,
+) {
+  await assertCurrentUser(userId);
+  const generation = enabled ? await captureRegistrationGeneration(userId) : undefined;
+  const { error } = await supabase.rpc("set_challenge_push_account_enabled", {
+    _expected_user: userId,
+    _enabled: enabled,
+    ...(generation ? { _expected_generation: generation } : {}),
+  });
+  if (error) throw new Error("Could not update Challenge notifications. Please try again.");
+  accountPreference.set(userId, enabled);
+  if (lastReconciliation?.userId === userId) lastReconciliation = undefined;
+  if (!enabled) {
+    if (marker()?.userId === userId) localStorage.removeItem(markerKey);
+    // Do not opt out the SDK if a different account took over during the write.
+    if (identifiedUserId === userId && sdk) {
+      try {
+        await assertCurrentUser(userId);
+        if (identifiedUserId === userId)
+          await notificationOperation(sdk.User.PushSubscription.optOut());
+      } catch {
+        /* Account-wide database opt-out is authoritative. */
+      }
+    }
+  }
+  return generation;
+}
+
 export async function detachChallengePush() {
   const saved = marker();
   if (saved) {
     // Do not complete normal sign-out until this device is detached server-side.
     await endpoint({ action: "detach", subscription_id: saved.id });
     localStorage.removeItem(markerKey);
+    registrationGenerations.delete(saved.userId);
   }
   try {
     const sdk = await loadSdk();

@@ -50,9 +50,11 @@ export type Audience = {
   invitation?: InvitationAudience | null;
 };
 export type Outcome = "sent" | "skipped" | "pending" | "failed";
+export type PushPreference = "week_penalties" | "payments";
 export interface PushStore {
   audience(event: PushEvent): Promise<Audience>;
   freezeDevices(event: PushEvent, ids: string[]): Promise<void>;
+  preferenceEnabled(recipient: string, category: PushPreference): Promise<boolean>;
   finish(event: PushEvent, status: Outcome, code: string | null, messageId?: string): Promise<void>;
 }
 
@@ -307,12 +309,22 @@ export async function deliverEvent(
     const fresh = await store.audience(event);
     const allowed = allowedDevices(event, fresh);
     const ids = candidates.filter((id) => verified.includes(id) && allowed.includes(id));
-    if (!ids.length || fresh.user?.external_id !== audience.user.external_id) {
+    if (!ids.length || !fresh.user || fresh.user.external_id !== audience.user.external_id) {
       await store.finish(event, "skipped", "device_or_membership_changed");
       return "skipped";
     }
     // Persist before calling provider; timeouts/crashes reuse both audience and key.
     await store.freezeDevices(event, ids);
+    const category =
+      event.kind === "week_penalty"
+        ? "week_penalties"
+        : event.kind === "payment_paid"
+          ? "payments"
+          : null;
+    if (category && !(await store.preferenceEnabled(fresh.user.user_id, category))) {
+      await store.finish(event, "skipped", "category_disabled");
+      return "skipped";
+    }
     const messageId = await provider.send(event, ids, fresh.name);
     const result = messageId ? "sent" : "skipped";
     await store.finish(

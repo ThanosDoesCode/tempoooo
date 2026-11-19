@@ -115,6 +115,16 @@ export function databaseStore(db: ReturnType<typeof adminClient>): PushStore {
         .select("id");
       if (result.error || result.data?.length !== 1) throw new Error("lease_lost");
     },
+    async preferenceEnabled(recipient, category) {
+      const result = await db
+        .from("account_notification_preferences")
+        .select("week_penalties,payments")
+        .eq("user_id", recipient)
+        .maybeSingle();
+      if (result.error) throw new Error("database_failed");
+      // A missing row is the legacy default; a failed read must never send.
+      return result.data === null || result.data[category] === true;
+    },
     async finish(event: PushEvent, status: Outcome, code: string | null, messageId?: string) {
       const result = await db
         .from("challenge_notification_events")

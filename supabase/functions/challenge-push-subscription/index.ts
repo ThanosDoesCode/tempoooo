@@ -32,21 +32,42 @@ Deno.serve(async (request: Request) => {
     const raw = await request.text();
     if (raw.length > 2048) return reply({ error: "Invalid request" }, 400);
     const body = JSON.parse(raw) as Record<string, unknown>;
-    if (!body || !["identity", "register", "status", "detach"].includes(String(body["action"])))
+    if (
+      !body ||
+      !["identity", "register", "register_device", "status", "detach"].includes(
+        String(body["action"]),
+      )
+    )
       return reply({ error: "Invalid request" }, 400);
+    if (
+      (body["action"] === "register_device" || body["expected_user"] !== undefined) &&
+      body["expected_user"] !== uid
+    )
+      return reply({ error: "Account changed" }, 403);
     const id = body["subscription_id"];
     if (body["action"] !== "identity" && !isUuid(id))
       return reply({ error: "Invalid subscription" }, 400);
     // Own-device cleanup remains possible after leaving a challenge.
     if (body["action"] === "detach") {
       phase = "detach_device";
-      const result = await db
-        .from("push_subscriptions")
-        .update({ is_active: false, updated_at: new Date().toISOString() })
-        .eq("user_id", uid)
-        .eq("subscription_id", id);
+      const result = await db.rpc("detach_challenge_push_device", {
+        _user: uid,
+        _subscription: id,
+      });
       if (result.error) throw new Error("database_failed");
       return reply({ ok: true });
+    }
+    if (
+      (body["action"] === "register_device" ||
+        (body["action"] === "register" && body["activate"] === true)) &&
+      !isUuid(body["expected_generation"])
+    ) {
+      // Never replace an absent legacy precondition with the latest generation.
+      return reply({
+        enabled: false,
+        registered: false,
+        code: "notification_upgrade_required",
+      });
     }
     phase = "membership_check";
     const member = await db.from("challenge_members").select("id").eq("user_id", uid).limit(1);
@@ -59,12 +80,13 @@ Deno.serve(async (request: Request) => {
     if (created.error) throw new Error("database_failed");
     const identity = await db
       .from("challenge_push_users")
-      .select("external_id,enabled")
+      .select("external_id,enabled,registration_generation")
       .eq("user_id", uid)
       .single();
     if (identity.error) throw new Error("database_failed");
     if (body["action"] === "identity") return reply(identity.data);
-    if (body["action"] === "status") {
+    const legacyStatus = body["action"] === "register" && !isUuid(body["expected_generation"]);
+    if (body["action"] === "status" || legacyStatus) {
       const device = await db
         .from("push_subscriptions")
         .select("is_active")
@@ -72,24 +94,47 @@ Deno.serve(async (request: Request) => {
         .eq("subscription_id", id)
         .maybeSingle();
       if (device.error) throw new Error("database_failed");
-      return reply({ enabled: identity.data.enabled && device.data?.is_active === true });
+      const registered = device.data?.is_active === true;
+      return reply({
+        enabled: identity.data.enabled && registered,
+        registered,
+        ...(legacyStatus ? { code: "notification_upgrade_required" } : {}),
+      });
     }
     // Only an explicit enable action may undo an account-wide opt-out.
-    const activate = body["activate"] === true;
-    if (!activate && !identity.data.enabled) return reply({ enabled: false });
+    const deviceOnly = body["action"] === "register_device";
+    const activate = !deviceOnly && body["activate"] === true;
+    const generation = identity.data.registration_generation;
+    const stale = () => reply({ enabled: false, registered: false, stale: true });
+    if (body["expected_generation"] !== generation) return stale();
+    if (!deviceOnly && !activate && !identity.data.enabled) return reply({ enabled: false });
+    // Snapshot ownership before the network call as well as the account's
+    // generation. The database checks both again while committing.
+    phase = "registration_snapshot";
+    const device = await db
+      .from("push_subscriptions")
+      .select("user_id")
+      .eq("provider", "onesignal")
+      .eq("subscription_id", id)
+      .maybeSingle();
+    if (device.error) throw new Error("database_failed");
     phase = "provider_verification";
     const verified = await oneSignal().subscriptions(identity.data.external_id);
     if (!verified.includes(id as string))
       return reply({ error: "Device not verified yet. Please try again." }, 409);
     phase = "save_subscription";
-    const saved = await db.rpc("register_challenge_push_device", {
+    const saved = await db.rpc("register_challenge_push_device_fenced", {
       _user: uid,
       _subscription: id,
       _external_id: identity.data.external_id,
-      _activate: activate,
+      _generation: generation,
+      _observed_owner: device.data?.user_id ?? null,
+      _mode: deviceOnly ? "device" : activate ? "activate" : "background",
     });
     if (saved.error) throw new Error("database_failed");
-    return reply({ enabled: saved.data === true });
+    if (saved.data === "stale") return stale();
+    const registered = saved.data === "registered";
+    return reply(deviceOnly ? { registered } : { enabled: registered });
   } catch (error) {
     operationalLog("error", "challenge_push_subscription", {
       requestId,
