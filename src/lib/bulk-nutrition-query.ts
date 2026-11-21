@@ -1,4 +1,9 @@
-import { queryOptions, useQuery, type QueryClient } from "@tanstack/react-query";
+import {
+  queryOptions,
+  useQuery,
+  type InvalidateOptions,
+  type QueryClient,
+} from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 import { readRetryDelay, shouldRetryRead } from "./network-errors";
@@ -57,23 +62,33 @@ export async function refreshBulkNutritionTargets(
   client: QueryClient,
   profileId: string,
   logDate: string,
-  targets: NutritionMacros,
+  targets?: NutritionMacros,
+  options?: InvalidateOptions,
 ) {
   const queryKey = bulkNutritionDayQueryKey(profileId, logDate);
-  const { calories, protein, carbs, fat } = targets;
-  client.setQueryData<NutritionDayData>(queryKey, (cached) =>
-    cached?.day
-      ? { ...cached, day: { ...cached.day, targets: { calories, protein, carbs, fat } } }
-      : cached
-        ? { ...cached, effectiveTargets: { calories, protein, carbs, fat } }
-        : cached,
-  );
-  await Promise.all([
-    client.invalidateQueries({ queryKey }),
-    client.invalidateQueries({ queryKey: ["bulk-progress-summary", "nutrition", profileId] }),
-    client.invalidateQueries({ queryKey: ["bulk-weekly-recommendation", profileId] }),
-    client.invalidateQueries({ queryKey: ["goal-settings-dashboard", profileId] }),
+  // Recommendation saves preserve server-side macros; refetch rather than publish stale props.
+  if (targets) {
+    const { calories, protein, carbs, fat } = targets;
+    client.setQueryData<NutritionDayData>(queryKey, (cached) =>
+      cached?.day
+        ? { ...cached, day: { ...cached.day, targets: { calories, protein, carbs, fat } } }
+        : cached
+          ? { ...cached, effectiveTargets: { calories, protein, carbs, fat } }
+          : cached,
+    );
+  }
+  const refreshed = await Promise.allSettled([
+    client.invalidateQueries({ queryKey }, options),
+    client.invalidateQueries(
+      { queryKey: ["bulk-progress-summary", "nutrition", profileId] },
+      options,
+    ),
+    client.invalidateQueries({ queryKey: ["bulk-weekly-recommendation", profileId] }, options),
+    client.invalidateQueries({ queryKey: ["goal-settings-dashboard", profileId] }, options),
+    client.invalidateQueries({ queryKey: ["bulk-today", profileId] }, options),
   ]);
+  const failure = refreshed.find((result) => result.status === "rejected");
+  if (failure) throw failure.reason;
 }
 
 export const bulkNutritionDayQueryOptions = (bulkProfileId: string, logDate: string) =>

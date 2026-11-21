@@ -339,7 +339,10 @@ export async function applyBulkCalorieRecommendation(
   const { data, error } = await supabase.rpc("apply_bulk_calorie_recommendation", {
     _expected_current_calories: expectedCurrentCalories,
     _new_calories: newCalories,
+    _timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
   });
   if (error) throw error;
-  if (!data) throw new Error("Calorie recommendation could not be applied");
+  if (typeof data !== "string" || !data)
+    throw new Error("Calorie recommendation could not be applied");
+  return data;
 }

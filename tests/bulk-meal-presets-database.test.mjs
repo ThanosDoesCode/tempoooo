@@ -1794,23 +1794,32 @@ test("calorie recommendation application is bounded, idempotent and calorie-only
       ownerProfile,
     ])
   ).rows[0].payload;
+  const localDay = (
+    await db.query("SELECT (now() AT TIME ZONE 'Europe/Stockholm')::date::text AS day")
+  ).rows[0].day;
   const current = Number(before.calories);
   const next = Math.floor((current + 150) / 50) * 50;
   assert.equal(
     (
       await asUser(owner, () =>
-        db.query("SELECT public.apply_bulk_calorie_recommendation($1,$2) AS ok", [current, next]),
+        db.query(
+          "SELECT public.apply_bulk_calorie_recommendation($1,$2,'Europe/Stockholm')::text AS ok",
+          [current, next],
+        ),
       )
     ).rows[0].ok,
-    true,
+    localDay,
   );
   assert.equal(
     (
       await asUser(owner, () =>
-        db.query("SELECT public.apply_bulk_calorie_recommendation($1,$2) AS ok", [current, next]),
+        db.query(
+          "SELECT public.apply_bulk_calorie_recommendation($1,$2,'Europe/Stockholm')::text AS ok",
+          [current, next],
+        ),
       )
     ).rows[0].ok,
-    true,
+    localDay,
   );
   const after = (
     await db.query("SELECT payload FROM public.bulk_targets WHERE bulk_profile_id=$1", [
@@ -1823,25 +1832,37 @@ test("calorie recommendation application is bounded, idempotent and calorie-only
   assert.equal(after.fat, before.fat);
   await assert.rejects(
     asUser(owner, () =>
-      db.query("SELECT public.apply_bulk_calorie_recommendation($1,$2)", [current, next + 50]),
+      db.query("SELECT public.apply_bulk_calorie_recommendation($1,$2,'Europe/Stockholm')", [
+        current,
+        next + 50,
+      ]),
     ),
     /another device/i,
   );
   await assert.rejects(
     asUser(owner, () =>
-      db.query("SELECT public.apply_bulk_calorie_recommendation($1,$2)", [next, next + 500]),
+      db.query("SELECT public.apply_bulk_calorie_recommendation($1,$2,'Europe/Stockholm')", [
+        next,
+        next + 500,
+      ]),
     ),
     /outside/i,
   );
   await assert.rejects(
     asUser(owner, () =>
-      db.query("SELECT public.apply_bulk_calorie_recommendation($1,$2)", [next, next + 125]),
+      db.query("SELECT public.apply_bulk_calorie_recommendation($1,$2,'Europe/Stockholm')", [
+        next,
+        next + 125,
+      ]),
     ),
     /outside/i,
   );
   await assert.rejects(
     asAnon(() =>
-      db.query("SELECT public.apply_bulk_calorie_recommendation($1,$2)", [next, next + 150]),
+      db.query("SELECT public.apply_bulk_calorie_recommendation($1,$2,'Europe/Stockholm')", [
+        next,
+        next + 150,
+      ]),
     ),
     /permission denied/i,
   );

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { addDays, format, parseISO } from "date-fns";
 import { useQueryClient } from "@tanstack/react-query";
 import { Camera, Pencil, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { Card, DataError, PendingLabel, SectionTitle } from "@/components/ui-kit";
 import { Button } from "@/components/ui/button";
 import { Link } from "@tanstack/react-router";
@@ -42,6 +43,8 @@ import { CheckInConsistencyCard, ThirtyDayWeightCard } from "@/components/GoalTr
 import { useActiveTrainingPlan } from "@/lib/training-plans-query";
 import type { Targets } from "@/lib/types";
 import { refreshBulk, useAppData } from "@/lib/store";
+import { useAuth } from "@/lib/auth";
+import { refreshBulkNutritionTargets } from "@/lib/bulk-nutrition-query";
 import {
   recommendBulkCalories,
   type BulkWeeklyRecommendation,
@@ -489,7 +492,7 @@ function Metric({ label, value, hint }: { label: string; value: string; hint: st
   );
 }
 
-function WeeklyCheckIn({
+export function WeeklyCheckIn({
   recommendation,
   summary,
   profileId,
@@ -501,18 +504,56 @@ function WeeklyCheckIn({
   goal: "gain" | "cut" | "maintain";
 }) {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState<{
+    profileId: string;
+    day: string;
+    previousCalories: number;
+    calories: number;
+  } | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncError, setSyncError] = useState(false);
+  const confirmed = saved?.profileId === profileId ? saved : null;
+  const alreadyApplied =
+    !!confirmed &&
+    confirmed.previousCalories === recommendation.currentTargetCalories &&
+    confirmed.calories === recommendation.recommendedCalories;
+  const needsRefresh = !!confirmed && syncError;
   const canApply =
     recommendation.decision === "increase_calories" ||
     recommendation.decision === "decrease_calories";
+
+  const refresh = async (day: string) => {
+    setSyncing(true);
+    try {
+      const refreshed = await Promise.allSettled([
+        refreshBulk(),
+        refreshBulkNutritionTargets(queryClient, profileId, day, undefined, { throwOnError: true }),
+        ...(user
+          ? ["streak", "streak-frozen", "streak-run-legs"].map((root) =>
+              queryClient.invalidateQueries({ queryKey: [root, user.id] }, { throwOnError: true }),
+            )
+          : []),
+      ]);
+      setSyncError(refreshed.some((result) => result.status === "rejected"));
+    } catch {
+      setSyncError(true);
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const apply = async () => {
     if (
       !canApply ||
       recommendation.currentTargetCalories == null ||
       recommendation.recommendedCalories == null ||
-      pending
+      pending ||
+      syncing ||
+      alreadyApplied ||
+      needsRefresh
     )
       return;
     if (
@@ -523,20 +564,28 @@ function WeeklyCheckIn({
       return;
     setPending(true);
     setError(null);
+    setSaved(null);
+    let savedDay: string;
     try {
-      await applyBulkCalorieRecommendation(
+      savedDay = await applyBulkCalorieRecommendation(
         recommendation.currentTargetCalories,
         recommendation.recommendedCalories,
       );
-      await refreshBulk();
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["bulk-progress-summary"] }),
-        queryClient.invalidateQueries({ queryKey: ["bulk-weekly-recommendation", profileId] }),
-      ]);
-      const { toast } = await import("sonner");
-      toast.success(`Daily calorie target updated to ${recommendation.recommendedCalories} kcal.`);
     } catch (cause) {
       setError(userFacingError(cause, "apply the calorie recommendation"));
+      setPending(false);
+      return;
+    }
+    // A committed save stays successful even if a subsequent read cannot synchronize.
+    setSaved({
+      profileId,
+      day: savedDay,
+      previousCalories: recommendation.currentTargetCalories,
+      calories: recommendation.recommendedCalories,
+    });
+    try {
+      toast.success(`Daily calorie target updated to ${recommendation.recommendedCalories} kcal.`);
+      await refresh(savedDay);
     } finally {
       setPending(false);
     }
@@ -616,12 +665,37 @@ function WeeklyCheckIn({
       {canApply ? (
         <Button
           type="button"
-          disabled={pending}
+          disabled={pending || syncing || alreadyApplied || needsRefresh}
           className="mt-3 min-h-11 w-full"
           onClick={() => void apply()}
         >
-          {pending ? <PendingLabel>Applying recommendation…</PendingLabel> : "Apply Recommendation"}
+          {pending ? (
+            <PendingLabel>Applying recommendation…</PendingLabel>
+          ) : alreadyApplied ? (
+            "Recommendation applied"
+          ) : (
+            "Apply Recommendation"
+          )}
         </Button>
+      ) : null}
+      {confirmed ? (
+        <p role="status" className="mt-2 text-sm text-primary">
+          Daily calorie target saved: {confirmed.calories} kcal.
+        </p>
+      ) : null}
+      {confirmed && syncError ? (
+        <div className="mt-2 text-sm text-muted-foreground">
+          <p role="status">Your target was saved, but the screen couldn’t refresh.</p>
+          <Button
+            type="button"
+            variant="outline"
+            className="mt-2 min-h-11"
+            disabled={pending || syncing}
+            onClick={() => void refresh(confirmed.day)}
+          >
+            {syncing ? <PendingLabel>Refreshing…</PendingLabel> : "Retry refresh"}
+          </Button>
+        </div>
       ) : null}
       {error ? (
         <p role="alert" className="mt-2 text-xs text-danger">

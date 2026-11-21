@@ -292,6 +292,7 @@ test("public weekly review uses the same frequency fallback without materializin
       "@/lib/private-image-upload": {},
       "@/lib/bulk-progress": bulkProgress,
       "@/lib/bulk-weekly-recommendation": recommendations,
+      "@/lib/bulk-nutrition-query": {},
       "@/components/GoalTrendCards": {},
       "@/lib/bulk-progress-query": {
         useBulkWeights: () => q([]),
