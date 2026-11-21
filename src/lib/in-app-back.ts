@@ -9,6 +9,10 @@ const backHandlers = new WeakMap<
   { dismiss: () => boolean; release?: () => Promise<void> }
 >();
 const pendingPops = new WeakMap<RouterHistory, string>();
+const retiredPaths = new WeakMap<
+  RouterHistory,
+  Map<string, { revision: number; fallback: string }>
+>();
 let account: string | null | undefined;
 let revision = 0;
 
@@ -34,6 +38,11 @@ export function observeNavigationIdentity(userId: string | null) {
 export const navigationRevision = () => revision;
 export const homeFallback = (fitness: boolean) => (fitness ? "/bulk" : "/challenge");
 
+/** A successfully deleted screen is terminal for this document/account, including Forward. */
+export function isRetiredInAppPath(history: RouterHistory | undefined, pathname: string): boolean {
+  return !!history && retiredPaths.get(history)?.get(pathname)?.revision === revision;
+}
+
 /** Overlay/local-step ownership uses the same history, not a second route stack. */
 export function registerBackHandler(
   history: RouterHistory,
@@ -51,6 +60,7 @@ export function registerBackHandler(
 export function trackInAppHistory(history: RouterHistory) {
   if (trails.has(history)) return;
   const entries = new Map<number, Entry>();
+  let previousIndex = history.location.state.__TSR_index;
   trails.set(history, entries);
   rememberedTrails.add(new WeakRef(entries));
   const remember = () => {
@@ -74,12 +84,35 @@ export function trackInAppHistory(history: RouterHistory) {
   };
   remember();
   history.subscribe(({ action }) => {
+    const fromIndex = previousIndex;
+    previousIndex = history.location.state.__TSR_index;
     if (action.type === "PUSH") {
       for (const index of entries.keys()) {
         if (index >= history.location.state.__TSR_index) entries.delete(index);
       }
     }
     remember();
+    if (
+      (action.type === "BACK" || action.type === "FORWARD" || action.type === "GO") &&
+      isRetiredInAppPath(history, history.location.pathname)
+    ) {
+      const currentIndex = history.location.state.__TSR_index;
+      const direction = currentIndex > fromIndex ? 1 : -1;
+      let index = currentIndex + direction;
+      let target = entries.get(index);
+      while (target?.revision === revision && isRetiredInAppPath(history, target.location.pathname))
+        target = entries.get((index += direction));
+      if (target?.revision === revision) history.go(index - currentIndex);
+      else {
+        const previous = entries.get(fromIndex);
+        if (
+          previous?.revision === revision &&
+          !isRetiredInAppPath(history, previous.location.pathname)
+        )
+          history.go(fromIndex - currentIndex);
+        else history.replace(retiredPaths.get(history)!.get(history.location.pathname)!.fallback);
+      }
+    }
   });
 }
 
@@ -97,7 +130,11 @@ function backEntry(
   // An overlay frame's immediate predecessor is its own underlying page, not that page's origin.
   let index = state.__TSR_index - (current.overlay ? 2 : 1);
   let previous = entries?.get(index);
-  while (previous?.overlay && previous.revision === revision) previous = entries?.get(--index);
+  while (
+    previous?.revision === revision &&
+    (previous.overlay || isRetiredInAppPath(history, previous.location.pathname))
+  )
+    previous = entries?.get(--index);
   if (
     !previous ||
     previous.revision !== revision ||
@@ -156,10 +193,27 @@ type BackRouter = {
 export async function safeBack(
   router: BackRouter,
   fallback: string,
-  { parentPath, completed = false }: { parentPath?: string; completed?: boolean } = {},
+  {
+    parentPath,
+    completed = false,
+    terminalPath,
+  }: { parentPath?: string; completed?: boolean; terminalPath?: string } = {},
 ) {
   const history = router.history;
-  if (completed && history) await backHandlers.get(history)?.release?.();
+  const onTerminalScreen = history?.location.pathname === terminalPath;
+  const origin = onTerminalScreen ? inAppBackLocation(history, parentPath) : undefined;
+  if (completed && history && (!terminalPath || onTerminalScreen))
+    await backHandlers.get(history)?.release?.();
+  if (terminalPath && history) {
+    const paths = retiredPaths.get(history) ?? new Map();
+    paths.set(terminalPath, {
+      revision,
+      fallback: origin ? `${origin.pathname}${origin.search}${origin.hash}` : fallback,
+    });
+    retiredPaths.set(history, paths);
+    // An overlay pop may already have left the screen. Never pop that destination again.
+    if (history.location.pathname !== terminalPath) return;
+  }
   if (
     history &&
     (completed ? popToOrigin(history, parentPath) : backWithinApp(history, parentPath))

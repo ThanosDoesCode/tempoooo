@@ -182,9 +182,11 @@ function clearLocalDrafts(session: BulkTrainingSession) {
 export function BulkWorkoutSessionView({
   session,
   progression,
+  onDiscarded,
 }: {
   session: BulkTrainingSession;
   progression: Record<string, BulkProgressionResult>;
+  onDiscarded?: () => void;
 }) {
   const navigate = useNavigate();
   const router = useRouter();
@@ -216,6 +218,7 @@ export function BulkWorkoutSessionView({
   const confirmingSets = useRef(new Set<string>());
   const [restDeadline, setRestDeadline] = useState<number | null>(null);
   const terminalPending = useRef(false);
+  const discardStarted = useRef(false);
   const addPending = useRef(new Set<string>());
   const removePending = useRef(new Set<string>());
   draftsRef.current = drafts;
@@ -275,10 +278,12 @@ export function BulkWorkoutSessionView({
 
   async function persist(setId: string) {
     timers.current.delete(setId);
+    if (discardStarted.current) return;
     const draft = draftsRef.current[setId];
     if (!draft || !dirty.current.has(setId)) return;
     const existing = pending.current.get(setId);
     if (existing) await existing;
+    if (discardStarted.current) return;
     const write = (async () => {
       setSaving((value) => new Set(value).add(setId));
       try {
@@ -329,6 +334,7 @@ export function BulkWorkoutSessionView({
   }
 
   async function flushAll() {
+    if (discardStarted.current) return;
     timers.current.forEach(clearTimeout);
     timers.current.clear();
     await Promise.all([...dirty.current].map(persist));
@@ -337,9 +343,11 @@ export function BulkWorkoutSessionView({
       throw new Error("Some sets still need to be saved.");
   }
 
-  async function refresh() {
+  async function refresh(includeDetail = true) {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["bulk-training-session", session.id] }),
+      ...(includeDetail
+        ? [queryClient.invalidateQueries({ queryKey: ["bulk-training-session", session.id] })]
+        : []),
       queryClient.invalidateQueries({ queryKey: ["bulk-training-session", "active"] }),
       queryClient.invalidateQueries({ queryKey: ["bulk-training-sessions"] }),
       queryClient.invalidateQueries({ queryKey: ["bulk-progression"] }),
@@ -428,6 +436,7 @@ export function BulkWorkoutSessionView({
   async function discard() {
     if (terminalPending.current || addPending.current.size || removePending.current.size) return;
     terminalPending.current = true;
+    discardStarted.current = true;
     setOpenSetId(null);
     setDiscarding(true);
     try {
@@ -435,17 +444,49 @@ export function BulkWorkoutSessionView({
       timers.current.clear();
       await Promise.all([...pending.current.values()]);
       await discardBulkTrainingSession(session.id);
-      dirty.current.clear();
-      clearLocalDrafts(session);
-      await refresh();
-      toast.success("Workout draft discarded");
-      await safeBack({ history: router?.history, navigate }, "/bulk/training", { completed: true });
     } catch (error) {
-      toast.error(userFacingError(error, "discard your workout", { inputPreserved: true }));
-    } finally {
+      discardStarted.current = false;
       terminalPending.current = false;
+      // The deletion failed: retain drafts and resume their normal autosave path.
+      dirty.current.forEach((id) =>
+        timers.current.set(
+          id,
+          setTimeout(() => void persist(id), 400),
+        ),
+      );
+      toast.error(userFacingError(error, "discard your workout", { inputPreserved: true }));
       setDiscarding(false);
       setDiscardDialog(false);
+      return;
+    }
+
+    // Deletion is committed. Keep the terminal guard set even if leaving/refreshing fails.
+    dirty.current.clear();
+    clearLocalDrafts(session);
+    onDiscarded?.();
+    const detailKey = ["bulk-training-session", session.id];
+    const activeKey = ["bulk-training-session", "active", session.bulkProfileId];
+    await Promise.all([
+      queryClient.cancelQueries({ queryKey: detailKey, exact: true }),
+      queryClient.cancelQueries({ queryKey: activeKey, exact: true }),
+    ]);
+    queryClient.setQueryData(detailKey, null);
+    queryClient.setQueryData<BulkTrainingSession | null>(activeKey, (current) =>
+      current?.id === session.id ? null : current,
+    );
+    toast.success("Workout draft discarded");
+    try {
+      await safeBack({ history: router?.history, navigate }, "/bulk/training", {
+        completed: true,
+        terminalPath: `/bulk/workout/${session.id}`,
+      });
+    } catch {
+      toast.error("Workout discarded. Use Back to leave this screen.");
+    }
+    try {
+      await refresh(false);
+    } catch {
+      toast.error("Workout discarded. Could not refresh your training data.");
     }
   }
 
@@ -489,6 +530,7 @@ export function BulkWorkoutSessionView({
   const activeExerciseId = session.exercises[activeIndex]?.id;
   const lastVisibleExercise = useRef(activeExerciseId);
   const workoutHeader = useRef<HTMLElement | null>(null);
+  const exerciseIndicators = useRef<HTMLDivElement | null>(null);
   const exerciseHeading = useRef<HTMLParagraphElement | null>(null);
   useEffect(() => {
     if (lastVisibleExercise.current === activeExerciseId) return;
@@ -506,6 +548,16 @@ export function BulkWorkoutSessionView({
       behavior: "instant",
     });
   }, [activeExerciseId]);
+
+  useEffect(() => {
+    const strip = exerciseIndicators.current;
+    const indicator = strip?.children[activeIndex] as HTMLElement | undefined;
+    if (!strip || !indicator) return;
+    const left = indicator.offsetLeft - strip.offsetLeft;
+    if (left < strip.scrollLeft) strip.scrollLeft = left;
+    else if (left + indicator.offsetWidth > strip.scrollLeft + strip.clientWidth)
+      strip.scrollLeft = left + indicator.offsetWidth - strip.clientWidth;
+  }, [activeIndex]);
 
   if (session.status === "completed") return <CompletedWorkout session={session} />;
 
@@ -567,7 +619,8 @@ export function BulkWorkoutSessionView({
           </Button>
         </div>
         <div
-          className="flex flex-wrap gap-1"
+          ref={exerciseIndicators}
+          className="flex min-w-0 flex-nowrap gap-1 overflow-x-auto overscroll-x-contain"
           aria-label={`${completedSets} of ${totalSets} sets entered`}
         >
           {session.exercises.map((exercise, index) => (
@@ -577,7 +630,7 @@ export function BulkWorkoutSessionView({
               aria-label={`Exercise ${index + 1}: ${exercise.name}`}
               aria-current={index === activeIndex ? "step" : undefined}
               onClick={() => setActiveExerciseIndex(index)}
-              className="flex min-h-11 min-w-11 flex-1 items-center"
+              className="flex min-h-11 min-w-11 flex-1 shrink-0 items-center rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
             >
               <span
                 className={cn(
@@ -847,7 +900,7 @@ export function BulkWorkoutSessionView({
           </div>
         </AlertDialogContent>
       </AlertDialog>
-      <AlertDialog open={discardDialog} onOpenChange={setDiscardDialog}>
+      <AlertDialog open={discardDialog} onOpenChange={setDiscardDialog} dismissible={!discarding}>
         <AlertDialogContent className="w-[calc(100%-2rem)] max-w-sm rounded-[20px] sm:rounded-[20px]">
           <AlertDialogHeader>
             <AlertDialogTitle>Discard this workout?</AlertDialogTitle>
@@ -858,12 +911,19 @@ export function BulkWorkoutSessionView({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="flex-col gap-2 sm:flex-row sm:gap-2 sm:space-x-0">
-            <AlertDialogCancel className="mt-0 min-h-[52px] w-full rounded-[16px] sm:w-auto">
+            <AlertDialogCancel
+              disabled={discarding}
+              className="mt-0 min-h-[52px] w-full rounded-[16px] sm:w-auto"
+            >
               Keep workout
             </AlertDialogCancel>
             <AlertDialogAction
               className="min-h-[52px] w-full rounded-[16px] bg-danger text-white hover:bg-danger/90 sm:w-auto"
-              onClick={() => void discard()}
+              disabled={discarding}
+              onClick={(event) => {
+                event.preventDefault();
+                void discard();
+              }}
             >
               {discarding ? "Discarding..." : "Discard workout"}
             </AlertDialogAction>

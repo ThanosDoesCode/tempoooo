@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFileSync } from "node:fs";
 import { createMemoryHistory, createBrowserHistory } from "@tanstack/history";
+import { createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
 import { createOverlayHistory } from "../src/lib/overlay-history.ts";
 import {
   trackInAppHistory,
@@ -9,12 +10,181 @@ import {
   backWithinApp,
   safeBack,
   observeNavigationIdentity,
+  isRetiredInAppPath,
 } from "../src/lib/in-app-back.ts";
 
 const settle = async () => {
   for (let i = 0; i < 6; i++) await new Promise(setImmediate);
 };
 const read = (file) => readFileSync(new URL(`../${file}`, import.meta.url), "utf8");
+
+async function workoutRouter(t, browser, initial = "/bulk") {
+  const history = browser
+    ? createBrowserHistory({ window: browserWindow(initial) })
+    : createMemoryHistory({ initialEntries: [initial] });
+  trackInAppHistory(history);
+  const root = createRootRoute();
+  const routes = [
+    "/bulk",
+    "/planner",
+    "/bulk/training",
+    "/bulk/workout/$sessionId",
+    "/profile",
+  ].map((path) => createRoute({ getParentRoute: () => root, path }));
+  const router = createRouter({ routeTree: root.addChildren(routes), history, isServer: false });
+  // The same subscription installed by TanStack's React Transitioner, without a second router.
+  const unsubscribe = history.subscribe(router.load);
+  const overlays = fixture(history);
+  t.after(() => {
+    unsubscribe();
+    overlays.controller.destroy();
+    history.destroy();
+  });
+  await router.load();
+  return { ...overlays, router };
+}
+
+for (const browser of [false, true]) {
+  const label = browser ? "asynchronous browser" : "memory";
+  for (const origin of ["/bulk/training?day=2#workouts", "/planner?view=calendar&month=2026-11"]) {
+    test(`${label}: terminal workout discard preserves ${origin}, Back exits once, Forward never reopens deletion`, async (t) => {
+      const f = await workoutRouter(t, browser);
+      await f.router.navigate({ href: origin });
+      await f.router.navigate({ href: "/bulk/workout/deleted" });
+      const finish = f.add("finish");
+      await settle();
+      finish.change(false);
+      f.add("discard");
+      await settle();
+      const length = f.history.length;
+      await safeBack(f.router, "/bulk/training", {
+        completed: true,
+        terminalPath: "/bulk/workout/deleted",
+      });
+      await settle();
+      assert.equal(f.history.location.href, origin);
+      assert.equal(f.router.state.location.href, origin);
+      assert.equal(isRetiredInAppPath(f.history, "/bulk/workout/deleted"), true);
+      assert.equal(f.history.length, length, "discard must not push a parent destination");
+      f.history.back();
+      await settle();
+      assert.equal(f.history.location.href, "/bulk");
+      f.history.forward();
+      await settle();
+      assert.equal(f.history.location.href, origin);
+      for (let i = 0; i < 3; i++) {
+        f.history.forward();
+        await settle();
+        assert.equal(f.history.location.href, origin);
+        assert.equal(f.router.state.location.href, origin);
+      }
+    });
+  }
+
+  test(`${label}: direct workout discard replaces its entry, including nested confirmation frames`, async (t) => {
+    const f = await workoutRouter(t, browser, "/bulk/workout/deleted");
+    f.add("finish");
+    await settle();
+    f.add("discard", 1);
+    await settle();
+    await safeBack(f.router, "/bulk/training", {
+      completed: true,
+      terminalPath: "/bulk/workout/deleted",
+    });
+    await settle();
+    assert.equal(f.history.location.href, "/bulk/training");
+    assert.equal(f.history.location.state.__TSR_index, 0);
+    f.history.forward();
+    await settle();
+    assert.equal(f.history.location.href, "/bulk/training");
+    assert.equal(f.history.location.state.__TSR_index, 0);
+  });
+
+  test(`${label}: minimise/resume stays valid until discard, repeated cycles never reopen removed sessions`, async (t) => {
+    const f = await workoutRouter(t, browser);
+    await f.router.navigate({ href: "/bulk/training" });
+    for (let cycle = 0; cycle < 3; cycle++) {
+      const path = `/bulk/workout/session-${cycle}`;
+      await f.router.navigate({ href: path });
+      await safeBack(f.router, "/bulk/training");
+      await settle();
+      assert.equal(isRetiredInAppPath(f.history, path), false);
+      f.history.forward();
+      await settle();
+      assert.equal(f.history.location.href, path, "a minimised workout remains resumable");
+      await safeBack(f.router, "/bulk/training", { completed: true, terminalPath: path });
+      await settle();
+      assert.equal(f.history.location.href, "/bulk/training");
+      f.history.forward();
+      await settle();
+      assert.equal(f.history.location.href, "/bulk/training");
+      f.history.back();
+      await settle();
+      assert.equal(f.history.location.href, "/bulk");
+      f.history.forward();
+      await settle();
+    }
+  });
+
+  test(`${label}: terminal traversal skips only the deleted route and preserves valid Forward destinations`, async (t) => {
+    const f = await workoutRouter(t, browser);
+    await f.router.navigate({ href: "/bulk/workout/deleted" });
+    await f.router.navigate({ href: "/bulk/training" });
+    await f.router.navigate({ href: "/profile" });
+    f.history.go(-2);
+    await settle();
+    await safeBack(f.router, "/bulk/training", {
+      completed: true,
+      terminalPath: "/bulk/workout/deleted",
+    });
+    await settle();
+    assert.equal(f.history.location.href, "/bulk");
+    f.history.forward();
+    await settle();
+    assert.equal(f.history.location.href, "/bulk/training");
+    f.history.forward();
+    await settle();
+    assert.equal(f.history.location.href, "/profile");
+    f.history.go(-2);
+    await settle();
+    assert.equal(f.history.location.href, "/bulk");
+  });
+
+  test(`${label}: a confirmation close already in flight cannot cause a double exit`, async (t) => {
+    const f = await workoutRouter(t, browser);
+    await f.router.navigate({ href: "/bulk/training" });
+    await f.router.navigate({ href: "/bulk/workout/deleted" });
+    const discard = f.add("discard");
+    await settle();
+    discard.change(false);
+    await Promise.resolve();
+    await safeBack(f.router, "/bulk/training", {
+      completed: true,
+      terminalPath: "/bulk/workout/deleted",
+    });
+    await settle();
+    assert.equal(f.history.location.href, "/bulk/training");
+    f.history.back();
+    await settle();
+    assert.equal(f.history.location.href, "/bulk");
+  });
+
+  test(`${label}: a late successful deletion retires only its own URL if navigation already left it`, async (t) => {
+    const f = await workoutRouter(t, browser);
+    await f.router.navigate({ href: "/bulk/training" });
+    await f.router.navigate({ href: "/bulk/workout/deleted" });
+    await safeBack(f.router, "/bulk/training");
+    await settle();
+    await safeBack(f.router, "/bulk/training", {
+      completed: true,
+      terminalPath: "/bulk/workout/deleted",
+    });
+    await settle();
+    assert.equal(f.history.location.href, "/bulk/training");
+    assert.equal(isRetiredInAppPath(f.history, "/bulk/training"), false);
+    assert.equal(isRetiredInAppPath(f.history, "/bulk/workout/deleted"), true);
+  });
+}
 function fixture(history = createMemoryHistory({ initialEntries: ["/challenge"] })) {
   const controller = createOverlayHistory(history);
   const layers = new Map();

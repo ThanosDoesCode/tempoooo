@@ -1,5 +1,10 @@
 import type { RouterHistory } from "@tanstack/history";
-import { navigationRevision, registerBackHandler, trackInAppHistory } from "./in-app-back.ts";
+import {
+  isRetiredInAppPath,
+  navigationRevision,
+  registerBackHandler,
+  trackInAppHistory,
+} from "./in-app-back.ts";
 
 export type BackLayer = {
   id: string;
@@ -85,6 +90,7 @@ export function createOverlayHistory(
   };
   const sync = () => {
     if (disposed || moving || creating) return;
+    if (isRetiredInAppPath(history, history.location.pathname)) return;
     if (identity !== navigationRevision()) {
       identity = navigationRevision();
       frames.clear();
@@ -154,6 +160,11 @@ export function createOverlayHistory(
     const index = last.state.__TSR_index;
     furthestIndex = action.type === "PUSH" ? index : Math.max(furthestIndex, index);
     const pop = action.type === "BACK" || action.type === "FORWARD" || action.type === "GO";
+    // Terminal traversal is owned by the contextual history helper, not an expired UI frame.
+    if (pop && isRetiredInAppPath(history, last.pathname)) {
+      moving = false;
+      return;
+    }
     const marker = last.state.tempoOverlay;
     const frame = marker ? frames.get(marker) : undefined;
     if (marker && frame && action.type === "REPLACE") frame.href = last.href;

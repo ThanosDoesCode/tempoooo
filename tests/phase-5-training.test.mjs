@@ -1,4 +1,5 @@
 import * as navigation from "../src/lib/in-app-back.ts";
+import { QueryClient, QueryObserver, isCancelledError } from "@tanstack/react-query";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -143,7 +144,11 @@ function fixture(source, exportName, initialProps, options = {}) {
       createFileRoute: () => (config) => config,
     },
     "@tanstack/react-query": {
-      useQueryClient: () => ({ invalidateQueries: async (q) => invalidations.push(q.queryKey) }),
+      useQueryClient: () => ({
+        invalidateQueries: async (q) => invalidations.push(q.queryKey),
+        cancelQueries: async () => {},
+        setQueryData() {},
+      }),
     },
     sonner: {
       toast: { success: (m) => calls.push(["success", m]), error: (m) => calls.push(["error", m]) },
@@ -408,7 +413,7 @@ test("Discard workout is inside Finish confirmation and still requires its separ
     f.render(),
     (n) => n.type === "AlertDialogAction" && text(n) === "Discard workout",
   )[0];
-  confirm.props.onClick();
+  confirm.props.onClick({ preventDefault() {} });
   await new Promise(setImmediate);
   assert.equal(f.calls.filter(([name]) => name === "discardBulkTrainingSession").length, 1);
   assert.equal(f.calls.filter(([name]) => name === "finishBulkTrainingSession").length, 0);
@@ -416,6 +421,235 @@ test("Discard workout is inside Finish confirmation and still requires its separ
   assert.equal(f.destinations[0].href, "/bulk/training");
   assert.equal(f.destinations[0].replace, true);
 });
+
+const discardConfirmation = (f) => {
+  find(f.render(), "Finish").props.onClick();
+  const finish = nodes(f.render(), (n) => n.type === "AlertDialog" && n.props.open)[0];
+  find(finish, "Discard workout").props.onClick();
+  return nodes(
+    f.render(),
+    (n) => n.type === "AlertDialogAction" && text(n).trim() === "Discard workout",
+  )[0];
+};
+
+test("discard waits for pending saves, blocks repeated confirmation, and does not autosave after deletion", async () => {
+  const f = fixture(workoutSource, "BulkWorkoutSessionView", {
+    session: session(),
+    progression: {},
+  });
+  let resolve;
+  f.setBlocker(new Promise((done) => (resolve = done)));
+  setRows(f.render())[0].props.onChange({ bilateralWeight: 20, bilateralReps: 10 });
+  await f.flushTimers();
+  assert.equal(f.calls.filter(([name]) => name === "saveBulkTrainingSet").length, 1);
+  // A queued change must not begin another save once discard has been confirmed.
+  setRows(f.render())[0].props.onChange({ rpe: 8 });
+  const confirm = discardConfirmation(f);
+  let prevented = 0;
+  confirm.props.onClick({ preventDefault: () => prevented++ });
+  confirm.props.onClick({ preventDefault: () => prevented++ });
+  await new Promise(setImmediate);
+  assert.equal(prevented, 2, "Radix must not auto-close/pop while deletion is pending");
+  const dialog = nodes(f.render(), (n) => n.type === "AlertDialog" && n.props.open)[0];
+  assert.equal(dialog.props.dismissible, false);
+  assert.equal(f.calls.filter(([name]) => name === "discardBulkTrainingSession").length, 0);
+  assert.equal(f.storage.size, 1);
+  resolve();
+  await new Promise(setImmediate);
+  await f.flushTimers();
+  confirm.props.onClick({ preventDefault() {} });
+  await new Promise(setImmediate);
+  assert.equal(f.calls.filter(([name]) => name === "discardBulkTrainingSession").length, 1);
+  assert.equal(f.calls.filter(([name]) => name === "saveBulkTrainingSet").length, 1);
+  assert.equal(f.storage.size, 0);
+  assert.equal(f.destinations.length, 1);
+});
+
+test("failed discard retains the workout/draft, does not navigate, and resumes autosave", async () => {
+  const f = fixture(workoutSource, "BulkWorkoutSessionView", {
+    session: session(),
+    progression: {},
+  });
+  setRows(f.render())[0].props.onChange({ bilateralWeight: 20, bilateralReps: 10, rpe: 8 });
+  f.setFail(true);
+  discardConfirmation(f).props.onClick({ preventDefault() {} });
+  await new Promise(setImmediate);
+  assert.equal(f.storage.size, 1);
+  assert.equal(f.destinations.length, 0);
+  assert.equal(f.invalidations.length, 0);
+  assert.equal(setRows(f.render())[0].props.draft.rpe, 8);
+  assert.equal(find(f.render(), "Finish").props.disabled, false);
+  f.setFail(false);
+  await f.flushTimers();
+  assert.equal(f.calls.filter(([name]) => name === "saveBulkTrainingSet").length, 1);
+  assert.equal(f.storage.size, 0);
+});
+
+test("successful discard suppresses unavailable rendering before clearing detail/resume caches; late reads cannot restore them", async () => {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: Infinity } },
+  });
+  const value = session();
+  const key = ["bulk-training-session", value.id];
+  const active = ["bulk-training-session", "active", value.bulkProfileId];
+  client.setQueryData(key, value);
+  client.setQueryData(active, value);
+  client.setQueryData(["bulk-training-session", "active", "another-owner"], { id: "keep" });
+  let resolve;
+  let signal;
+  const queryFn = (context) => {
+    signal = context.signal;
+    return new Promise((done) => (resolve = done));
+  };
+  const observer = new QueryObserver(client, { queryKey: key, queryFn, staleTime: Infinity });
+  let discarded = false;
+  const unavailable = [];
+  const stop = observer.subscribe((result) => {
+    if (result.data === null && !discarded) unavailable.push(true);
+  });
+  const read = client.fetchQuery({ queryKey: key, queryFn, staleTime: 0 });
+  // TanStack may resolve cancellation to its prior cached snapshot. Neither that
+  // reverted result nor the late transport response may restore the deleted cache.
+  const cancelled = read.then(
+    (reverted) => assert.equal(reverted.id, value.id),
+    (error) => assert.ok(isCancelledError(error)),
+  );
+  const f = fixture(
+    workoutSource,
+    "BulkWorkoutSessionView",
+    {
+      session: value,
+      progression: {},
+      onDiscarded() {
+        discarded = true;
+      },
+    },
+    { modules: { "@tanstack/react-query": { useQueryClient: () => client } } },
+  );
+  try {
+    discardConfirmation(f).props.onClick({ preventDefault() {} });
+    await new Promise(setImmediate);
+    assert.equal(discarded, true);
+    assert.deepEqual(unavailable, []);
+    assert.equal(signal.aborted, true);
+    assert.equal(client.getQueryData(key), null);
+    assert.equal(client.getQueryData(active), null);
+    assert.equal(
+      client.getQueryData(["bulk-training-session", "active", "another-owner"]).id,
+      "keep",
+    );
+    resolve(value);
+    await cancelled;
+    await new Promise(setImmediate);
+    assert.equal(client.getQueryData(key), null);
+    assert.equal(f.destinations.length, 1);
+  } finally {
+    stop();
+    client.clear();
+  }
+});
+
+test("navigation/refresh failures after committed discard are never reported as failed deletion", async () => {
+  for (const failNavigation of [true, false]) {
+    const f = fixture(
+      workoutSource,
+      "BulkWorkoutSessionView",
+      { session: session(), progression: {} },
+      {
+        modules: {
+          "@tanstack/react-router": {
+            useRouter: () => undefined,
+            useNavigate: () => async () => {
+              if (failNavigation) throw new Error("navigation failed");
+            },
+            Link: "Link",
+          },
+          "@tanstack/react-query": {
+            useQueryClient: () => ({
+              cancelQueries: async () => {},
+              setQueryData() {},
+              invalidateQueries: async () => {
+                if (!failNavigation) throw new Error("refresh failed");
+              },
+            }),
+          },
+        },
+      },
+    );
+    discardConfirmation(f).props.onClick({ preventDefault() {} });
+    await new Promise(setImmediate);
+    assert.ok(f.calls.some(([kind]) => kind === "success"));
+    assert.deepEqual(
+      f.calls.filter(([kind]) => kind === "error").map(([, message]) => message),
+      [
+        failNavigation
+          ? "Workout discarded. Use Back to leave this screen."
+          : "Workout discarded. Could not refresh your training data.",
+      ],
+    );
+    assert.equal(f.storage.size, 0);
+    assert.equal(find(f.render(), "Finish").props.disabled, true);
+  }
+});
+
+for (const width of [320, 375, 390, 430])
+  for (const count of [1, 3, 5, 8, 12])
+    test(`${width}px workout with ${count} exercises keeps one accessible, ordered indicator strip`, () => {
+      const exercises = Array.from({ length: count }, (_, i) => exercise(`exercise-${i + 1}`));
+      const f = fixture(workoutSource, "BulkWorkoutSessionView", {
+        session: session({ exercises }),
+        progression: {},
+      });
+      const strip = nodes(
+        f.render(),
+        (n) => n.props.ref && n.props.className?.includes("overflow-x-auto"),
+      )[0];
+      assert.ok(strip);
+      assert.match(strip.props.className, /flex-nowrap/);
+      assert.doesNotMatch(strip.props.className, /flex-wrap(?:\s|$)/);
+      const buttons = nodes(strip, (n) => n.type === "button");
+      assert.equal(buttons.length, count);
+      buttons.forEach((button, i) => {
+        assert.match(button.props.className, /min-h-11 min-w-11/);
+        assert.equal(button.props["aria-label"], `Exercise ${i + 1}: ${exercises[i].name}`);
+        button.props.onClick();
+        const visible = nodes(f.render(), (n) => n.type === "section" && !n.props.hidden);
+        assert.equal(visible[0].props["aria-label"], exercises[i].name);
+      });
+      const viewport = width - 40;
+      const innerWidth = Math.max(viewport, count * 44 + (count - 1) * 4);
+      assert.ok(innerWidth >= viewport);
+      assert.match(strip.props.className, /min-w-0.*overflow-x-auto/);
+    });
+
+for (const width of [320, 375, 390, 430])
+  test(`${width}px indicator strip reveals the selected exercise without scrolling the page`, () => {
+    const f = fixture(workoutSource, "BulkWorkoutSessionView", {
+      session: session({ exercises: Array.from({ length: 12 }, (_, i) => exercise(`ex${i}`)) }),
+      progression: {},
+    });
+    const strip = nodes(f.render(), (n) => n.props.className?.includes("overflow-x-auto"))[0];
+    const viewport = {
+      children: Array.from({ length: 12 }, (_, i) => ({
+        offsetLeft: 20 + i * 48,
+        offsetWidth: 44,
+      })),
+      offsetLeft: 20,
+      scrollLeft: 0,
+      clientWidth: width - 40,
+    };
+    strip.props.ref.current = viewport;
+    f.runEffects();
+    const buttons = nodes(strip, (n) => n.type === "button");
+    buttons[11].props.onClick();
+    f.render();
+    f.runEffects();
+    assert.equal(viewport.scrollLeft, 11 * 48 + 44 - viewport.clientWidth);
+    buttons[0].props.onClick();
+    f.render();
+    f.runEffects();
+    assert.equal(viewport.scrollLeft, 0);
+  });
 
 test("compact Finish confirmation keeps balanced 48px actions and cancellation leaves the workout untouched", () => {
   const value = session({
