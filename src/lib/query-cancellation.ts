@@ -9,6 +9,7 @@ const USER_SCOPED_QUERY_ROOTS = new Set([
   "bulk-exercise-library",
   "bulk-training-plan-templates",
   "bulk-training-plan",
+  "bulk-training-plan-detail",
   "bulk-training-session",
   "bulk-training-sessions",
   "bulk-progression",
@@ -24,11 +25,18 @@ const USER_SCOPED_QUERY_ROOTS = new Set([
   "challenge",
   "challenge-members",
   "challenge-activities",
+  "challenge-activity",
   "challenge-travel-pauses",
   "challenge-weeks",
   "challenge-payments",
   "challenge-invitations",
+  "challenge-outgoing-invitation",
+  "challenge-week-targets",
+  "challenge-adjustments",
   "account-notifications",
+  "streak",
+  "streak-frozen",
+  "streak-run-legs",
 ]);
 
 export function isExpectedQueryCancellation(error: unknown): boolean {

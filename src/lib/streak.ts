@@ -1,6 +1,6 @@
 import { queryOptions, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "./auth";
+import { assertCurrentAuthIdentity, captureAuthIdentity, useAuth } from "./auth";
 import { useBulkMeta } from "./store";
 import { useCompletedSessionDates } from "./bulk-training-sessions";
 import { useBulkProgressNutrition } from "./bulk-progress-query";
@@ -21,13 +21,20 @@ import {
 
 export const localTimezone = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-export const streakQueryOptions = () => {
+export const streakQueryOptions = (userId: string | null) => {
   const tz = localTimezone();
   return queryOptions({
-    queryKey: ["streak", tz],
+    queryKey: ["streak", userId, tz],
+    enabled: !!userId,
     staleTime: 60_000,
-    queryFn: async (): Promise<StreakData> => {
-      const { data, error } = await supabase.rpc("recompute_streak", { _timezone: tz });
+    queryFn: async ({ signal }): Promise<StreakData> => {
+      const revision = captureAuthIdentity();
+      // Account cleanup refetches active observers; an old observer must not read as the new user.
+      assertCurrentAuthIdentity(revision, signal, userId);
+      const { data, error } = await supabase
+        .rpc("recompute_streak", { _timezone: tz })
+        .abortSignal(signal);
+      assertCurrentAuthIdentity(revision, signal, userId);
       if (error) throw error;
       return parseStreakResponse(data);
     },
@@ -35,7 +42,10 @@ export const streakQueryOptions = () => {
 };
 
 /** The authoritative streak: headline (locked weeks only), this week's rings, recent weeks. */
-export const useStreak = () => useQuery(streakQueryOptions());
+export const useStreak = () => {
+  const { user } = useAuth();
+  return useQuery(streakQueryOptions(user?.id ?? null));
+};
 
 export type RingProgress =
   | { kind: "count"; current: number; target: number | null; unit?: string }
@@ -43,17 +53,22 @@ export type RingProgress =
 export type ThisWeekRingProgress = Partial<Record<RingKey, RingProgress>>;
 
 /** Frozen Train/Eat targets for a streak week (owner-scoped read of the persisted row). */
-function useStreakFrozen(weekStart: string | null, enabled: boolean) {
+function useStreakFrozen(userId: string | null, weekStart: string | null, enabled: boolean) {
   return useQuery({
-    queryKey: ["streak-frozen", weekStart],
-    enabled: enabled && !!weekStart,
+    queryKey: ["streak-frozen", userId, weekStart],
+    enabled: enabled && !!userId && !!weekStart,
     staleTime: 60_000,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
+      const revision = captureAuthIdentity();
+      assertCurrentAuthIdentity(revision, signal, userId);
       const { data, error } = await supabase
         .from("streak_weeks")
         .select("train_target_workouts,eat_required_days")
+        .eq("user_id", userId!)
         .eq("week_start", weekStart!)
+        .abortSignal(signal)
         .maybeSingle();
+      assertCurrentAuthIdentity(revision, signal, userId);
       if (error) throw error;
       return {
         trainTarget: data?.train_target_workouts ?? null,
@@ -70,6 +85,7 @@ function useStreakFrozen(weekStart: string | null, enabled: boolean) {
  */
 export function useThisWeekRingProgress(thisWeek: StreakThisWeek | null): ThisWeekRingProgress {
   const { user } = useAuth();
+  const userId = user?.id ?? null;
   const { bulkId } = useBulkMeta();
   const weekStart = thisWeek?.weekStart ?? null;
   const weekEnd = thisWeek?.weekEnd ?? weekStart ?? "";
@@ -83,16 +99,21 @@ export function useThisWeekRingProgress(thisWeek: StreakThisWeek | null): ThisWe
   // (whose end instant may map to a different account week) — use each leg's own challenge + week.
   const legs =
     useQuery({
-      queryKey: ["streak-run-legs", weekStart],
-      enabled: runActive && !!weekStart,
+      queryKey: ["streak-run-legs", userId, weekStart],
+      enabled: runActive && !!userId && !!weekStart,
       staleTime: 60_000,
-      queryFn: async () => {
+      queryFn: async ({ signal }) => {
+        const revision = captureAuthIdentity();
+        assertCurrentAuthIdentity(revision, signal, userId);
         const { data, error } = await supabase
           .from("streak_week_run_legs")
           .select(
             "source_challenge_id,challenge_week_number,challenge_week_start,challenge_week_end,target_km,settlement_state",
           )
-          .eq("week_start", weekStart!);
+          .eq("user_id", userId!)
+          .eq("week_start", weekStart!)
+          .abortSignal(signal);
+        assertCurrentAuthIdentity(revision, signal, userId);
         if (error) throw error;
         return data ?? [];
       },
@@ -108,7 +129,7 @@ export function useThisWeekRingProgress(thisWeek: StreakThisWeek | null): ThisWe
       : undefined,
   );
 
-  const frozen = useStreakFrozen(weekStart, trainActive || eatActive);
+  const frozen = useStreakFrozen(userId, weekStart, trainActive || eatActive);
   const sessions = useCompletedSessionDates(trainActive ? bulkId : null, weekStart ?? "", weekEnd);
   const nutrition = useBulkProgressNutrition(eatActive ? bulkId : null, weekStart, weekEnd);
 

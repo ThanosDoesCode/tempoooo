@@ -146,6 +146,34 @@ test("account changes clear private query data without removing active queries",
   unsubscribe();
 });
 
+test("account cleanup clears streak and verified private detail roots, including old key shapes", async () => {
+  const client = new QueryClient();
+  const keys = [
+    ["streak", "Europe/Stockholm"],
+    ["streak-frozen", "2026-11-16"],
+    ["streak-run-legs", "2026-11-16"],
+    ["streak", "owner-a", "Europe/Stockholm"],
+    ["streak-frozen", "owner-a", "2026-11-16"],
+    ["streak-run-legs", "owner-a", "2026-11-16"],
+    ["challenge-outgoing-invitation", "challenge-a"],
+    ["challenge-week-targets", "challenge-a"],
+    ["challenge-adjustments", "challenge-a"],
+    ["challenge-activity", "activity-a"],
+    ["bulk-training-plan-detail", "plan-a"],
+  ];
+  try {
+    for (const key of keys) client.setQueryData(key, { owner: "owner-a" });
+    client.setQueryData(["public-unrelated"], "keep");
+
+    await resetUserScopedQueries(client);
+
+    for (const key of keys) assert.equal(client.getQueryData(key), undefined, key.join("/"));
+    assert.equal(client.getQueryData(["public-unrelated"]), "keep");
+  } finally {
+    client.clear();
+  }
+});
+
 test("TanStack cancellations recover while unexpected errors still reach crash UI", async () => {
   const [boundary, root, bulk] = await Promise.all([
     read("src/components/AppCrashBoundary.tsx"),
