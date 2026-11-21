@@ -1,3 +1,4 @@
+import * as navigation from "../src/lib/in-app-back.ts";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -56,6 +57,10 @@ function fixture(distance, duration = "", type = "run", storageThrows = false) {
       },
     },
     require(name) {
+      if (name === "@/lib/in-app-back") return navigation;
+      if (name.endsWith("HistoryBackLink")) return { HistoryBackLink: "HistoryBackLink" };
+      if (name.endsWith("UnsavedSettingsDialog"))
+        return { UnsavedSettingsDialog: "UnsavedSettingsDialog" };
       if (name === "react")
         return {
           useState: () => {
@@ -74,6 +79,7 @@ function fixture(distance, duration = "", type = "run", storageThrows = false) {
         return {
           createFileRoute: () => (v) => ({ ...v, useSearch: () => ({}), useParams: () => ({}) }),
           useNavigate: () => () => {},
+          useRouter: () => undefined,
           useBlocker: () => ({ status: "idle" }),
         };
       if (name === "@tanstack/react-query")

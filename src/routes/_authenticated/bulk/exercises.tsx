@@ -1,3 +1,4 @@
+import { UnsavedSettingsDialog } from "@/components/UnsavedSettingsDialog";
 import { NativeSelect } from "@/components/ui/native-select";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { ChevronDown, Plus } from "lucide-react";
@@ -250,6 +251,10 @@ function ExerciseLibraryPage() {
 
   return (
     <AppShell>
+      <UnsavedSettingsDialog
+        dirty={!!name.trim() && !saving}
+        description="Your custom exercise hasn’t been saved."
+      />
       <PageHeader
         title={addingToWorkout ? "Add to workout" : "Exercises"}
         subtitle={

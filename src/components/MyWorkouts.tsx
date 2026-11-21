@@ -352,6 +352,7 @@ export function WorkoutDeleteDialog({
   }
   return (
     <AlertDialog
+      dismissible={!saving}
       open
       onOpenChange={(open) => {
         if (!open && !pending.current) onClose();

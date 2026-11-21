@@ -267,8 +267,8 @@ test("inbox uses shared contextual Back, while Profile retains a separate push-s
   });
   assert.deepEqual(plain(ui.find("PageHeader")[0].props), {
     title: "Notifications",
-    backTo: "/bulk",
-    backLabel: "Today",
+    backTo: "/today",
+    backLabel: "Home",
   });
   assert.equal(ui.find("AccountNotificationInbox").length, 1);
   const profile = read("src/routes/_authenticated/profile.tsx");

@@ -12,7 +12,29 @@ export function presentationComponent(file, modules = {}, globals = {}) {
     ...globals,
     exports: {},
     require(name) {
-      if (modules[name]) return modules[name];
+      if (modules[name])
+        return name === "@tanstack/react-router"
+          ? { useRouter: () => undefined, ...modules[name] }
+          : modules[name];
+      if (name === "@/lib/in-app-back" || name === "./in-app-back")
+        return require("../src/lib/in-app-back.ts");
+      if (name === "@/lib/overlay-history") return require("../src/lib/overlay-history.ts");
+      if (name === "@/components/ui/dialog-root")
+        return modules["@radix-ui/react-dialog"] ?? require("@radix-ui/react-dialog");
+      if (name === "./NavigationOverlay" || name === "@/components/NavigationOverlay")
+        return presentationComponent(
+          "src/components/NavigationOverlay.tsx",
+          {
+            ...modules,
+            "@tanstack/react-router": {
+              useRouter: () => undefined,
+              ...modules["@tanstack/react-router"],
+            },
+          },
+          globals,
+        );
+      if (name === "@/components/UnsavedSettingsDialog")
+        return presentationComponent("src/components/UnsavedSettingsDialog.tsx", modules, globals);
       if (name === "./workout-plan-copy" || name === "@/lib/workout-plan-copy")
         return require("../src/lib/workout-plan-copy.ts");
       if (name === "./StreakHeadline" || name === "@/components/StreakHeadline")

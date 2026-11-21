@@ -32,6 +32,7 @@ export function ProgressNav({ active }: { active: ProgressSection }) {
           <Link
             key={section}
             to={to}
+            replace
             preload="intent"
             aria-current={on ? "page" : undefined}
             className={`flex min-h-11 min-w-0 items-center justify-center rounded-[10px] px-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring min-[360px]:px-1 ${

@@ -277,7 +277,7 @@ test("core users reach the streak from Challenge (flame gated to core), not from
 test("/streak is account-level, keeps the bottom nav, and uses contextual Back by mode", async () => {
   const screen = await read("src/routes/_authenticated/streak.tsx");
   assert.match(screen, /createFileRoute\("\/_authenticated\/streak"\)/);
-  assert.match(screen, /backTo=\{core \? "\/challenge" : "\/bulk"\}/);
+  assert.match(screen, /backTo=\{homeFallback\(!core\)\}/);
   assert.match(screen, /backLabel=\{core \? "Challenge" : "Today"\}/);
   // Not a focus screen: the bottom nav stays, and no wrong tab is force-highlighted.
   assert.equal(isFocusScreen("/streak"), false);

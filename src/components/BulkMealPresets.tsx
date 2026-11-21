@@ -1,3 +1,4 @@
+import { UnsavedSettingsDialog } from "@/components/UnsavedSettingsDialog";
 import { MealDeleteDialog } from "./MealDeleteDialog";
 import { NativeSelect } from "@/components/ui/native-select";
 import { useQueryClient } from "@tanstack/react-query";
@@ -137,6 +138,10 @@ export function BulkMealPresets({ bulkProfileId }: { bulkProfileId: string }) {
   const rows = meals.data ?? [];
   return (
     <div className="min-w-0 space-y-3">
+      <UnsavedSettingsDialog
+        dirty={!!editor && draftSignature(editor.draft) !== editor.initial && pending === null}
+        description="Your meal preset edits haven’t been saved."
+      />
       <MealDeleteDialog
         preset
         name={deleteMeal?.name ?? ""}

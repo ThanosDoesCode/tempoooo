@@ -1,11 +1,10 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Image as ImageIcon, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { resolveEvidenceUrls, type EvidenceResolution } from "@/lib/challenge-evidence-viewer";
 import { reportLovableError } from "@/lib/lovable-error-reporting";
-
-const HISTORY_MARKER = "__tempoChallengeEvidenceViewer";
+import { useOverlayBack } from "./NavigationOverlay";
 
 type ViewerState = { status: "idle" | "loading" } | EvidenceResolution;
 
@@ -20,7 +19,6 @@ export function ChallengeEvidenceViewer({
   /** "inline" is a compact row button; "panel" is the large tappable screenshot area. */
   variant?: "inline" | "panel";
 }) {
-  const viewerId = useId();
   const requestId = useRef(0);
   const [open, setOpen] = useState(false);
   const [state, setState] = useState<ViewerState>({ status: "idle" });
@@ -31,14 +29,7 @@ export function ChallengeEvidenceViewer({
     setOpen(false);
   };
 
-  const close = () => {
-    const historyState = window.history.state as Record<string, unknown> | null;
-    if (historyState?.[HISTORY_MARKER] === viewerId) {
-      window.history.back();
-      return;
-    }
-    closeLocally();
-  };
+  const close = closeLocally;
 
   const load = async () => {
     const activeRequest = ++requestId.current;
@@ -70,40 +61,29 @@ export function ChallengeEvidenceViewer({
   };
 
   const show = () => {
-    const currentState = window.history.state;
-    const preservedState =
-      currentState && typeof currentState === "object"
-        ? (currentState as Record<string, unknown>)
-        : {};
-    window.history.pushState({ ...preservedState, [HISTORY_MARKER]: viewerId }, "");
     setOpen(true);
     void load();
   };
+  useOverlayBack(open, (next) => {
+    if (next) show();
+    else closeLocally();
+  });
 
   useEffect(() => {
     if (!open) return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
-    const closeFromViewerHistory = () => {
-      requestId.current += 1;
-      setOpen(false);
-    };
-    const onPopState = () => closeFromViewerHistory();
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
-      const historyState = window.history.state as Record<string, unknown> | null;
-      if (historyState?.[HISTORY_MARKER] === viewerId) window.history.back();
-      else closeFromViewerHistory();
+      closeLocally();
     };
-    window.addEventListener("popstate", onPopState);
     window.addEventListener("keydown", onKeyDown);
     return () => {
-      window.removeEventListener("popstate", onPopState);
       window.removeEventListener("keydown", onKeyDown);
       document.body.style.overflow = previousOverflow;
     };
-  }, [open, viewerId]);
+  }, [open]);
 
   if (paths.length === 0) return null;
 

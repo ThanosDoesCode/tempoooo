@@ -1,3 +1,5 @@
+import { UnsavedSettingsDialog } from "@/components/UnsavedSettingsDialog";
+import { safeBack } from "@/lib/in-app-back";
 import { MealDeleteDialog } from "./MealDeleteDialog";
 import { NutritionDateStrip } from "./NutritionDateStrip";
 import { NativeSelect } from "@/components/ui/native-select";
@@ -13,7 +15,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { format, parseISO } from "date-fns";
 import { ChevronDown, Pencil, Plus, Trash2 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
@@ -83,6 +85,7 @@ export function BulkNutritionLog({
 }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const router = useRouter();
   const mutationBusy = useRef(false);
   const savedQuickPreset = useRef<string | null>(null);
   const selectedPreset = useRef<string | null>(null);
@@ -201,7 +204,10 @@ export function BulkNutritionLog({
       await invalidate();
       toast.success(editor.entry ? "Entry updated" : "Entry added");
       setEditor(null);
-      if (mode === "add") void navigate({ to: "/bulk/meals", search: { date: selectedDate } });
+      if (mode === "add")
+        void safeBack({ history: router?.history, navigate }, `/bulk/meals?date=${selectedDate}`, {
+          completed: true,
+        });
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : "";
       setError(
@@ -272,6 +278,10 @@ export function BulkNutritionLog({
 
   return (
     <div className="min-w-0 space-y-4">
+      <UnsavedSettingsDialog
+        dirty={editorDirty && pending === null && discardPending === null}
+        description="Your meal details haven’t been saved."
+      />
       <MealDeleteDialog
         name={deleteEntry?.name ?? ""}
         open={deleteEntry != null}

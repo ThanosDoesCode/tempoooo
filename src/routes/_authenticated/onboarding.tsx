@@ -1,3 +1,4 @@
+import { useOverlayBack } from "@/components/NavigationOverlay";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { Dumbbell, Salad, Target, Trophy, type LucideIcon } from "lucide-react";
@@ -32,6 +33,13 @@ function AccountOnboarding() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const completing = useRef(false);
+  useOverlayBack(
+    step > 0 && !establishedNeedsUsername,
+    (open) => {
+      if (!open) setStep(step === 2 ? 1 : 0);
+    },
+    { kind: "step", dismissible: !busy },
+  );
   const normalized = normalizeUsername(username);
   const validationError = username ? usernameValidationError(username) : null;
 

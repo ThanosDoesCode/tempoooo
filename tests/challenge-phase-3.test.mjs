@@ -239,7 +239,7 @@ test("successful create invalidates challenge caches before navigating to Waitin
   );
   // …and do so BEFORE navigating, with no setTimeout hack.
   const invalidateAt = block.indexOf("invalidateQueries");
-  const navigateAt = block.indexOf('navigate({ to: "/challenge" })');
+  const navigateAt = block.indexOf("safeBack(");
   assert.ok(invalidateAt > 0 && navigateAt > invalidateAt, "invalidate precedes navigate");
   assert.doesNotMatch(block, /setTimeout/);
   assert.match(create, /const qc = useQueryClient\(\)/);

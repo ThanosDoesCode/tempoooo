@@ -1,3 +1,4 @@
+import * as navigation from "../src/lib/in-app-back.ts";
 import { presentationComponent } from "./presentation-component-fixture.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -74,6 +75,7 @@ function fixture(source, exportName, props, options = {}) {
       useQueryClient: () => ({ invalidateQueries: async (c) => cache.push(c.queryKey) }),
     },
     "@tanstack/react-router": {
+      useRouter: () => undefined,
       Link: "Link",
       useNavigate: () => async (d) => destinations.push(d),
       createFileRoute: () => (config) => config,
@@ -126,6 +128,10 @@ function fixture(source, exportName, props, options = {}) {
     crypto: { randomUUID: () => `request-${++uuid}` },
     window: { confirm: () => true },
     require(name) {
+      if (name === "@/lib/in-app-back") return navigation;
+      if (name.endsWith("HistoryBackLink")) return { HistoryBackLink: "HistoryBackLink" };
+      if (name.endsWith("UnsavedSettingsDialog"))
+        return { UnsavedSettingsDialog: "UnsavedSettingsDialog" };
       if (options.modules?.[name]) return options.modules[name];
       if (modules[name]) return modules[name];
       if (name === "date-fns") return require(name);
@@ -265,7 +271,8 @@ test("Phase 4 check-in writes today's owner weight and yesterday's steps, guards
     8000,
   );
   assert.ok(f.cache.some((key) => key[0] === "bulk-weight-entries"));
-  assert.equal(f.destinations[0].to, "/bulk");
+  assert.equal(f.destinations[0].href, "/bulk");
+  assert.equal(f.destinations[0].replace, true);
 });
 
 test("Phase 4 failed check-in preserves values, stays on form and retries without fabricated success", async () => {
@@ -425,8 +432,8 @@ test("Phase 4 custom meal preserves date/macros, clears on confirmed success and
   for (const key of ["calories", "protein", "carbs", "fat"])
     assert.equal(calls[0][3][key], entry[key]);
   assert.equal(find(f.render(), "NutritionEntryEditor"), undefined);
-  assert.equal(f.destinations[0].to, "/bulk/meals");
-  assert.equal(f.destinations[0].search.date, "2026-10-03");
+  assert.equal(f.destinations[0].href, "/bulk/meals?date=2026-10-03");
+  assert.equal(f.destinations[0].replace, true);
   assert.ok(f.cache.some((k) => k[0] === "nutrition" && k[2] === "2026-10-03"));
 });
 

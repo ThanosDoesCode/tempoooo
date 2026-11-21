@@ -1,5 +1,8 @@
+import { useOverlayBack } from "@/components/NavigationOverlay";
+import { UnsavedSettingsDialog } from "@/components/UnsavedSettingsDialog";
+import { safeBack } from "@/lib/in-app-back";
 import { NativeSelect } from "@/components/ui/native-select";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, useRouter } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { addDays, format, parseISO, startOfWeek } from "date-fns";
 import { useEffect, useRef, useState } from "react";
@@ -45,6 +48,7 @@ function NewChallenge() {
   const { step = 1 } = Route.useSearch();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const router = useRouter();
   const qc = useQueryClient();
   const myProfile = useAccountProfile(user?.id);
 
@@ -78,6 +82,28 @@ function NewChallenge() {
   const createLock = useRef(false);
   const creation = useRef<{ requestId: string; token: string } | null>(null);
 
+  const signature = JSON.stringify({
+    username,
+    length,
+    target,
+    penaltyMode,
+    highPenalty,
+    mediumPenalty,
+    lowPenalty,
+    highCustom,
+    mediumCustom,
+    lowCustom,
+    travelPauseEnabled,
+    homeCountries,
+  });
+  const initialSignature = useRef(signature);
+
+  const lastStep = useRef(step);
+  if (step > 1) lastStep.current = step;
+  useOverlayBack(step > 1, (open) => goStep(open ? lastStep.current : ((step - 1) as 1 | 2 | 3)), {
+    kind: "step",
+    dismissible: !busy,
+  });
   const normalized = normalizeUsername(username);
   const formatError = usernameValidationError(username);
   const isSelf = !!myProfile.data?.username && normalized === myProfile.data.username;
@@ -134,7 +160,7 @@ function NewChallenge() {
   const step1Valid = !formatError && !isSelf && usernameState === "found" && targetValid;
 
   const goStep = (next: 1 | 2 | 3) =>
-    void navigate({ to: "/challenge/new", search: { step: next } });
+    void navigate({ to: "/challenge/new", search: { step: next }, replace: true });
 
   const create = async () => {
     if (!user || createLock.current) return;
@@ -178,7 +204,10 @@ function NewChallenge() {
       await qc.invalidateQueries({
         predicate: (query) => String(query.queryKey[0]).startsWith("challenge"),
       });
-      void navigate({ to: "/challenge" });
+      initialSignature.current = signature;
+      void safeBack({ history: router?.history, navigate }, "/challenge", {
+        completed: true,
+      });
     } catch (e) {
       setError(challengeUsernameError(e, username));
     } finally {
@@ -191,12 +220,17 @@ function NewChallenge() {
 
   return (
     <AppShell>
+      <UnsavedSettingsDialog
+        ignoreSearch
+        dirty={signature !== initialSignature.current && !busy}
+        description="Your challenge setup hasn’t been saved."
+      />
       <div className="flex min-h-[calc(100dvh-4rem)] flex-col gap-[18px]">
         <div className="flex items-center justify-between">
           {step === 1 ? (
             <button
               type="button"
-              onClick={() => void navigate({ to: "/challenge" })}
+              onClick={() => void safeBack({ history: router?.history, navigate }, "/challenge")}
               className="flex h-11 items-center text-[15px] text-muted-foreground"
             >
               Cancel

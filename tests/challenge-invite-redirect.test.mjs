@@ -61,7 +61,7 @@ test("username invitations let both creator and recipient open the Challenge", a
   assert.doesNotMatch(createRoute, /Copy link|navigator\.clipboard|setLink\(/);
 
   // After sending the invite the creator lands on the Challenge (Waiting) screen.
-  assert.match(createRoute, /void navigate\(\{ to: "\/challenge" \}\)/);
+  assert.match(createRoute, /void safeBack\([\s\S]*?"\/challenge"/);
 
   // The recipient sees their pending invitation and accepts it through the authenticated boundary.
   assert.match(invitationQuery, /listMyChallengeInvitations\(\)/);

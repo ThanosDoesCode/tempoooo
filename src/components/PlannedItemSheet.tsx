@@ -45,6 +45,7 @@ export function PlannedItemSheet({
   profileId,
   today,
   onClose,
+  onReopen,
 }: {
   item: PlannedActivity | null | undefined;
   open: boolean;
@@ -52,9 +53,14 @@ export function PlannedItemSheet({
   profileId: string | null;
   today: string;
   onClose: () => void;
+  onReopen?: () => void;
 }) {
   return (
-    <Drawer open={open} onOpenChange={(next) => !next && onClose()} shouldScaleBackground={false}>
+    <Drawer
+      open={open}
+      onOpenChange={(next) => (next ? onReopen?.() : onClose())}
+      shouldScaleBackground={false}
+    >
       {open ? (
         <DrawerContent
           aria-describedby={undefined}

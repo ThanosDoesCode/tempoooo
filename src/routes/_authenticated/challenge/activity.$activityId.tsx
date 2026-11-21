@@ -1,4 +1,5 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { safeBack } from "@/lib/in-app-back";
+import { createFileRoute, Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { format, parseISO } from "date-fns";
@@ -30,6 +31,7 @@ function ActivityDetail() {
   const { activityId } = Route.useParams();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const router = useRouter();
   const qc = useQueryClient();
   const challengeQuery = useMyChallenge();
   const challenge = challengeQuery.data;
@@ -55,7 +57,9 @@ function ActivityDetail() {
       if (e) throw e;
       await qc.invalidateQueries({ queryKey: ["challenge-activities"] });
       await qc.invalidateQueries({ queryKey: ["challenge-activity", activity.id] });
-      void navigate({ to: "/challenge" });
+      void safeBack({ history: router?.history, navigate }, "/challenge", {
+        completed: true,
+      });
     } catch (e) {
       setDeleteError(userFacingError(e, "delete the activity"));
       setDeleting(false);

@@ -1,21 +1,70 @@
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useBlocker } from "@tanstack/react-router";
-import * as Dialog from "@radix-ui/react-dialog";
+import * as Dialog from "@/components/ui/dialog-root";
+import { useOverlayBack } from "./NavigationOverlay";
 
 /** One router/history guard for the existing Goal editors, including browser Back. */
-export function UnsavedSettingsDialog({ dirty }: { dirty: boolean }) {
+export function UnsavedSettingsDialog({
+  dirty,
+  description = "Your unsaved target edits will be lost. Saved settings and history are unchanged.",
+  ignoreSearch = false,
+}: {
+  dirty: boolean;
+  description?: string;
+  ignoreSearch?: boolean;
+}) {
   const returnFocus = useRef<HTMLElement | null>(null);
-  const blocker = useBlocker({
-    shouldBlockFn: () => dirty,
+  const [blocked, setBlocked] = useState(false);
+  const pending = useRef<((block: boolean) => void) | null>(null);
+  const resolve = (leave: boolean) => {
+    const finish = pending.current;
+    pending.current = null;
+    setBlocked(false);
+    finish?.(!leave);
+  };
+  useBlocker({
+    // Same-screen picker/overlay history does not discard the form. Its own Cancel/date
+    // controls retain their existing draft checks; a real route exit is guarded here.
+    shouldBlockFn: ({ current, next }) => {
+      if (pending.current) {
+        resolve(false);
+        return true;
+      }
+      if (
+        !dirty ||
+        (current.pathname === next.pathname &&
+          (ignoreSearch || JSON.stringify(current.search) === JSON.stringify(next.search)))
+      )
+        return false;
+      return new Promise<boolean>((finish) => {
+        pending.current = finish;
+        setBlocked(true);
+      });
+    },
     disabled: !dirty,
     enableBeforeUnload: dirty,
-    withResolver: true,
+    withResolver: false,
   });
+  useOverlayBack(
+    blocked,
+    (open) => {
+      if (!open) resolve(false);
+    },
+    { kind: "guard", frame: false },
+  );
+  useEffect(
+    () => () => {
+      pending.current?.(true);
+      pending.current = null;
+    },
+    [],
+  );
   return (
     <Dialog.Root
-      open={blocker.status === "blocked"}
+      historyBack={false}
+      open={blocked}
       onOpenChange={(open) => {
-        if (!open) blocker.reset?.();
+        if (!open) resolve(false);
       }}
     >
       <Dialog.Portal>
@@ -35,13 +84,13 @@ export function UnsavedSettingsDialog({ dirty }: { dirty: boolean }) {
         >
           <Dialog.Title className="text-xl font-semibold">Leave without saving?</Dialog.Title>
           <Dialog.Description className="mt-2 text-sm leading-6 text-muted-foreground">
-            Your unsaved target edits will be lost. Saved settings and history are unchanged.
+            {description}
           </Dialog.Description>
           <div className="mt-5 grid grid-cols-2 gap-2">
-            <button type="button" className="account-secondary" onClick={() => blocker.reset?.()}>
+            <button type="button" className="account-secondary" onClick={() => resolve(false)}>
               Keep editing
             </button>
-            <button type="button" className="account-primary" onClick={() => blocker.proceed?.()}>
+            <button type="button" className="account-primary" onClick={() => resolve(true)}>
               Leave
             </button>
           </div>

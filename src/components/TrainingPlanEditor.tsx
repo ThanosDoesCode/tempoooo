@@ -1,3 +1,5 @@
+import { useOverlayBack } from "@/components/NavigationOverlay";
+import { UnsavedSettingsDialog } from "@/components/UnsavedSettingsDialog";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, ChevronRight, Plus, Trash2 } from "lucide-react";
 import { BackButton } from "./BackControl";
@@ -33,10 +35,12 @@ export function TrainingPlanEditor({
   plan,
   onCancel,
   onSaved,
+  onDirtyChange,
 }: {
   plan: UserTrainingPlan;
   onCancel: () => void;
   onSaved: () => Promise<void>;
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
   const [name, setName] = useState(plan.name);
   const [days, setDays] = useState<TrainingPlanDay[]>(() => structuredClone(plan.days));
@@ -47,6 +51,7 @@ export function TrainingPlanEditor({
     () => name !== plan.name || JSON.stringify(days) !== JSON.stringify(plan.days),
     [days, name, plan.days, plan.name],
   );
+  useEffect(() => onDirtyChange?.(dirty), [dirty, onDirtyChange]);
 
   useEffect(() => {
     if (!dirty) return;
@@ -55,6 +60,13 @@ export function TrainingPlanEditor({
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty]);
 
+  useOverlayBack(
+    selectedDayId !== null,
+    (open) => {
+      if (!open) setSelectedDayId(null);
+    },
+    { kind: "step", dismissible: !saving },
+  );
   const updateDays = (next: TrainingPlanDay[]) => setDays(renumberDays(next));
   const updateDay = (dayIndex: number, update: (day: TrainingPlanDay) => TrainingPlanDay) =>
     updateDays(days.map((day, index) => (index === dayIndex ? update(day) : day)));
@@ -141,6 +153,10 @@ export function TrainingPlanEditor({
 
   return (
     <div className="space-y-3">
+      <UnsavedSettingsDialog
+        dirty={dirty && !saving}
+        description="Your unsaved plan edits will be lost."
+      />
       <Card className="space-y-3">
         <SectionTitle>Edit plan</SectionTitle>
         <label className="block text-xs font-medium text-muted-foreground">

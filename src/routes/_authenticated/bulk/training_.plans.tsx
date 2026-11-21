@@ -17,6 +17,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { BackButton } from "@/components/BackControl";
+import { NavigationBackScope, useOverlayBack } from "@/components/NavigationOverlay";
 import { Card, DataError, PendingLabel, SectionTitle } from "@/components/ui-kit";
 import { userFacingError } from "@/lib/network-errors";
 import { useAppData, useBulkMeta } from "@/lib/store";
@@ -65,6 +66,16 @@ function MyPlansPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   // A plan created while another is active: saved but inactive, awaiting an explicit activation.
   const [savedInactive, setSavedInactive] = useState<string | null>(null);
+  useOverlayBack(
+    view === "create",
+    (open) => {
+      if (!open) {
+        setSavedInactive(null);
+        setView("list");
+      }
+    },
+    { kind: "step", dismissible: busyId === null },
+  );
   // One stable request id per logical duplicate action; reused on retry, cleared on success.
   const dupRequestIds = useRef<Map<string, string>>(new Map());
 
@@ -365,54 +376,72 @@ function PlanDetail({
   onSaved: () => Promise<void>;
 }) {
   const plan = useTrainingPlanById(planId);
+  const [dirty, setDirty] = useState(false);
+  const leave = () => {
+    if (!dirty || window.confirm("Discard unsaved plan changes?")) onBack();
+  };
+  const backOwner = useOverlayBack(
+    true,
+    (open) => {
+      if (!open) leave();
+    },
+    { kind: "step" },
+  );
   return (
-    <AppShell>
-      <BackButton onClick={onBack}>My plans</BackButton>
-      <PageHeader title={edit ? "Edit plan" : "Plan"} />
-      {plan.isLoading ? (
-        <div className="h-48 motion-safe:animate-pulse rounded-2xl bg-card" />
-      ) : plan.error ? (
-        <DataError
-          message={userFacingError(plan.error, "load this plan")}
-          onRetry={() => void plan.refetch()}
-        />
-      ) : !plan.data ? (
-        <Card>
-          <p className="text-sm text-muted-foreground">This plan is no longer available.</p>
-        </Card>
-      ) : edit ? (
-        <TrainingPlanEditor plan={plan.data} onCancel={onBack} onSaved={onSaved} />
-      ) : (
-        <div className="space-y-[14px]">
+    <NavigationBackScope ownerId={backOwner}>
+      <AppShell>
+        <BackButton onClick={leave}>My plans</BackButton>
+        <PageHeader title={edit ? "Edit plan" : "Plan"} />
+        {plan.isLoading ? (
+          <div className="h-48 motion-safe:animate-pulse rounded-2xl bg-card" />
+        ) : plan.error ? (
+          <DataError
+            message={userFacingError(plan.error, "load this plan")}
+            onRetry={() => void plan.refetch()}
+          />
+        ) : !plan.data ? (
           <Card>
-            <SectionTitle>Plan</SectionTitle>
-            <h2 className="text-xl font-semibold">{plan.data.name}</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {plan.data.days.length} workout{plan.data.days.length === 1 ? "" : "s"}
-            </p>
-            <Button variant="outline" className="mt-4 min-h-11 w-full" onClick={onEdit}>
-              Edit plan
-            </Button>
+            <p className="text-sm text-muted-foreground">This plan is no longer available.</p>
           </Card>
-          {plan.data.days.map((day) => (
-            <Card key={day.id}>
-              <h3 className="font-medium">
-                Day {day.order} · {day.name}
-              </h3>
-              <ol className="mt-2 space-y-2 text-sm text-muted-foreground">
-                {day.exercises.map((exercise) => (
-                  <li key={exercise.id} className="flex justify-between gap-3">
-                    <span className="min-w-0">{exercise.name}</span>
-                    <span className="num shrink-0">
-                      {exercise.sets} × {exercise.repMin}–{exercise.repMax}
-                    </span>
-                  </li>
-                ))}
-              </ol>
+        ) : edit ? (
+          <TrainingPlanEditor
+            plan={plan.data}
+            onCancel={onBack}
+            onSaved={onSaved}
+            onDirtyChange={setDirty}
+          />
+        ) : (
+          <div className="space-y-[14px]">
+            <Card>
+              <SectionTitle>Plan</SectionTitle>
+              <h2 className="text-xl font-semibold">{plan.data.name}</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {plan.data.days.length} workout{plan.data.days.length === 1 ? "" : "s"}
+              </p>
+              <Button variant="outline" className="mt-4 min-h-11 w-full" onClick={onEdit}>
+                Edit plan
+              </Button>
             </Card>
-          ))}
-        </div>
-      )}
-    </AppShell>
+            {plan.data.days.map((day) => (
+              <Card key={day.id}>
+                <h3 className="font-medium">
+                  Day {day.order} · {day.name}
+                </h3>
+                <ol className="mt-2 space-y-2 text-sm text-muted-foreground">
+                  {day.exercises.map((exercise) => (
+                    <li key={exercise.id} className="flex justify-between gap-3">
+                      <span className="min-w-0">{exercise.name}</span>
+                      <span className="num shrink-0">
+                        {exercise.sets} × {exercise.repMin}–{exercise.repMax}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              </Card>
+            ))}
+          </div>
+        )}
+      </AppShell>
+    </NavigationBackScope>
   );
 }

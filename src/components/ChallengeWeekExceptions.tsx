@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import * as Dialog from "@radix-ui/react-dialog";
+import * as Dialog from "@/components/ui/dialog-root";
 import { userFacingError } from "@/lib/network-errors";
 import {
   cancelChallengeException,
@@ -200,7 +200,7 @@ export function ChallengeWeekExceptions({
   // Eligible and nothing pending/approved: offer the request.
   return (
     <div>
-      <Dialog.Root open={open} onOpenChange={(o) => !busy && setOpen(o)}>
+      <Dialog.Root open={open} dismissible={!busy} onOpenChange={(o) => !busy && setOpen(o)}>
         <Dialog.Trigger asChild>
           <button
             type="button"

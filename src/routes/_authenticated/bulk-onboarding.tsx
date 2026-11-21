@@ -4,6 +4,8 @@ import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { Check, Dumbbell } from "lucide-react";
 import { BackButton } from "@/components/BackControl";
 import { HistoryBackLink } from "@/components/HistoryBackLink";
+import { useOverlayBack } from "@/components/NavigationOverlay";
+import { UnsavedSettingsDialog } from "@/components/UnsavedSettingsDialog";
 import { AppShell } from "@/components/AppShell";
 import { PendingLabel } from "@/components/ui-kit";
 import { activeBulkMemberships, bulkOwnerQueryOptions } from "@/lib/bulk-access";
@@ -110,6 +112,13 @@ function BulkOnboarding() {
     {},
   );
   const [busy, setBusy] = useState(false);
+  useOverlayBack(
+    step > 1,
+    (open) => {
+      if (!open) setStep((step - 1) as Step);
+    },
+    { kind: "step", dismissible: !busy },
+  );
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [nutritionManuallyAdjusted, setNutritionManuallyAdjusted] = useState(false);
   const values = useMemo(() => valuesOf(form), [form]);
@@ -243,6 +252,10 @@ function BulkOnboarding() {
 
   return (
     <AppShell>
+      <UnsavedSettingsDialog
+        dirty={!busy && JSON.stringify(form) !== JSON.stringify(initialForm)}
+        description="Your fitness setup hasn’t been saved."
+      />
       <div className="mx-auto max-w-md">
         <div className="mb-4 flex min-h-11 items-center justify-between gap-3">
           {step === 1 ? (

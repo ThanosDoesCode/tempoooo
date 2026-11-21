@@ -2,12 +2,33 @@ import * as React from "react";
 import { Drawer as DrawerPrimitive } from "vaul";
 
 import { cn } from "@/lib/utils";
+import { NavigationOverlay } from "../NavigationOverlay";
 
 const Drawer = ({
   shouldScaleBackground = true,
+  open,
+  defaultOpen,
+  onOpenChange,
+  historyBack,
+  dismissible = true,
   ...props
-}: React.ComponentProps<typeof DrawerPrimitive.Root>) => (
-  <DrawerPrimitive.Root shouldScaleBackground={shouldScaleBackground} {...props} />
+}: React.ComponentProps<typeof DrawerPrimitive.Root> & { historyBack?: boolean }) => (
+  <NavigationOverlay
+    open={open}
+    defaultOpen={defaultOpen}
+    onOpenChange={onOpenChange}
+    historyBack={historyBack}
+    dismissible={dismissible}
+  >
+    {(state) => (
+      <DrawerPrimitive.Root
+        shouldScaleBackground={shouldScaleBackground}
+        dismissible={dismissible}
+        {...props}
+        {...state}
+      />
+    )}
+  </NavigationOverlay>
 );
 Drawer.displayName = "Drawer";
 

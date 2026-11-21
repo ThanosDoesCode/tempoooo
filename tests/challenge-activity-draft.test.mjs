@@ -5,6 +5,7 @@ import vm from "node:vm";
 import ts from "typescript";
 import * as numeric from "../src/lib/numeric.ts";
 import * as duration from "../src/lib/duration.ts";
+import * as navigation from "../src/lib/in-app-back.ts";
 
 const source = await readFile(
   new URL("../src/routes/_authenticated/challenge/add.tsx", import.meta.url),
@@ -124,6 +125,7 @@ function fixture({ storage = new Map(), search = {}, activities = {}, fail = fal
         return {
           createFileRoute: () => (route) => ({ ...route, useSearch: () => search }),
           useNavigate: () => navigate,
+          useRouter: () => undefined,
           useBlocker: (options) => {
             blockerOptions = options;
             return blocker;
@@ -145,6 +147,7 @@ function fixture({ storage = new Map(), search = {}, activities = {}, fail = fal
       if (name === "@tanstack/react-query")
         return { useQueryClient: () => ({ invalidateQueries() {} }) };
       if (name === "@/lib/auth") return { useAuth: () => ({ user: { id: "user" } }) };
+      if (name === "@/lib/in-app-back") return navigation;
       if (name === "@/lib/numeric") return numeric;
       if (name === "@/lib/duration") return duration;
       if (name === "@/lib/challenge")
@@ -419,8 +422,8 @@ test("Discard draft and Cancel edit retain their original destinations and run o
     assert.deepEqual(
       JSON.parse(JSON.stringify(f.destinations)),
       editing
-        ? [{ to: "/challenge/activity/$activityId", params: { activityId: "a" } }]
-        : [{ to: "/challenge" }],
+        ? [{ href: "/challenge/activity/a", replace: true }]
+        : [{ href: "/challenge", replace: true }],
     );
     assert.equal(f.proceeded, 0);
   }

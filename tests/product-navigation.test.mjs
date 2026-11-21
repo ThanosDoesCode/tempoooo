@@ -98,7 +98,7 @@ test("bottom bar is Today, Challenge, +, Community, Progress and preserves brows
   assert.doesNotMatch(nav, /label: "(Training|Meals|Goal)"/);
   assert.match(shell, /aria-label="Log"/); // the center "+" action
   assert.match(shell, /<Link[\s\S]*to=\{item\.to\}/);
-  assert.doesNotMatch(shell, /to=\{item\.to\}[\s\S]{0,200}replace/);
+  assert.match(shell, /to=\{item\.to\}[\s\S]{0,200}replace/);
   assert.match(shell, /aria-label="Primary"[\s\S]*fixed inset-x-0 bottom-0/);
   assert.doesNotMatch(shell, /My Bulk/);
   assert.doesNotMatch(shell, /sticky top-0/);

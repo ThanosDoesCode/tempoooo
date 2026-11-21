@@ -172,6 +172,26 @@ test("nested navigation, contextual history and scroll restoration are unchanged
   assert.match(shell, /pb-\[max\(1rem,env\(safe-area-inset-bottom\)\)\]/);
 });
 
+for (const core of [false, true])
+  test(`${core ? "Core" : "Fitness"} tab switches replace while Profile/Planner/details still push`, () => {
+    const fixture = shellFixture(core);
+    const history = createMemoryHistory({ initialEntries: [core ? "/challenge" : "/bulk"] });
+    trackInAppHistory(history);
+    const tabs = fixture.tabs();
+    for (let pass = 0; pass < 30; pass++)
+      for (const tab of tabs) {
+        assert.equal(tab.props.replace, true);
+        history.replace(tab.props.to);
+      }
+    assert.equal(history.location.state.__TSR_index, 0);
+    assert.equal(history.length, 1);
+    const origin = history.location.href;
+    history.push("/profile");
+    assert.equal(history.location.state.__TSR_index, 1);
+    assert.equal(backWithinApp(history), true);
+    assert.equal(history.location.href, origin);
+  });
+
 test("real TanStack links never mark both Today and Progress active; nested ownership remains canonical", async () => {
   const { AppShell } = presentationComponent("src/components/AppShell.tsx", {
     react: React,

@@ -1,3 +1,5 @@
+import { useOverlayBack } from "@/components/NavigationOverlay";
+import { UnsavedSettingsDialog } from "@/components/UnsavedSettingsDialog";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { WorkoutExerciseListEditor } from "@/components/WorkoutExerciseListEditor";
@@ -50,6 +52,13 @@ export function WorkoutTemplateEditor({
     if (dirty) setDiscard(true);
     else onCancel();
   }
+  useOverlayBack(
+    true,
+    (open) => {
+      if (!open) cancel();
+    },
+    { kind: "step", dismissible: !saving },
+  );
   async function save() {
     if (pending.current) return;
     const validation = validateTrainingExercises(exercises, "Workout");
@@ -90,6 +99,10 @@ export function WorkoutTemplateEditor({
   }
   return (
     <div className="min-w-0 space-y-3">
+      <UnsavedSettingsDialog
+        dirty={dirty && !saving && !discard}
+        description="Your unsaved workout edits will be lost."
+      />
       <BackButton onClick={cancel}>My workout</BackButton>
       <Card className="space-y-3">
         <h1 className="text-xl font-semibold">Edit workout</h1>

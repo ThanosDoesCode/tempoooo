@@ -349,7 +349,8 @@ test("shared picker delegates focus trap, dismissal and trigger restoration to R
   const dialog = read("src/components/ui/dialog.tsx");
   assert.match(source, /<DialogTrigger asChild>/);
   assert.match(source, /onOpenChange=/);
-  assert.match(dialog, /@radix-ui\/react-dialog/);
+  assert.match(dialog, /dialog-root/);
+  assert.match(read("src/components/ui/dialog-root.tsx"), /@radix-ui\/react-dialog/);
   assert.doesNotMatch(source, /onEscapeKeyDown|onCloseAutoFocus/);
   assert.match(source, /motion-reduce:animate-none/);
   assert.match(source, /safe-area-inset-bottom/);

@@ -99,6 +99,8 @@ function manager(rows = [preset()]) {
       "@/components/ui/input": { Input: "Input" },
       "@/components/ui/textarea": { Textarea: "Textarea" },
       "@/components/ui/switch": { Switch: "Switch" },
+      // Router-backed draft protection is covered by the shared navigation tests.
+      "@/components/UnsavedSettingsDialog": { UnsavedSettingsDialog: "UnsavedSettingsDialog" },
       "@/components/ui-kit": new Proxy({}, { get: (_, name) => String(name) }),
     },
     {

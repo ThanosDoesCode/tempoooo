@@ -1,3 +1,5 @@
+import { HistoryBackLink } from "./HistoryBackLink";
+import { safeBack } from "@/lib/in-app-back";
 import {
   useEffect,
   useMemo,
@@ -7,7 +9,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { createPortal } from "react-dom";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   ChevronDown,
@@ -20,7 +22,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "./ui/button";
-import { BackLabel, backControlClassName } from "./BackControl";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -186,6 +187,7 @@ export function BulkWorkoutSessionView({
   progression: Record<string, BulkProgressionResult>;
 }) {
   const navigate = useNavigate();
+  const router = useRouter();
   const queryClient = useQueryClient();
   const [drafts, setDrafts] = useState<Record<string, SetDraft>>(() =>
     readLocalDrafts(
@@ -437,7 +439,7 @@ export function BulkWorkoutSessionView({
       clearLocalDrafts(session);
       await refresh();
       toast.success("Workout draft discarded");
-      await navigate({ to: "/bulk/training" });
+      await safeBack({ history: router?.history, navigate }, "/bulk/training", { completed: true });
     } catch (error) {
       toast.error(userFacingError(error, "discard your workout", { inputPreserved: true }));
     } finally {
@@ -544,7 +546,7 @@ export function BulkWorkoutSessionView({
             type="button"
             aria-label="Minimise workout, keep progress"
             className="grid min-h-11 min-w-11 shrink-0 place-items-center text-muted-foreground"
-            onClick={() => void navigate({ to: "/bulk/training" })}
+            onClick={() => void safeBack({ history: router?.history, navigate }, "/bulk/training")}
           >
             <ChevronDown className="h-5 w-5" aria-hidden="true" />
             <span className="sr-only">Minimise</span>
@@ -1289,7 +1291,9 @@ export function CompletedWorkout({
         </dl>
         {showBackLink ? (
           <Button asChild className="mt-5 h-[54px] w-full rounded-[16px]">
-            <Link to="/bulk">Done</Link>
+            <Link to="/bulk" replace>
+              Done
+            </Link>
           </Button>
         ) : null}
       </Card>
@@ -1324,11 +1328,7 @@ export function CompletedWorkout({
           ) : null}
         </Card>
       ))}
-      {showBackLink ? (
-        <Link to="/bulk/training" className={backControlClassName}>
-          <BackLabel>Training</BackLabel>
-        </Link>
-      ) : null}
+      {showBackLink ? <HistoryBackLink fallback="/bulk/training" fallbackLabel="Training" /> : null}
     </div>
   );
 }

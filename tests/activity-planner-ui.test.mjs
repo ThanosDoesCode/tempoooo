@@ -442,6 +442,7 @@ function plannerCalendar(search) {
   const navigations = [];
   const jsx = (type, props) => ({ type, props });
   const route = presentationComponent("src/routes/_authenticated/planner.tsx", {
+    react: { useRef: (value) => ({ current: value }) },
     "react/jsx-runtime": { jsx, jsxs: jsx, Fragment: "Fragment" },
     "@tanstack/react-router": {
       createFileRoute: () => (options) => ({ options, useSearch: () => search }),
@@ -556,13 +557,10 @@ test("Planner is not a tab; it belongs to Today with contextual Back and focus-s
   const page = read("src/routes/_authenticated/planner.tsx");
   assert.match(page, /<HistoryBackLink fallback="\/bulk" fallbackLabel="Today" \/>/);
   // Closing the sheet returns to the exact Agenda/Calendar entry; deep links fall back to /planner.
+  assert.match(page, /setSearch\(\{ item: undefined \}\)/);
   assert.match(
     page,
-    /if \(!backWithinApp\(router\.history, "\/planner"\)\) setSearch\(\{ item: undefined \}\)/,
-  );
-  assert.match(
-    page,
-    /const openItem = \(item: PlannedActivity\) => setSearch\(\{ item: item\.id \}, true\)/,
+    /const openItem = \(item: PlannedActivity\) => setSearch\(\{ item: item\.id \}\)/,
   );
   // Core accounts go through the existing fitness gate; legacy goes Today. No onboarding is forced.
   for (const file of [
@@ -580,11 +578,8 @@ test("Planner is not a tab; it belongs to Today with contextual Back and focus-s
   }
   const form = read("src/components/PlanActivityForm.tsx");
   // Cancel returns to the prior logical screen; creating replaces the form entry (no Back loop).
-  assert.match(
-    form,
-    /if \(!backWithinApp\(router\.history\)\) void navigate\(\{ to: "\/planner", replace: true \}\)/,
-  );
-  assert.match(form, /else void navigate\(\{ to: "\/planner", replace: true \}\)/);
+  assert.match(form, /safeBack\(\{ history: router\?\.history, navigate \}, "\/planner"\)/);
+  assert.match(form, /safeBack\([\s\S]*?"\/planner",\s*\{\s*completed: true/);
 });
 
 test("Planner search params are sanitized so deep links cannot inject state", () => {

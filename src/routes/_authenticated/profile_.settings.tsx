@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ChevronRight } from "lucide-react";
-import * as Dialog from "@radix-ui/react-dialog";
+import * as Dialog from "@/components/ui/dialog-root";
 import { SignOutButton } from "@/components/SignOutButton";
 import { DeleteAccountDialog } from "@/components/DeleteAccountDialog";
 import { NavRows } from "@/components/NavRows";
@@ -80,6 +80,7 @@ function SettingsPage() {
           <p className="mt-0.5 break-all text-[15px] font-medium">{user?.email ?? "…"}</p>
         </div>
         <Dialog.Root
+          dismissible={!usernameBusy}
           open={editingUsername}
           onOpenChange={(open) => {
             if (usernameBusy) return;

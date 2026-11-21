@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { ChevronDown, Flame, Minus, Pause, X } from "lucide-react";
 import { AppShell, PageHeader } from "@/components/AppShell";
+import { homeFallback } from "@/lib/in-app-back";
 import { PageSkeleton } from "@/components/PageSkeleton";
 import { DataError } from "@/components/ui-kit";
 import { StreakRings } from "@/components/StreakRings";
@@ -27,7 +28,7 @@ function StreakScreen() {
     <AppShell>
       <PageHeader
         title="Streak"
-        backTo={core ? "/challenge" : "/bulk"}
+        backTo={homeFallback(!core)}
         backLabel={core ? "Challenge" : "Today"}
       />
       {streak.isLoading ? (

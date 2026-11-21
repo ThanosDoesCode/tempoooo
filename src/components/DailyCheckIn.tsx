@@ -1,7 +1,9 @@
+import { UnsavedSettingsDialog } from "@/components/UnsavedSettingsDialog";
+import { safeBack } from "@/lib/in-app-back";
 import { useState, useRef } from "react";
 import { addDays, parseISO } from "date-fns";
 import { useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, useRouter } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { PendingLabel } from "./ui-kit";
 import { checkInDraft, validateCheckIn } from "@/lib/daily-check-in";
@@ -29,12 +31,14 @@ export function DailyCheckIn({
   weightNote?: string | null | undefined;
 }) {
   const [draft, setDraft] = useState(() => checkInDraft(day, weight, yesterdayDay));
+  const initialDraft = useRef(JSON.stringify(draft));
   const [more, setMore] = useState(!!(day?.waist || day?.restingHr));
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const busy = useRef(false);
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const router = useRouter();
   const { saveDay } = useActions();
   const patch = (value: Partial<typeof draft>) => setDraft((old) => ({ ...old, ...value }));
   const save = async () => {
@@ -69,7 +73,10 @@ export function DailyCheckIn({
         qc.invalidateQueries({ queryKey: ["goal-settings-dashboard", profileId] }),
       ]);
       toast.success("Check-in saved");
-      await navigate({ to: "/bulk" });
+      initialDraft.current = JSON.stringify(draft);
+      await safeBack({ history: router?.history, navigate }, "/bulk", {
+        completed: true,
+      });
     } catch (cause) {
       setError(userFacingError(cause, "save your check-in", { inputPreserved: true }));
     } finally {
@@ -99,6 +106,10 @@ export function DailyCheckIn({
   );
   return (
     <div className="space-y-4">
+      <UnsavedSettingsDialog
+        dirty={JSON.stringify(draft) !== initialDraft.current && !pending}
+        description="Your check-in details haven’t been saved."
+      />
       <div className="grid grid-cols-2 gap-3">
         {field("weight", "Weight", "kg")}
         {field("sleep", "Sleep", "hours")}

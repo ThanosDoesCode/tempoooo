@@ -152,6 +152,7 @@ function TabLink({
   return (
     <Link
       to={item.to}
+      replace
       preload="intent"
       activeOptions={{ exact: true, includeSearch: false }}
       aria-label={item.label}

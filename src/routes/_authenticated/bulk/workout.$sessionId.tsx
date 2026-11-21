@@ -1,7 +1,7 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { BulkWorkoutSessionView } from "@/components/BulkWorkoutSession";
-import { BackLabel, backControlClassName } from "@/components/BackControl";
+import { HistoryBackLink } from "@/components/HistoryBackLink";
 import { DataError } from "@/components/ui-kit";
 import { useBulkTrainingSession } from "@/lib/bulk-training-sessions";
 import { userFacingError } from "@/lib/network-errors";
@@ -63,9 +63,7 @@ function BulkWorkoutPage() {
           <p className="mt-1 text-sm text-muted-foreground">
             This workout does not exist or does not belong to your Goal.
           </p>
-          <Link to="/bulk/training" className={`mt-4 ${backControlClassName}`}>
-            <BackLabel>Training</BackLabel>
-          </Link>
+          <HistoryBackLink fallback="/bulk/training" fallbackLabel="Training" />
         </div>
       )}
     </AppShell>

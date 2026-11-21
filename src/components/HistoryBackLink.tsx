@@ -26,7 +26,9 @@ export function HistoryBackLink({
   labelOverride?: string;
 }) {
   const router = useRouter();
-  useRouterState({ select: (state) => state.location.href });
+  useRouterState({
+    select: (state) => `${state.location.href}:${state.location.state?.__TSR_key ?? ""}`,
+  });
   const location = inAppBackLocation(router.history, parentPath);
   const previous = location?.pathname;
   const label = previous

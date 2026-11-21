@@ -263,10 +263,8 @@ test("Phase 7 viewers still cannot modify nutrition or weekly targets", () => {
   }
 });
 
-test("Phase 7 unsaved settings use the existing router/history blocker with explicit leave/keep choices", () => {
-  let options,
-    kept = 0,
-    left = 0;
+test("Phase 7 unsaved settings use one router/history transaction with explicit leave/keep choices", async () => {
+  let options;
   const ui = accountUI(
     "src/components/UnsavedSettingsDialog.tsx",
     "UnsavedSettingsDialog",
@@ -274,21 +272,32 @@ test("Phase 7 unsaved settings use the existing router/history blocker with expl
       "@tanstack/react-router": {
         useBlocker: (value) => {
           options = value;
-          return { status: "blocked", reset: () => kept++, proceed: () => left++ };
         },
       },
     },
     { dirty: true },
   );
-  assert.equal(ui.find("Dialog.Root")[0].props.open, true);
-  assert.equal(options.withResolver, true);
+  ui.render();
+  const attempt = {
+    current: { pathname: "/bulk/more", search: {} },
+    next: { pathname: "/profile", search: {} },
+  };
+  assert.equal(options.withResolver, false);
   assert.equal(options.enableBeforeUnload, true);
-  assert.equal(options.shouldBlockFn(), true);
+  assert.equal(options.shouldBlockFn({ current: attempt.current, next: attempt.current }), false);
+  const first = options.shouldBlockFn(attempt);
+  assert.equal(ui.find("Dialog.Root")[0].props.open, true);
+  assert.equal(ui.find("Dialog.Root")[0].props.historyBack, false);
   ui.button("Keep editing").props.onClick();
+  assert.equal(await first, true);
+  const second = options.shouldBlockFn(attempt);
   ui.button("Leave").props.onClick();
-  ui.find("Dialog.Root")[0].props.onOpenChange(false);
-  assert.equal(kept, 2);
-  assert.equal(left, 1);
+  assert.equal(await second, false);
+  const repeated = options.shouldBlockFn(attempt);
+  assert.equal(options.shouldBlockFn(attempt), true);
+  assert.equal(await repeated, true);
+  assert.equal(ui.find("Dialog.Root")[0].props.open, false);
+  ui.dispose();
 });
 
 test("Phase 7 account deletion requires exact DELETE and Keep does not delete", () => {

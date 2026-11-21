@@ -1,3 +1,4 @@
+import { UnsavedSettingsDialog } from "@/components/UnsavedSettingsDialog";
 import { NativeSelect } from "@/components/ui/native-select";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
@@ -134,6 +135,10 @@ function PauseEditor({
 
   return (
     <div className="space-y-3.5">
+      <UnsavedSettingsDialog
+        dirty={country !== "" && !busy}
+        description="Your travel pause hasn’t been saved."
+      />
       {eligibleWeeks.length ? (
         <>
           <p className="px-1 text-[13px] text-muted-foreground">Which week?</p>

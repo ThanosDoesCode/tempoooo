@@ -176,7 +176,7 @@ test("historical Add meal submits the selected date and category, clears only on
     assert.equal(f.calls[0][0], "2001-01-01");
     assert.equal(f.calls[0][2].mealCategory, "dinner");
     assert.deepEqual(JSON.parse(JSON.stringify(f.destinations)), [
-      { to: "/bulk/meals", search: { date: "2001-01-01" } },
+      { href: "/bulk/meals?date=2001-01-01", replace: true },
     ]);
   } finally {
     f.ui.dispose();

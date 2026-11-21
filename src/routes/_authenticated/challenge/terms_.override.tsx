@@ -1,3 +1,4 @@
+import { UnsavedSettingsDialog } from "@/components/UnsavedSettingsDialog";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
@@ -127,6 +128,14 @@ function OverrideEditor({
 
   return (
     <div className="space-y-3.5">
+      <UnsavedSettingsDialog
+        dirty={
+          busy === null &&
+          selected !== null &&
+          target !== targetOverrideForWeek(challenge, overrides, selected)
+        }
+        description="Your target change hasn’t been saved."
+      />
       <div className="rounded-[20px] bg-card px-4" role="radiogroup" aria-label="Week">
         {visible.map((week) => {
           const effective = targetOverrideForWeek(challenge, overrides, week);

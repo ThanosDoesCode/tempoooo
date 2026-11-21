@@ -75,6 +75,7 @@ export function accountUI(file, exportName, modules = {}, props = {}, globals = 
   const route = {
     createFileRoute: () => (options) => ({ options, useSearch: () => ({}) }),
     useNavigate: () => async () => {},
+    useBlocker: () => ({ status: "idle" }),
     Link: "Link",
   };
   const dialog = Object.fromEntries(
@@ -96,6 +97,7 @@ export function accountUI(file, exportName, modules = {}, props = {}, globals = 
       "@/components/BackControl": { BackButton: "BackButton" },
       "@/components/HistoryBackLink": { HistoryBackLink: "HistoryBackLink" },
       ...modules,
+      "@tanstack/react-router": { ...route, ...modules["@tanstack/react-router"] },
     },
     { window: browser, localStorage: { removeItem() {} }, Error, ...globals },
   );

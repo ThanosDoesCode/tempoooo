@@ -1,3 +1,4 @@
+import { UnsavedSettingsDialog } from "@/components/UnsavedSettingsDialog";
 import { useId, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
@@ -5,7 +6,7 @@ import { X } from "lucide-react";
 import { TempoDatePicker, TempoTimePicker } from "@/components/TempoDateTimePicker";
 import { planningDisclaimer } from "@/components/PlannerParts";
 import { useAuth } from "@/lib/auth";
-import { backWithinApp } from "@/lib/in-app-back";
+import { safeBack } from "@/lib/in-app-back";
 import { canonicalDuration, formatClock } from "@/lib/duration";
 import { userFacingError } from "@/lib/network-errors";
 import {
@@ -88,8 +89,11 @@ export function PlanActivityForm({
     type !== "workout" &&
     setDetails((current) => ({ ...current, [type]: { ...current[type], ...patch } }));
 
+  const signature = JSON.stringify({ type, date, time, source, planDayId, templateId, details });
+  const initialSignature = useRef(signature);
+
   const leave = () => {
-    if (!backWithinApp(router.history)) void navigate({ to: "/planner", replace: true });
+    void safeBack({ history: router?.history, navigate }, "/planner");
   };
 
   async function submit() {
@@ -144,9 +148,13 @@ export function PlanActivityForm({
       if (editing) await updatePlannedActivity(editing.id, editing.updatedAt, input);
       else await createPlannedActivity(input, requestId.current);
       await invalidatePlanner(queryClient);
+      initialSignature.current = signature;
       if (editing) leave();
       // Replace the form entry so Back from the Planner returns to where planning started.
-      else void navigate({ to: "/planner", replace: true });
+      else
+        void safeBack({ history: router?.history, navigate }, "/planner", {
+          completed: true,
+        });
     } catch (error) {
       // Every typed value stays; the same request id makes a retry safe.
       setRequestError(
@@ -178,6 +186,10 @@ export function PlanActivityForm({
         void submit();
       }}
     >
+      <UnsavedSettingsDialog
+        dirty={signature !== initialSignature.current && !pending}
+        description="Your planned activity hasn’t been saved."
+      />
       <div className="mb-2 flex items-center justify-between">
         <button
           type="button"

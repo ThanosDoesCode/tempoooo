@@ -1,5 +1,6 @@
 import { TempoDatePicker } from "@/components/TempoDateTimePicker";
-import { createFileRoute, useBlocker, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useBlocker, useNavigate, useRouter } from "@tanstack/react-router";
+import { safeBack } from "@/lib/in-app-back";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, ImageUp } from "lucide-react";
@@ -106,6 +107,7 @@ function AddActivity() {
   };
   const { user } = useAuth();
   const navigate = useNavigate();
+  const router = useRouter();
   const qc = useQueryClient();
   const challengeQuery = useMyChallenge();
   const { data: challenge, isLoading: challengeLoading, error: challengeError } = challengeQuery;
@@ -282,12 +284,14 @@ function AddActivity() {
     clearDraft();
     setDiscardRequested(false);
     if (blocker.status === "blocked") blocker.proceed();
-    else if (editing)
-      void navigate({
-        to: "/challenge/activity/$activityId",
-        params: { activityId: editId! },
-      });
-    else void navigate({ to: "/challenge" });
+    else
+      void safeBack(
+        { history: router?.history, navigate },
+        editing ? `/challenge/activity/${editId}` : "/challenge",
+        {
+          completed: true,
+        },
+      );
   };
 
   useEffect(() => {
@@ -414,7 +418,9 @@ function AddActivity() {
         void qc.invalidateQueries({ queryKey: ["challenge-activities"] });
         void qc.invalidateQueries({ queryKey: ["challenge-activity", editId] });
         toast.success("Activity updated.");
-        void navigate({ to: "/challenge/activity/$activityId", params: { activityId: editId! } });
+        void safeBack({ history: router?.history, navigate }, `/challenge/activity/${editId}`, {
+          completed: true,
+        });
         return;
       }
 
@@ -444,7 +450,9 @@ function AddActivity() {
         void navigate({ to: "/planner", search: { item: planned }, replace: true });
         return;
       }
-      void navigate({ to: "/challenge" });
+      void safeBack({ history: router?.history, navigate }, "/challenge", {
+        completed: true,
+      });
     } catch (e) {
       if (paths.length) {
         try {
@@ -842,6 +850,7 @@ function AddActivity() {
         </Note>
       </div>
       <AlertDialog
+        historyBack={blocker.status !== "blocked"}
         open={discardOpen}
         onOpenChange={(open) => {
           if (!open) keepEditing();

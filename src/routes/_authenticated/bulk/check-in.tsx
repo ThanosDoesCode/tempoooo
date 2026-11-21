@@ -35,6 +35,7 @@ import {
 } from "@/lib/goal-metrics";
 import { useBulkWeights } from "@/lib/bulk-progress-query";
 import { PublicWeeklyReview } from "@/components/PublicBulkProgress";
+import { useOverlayBack } from "@/components/NavigationOverlay";
 import type { AppData, Workout } from "@/lib/types";
 
 export const Route = createFileRoute("/_authenticated/bulk/check-in")({
@@ -63,6 +64,7 @@ function CheckInPage() {
   const [mode, setMode] = useState<"weekly" | "monthly">("weekly");
   const [share, setShare] = useState(false);
   const [copied, setCopied] = useState(false);
+  useOverlayBack(share, setShare);
 
   const weekStart = useMemo(() => addDays(weekStartOf(new Date()), weekOffset * 7), [weekOffset]);
   const { bulkId } = useBulkMeta();

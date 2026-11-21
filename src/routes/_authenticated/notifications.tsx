@@ -10,7 +10,7 @@ export const Route = createFileRoute("/_authenticated/notifications")({
 function NotificationInbox() {
   return (
     <AppShell>
-      <PageHeader title="Notifications" backTo="/bulk" backLabel="Today" />
+      <PageHeader title="Notifications" backTo="/today" backLabel="Home" />
       <AccountNotificationInbox />
     </AppShell>
   );

@@ -3,8 +3,31 @@ import * as AlertDialogPrimitive from "@radix-ui/react-alert-dialog";
 
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
+import { NavigationOverlay } from "../NavigationOverlay";
 
-const AlertDialog = AlertDialogPrimitive.Root;
+function AlertDialog({
+  open,
+  defaultOpen,
+  onOpenChange,
+  historyBack,
+  dismissible,
+  ...props
+}: React.ComponentProps<typeof AlertDialogPrimitive.Root> & {
+  historyBack?: boolean;
+  dismissible?: boolean;
+}) {
+  return (
+    <NavigationOverlay
+      open={open}
+      defaultOpen={defaultOpen}
+      onOpenChange={onOpenChange}
+      historyBack={historyBack}
+      dismissible={dismissible}
+    >
+      {(state) => <AlertDialogPrimitive.Root {...props} {...state} />}
+    </NavigationOverlay>
+  );
+}
 
 const AlertDialogTrigger = AlertDialogPrimitive.Trigger;
 

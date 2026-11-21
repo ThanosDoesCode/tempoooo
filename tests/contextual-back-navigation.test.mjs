@@ -247,10 +247,10 @@ const flows = [
   ["/profile", "/bulk/diagnostics", "bulk/diagnostics.tsx", "/profile", "You"],
   ["/profile", "/bulk/history", "bulk/history.tsx", "/profile", "You"],
   ["/bulk", "/bulk/morning", "bulk/morning.tsx", "/bulk", "Today"],
-  ["/bulk", "/notifications", "notifications.tsx", "/bulk", "Today"],
-  ["/challenge", "/notifications", "notifications.tsx", "/bulk", "Challenge"],
-  ["/bulk/progress", "/notifications", "notifications.tsx", "/bulk", "Progress"],
-  ["/profile", "/notifications", "notifications.tsx", "/bulk", "You"],
+  ["/bulk", "/notifications", "notifications.tsx", "/today", "Today"],
+  ["/challenge", "/notifications", "notifications.tsx", "/today", "Challenge"],
+  ["/bulk/progress", "/notifications", "notifications.tsx", "/today", "Progress"],
+  ["/profile", "/notifications", "notifications.tsx", "/today", "You"],
 ];
 
 for (const [origin, destination, route, fallback, label] of flows) {
@@ -480,4 +480,131 @@ test("all unobserved direct entries use replace-only safe parents, including set
     click(link, history, href);
     assert.equal(history.location.pathname, parent);
   }
+});
+
+for (const [entry, parent] of [
+  ["/profile/notifications", "/profile"],
+  ["/profile/settings", "/profile"],
+  ["/notifications?from=notification", "/today"],
+  ["/planner", "/bulk"],
+  ["/community/person?from=external", "/community"],
+  ["/challenge/activity/owned?from=notification", "/challenge"],
+])
+  test(`refresh/deep entry ${entry} ignores an unobserved predecessor and replaces with ${parent}`, () => {
+    const history = createMemoryHistory({
+      initialEntries: ["/external-document", entry],
+      initialIndex: 1,
+    });
+    trackInAppHistory(history);
+    const { HistoryBackLink, href } = controls(history);
+    const link = HistoryBackLink({ fallback: parent });
+    assert.equal(link.props.replace, true);
+    click(link, history, href);
+    assert.equal(history.location.href, parent);
+    assert.equal(history.location.state.__TSR_index, 1);
+  });
+
+test("logout/account switching invalidates origin trust; a token refresh does not", () => {
+  const { observeNavigationIdentity } = contextualBack;
+  observeNavigationIdentity("owner-a");
+  const history = createMemoryHistory({ initialEntries: ["/community?q=alice#friends"] });
+  trackInAppHistory(history);
+  history.push("/profile/settings");
+  assert.equal(inAppBackPath(history), "/community");
+  observeNavigationIdentity("owner-a");
+  assert.equal(
+    inAppBackPath(history),
+    "/community",
+    "same-user auth refresh retains the real origin",
+  );
+  observeNavigationIdentity("owner-b");
+  assert.equal(inAppBackPath(history), undefined);
+  history.replace("/profile");
+  history.push("/profile/notifications");
+  assert.equal(inAppBackPath(history), "/profile");
+  observeNavigationIdentity(null);
+  assert.equal(inAppBackPath(history), undefined);
+  observeNavigationIdentity("owner-b");
+  assert.equal(inAppBackPath(history), undefined);
+});
+
+test("a replaced/foreign entry key cannot borrow a recorded index's trust", () => {
+  const history = createMemoryHistory({ initialEntries: ["/planner?view=calendar"] });
+  trackInAppHistory(history);
+  history.push("/planner/new");
+  history.location.state.__TSR_key = "unobserved-entry";
+  assert.equal(backWithinApp(history), false);
+});
+
+for (const [parent, form] of [
+  ["/bulk/training", "/bulk/workout/session"],
+  ["/bulk/meals?date=2026-11-17", "/bulk/meals/add?date=2026-11-17"],
+  ["/bulk", "/bulk/morning"],
+  ["/challenge", "/challenge/add"],
+  ["/planner?view=calendar", "/planner/new"],
+])
+  test(`safe exit ${form} consumes its entry instead of pushing ${parent}`, async () => {
+    const history = createMemoryHistory({ initialEntries: [parent] });
+    trackInAppHistory(history);
+    history.push(form);
+    const navigations = [];
+    await contextualBack.safeBack(
+      { history, navigate: async (options) => navigations.push(options) },
+      parent,
+      { completed: true },
+    );
+    assert.equal(history.location.href, parent);
+    assert.equal(history.location.state.__TSR_index, 0);
+    assert.deepEqual(navigations, []);
+    history.back();
+    assert.equal(history.location.href, parent);
+  });
+
+test("imperative direct-entry exits use the same replace-only fallback as visible Back", async () => {
+  const history = createMemoryHistory({ initialEntries: ["/planner/new"] });
+  trackInAppHistory(history);
+  const writes = [];
+  await contextualBack.safeBack(
+    {
+      history,
+      navigate: async (options) => {
+        writes.push(options);
+        history.replace(options.href);
+      },
+    },
+    "/planner",
+  );
+  assert.deepEqual(writes, [{ href: "/planner", replace: true }]);
+  assert.equal(history.location.state.__TSR_index, 0);
+  assert.equal(contextualBack.homeFallback(false), "/challenge");
+  assert.equal(contextualBack.homeFallback(true), "/bulk");
+});
+
+test("successful forms preserve a trusted non-parent origin instead of imposing their fallback", async () => {
+  for (const [form, fallback] of [
+    ["/bulk/meals/add?date=2026-11-17", "/bulk/meals?date=2026-11-17"],
+    ["/bulk/morning", "/bulk"],
+    ["/challenge/add", "/challenge"],
+    ["/planner/new", "/planner"],
+  ]) {
+    const origin = "/community?section=plans&q=alice#saved";
+    const history = createMemoryHistory({ initialEntries: [origin] });
+    trackInAppHistory(history);
+    history.push(form);
+    await contextualBack.safeBack(
+      { history, navigate: async () => assert.fail("trusted origin must win") },
+      fallback,
+      { completed: true },
+    );
+    assert.equal(history.location.href, origin);
+  }
+  for (const file of [
+    "src/components/BulkNutritionLog.tsx",
+    "src/components/DailyCheckIn.tsx",
+    "src/components/PlanActivityForm.tsx",
+    "src/routes/_authenticated/challenge/add.tsx",
+    "src/routes/_authenticated/challenge/new.tsx",
+    "src/routes/_authenticated/challenge/activity.$activityId.tsx",
+  ])
+    assert.doesNotMatch(readFileSync(file, "utf8"), /parentPath:/);
 });

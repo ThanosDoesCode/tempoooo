@@ -24,7 +24,7 @@ test("Challenge creation uses the authenticated server function and no browser R
   assert.match(createBlock, /creation\.current/);
   assert.match(createBlock, /challengeId !== request\.requestId/);
   // Only the final "Send invite" creates the challenge, then routes to the Waiting state.
-  assert.match(createBlock, /navigate\(\{ to: "\/challenge" \}\)/);
+  assert.match(createBlock, /safeBack\([\s\S]*?"\/challenge"/);
   // Phase 3: the length comes from the 4/12/52 selector, never defaulted or forced to 52.
   assert.match(createBlock, /durationWeeks: length/);
   assert.doesNotMatch(source, /Math\.max\(52/);

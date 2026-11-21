@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import * as Dialog from "@radix-ui/react-dialog";
+import * as Dialog from "@/components/ui/dialog-root";
 import { Trash2 } from "lucide-react";
 import { PendingLabel } from "@/components/ui-kit";
 import { deleteTempoAccount } from "@/lib/privileged-rpcs.functions";
@@ -43,6 +43,7 @@ export function DeleteAccountDialog({ onDeleted }: { onDeleted: () => Promise<vo
 
   return (
     <Dialog.Root
+      dismissible={!pending}
       open={open}
       onOpenChange={(next) => {
         if (inFlight.current) return;

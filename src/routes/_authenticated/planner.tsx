@@ -1,5 +1,6 @@
-import { createFileRoute, Link, redirect, useNavigate, useRouter } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import { addDays, format, parseISO } from "date-fns";
+import { useRef } from "react";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { HistoryBackLink } from "@/components/HistoryBackLink";
@@ -19,7 +20,6 @@ import {
   preferredBulkMembership,
   useMemberships,
 } from "@/lib/bulk-access";
-import { backWithinApp } from "@/lib/in-app-back";
 import { useLocalDay } from "@/lib/use-local-day";
 import {
   ACTIVITY_TONE,
@@ -79,8 +79,9 @@ const WEEKDAYS = ["M", "T", "W", "T", "F", "S", "S"];
 
 function PlannerPage() {
   const search = Route.useSearch();
+  const lastItem = useRef(search.item);
+  if (search.item) lastItem.current = search.item;
   const navigate = useNavigate({ from: "/planner" });
-  const router = useRouter();
   const today = useLocalDay();
   const memberships = useMemberships();
   const profileId = preferredBulkMembership(memberships.data)?.bulk_profile_id ?? null;
@@ -98,12 +99,16 @@ function PlannerPage() {
   const detail = usePlannedItem(profileId, search.item ?? null);
   const workoutStart = usePlannedWorkoutStart(profileId);
 
-  const setSearch = (next: Partial<PlannerSearch>, push = false) =>
-    void navigate({ search: (previous) => ({ ...previous, ...next }), replace: !push });
-  const openItem = (item: PlannedActivity) => setSearch({ item: item.id }, true);
+  const setSearch = (next: Partial<PlannerSearch>) =>
+    void navigate({
+      search: (previous) => ({ ...previous, ...next }),
+      replace: true,
+      resetScroll: false,
+    });
+  const openItem = (item: PlannedActivity) => setSearch({ item: item.id });
   const closeItem = () => {
-    // Return to the exact Agenda/Calendar entry that opened the sheet; deep links fall back here.
-    if (!backWithinApp(router.history, "/planner")) setSearch({ item: undefined });
+    // The shared overlay adapter consumes its frame; retain this exact Agenda/Calendar context.
+    setSearch({ item: undefined });
   };
   const newSearch = calendar && selected >= today ? { date: selected } : {};
 
@@ -201,6 +206,9 @@ function PlannerPage() {
         profileId={profileId}
         today={today}
         onClose={closeItem}
+        onReopen={() => {
+          if (lastItem.current) setSearch({ item: lastItem.current });
+        }}
       />
     </AppShell>
   );

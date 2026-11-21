@@ -379,7 +379,7 @@ test("Activity edit updates in place (owner + open week), and never inserts on e
   // The edit screen's back link names and returns to the Activity.
   assert.match(add, /backTo="\/challenge\/activity\/\$activityId"/);
   assert.match(add, /backLabel="Activity"/);
-  assert.match(add, /to: "\/challenge\/activity\/\$activityId", params: \{ activityId: editId/);
+  assert.match(add, /`\/challenge\/activity\/\$\{editId\}`/);
 });
 
 test("Activity detail shows the large evidence panel via the shared signed-URL lightbox", async () => {

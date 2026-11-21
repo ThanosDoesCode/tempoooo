@@ -1,3 +1,4 @@
+import * as navigation from "../src/lib/in-app-back.ts";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -136,6 +137,7 @@ function fixture(source, exportName, initialProps, options = {}) {
     "react/jsx-runtime": { jsx, jsxs: jsx, Fragment: "fragment" },
     "react-dom": { createPortal: (children) => children },
     "@tanstack/react-router": {
+      useRouter: () => undefined,
       Link: "Link",
       useNavigate: () => async (d) => destinations.push(d),
       createFileRoute: () => (config) => config,
@@ -212,6 +214,10 @@ function fixture(source, exportName, initialProps, options = {}) {
     clearTimeout: (id) => timers.delete(id),
     console,
     require(name) {
+      if (name === "@/lib/in-app-back") return navigation;
+      if (name.endsWith("HistoryBackLink")) return { HistoryBackLink: "HistoryBackLink" };
+      if (name.endsWith("UnsavedSettingsDialog"))
+        return { UnsavedSettingsDialog: "UnsavedSettingsDialog" };
       if (options.modules?.[name]) return options.modules[name];
       if (modules[name]) return modules[name];
       if (name === "date-fns") return require(name);
@@ -407,7 +413,8 @@ test("Discard workout is inside Finish confirmation and still requires its separ
   assert.equal(f.calls.filter(([name]) => name === "discardBulkTrainingSession").length, 1);
   assert.equal(f.calls.filter(([name]) => name === "finishBulkTrainingSession").length, 0);
   assert.equal(f.storage.has("tempo:bulk-workout-draft:owner1:session1"), false);
-  assert.equal(f.destinations[0].to, "/bulk/training");
+  assert.equal(f.destinations[0].href, "/bulk/training");
+  assert.equal(f.destinations[0].replace, true);
 });
 
 test("compact Finish confirmation keeps balanced 48px actions and cancellation leaves the workout untouched", () => {

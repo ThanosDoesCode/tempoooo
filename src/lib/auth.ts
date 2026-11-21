@@ -6,12 +6,14 @@ import { clearAccountScopedBrowserData } from "@/lib/browser-data";
 import { readRetryDelay, shouldRetryRead, errorStatus } from "@/lib/network-errors";
 
 import { startupDiagnostic, withStartupDeadline } from "@/lib/startup";
+import { observeNavigationIdentity } from "./in-app-back";
 
 // One identity revision shared with the existing root auth listener. Token refreshes
 // for the same account do not invalidate work; logout/account switches do.
 let authIdentityRevision = 0;
 let observedUserId: string | null | undefined;
 export function observeAuthIdentity(userId: string | null) {
+  observeNavigationIdentity(userId);
   if (observedUserId !== userId) authIdentityRevision += 1;
   observedUserId = userId;
 }

@@ -402,9 +402,13 @@ export function CommunityBlockedUsers() {
 export function CommunityPage({
   search,
   onSearchChange,
+  section = "friends",
+  onSectionChange,
 }: {
   search: string;
   onSearchChange: (value: string) => void;
+  section?: string;
+  onSectionChange?: (value: string) => void;
 }) {
   const { user } = useAuth();
   const [debounced, setDebounced] = useState(search);
@@ -418,7 +422,11 @@ export function CommunityPage({
   return (
     <>
       <MainPageHeader title="Community" />
-      <Tabs defaultValue="friends" className="min-w-0">
+      <Tabs
+        defaultValue="friends"
+        {...(onSectionChange ? { value: section, onValueChange: onSectionChange } : {})}
+        className="min-w-0"
+      >
         <TabsList
           aria-label="Community sections"
           className="mb-4 grid h-auto w-full grid-cols-2 rounded-2xl bg-card p-1"

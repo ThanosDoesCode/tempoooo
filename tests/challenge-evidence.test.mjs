@@ -530,10 +530,8 @@ test("Challenge evidence uses a local lightbox with safe close and browser Back 
   assert.match(viewer, /Evidence available/);
   assert.match(viewer, /Evidence expired after finalization/);
   assert.match(viewer, /Evidence unavailable/);
-  assert.match(viewer, /window\.history\.pushState/);
-  assert.match(viewer, /\.\.\.preservedState/);
-  assert.match(viewer, /window\.history\.back/);
-  assert.match(viewer, /addEventListener\("popstate"/);
+  assert.match(viewer, /useOverlayBack\(open/);
+  assert.doesNotMatch(viewer, /window\.history|preservedState|popstate/);
   assert.match(viewer, /onClick=\{close\}/);
   assert.match(viewer, /document\.body\.style\.overflow = previousOverflow/);
   assert.match(viewer, /onError=/);

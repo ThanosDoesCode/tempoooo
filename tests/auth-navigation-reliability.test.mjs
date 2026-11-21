@@ -1,4 +1,6 @@
 import { test } from "node:test";
+import * as navigation from "../src/lib/in-app-back.ts";
+import { createMemoryHistory } from "@tanstack/history";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import vm from "node:vm";
@@ -29,6 +31,7 @@ function fixture({ responses = [], offline = false } = {}) {
   const context = {
     exports: {},
     require(name) {
+      if (name.includes("in-app-back")) return navigation;
       if (name === "react")
         return {
           useState(initial) {
@@ -275,14 +278,22 @@ test("first observed auth identity also fences an earlier invalid getUser respon
 test("same-account TOKEN_REFRESHED identity does not invalidate validation", async () => {
   const f = fixture();
   f.api.observeAuthIdentity("a");
+  const history = createMemoryHistory({ initialEntries: ["/community?q=friend"] });
+  navigation.trackInAppHistory(history);
+  history.push("/profile");
   const revision = f.api.captureAuthIdentity();
   f.api.observeAuthIdentity("a");
   assert.equal(f.api.captureAuthIdentity(), revision);
+  assert.equal(navigation.inAppBackPath(history), "/community");
   assert.equal(
     (await f.api.authenticatedUserQueryOptions().queryFn({ signal: new AbortController().signal }))
       .id,
     "a",
   );
+  f.api.observeAuthIdentity("b");
+  assert.equal(navigation.inAppBackPath(history), undefined);
+  f.api.observeAuthIdentity(null);
+  assert.equal(navigation.inAppBackPath(history), undefined);
 });
 
 test("bounded entry-session read cannot overwrite logout and an aborted auth read cannot publish", async () => {

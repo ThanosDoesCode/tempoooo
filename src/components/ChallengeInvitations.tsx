@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import * as Dialog from "@radix-ui/react-dialog";
+import * as Dialog from "@/components/ui/dialog-root";
 import { format, parseISO } from "date-fns";
 import { Card, PendingLabel, SectionTitle } from "@/components/ui-kit";
 import { ChallengeInvitationDetails } from "@/components/ChallengeInvitationDetails";
