@@ -240,7 +240,10 @@ function CheckInPage() {
             <ThreeUp
               title="Training"
               items={[
-                [formatWorkoutProgress(s.gymSessions, s.gymTarget), "Workouts"],
+                [
+                  formatWorkoutProgress(s.gymSessions, s.gymTarget),
+                  s.gymTarget == null ? "Workouts" : "Workouts · current goal",
+                ],
                 [String(s.prs.length), "New records"],
                 [String(s.regressed), "Went down"],
               ]}

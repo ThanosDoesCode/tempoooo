@@ -1185,7 +1185,7 @@ test("Phase 5 keeps original routes, goal separate from frequency, historical ed
   const training = await read("src/routes/_authenticated/bulk/training.tsx");
   const today = await read("src/routes/_authenticated/bulk/index.tsx");
   for (const source of [training, today])
-    assert.match(source, /weeklyWorkoutGoal: data\?\.targets\.weeklyWorkoutGoal \?\? 5/);
+    assert.match(source, /weeklyWorkoutGoal: data\?\.targets\.weeklyWorkoutGoal \?\? null/);
   assert.match(training, /if \(starting\.current/);
   assert.match(training, /activeSession\.data\.id/);
   const history = await read("src/routes/_authenticated/bulk/training_.history.tsx");

@@ -96,7 +96,7 @@ export type Targets = {
   goal?: PhysiqueGoal | undefined;
   experienceLevel?: ExperienceLevel | undefined;
   trainingDaysPerWeek?: number | undefined;
-  /** Weekly completed-workout goal, independent of the plan's structured-day count. */
+  /** Explicit weekly goal. Leave absent until chosen; resolve frequency/legacy fallbacks on read. */
   weeklyWorkoutGoal?: number | undefined;
   availableEquipment?: Equipment[] | undefined;
   trainingSetupPreference?: TrainingSetupPreference | undefined;
@@ -198,6 +198,5 @@ export const DEFAULT_DATA: AppData = {
     water: 3,
     startWeight: 61.5,
     targetWeight: 75,
-    weeklyWorkoutGoal: 5,
   },
 };

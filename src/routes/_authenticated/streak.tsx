@@ -71,6 +71,11 @@ function StreakContent({
       <section className="card-surface space-y-3 rounded-[20px] p-5">
         <h2 className="text-[13px] text-muted-foreground">This week</h2>
         <StreakRings thisWeek={data.thisWeek} progress={progress} />
+        {data.thisWeek?.rings.some((ring) => ring.key === "train" && ring.active) ? (
+          <p className="text-xs text-muted-foreground">
+            Train uses the goal frozen at the start of this week.
+          </p>
+        ) : null}
       </section>
 
       {weeks.length > 0 ? (

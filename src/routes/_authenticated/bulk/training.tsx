@@ -76,7 +76,7 @@ function TrainingPage() {
       legacyDays: data?.days ?? null,
     });
     const target = resolveWeeklyWorkoutTarget({
-      weeklyWorkoutGoal: data?.targets.weeklyWorkoutGoal ?? 5,
+      weeklyWorkoutGoal: data?.targets.weeklyWorkoutGoal ?? null,
       activePlanDaysPerWeek: activePlan.data?.trainingDaysPerWeek ?? null,
       targetDaysPerWeek: data?.targets.trainingDaysPerWeek ?? null,
     });

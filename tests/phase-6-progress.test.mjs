@@ -982,13 +982,30 @@ test("Today, Progress and Challenge share the safe-area-aware shell inset and 14
   assert.doesNotMatch(tiles[0] + tiles[1], /<svg|Not enough data|build your trends|start tracking/);
 });
 
-test("Strength with no active public plan never invents planned-workout adherence", async () => {
-  const fixture = await progressFixture({ plan: null });
+test("Strength without any configured goal, frequency or plan never invents adherence", async () => {
+  const fixture = await progressFixture({
+    plan: null,
+    targets: { weeklyWorkoutGoal: undefined, trainingDaysPerWeek: undefined },
+  });
   const html = await fixture.render("src/routes/_authenticated/bulk/progress_.strength.tsx");
   assert.match(html, /completed workouts/);
   assert.doesNotMatch(html, /training adherence|of \d+ planned workouts/);
-  assert.match(html, /Choose a training plan and weekly workout goal/);
+  assert.match(html, /Set a weekly workout goal/);
 });
+
+for (const targets of [
+  { trainingDaysPerWeek: 2 },
+  { weeklyWorkoutGoal: 4, trainingDaysPerWeek: 3 },
+])
+  test(`Strength honors configured frequency/goal ${JSON.stringify(targets)} without requiring a plan`, async () => {
+    const fixture = await progressFixture({
+      plan: null,
+      targets: { weeklyWorkoutGoal: undefined, ...targets },
+    });
+    const html = await fixture.render("src/routes/_authenticated/bulk/progress_.strength.tsx");
+    assert.match(html, /training adherence/);
+    assert.match(html, /Planned count uses your current weekly workout goal/);
+  });
 
 test("one working Strength session renders actual load before secondary estimated 1RM and no fake change", async () => {
   const record = {

@@ -60,9 +60,9 @@ export function countWorkoutsInRange(
 /**
  * Configured weekly workout goal. This is how many workouts the user aims to complete
  * per week and is deliberately independent of the plan's structured-day count: a 3-day
- * plan can carry a 5-workout weekly goal. The explicit `weeklyWorkoutGoal` wins; the
- * plan/onboarding day counts are only legacy fallbacks. Returns null when nothing is
- * configured; never guesses.
+ * plan can carry a 5-workout weekly goal. Match private.resolve_streak_goal: explicit
+ * `weeklyWorkoutGoal`, then configured training frequency, then the legacy active-plan
+ * fallback. Resolve on read without persisting a fallback. Null means unconfigured.
  */
 export function resolveWeeklyWorkoutTarget(args: {
   weeklyWorkoutGoal?: number | null;

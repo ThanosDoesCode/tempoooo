@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { readdir, readFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { PGlite } from "@electric-sql/pglite";
+import { DEFAULT_DATA } from "../src/lib/types.ts";
+import { resolveWeeklyWorkoutTarget } from "../src/lib/goal-metrics.ts";
 
 const migrations = new URL("../supabase/migrations/", import.meta.url);
 
@@ -55,7 +57,7 @@ const recompute = async (db, uid, tz = "Europe/Athens") => {
   return rows[0].r;
 };
 
-async function makeUser(db, { fitness = false } = {}) {
+async function makeUser(db, { fitness = false, frequency = 4 } = {}) {
   const uid = randomUUID();
   await asService(db);
   await db.query("INSERT INTO auth.users(id) VALUES($1)", [uid]);
@@ -64,8 +66,9 @@ async function makeUser(db, { fitness = false } = {}) {
     await asUser(db, uid);
     await db.query(
       `SELECT public.complete_goal_onboarding(
-        'gain',70,78,0.25,'intermediate',4,
+        'gain',70,78,0.25,'intermediate',$1,
         ARRAY['dumbbells','cables','bench'],'custom',2900,140,360,90)`,
+      [frequency],
     );
     await asService(db);
   }
@@ -120,6 +123,114 @@ const legsOf = async (db, uid) =>
       [uid],
     )
   ).rows;
+
+test("onboarded frequency, explicit goal, legacy plan fallback and unconfigured state match the frontend resolver", async (t) => {
+  const db = await freshDatabase();
+  t.after(() => db.close());
+  const uid = await makeUser(db, { fitness: true, frequency: 2 });
+  const profile = await profileOf(db, uid);
+  const original = (
+    await db.query("SELECT payload FROM public.bulk_targets WHERE bulk_profile_id=$1", [profile])
+  ).rows[0].payload;
+  assert.equal(original.trainingDaysPerWeek, 2);
+  assert.equal(Object.hasOwn(original, "weeklyWorkoutGoal"), false);
+  await db.query(
+    "INSERT INTO public.bulk_training_plans(bulk_profile_id,plan_type,name,experience_level,training_days_per_week) VALUES($1,'custom','Three days','intermediate',3)",
+    [profile],
+  );
+  const check = async (payload, expected) => {
+    await asService(db);
+    await db.query("UPDATE public.bulk_targets SET payload=$2::jsonb WHERE bulk_profile_id=$1", [
+      profile,
+      JSON.stringify(payload),
+    ]);
+    const server = (await db.query("SELECT private.resolve_streak_goal($1) AS goal", [profile]))
+      .rows[0].goal;
+    const loaded = { ...DEFAULT_DATA.targets, ...payload };
+    assert.equal(server, expected);
+    assert.equal(
+      resolveWeeklyWorkoutTarget({
+        weeklyWorkoutGoal: loaded.weeklyWorkoutGoal,
+        targetDaysPerWeek: loaded.trainingDaysPerWeek,
+        activePlanDaysPerWeek: 3,
+      }),
+      expected,
+    );
+  };
+  await check(original, 2);
+  await check({ ...original, weeklyWorkoutGoal: 4 }, 4);
+  await check({ ...original, weeklyWorkoutGoal: 5 }, 5);
+  const { trainingDaysPerWeek: _frequency, ...legacy } = original;
+  await check(legacy, 3);
+  await db.query("DELETE FROM public.bulk_training_plans WHERE bulk_profile_id=$1", [profile]);
+  assert.equal(
+    (await db.query("SELECT private.resolve_streak_goal($1) AS goal", [profile])).rows[0].goal,
+    null,
+  );
+  assert.equal(resolveWeeklyWorkoutTarget({ ...legacy }), null);
+});
+
+test("real target saves never inject a missing weekly goal; explicit mid-week saves preserve frozen current and historical streak targets", async (t) => {
+  const db = await freshDatabase();
+  t.after(() => db.close());
+  const uid = await makeUser(db, { fitness: true, frequency: 2 });
+  const profile = await profileOf(db, uid);
+  const original = (
+    await db.query("SELECT payload FROM public.bulk_targets WHERE bulk_profile_id=$1", [profile])
+  ).rows[0].payload;
+  await db.query(
+    "INSERT INTO public.bulk_streak_goal_events(bulk_profile_id,effective_at,weekly_workout_goal,calorie_target_kcal) VALUES($1,date_trunc('week',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC' - interval '7 days',2,2900)",
+    [profile],
+  );
+  await recompute(db, uid, "UTC");
+  const before = await weeksOf(db, uid);
+  const activeWeeks = before.filter((week) => week.train_active);
+  assert.ok(activeWeeks.length >= 2, "a historical and current week are frozen");
+  assert.ok(activeWeeks.every((week) => week.train_target_workouts === 2));
+  const save = async (payload) => {
+    await asUser(db, uid);
+    await db.query("SELECT public.save_bulk_targets_for_local_day($1,$2::jsonb,'UTC')", [
+      profile,
+      JSON.stringify(payload),
+    ]);
+    await asService(db);
+  };
+  const nutrition = { ...DEFAULT_DATA.targets, ...original, calories: 3000 };
+  await save(nutrition);
+  assert.equal(
+    Object.hasOwn(
+      (
+        await db.query("SELECT payload FROM public.bulk_targets WHERE bulk_profile_id=$1", [
+          profile,
+        ])
+      ).rows[0].payload,
+      "weeklyWorkoutGoal",
+    ),
+    false,
+  );
+  assert.equal(
+    (await db.query("SELECT private.resolve_streak_goal($1) AS goal", [profile])).rows[0].goal,
+    2,
+  );
+  await save({ ...nutrition, exerciseSetupNotes: { Press: "Seat 3" } });
+  assert.equal(
+    (await db.query("SELECT private.resolve_streak_goal($1) AS goal", [profile])).rows[0].goal,
+    2,
+  );
+  await save({ ...nutrition, weeklyWorkoutGoal: 4 });
+  assert.equal(
+    (await db.query("SELECT private.resolve_streak_goal($1) AS goal", [profile])).rows[0].goal,
+    4,
+  );
+  await recompute(db, uid, "UTC");
+  const after = await weeksOf(db, uid);
+  for (const week of activeWeeks) {
+    const saved = after.find((candidate) => candidate.week_start === week.week_start);
+    assert.equal(saved.train_target_workouts, 2);
+    assert.deepEqual(saved.locked_at, week.locked_at);
+    assert.equal(saved.result, week.result);
+  }
+});
 
 // ----------------------------------------------------------------- smoke / shape
 test("migration applies; recompute returns a zero shape for a bare account", async () => {

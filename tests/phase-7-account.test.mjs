@@ -1,4 +1,5 @@
 import { test } from "node:test";
+import * as goalMetrics from "../src/lib/goal-metrics.ts";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { accountUI, deferred, event, textOf } from "./account-ui-fixture.mjs";
@@ -83,6 +84,8 @@ function editor(name, save, role = "owner") {
       "@tanstack/react-query": { useQueryClient: () => queryClient },
       "@/lib/calc": { iso: () => "2026-10-07" },
       "@/lib/bulk-nutrition-query": { refreshBulkNutritionTargets: async () => {} },
+      "@/lib/goal-metrics": goalMetrics,
+      "@/lib/training-plans-query": { useActiveTrainingPlan: () => ({ data: null }) },
     },
     { onDirtyChange: (value) => dirty.push(value) },
   );

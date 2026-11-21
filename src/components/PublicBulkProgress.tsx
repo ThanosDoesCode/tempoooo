@@ -592,7 +592,9 @@ function WeeklyCheckIn({
               ? `${summary.completedWorkouts} completed`
               : `${summary.completedWorkouts} / ${summary.plannedWorkouts}`
           }
-          hint="completed week"
+          hint={
+            summary.plannedWorkouts == null ? "completed week" : "completed week · current goal"
+          }
         />
       </div>
       <div className="mt-3 rounded-xl border border-border bg-elevated p-3" role="status">

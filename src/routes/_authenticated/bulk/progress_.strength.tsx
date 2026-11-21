@@ -16,6 +16,7 @@ import { trackedLiftSummary } from "@/lib/progress-presentation";
 import { ExerciseRecordSummary } from "@/components/ExerciseRecordSummary";
 import { groupExerciseRecords, resolveExerciseRecord } from "@/lib/exercise-records";
 import { useAppData } from "@/lib/store";
+import { resolveWeeklyWorkoutTarget } from "@/lib/goal-metrics";
 import {
   progressRange,
   progressPeriodLabel,
@@ -54,7 +55,7 @@ function StrengthPage() {
 
 function StrengthBody({ data, period }: { data: AppData; period: ProgressPeriod }) {
   const range = progressRange(period);
-  const { mode, publicId } = useProgressMode();
+  const { publicId } = useProgressMode();
   const plan = useActiveTrainingPlan(publicId);
   const { records, workoutRecords, loading, error, refetch } = useStrengthModel();
   const [trackedNames, setTrackedNames, resetTrackedNames, candidates, planLoading] =
@@ -72,7 +73,11 @@ function StrengthBody({ data, period }: { data: AppData; period: ProgressPeriod 
   const adherence = trainingAdherence(
     workoutRecords,
     range,
-    mode === "public" && !plan.data ? null : (data.targets.weeklyWorkoutGoal ?? null),
+    resolveWeeklyWorkoutTarget({
+      weeklyWorkoutGoal: data.targets.weeklyWorkoutGoal ?? null,
+      targetDaysPerWeek: data.targets.trainingDaysPerWeek ?? null,
+      activePlanDaysPerWeek: plan.data?.trainingDaysPerWeek ?? null,
+    }),
   );
   const events = useMemo(
     () => progressRecordEvents(records, progressRange(period)),
@@ -109,7 +114,7 @@ function StrengthBody({ data, period }: { data: AppData; period: ProgressPeriod 
             ? "Planned count uses your current weekly workout goal across this period."
             : period === "all"
               ? "Historical weekly goals aren't recorded, so no adherence percentage is estimated."
-              : "Choose a training plan and weekly workout goal to track adherence."}
+              : "Set a weekly workout goal to track adherence."}
         </p>
         {summary.total ? (
           <p className="text-sm text-primary">

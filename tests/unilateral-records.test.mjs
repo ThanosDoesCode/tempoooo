@@ -143,6 +143,7 @@ function markup(
     "@/lib/types": types,
     "@/lib/network-errors": { userFacingError: () => "Error" },
     "@/lib/strength-progress": require("../src/lib/strength-progress.ts"),
+    "@/lib/goal-metrics": require("../src/lib/goal-metrics.ts"),
     "@/lib/progress-period": periods,
     "@/lib/progress-presentation": { trackedLiftSummary },
     recharts: charts,

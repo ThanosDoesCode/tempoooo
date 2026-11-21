@@ -101,7 +101,7 @@ function TodayPage() {
           : `${weight} kg · ${sleep} h sleep`;
   const habits = [weight != null && sleep != null, workoutDone || rest, mealsComplete];
   const target = resolveWeeklyWorkoutTarget({
-    weeklyWorkoutGoal: data?.targets.weeklyWorkoutGoal ?? 5,
+    weeklyWorkoutGoal: data?.targets.weeklyWorkoutGoal ?? null,
     targetDaysPerWeek: data?.targets.trainingDaysPerWeek ?? null,
     activePlanDaysPerWeek: plan.data?.trainingDaysPerWeek ?? null,
   });

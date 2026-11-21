@@ -1,9 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Card, Note, PendingLabel, SectionTitle } from "@/components/ui-kit";
 import { useActions, useAppData, useBulkMeta } from "@/lib/store";
+import { resolveWeeklyWorkoutTarget } from "@/lib/goal-metrics";
+import { useActiveTrainingPlan } from "@/lib/training-plans-query";
 
 const MIN = 1;
 const MAX = 14;
+const goalDraftValue = (draft: string) =>
+  draft.trim() === "" ? null : Number(draft.replace(",", "."));
 
 /**
  * Edits the weekly completed-workout goal through the existing saveTargets() mutation.
@@ -15,29 +19,31 @@ export function WeeklyWorkoutGoalEditor({
   onDirtyChange,
 }: { onDirtyChange?: (dirty: boolean) => void } = {}) {
   const data = useAppData();
-  const { role } = useBulkMeta();
+  const { role, bulkId } = useBulkMeta();
+  const plan = useActiveTrainingPlan(bulkId ?? null);
   const canEdit = role !== "viewer";
   const { saveTargets } = useActions();
   const targets = data?.targets;
+  const configuredGoal = resolveWeeklyWorkoutTarget({
+    weeklyWorkoutGoal: targets?.weeklyWorkoutGoal ?? null,
+    targetDaysPerWeek: targets?.trainingDaysPerWeek ?? null,
+    activePlanDaysPerWeek: plan.data?.trainingDaysPerWeek ?? null,
+  });
   const [draft, setDraft] = useState("");
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
   const [initialized, setInitialized] = useState(false);
+  const edited = useRef(false);
 
   useEffect(() => {
     // Keep the draft when the existing optimistic store rolls back a failed save.
-    if (status === "saving" || status === "error") return;
-    if (targets?.weeklyWorkoutGoal != null) {
-      setDraft(String(targets.weeklyWorkoutGoal));
-      setInitialized(true);
-    }
-  }, [targets?.weeklyWorkoutGoal]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (edited.current || status === "saving" || status === "error") return;
+    if (!targets) return;
+    setDraft(configuredGoal == null ? "" : String(configuredGoal));
+    setInitialized(true);
+  }, [!!targets, configuredGoal]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const dirty =
-    !!targets &&
-    canEdit &&
-    initialized &&
-    Number(draft.replace(",", ".")) !== targets.weeklyWorkoutGoal;
+  const dirty = !!targets && canEdit && initialized && goalDraftValue(draft) !== configuredGoal;
   useEffect(() => {
     onDirtyChange?.(dirty);
   }, [dirty, onDirtyChange]);
@@ -56,6 +62,7 @@ export function WeeklyWorkoutGoalEditor({
     setError(null);
     try {
       await saveTargets({ ...targets, weeklyWorkoutGoal: value });
+      edited.current = false;
       setStatus("saved");
     } catch {
       setStatus("error");
@@ -72,7 +79,9 @@ export function WeeklyWorkoutGoalEditor({
           inputMode="numeric"
           disabled={!canEdit || status === "saving"}
           value={draft}
+          placeholder="Not configured"
           onChange={(event) => {
+            edited.current = goalDraftValue(event.target.value) !== configuredGoal;
             setDraft(event.target.value);
             setStatus("idle");
           }}
@@ -83,7 +92,8 @@ export function WeeklyWorkoutGoalEditor({
       <div className="mt-3">
         <Note>
           This is your target number of completed workouts each week. It is independent of how many
-          structured days your training plan has, and does not change your plan or history.
+          structured days your training plan has, and does not change your plan or history. Your
+          configured goal updates now. Streak targets stay fixed for each week.
         </Note>
       </div>
       {error ? (
