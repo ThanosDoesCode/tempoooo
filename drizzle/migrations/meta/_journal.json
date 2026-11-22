@@ -71,6 +71,13 @@
       "when": 1793510529024,
       "tag": "0009_community_account_notifications",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1795387244777,
+      "tag": "0010_calorie_recommendation_local_day",
+      "breakpoints": true
     }
   ]
 }

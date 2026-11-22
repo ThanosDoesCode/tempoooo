@@ -2621,10 +2621,19 @@ export type Database = {
         Args: { _exercise: string; _session: string }
         Returns: string
       }
-      apply_bulk_calorie_recommendation: {
-        Args: { _expected_current_calories: number; _new_calories: number }
-        Returns: boolean
-      }
+      apply_bulk_calorie_recommendation:
+        | {
+            Args: { _expected_current_calories: number; _new_calories: number }
+            Returns: boolean
+          }
+        | {
+            Args: {
+              _expected_current_calories: number
+              _new_calories: number
+              _timezone: string
+            }
+            Returns: string
+          }
       block_community_user: { Args: { _user: string }; Returns: undefined }
       bulk_nutrition_targets_for_day: {
         Args: { _log_date: string; _profile: string; _timezone: string }
