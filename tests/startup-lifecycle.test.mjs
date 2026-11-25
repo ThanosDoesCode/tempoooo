@@ -413,7 +413,9 @@ test("root suspension is caught inside the shell rather than hiding its watchdog
   assert.ok(source.indexOf("startup.begin()") < source.indexOf("function RootComponent"));
 });
 
-test("real TanStack cold redirect before its history subscription loads the intended destination", async () => {
+// Match the client path of the locked Router without requiring a global browser DOM.
+async function clientStartupRouter(redirectOnLoad) {
+  process.env.NODE_ENV = "test";
   const { createRootRoute, createRoute, createRouter, createMemoryHistory, redirect } =
     await import("@tanstack/react-router");
   const root = createRootRoute();
@@ -421,7 +423,7 @@ test("real TanStack cold redirect before its history subscription loads the inte
     getParentRoute: () => root,
     path: "/protected",
     beforeLoad: () => {
-      throw redirect({ to: "/auth", replace: true });
+      if (redirectOnLoad) throw redirect({ to: "/auth", replace: true });
     },
   });
   const auth = createRoute({ getParentRoute: () => root, path: "/auth" });
@@ -429,17 +431,39 @@ test("real TanStack cold redirect before its history subscription loads the inte
     routeTree: root.addChildren([protectedRoute, auth]),
     history: createMemoryHistory({ initialEntries: ["/protected"] }),
     isServer: false,
+    origin: "https://tempo.test",
   });
   await router.load();
-  // Node resolves the server export condition. Reproduce the browser redirect
-  // commit from Router.load, before React Transitioner installs its subscriber.
-  router.history.replace(router.state.redirect.headers.get("Location"));
+  return router;
+}
+
+test("real TanStack cold redirect loads its destination without a duplicate startup repair", async () => {
+  const router = await clientStartupRouter(true);
   assert.equal(router.history.location.href, "/auth");
-  assert.equal(
-    router.state.location.pathname,
-    "/protected",
-    "the pre-subscription redirect really leaves stale pending matches",
-  );
+  assert.equal(router.state.location.pathname, "/auth");
+  let extraLoads = 0;
+  const load = router.load;
+  router.load = (...args) => {
+    extraLoads++;
+    return load(...args);
+  };
+  const lifecycle = new StartupLifecycle(clock());
+  lifecycle.begin();
+  const stop = watchStartupRedirects(router, lifecycle);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(router.state.isLoading, false);
+  assert.equal(router.state.matches.at(-1).status, "success");
+  assert.equal(extraLoads, 0, "Router already handled this redirect");
+  stop();
+  lifecycle.stop();
+});
+
+test("real TanStack missed cold history handoff still loads the intended destination", async () => {
+  const router = await clientStartupRouter(false);
+  // Deliberately commit before Transitioner subscribes to reproduce a missed handoff.
+  router.history.replace("/auth");
+  assert.equal(router.history.location.href, "/auth");
+  assert.equal(router.state.location.pathname, "/protected");
   const lifecycle = new StartupLifecycle(clock());
   lifecycle.begin();
   const stop = watchStartupRedirects(router, lifecycle);

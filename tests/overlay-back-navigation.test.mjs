@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFileSync } from "node:fs";
 import { createMemoryHistory, createBrowserHistory } from "@tanstack/history";
-import { createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
 import { createOverlayHistory } from "../src/lib/overlay-history.ts";
 import {
   trackInAppHistory,
@@ -12,6 +11,11 @@ import {
   observeNavigationIdentity,
   isRetiredInAppPath,
 } from "../src/lib/in-app-back.ts";
+
+// The locked Router's Node export honors per-instance isServer in test mode.
+// Load it afterward so these browser-history fixtures exercise the client path.
+process.env.NODE_ENV = "test";
+const { createRootRoute, createRoute, createRouter } = await import("@tanstack/react-router");
 
 const settle = async () => {
   for (let i = 0; i < 6; i++) await new Promise(setImmediate);
@@ -31,7 +35,12 @@ async function workoutRouter(t, browser, initial = "/bulk") {
     "/bulk/workout/$sessionId",
     "/profile",
   ].map((path) => createRoute({ getParentRoute: () => root, path }));
-  const router = createRouter({ routeTree: root.addChildren(routes), history, isServer: false });
+  const router = createRouter({
+    routeTree: root.addChildren(routes),
+    history,
+    isServer: false,
+    origin: "https://tempo.test",
+  });
   // The same subscription installed by TanStack's React Transitioner, without a second router.
   const unsubscribe = history.subscribe(router.load);
   const overlays = fixture(history);

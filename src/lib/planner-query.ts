@@ -175,15 +175,25 @@ export type PlannedInput = {
   note: string | null;
 };
 
-const fieldArgs = (input: PlannedInput) => ({
-  _planned_time: input.time,
-  _workout_source_type: input.type === "workout" ? input.source : null,
-  _training_plan_day_id: input.type === "workout" ? input.planDayId : null,
-  _workout_template_id: input.type === "workout" ? input.templateId : null,
-  _distance_km: input.type === "workout" ? null : input.distanceKm,
-  _duration_seconds: input.type === "workout" ? null : input.durationSeconds,
-  _note: input.note,
-});
+// Generated RPC types mark these args optional; the database expects explicit nulls.
+const fieldArgs = (input: PlannedInput) =>
+  ({
+    _planned_time: input.time,
+    _workout_source_type: input.type === "workout" ? input.source : null,
+    _training_plan_day_id: input.type === "workout" ? input.planDayId : null,
+    _workout_template_id: input.type === "workout" ? input.templateId : null,
+    _distance_km: input.type === "workout" ? null : input.distanceKm,
+    _duration_seconds: input.type === "workout" ? null : input.durationSeconds,
+    _note: input.note,
+  }) as unknown as {
+    _planned_time?: string;
+    _workout_source_type?: string;
+    _training_plan_day_id?: string;
+    _workout_template_id?: string;
+    _distance_km?: number;
+    _duration_seconds?: number;
+    _note?: string;
+  };
 
 function fail(phase: string, error: unknown): never {
   developmentErrorDiagnostic(phase, error);
@@ -220,7 +230,7 @@ export async function reschedulePlannedActivity(id: string, date: string, time: 
   const { error } = await supabase.rpc("reschedule_planned_activity", {
     _id: id,
     _planned_date: date,
-    _planned_time: time,
+    _planned_time: time as string,
   });
   if (error) fail("planner_reschedule", error);
 }
