@@ -448,30 +448,34 @@ export function useActions() {
     }
   }, []);
 
-  const saveTargets = useCallback(async (targets: Targets) => {
-    if (!state || !bulkId || !canWrite()) return;
-    const id = bulkId;
-    const previous = state.targets;
-    state.targets = targets;
-    targetsPending = true;
-    emit();
-    // Snapshot today's targets in the same transaction as the current settings.
-    // Older nutrition days keep their original targets.
-    const { data, error } = await supabase.rpc("save_bulk_targets_for_local_day", {
-      _profile: id,
-      _targets: json(targets),
-      _timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    });
-    targetsPending = false;
-    if (error) {
-      if (state && bulkId === id) {
-        state.targets = previous;
-        emit();
+  const saveTargets = useCallback(
+    async (targets: Pick<Targets, "calories" | "protein" | "carbs" | "fat"> & Partial<Targets>) => {
+      if (!state || !bulkId || !canWrite()) return;
+      const id = bulkId;
+      const previous = state.targets;
+      // Keep compatibility defaults in memory only; raw saves must preserve absent legacy fields.
+      state.targets = { ...DEFAULT_DATA.targets, ...targets };
+      targetsPending = true;
+      emit();
+      // Snapshot today's targets in the same transaction as the current settings.
+      // Older nutrition days keep their original targets.
+      const { data, error } = await supabase.rpc("save_bulk_targets_for_local_day", {
+        _profile: id,
+        _targets: json(targets),
+        _timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      });
+      targetsPending = false;
+      if (error) {
+        if (state && bulkId === id) {
+          state.targets = previous;
+          emit();
+        }
+        throw new Error(error.message);
       }
-      throw new Error(error.message);
-    }
-    return data;
-  }, []);
+      return data;
+    },
+    [],
+  );
 
   const addPhotoSet = useCallback(async (date: string, weight?: number) => {
     if (!state || !bulkId || !canWrite()) return;

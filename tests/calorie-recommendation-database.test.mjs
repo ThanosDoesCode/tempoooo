@@ -130,6 +130,35 @@ test("history pagination finds a calorie change beyond a simulated server row ca
   assert.equal(calorieReviewState(result, 2550), "changed");
 });
 
+test("the existing target-save RPC repairs missing weight pace without altering history or other saved settings", async () => {
+  const f = await fixture();
+  await db.query(
+    "UPDATE public.bulk_targets SET payload=payload-'targetWeeklyGainKg'-'startWeight' WHERE bulk_profile_id=$1",
+    [f.profile],
+  );
+  await asUser(f.user, () => mealQuery(f));
+  await asUser(f.user, () => mealQuery(f, f.yesterday));
+  const before = await snapshot(f);
+  const payload = before.targets;
+  await asUser(f.user, () =>
+    db.query("SELECT public.save_bulk_targets_for_local_day($1,$2::jsonb,$3)", [
+      f.profile,
+      { ...payload, targetWeeklyGainKg: 0.25 },
+      "Europe/Stockholm",
+    ]),
+  );
+  const after = await snapshot(f);
+  assert.deepEqual(after.targets, { ...payload, targetWeeklyGainKg: 0.25 });
+  assert.equal(Object.hasOwn(after.targets, "startWeight"), false);
+  assert.deepEqual(after.entries, before.entries);
+  assert.deepEqual(after.events, before.events, "no workout/calorie streak goal was changed");
+  assert.deepEqual(after.frozen, before.frozen);
+  const historical = (days) =>
+    days.filter((day) => day.log_date.toISOString().slice(0, 10) === f.yesterday);
+  assert.deepEqual(historical(after.days), historical(before.days));
+  assert.deepEqual(after.legacy, before.legacy);
+});
+
 async function asUser(user, action, role = "authenticated") {
   await db.query("SELECT set_config('request.jwt.claim.sub',$1,false)", [user]);
   await db.exec(`SET ROLE ${role}`);

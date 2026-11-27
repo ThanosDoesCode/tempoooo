@@ -568,7 +568,7 @@ test("Phase 7 subpage and Goal settings Back fallbacks are Profile; focus screen
   assert.match(route, /useAuth/);
   assert.match(
     read("src/routes/_authenticated/bulk/more.tsx"),
-    /dirty=\{\(nutritionDirty \|\| weeklyDirty\) && !switching\}/,
+    /dirty=\{\(nutritionDirty \|\| weeklyDirty \|\| weightDirty\) && !switching\}/,
   );
   assert.match(read("src/components/AppShell.tsx"), /\/onboarding|\/bulk-onboarding/);
   assert.match(read("src/components/AppShell.tsx"), /HistoryBackLink/);
@@ -923,8 +923,20 @@ test("Phase 7 explicitly confirmed Goal change bypasses the unsaved guard only f
     "@/lib/network-errors": { userFacingError: () => "Please retry" },
     "@/components/NutritionTargetsEditor": { NutritionTargetsEditor: "NutritionTargetsEditor" },
     "@/components/WeeklyWorkoutGoalEditor": { WeeklyWorkoutGoalEditor: "WeeklyWorkoutGoalEditor" },
+    "@/components/WeightGoalConfigurationEditor": {
+      WeightGoalConfigurationEditor: "WeightGoalConfigurationEditor",
+    },
+    "@/lib/bulk-today-query": {
+      useBulkToday: () => ({ data: { savedTargets: targets() }, isLoading: false }),
+    },
+    "@/lib/weekly-progress-coach": await import("../src/lib/weekly-progress-coach.ts"),
+    "@/lib/calc": await import("../src/lib/calc.ts"),
     "@/components/UnsavedSettingsDialog": { UnsavedSettingsDialog: "UnsavedSettingsDialog" },
   });
+  ui.find("WeightGoalConfigurationEditor")[0].props.onDirtyChange(true);
+  assert.equal(ui.find("UnsavedSettingsDialog")[0].props.dirty, true);
+  ui.find("WeightGoalConfigurationEditor")[0].props.onDirtyChange(false);
+  assert.equal(ui.find("UnsavedSettingsDialog")[0].props.dirty, false);
   ui.find("NutritionTargetsEditor")[0].props.onDirtyChange(true);
   assert.equal(ui.find("UnsavedSettingsDialog")[0].props.dirty, true);
   ui.find("button")

@@ -12,6 +12,38 @@ import {
 export type WeeklyCoachAvailability = "loading" | "error" | "ready";
 export type CalorieReviewState = "eligible" | "changed" | "unknown";
 
+/** Validate saved fields independently; compatibility defaults are never evidence of a goal. */
+export function weightGoalConfiguration(saved: Partial<Targets> | null | undefined) {
+  const goal =
+    saved?.goal === "gain" || saved?.goal === "cut" || saved?.goal === "maintain"
+      ? saved.goal
+      : null;
+  const targetWeight =
+    typeof saved?.targetWeight === "number" &&
+    Number.isFinite(saved.targetWeight) &&
+    saved.targetWeight >= 20 &&
+    saved.targetWeight <= 450
+      ? saved.targetWeight
+      : null;
+  const rawPace = saved?.targetWeeklyGainKg;
+  const pace =
+    typeof rawPace === "number" &&
+    Number.isFinite(rawPace) &&
+    (goal === "maintain"
+      ? rawPace === 0
+      : goal
+        ? rawPace >= 0.05 && rawPace <= 1.5
+        : rawPace === 0 || (rawPace >= 0.05 && rawPace <= 1.5))
+      ? rawPace
+      : null;
+  const missing = [
+    ...(goal == null ? ["goal type"] : []),
+    ...(targetWeight == null ? ["target weight"] : []),
+    ...(pace == null ? ["weekly pace"] : []),
+  ];
+  return { goal, targetWeight, pace, missing, complete: missing.length === 0 };
+}
+
 export function calorieReviewState(
   history: BulkCalorieReviewHistory | undefined,
   currentCalories: number | null,
@@ -27,7 +59,10 @@ export type WeeklyProgressCoachModel = {
   weight: CoachRow;
   training: CoachRow;
   nutrition: CoachRow;
-  action: CoachRow & { kind: "setup" | "weigh" | "log" | "train" | "review_calories" | "continue" };
+  action: CoachRow & {
+    kind: "setup" | "weigh" | "log" | "train" | "review_calories" | "continue";
+    to?: "/bulk/more";
+  };
 };
 
 /** Presentation only: evidence, pace and calorie decisions belong to the existing engine. */
@@ -37,24 +72,35 @@ export function weeklyProgressCoach(
   recommendation: BulkWeeklyRecommendation,
   calorieState: CalorieReviewState,
 ): WeeklyProgressCoachModel {
-  const goal = configured?.goal;
-  const rate = summary.targetWeeklyGainKg;
-  const hasPace =
-    !!goal &&
-    rate != null &&
-    Number.isFinite(rate) &&
-    (goal === "maintain" ? rate === 0 : rate > 0);
+  const configuration = weightGoalConfiguration(configured);
+  const { goal, targetWeight, pace: rate, missing } = configuration;
+  const context = [
+    ...(goal ? [`Goal: ${goal}`] : []),
+    ...(targetWeight != null ? [`Target: ${targetWeight} kg`] : []),
+    ...(rate != null ? [`Pace: ${rate} kg/week`] : []),
+  ].join(" · ");
+  const missingLabel =
+    missing.length > 1
+      ? "Weight goal details incomplete"
+      : missing[0] === "goal type"
+        ? "Goal type not set"
+        : missing[0] === "target weight"
+          ? "Target weight not set"
+          : "Weekly pace not set";
   const reliable =
     summary.weightEntryCount >= RECOMMENDATION_MIN_CURRENT_WEIGH_INS &&
     summary.previousWeightEntryCount >= RECOMMENDATION_MIN_PREVIOUS_WEIGH_INS &&
     summary.weightChangeKg != null &&
     Number.isFinite(summary.weightChangeKg);
-  const weight: CoachRow = !hasPace
-    ? { value: "Weight goal not configured", detail: "Choose a goal and intended weekly pace." }
+  const weight: CoachRow = !configuration.complete
+    ? {
+        value: missingLabel,
+        detail: `${context ? `${context}. ` : ""}Missing: ${missing.join(", ")}.`,
+      }
     : !reliable
       ? {
           value: "Not enough weight data",
-          detail: `Needs ${RECOMMENDATION_MIN_CURRENT_WEIGH_INS}+ weigh-ins in the completed week and ${RECOMMENDATION_MIN_PREVIOUS_WEIGH_INS}+ in the week before (${summary.weightEntryCount} and ${summary.previousWeightEntryCount} logged).`,
+          detail: `${context}. Needs ${RECOMMENDATION_MIN_CURRENT_WEIGH_INS}+ weigh-ins in the completed week and ${RECOMMENDATION_MIN_PREVIOUS_WEIGH_INS}+ in the week before (${summary.weightEntryCount} and ${summary.previousWeightEntryCount} logged).`,
         }
       : (() => {
           const change = summary.weightChangeKg!;
@@ -69,10 +115,7 @@ export function weeklyProgressCoach(
                   : "Slower than intended";
           return {
             value: `${change > 0 ? "+" : ""}${change.toFixed(2)} kg · ${description.toLowerCase()}`,
-            detail:
-              goal === "maintain"
-                ? "Goal: maintain weight · completed-week averages."
-                : `Goal: ${goal === "cut" ? "lose" : "gain"} ${rate} kg/week · completed-week averages.`,
+            detail: `${context} · completed-week averages.`,
           };
         })();
   const target = summary.plannedWorkouts;
@@ -98,11 +141,19 @@ export function weeklyProgressCoach(
         : "Logged entries only; full-day intake isn’t verified.",
   };
   let action: WeeklyProgressCoachModel["action"];
-  if (!hasPace) {
+  if (!configuration.complete) {
     action = {
       kind: "setup",
-      value: "Set your weight goal",
-      detail: "Choose your goal and intended pace before assessing weight progress.",
+      value:
+        missing.length > 1
+          ? "Complete your weight goal details"
+          : missing[0] === "goal type"
+            ? "Choose your goal type"
+            : missing[0] === "target weight"
+              ? "Set your target weight"
+              : "Set your weekly pace",
+      detail: "Complete the missing details in Goal settings. Keep your saved values and history.",
+      to: "/bulk/more",
     };
   } else if (!reliable) {
     action = {

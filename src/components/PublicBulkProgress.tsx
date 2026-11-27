@@ -50,6 +50,7 @@ import { useBulkToday } from "@/lib/bulk-today-query";
 import { WeeklyProgressCoach } from "@/components/WeeklyProgressCoach";
 import {
   weeklyProgressCoach,
+  weightGoalConfiguration,
   calorieReviewState,
   type WeeklyCoachAvailability,
   type WeeklyProgressCoachModel,
@@ -70,7 +71,9 @@ function usePublicGoalWeeklyAnalysis(bulkProfileId: string, targets: Targets) {
     configured.calories > 0
       ? configured.calories
       : null;
-  const weeklyRate = configured?.goal ? (configured.targetWeeklyGainKg ?? null) : null;
+  const weightConfiguration = weightGoalConfiguration(configured);
+  // The legacy engine default must never authorize adjustments for incomplete saved goals.
+  const weeklyRate = weightConfiguration.complete ? weightConfiguration.pace : null;
   const currentWeek = bulkWeek(today);
   const calorieHistory = useBulkCalorieReviewHistory(bulkProfileId, currentWeek.start);
   const from = localDay(addDays(parseISO(currentWeek.start), -84));
@@ -168,7 +171,7 @@ function usePublicGoalWeeklyAnalysis(bulkProfileId: string, targets: Targets) {
   const recommendation = useMemo(
     () =>
       recommendBulkCalories({
-        goal: configured?.goal ?? "gain",
+        ...(weightConfiguration.goal ? { goal: weightConfiguration.goal } : {}),
         summary: completedSummary,
         currentTargetCalories: currentCalories,
         previousTrendChangeKg: priorSummary.weightChangeKg,
@@ -176,14 +179,21 @@ function usePublicGoalWeeklyAnalysis(bulkProfileId: string, targets: Targets) {
           priorSummary.weightEntryCount >= 3 && priorSummary.previousWeightEntryCount >= 3,
         targetWeightReached:
           completedSummary.weightAverageKg != null &&
-          configured?.targetWeight != null &&
-          (configured.goal === "cut"
-            ? completedSummary.weightAverageKg <= configured.targetWeight
-            : configured.goal === "maintain"
-              ? Math.abs(completedSummary.weightAverageKg - configured.targetWeight) <= 0.5
-              : completedSummary.weightAverageKg >= configured.targetWeight),
+          weightConfiguration.targetWeight != null &&
+          (weightConfiguration.goal === "cut"
+            ? completedSummary.weightAverageKg <= weightConfiguration.targetWeight
+            : weightConfiguration.goal === "maintain"
+              ? Math.abs(completedSummary.weightAverageKg - weightConfiguration.targetWeight) <= 0.5
+              : weightConfiguration.goal === "gain" &&
+                completedSummary.weightAverageKg >= weightConfiguration.targetWeight),
       }),
-    [completedSummary, priorSummary, currentCalories, configured?.goal, configured?.targetWeight],
+    [
+      completedSummary,
+      priorSummary,
+      currentCalories,
+      weightConfiguration.goal,
+      weightConfiguration.targetWeight,
+    ],
   );
   const reads = [currentTargets, weights, nutrition, sessions, plan, calorieHistory];
   const availability: WeeklyCoachAvailability = reads.some((read) => read.error)

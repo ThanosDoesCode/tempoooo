@@ -63,7 +63,10 @@ for (const [goal, rate, delta, text] of [
   ["maintain", 0, -0.3, "maintenance range"],
 ]) {
   test(`${goal}: ${delta} uses the engine's completed-week pace classification`, () => {
-    const result = model({ targetWeeklyGainKg: rate, weightChangeKg: delta }, { ...targets, goal });
+    const result = model(
+      { targetWeeklyGainKg: rate, weightChangeKg: delta },
+      { ...targets, goal, targetWeeklyGainKg: rate },
+    );
     assert.match(result.weight.value, new RegExp(text));
     assert.equal(engine.classifyWeeklyWeightChange(goal, rate, delta) === "on", text === "on pace");
   });
@@ -87,9 +90,91 @@ test("missing goals never inherit a gain rate or a developer target", () => {
   for (const configured of [{}, { goal: "gain" }, { goal: "maintain" }]) {
     const result = model({ targetWeeklyGainKg: null, plannedWorkouts: null }, configured);
     assert.equal(result.action.kind, "setup");
-    assert.match(result.weight.value, /not configured/);
+    assert.match(result.weight.value, /details incomplete/);
     assert.match(result.training.detail, /not configured/);
   }
+});
+
+for (const [field, expected] of [
+  ["targetWeeklyGainKg", "Weekly pace not set"],
+  ["goal", "Goal type not set"],
+  ["targetWeight", "Target weight not set"],
+]) {
+  test(`missing explicit ${field} is classified independently and cannot authorize calories`, () => {
+    const configured = { ...targets };
+    delete configured[field];
+    const f = fixture({ configured });
+    const progressUI = f.progress();
+    const props = f.ui.render().props;
+    const reviewUI = f.checkIn(props);
+    try {
+      assert.equal(props.coach.weight.value, expected);
+      assert.equal(
+        props.summary.targetWeeklyGainKg,
+        null,
+        "incomplete configuration blocks the legacy gain fallback",
+      );
+      assert.equal(props.recommendation.decision, "insufficient_data");
+      assert.equal(props.coach.action.kind, "setup");
+      assert.equal(props.coach.action.to, "/bulk/more");
+      assert.doesNotMatch(reviewUI.text(), /Apply Recommendation|on pace|faster than intended/);
+      if (field !== "targetWeight") assert.match(props.coach.weight.detail, /Target: 75 kg/);
+      else
+        assert.doesNotMatch(
+          props.coach.weight.detail,
+          /75 kg/,
+          "merged compatibility targets cannot replace a missing saved target",
+        );
+      const summaryText = textOf(progressRecommendation(progressUI));
+      assert.ok(summaryText.includes(props.coach.action.value));
+      assert.match(props.coach.training.value, /4 of 4 workouts/);
+      assert.match(props.coach.nutrition.value, /4 of 7 days/);
+      assert.ok(reviewUI.find("Link").some((node) => node.props.to === "/bulk/more"));
+    } finally {
+      reviewUI.dispose();
+      progressUI.dispose();
+      f.dispose();
+    }
+  });
+}
+
+test("a migrated goal with no pace keeps its target and independent workout/food figures", () => {
+  const configured = { goal: "gain", targetWeight: 75, calories: 3000, trainingDaysPerWeek: 3 };
+  const f = fixture({ configured, sessionCount: 1 });
+  f.reads.nutrition.data = f.reads.nutrition.data.slice(0, 2);
+  try {
+    const props = f.ui.render().props;
+    assert.equal(props.coach.weight.value, "Weekly pace not set");
+    assert.match(props.coach.weight.detail, /Target: 75 kg/);
+    assert.equal(props.coach.action.value, "Set your weekly pace");
+    assert.equal(props.coach.training.value, "1 of 3 workouts · below goal");
+    assert.equal(props.coach.nutrition.value, "2 of 7 days logged");
+  } finally {
+    f.dispose();
+  }
+});
+
+test("complete maintenance requires explicit zero pace; zero is never filled for an absent pace", () => {
+  for (const [pace, complete] of [
+    [0, true],
+    [undefined, false],
+    [0.25, false],
+  ]) {
+    const configured = { ...targets, goal: "maintain", targetWeight: 70, targetWeeklyGainKg: pace };
+    const result = coach.weightGoalConfiguration(configured);
+    assert.equal(result.complete, complete);
+    assert.equal(result.pace, complete ? 0 : null);
+  }
+});
+
+test("invalid saved goal types and nonnumeric fields are never coerced or inferred", () => {
+  for (const configured of [
+    { ...targets, goal: "bulk" },
+    { ...targets, targetWeight: "75" },
+    { ...targets, targetWeeklyGainKg: "0.25" },
+    { ...targets, targetWeight: NaN },
+  ])
+    assert.equal(coach.weightGoalConfiguration(configured).complete, false);
 });
 
 test("half the workout target is still a shortfall, not an achieved goal", () => {
@@ -221,6 +306,7 @@ function fixture({
     },
     "@/components/WeeklyProgressCoach": presentationComponent(
       "src/components/WeeklyProgressCoach.tsx",
+      { "@tanstack/react-router": { Link: "Link" } },
     ),
     "@/lib/weekly-progress-coach": coach,
     "@/lib/bulk-weekly-recommendation": engine,
@@ -587,7 +673,7 @@ test("successful empty queries are honestly distinct from pending and failed rea
   try {
     const props = f.ui.render().props;
     assert.equal(props.availability, "ready");
-    assert.match(props.coach.weight.value, /not configured/);
+    assert.match(props.coach.weight.value, /details incomplete/);
     assert.equal(props.coach.nutrition.value, "0 of 7 days logged");
     assert.match(props.coach.training.value, /0 workouts completed/);
     assert.equal(props.coach.action.kind, "setup");
@@ -617,7 +703,9 @@ test("normalized review retains supported Legacy workouts without counting draft
 });
 
 test("the compact presentation has four semantic sections and wrapping values", () => {
-  const component = presentationComponent("src/components/WeeklyProgressCoach.tsx");
+  const component = presentationComponent("src/components/WeeklyProgressCoach.tsx", {
+    "@tanstack/react-router": { Link: "Link" },
+  });
   const tree = component.WeeklyProgressCoach({ model: model() });
   const sections = tree.props.children;
   assert.deepEqual(

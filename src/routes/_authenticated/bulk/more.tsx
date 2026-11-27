@@ -6,10 +6,14 @@ import { AppShell, PageHeader } from "@/components/AppShell";
 import { Card, Note, PendingLabel, SectionTitle } from "@/components/ui-kit";
 import { bulkPlanModeFor, deactivatePublicGoal, useMemberships } from "@/lib/bulk-access";
 import { userFacingError } from "@/lib/network-errors";
-import { clearBulk, useAppData, useBulkMeta } from "@/lib/store";
+import { clearBulk, useBulkMeta } from "@/lib/store";
 import { NutritionTargetsEditor } from "@/components/NutritionTargetsEditor";
 import { WeeklyWorkoutGoalEditor } from "@/components/WeeklyWorkoutGoalEditor";
 import { UnsavedSettingsDialog } from "@/components/UnsavedSettingsDialog";
+import { WeightGoalConfigurationEditor } from "@/components/WeightGoalConfigurationEditor";
+import { useBulkToday } from "@/lib/bulk-today-query";
+import { weightGoalConfiguration } from "@/lib/weekly-progress-coach";
+import { iso } from "@/lib/calc";
 
 export const Route = createFileRoute("/_authenticated/bulk/more")({
   head: () => ({ meta: [{ title: "Tempo" }] }),
@@ -21,15 +25,26 @@ function BulkMorePage() {
   const queryClient = useQueryClient();
   const memberships = useMemberships();
   const { bulkId } = useBulkMeta();
-  const data = useAppData();
   const planMode = bulkPlanModeFor(memberships.data, bulkId);
+  const savedQuery = useBulkToday(planMode === "public" ? bulkId : null, iso(new Date()));
+  const savedWeightGoal = weightGoalConfiguration(savedQuery.data?.savedTargets);
   const [confirming, setConfirming] = useState(false);
   const [switching, setSwitching] = useState(false);
   const [switchError, setSwitchError] = useState<string | null>(null);
   const [nutritionDirty, setNutritionDirty] = useState(false);
   const [weeklyDirty, setWeeklyDirty] = useState(false);
-  const currentGoal =
-    data?.targets.goal === "cut" ? "Cut" : data?.targets.goal === "maintain" ? "Maintain" : "Bulk";
+  const [weightDirty, setWeightDirty] = useState(false);
+  const currentGoal = savedQuery.error
+    ? "Goal details unavailable"
+    : savedQuery.isLoading || savedQuery.data === undefined
+      ? "Loading goal details…"
+      : savedWeightGoal.goal === "cut"
+        ? "Cut"
+        : savedWeightGoal.goal === "maintain"
+          ? "Maintain"
+          : savedWeightGoal.goal === "gain"
+            ? "Bulk"
+            : "Goal type not set";
 
   const changeGoal = async () => {
     if (switching || planMode !== "public" || !bulkId) return;
@@ -62,25 +77,25 @@ function BulkMorePage() {
         backTo="/profile"
         backLabel="Profile"
       />
-      <UnsavedSettingsDialog dirty={(nutritionDirty || weeklyDirty) && !switching} />
+      <UnsavedSettingsDialog dirty={(nutritionDirty || weeklyDirty || weightDirty) && !switching} />
       <div className="space-y-3">
         {planMode === "public" ? (
           <Card>
             <SectionTitle>Current goal</SectionTitle>
             <p className="text-lg font-semibold">{currentGoal}</p>
             <dl className="mt-3 space-y-2 text-[13px]">
-              {data?.targets.targetWeight != null ? (
+              {savedWeightGoal.targetWeight != null ? (
                 <div className="flex justify-between gap-3">
                   <dt className="text-muted-foreground">Target weight</dt>
-                  <dd>{data.targets.targetWeight} kg</dd>
+                  <dd>{savedWeightGoal.targetWeight} kg</dd>
                 </div>
               ) : null}
-              {data?.targets.targetWeeklyGainKg != null ? (
+              {savedWeightGoal.pace != null ? (
                 <div className="flex justify-between gap-3">
                   <dt className="text-muted-foreground">
                     Weekly {currentGoal === "Cut" ? "loss" : "change"}
                   </dt>
-                  <dd>{data.targets.targetWeeklyGainKg} kg</dd>
+                  <dd>{savedWeightGoal.pace} kg</dd>
                 </div>
               ) : null}
             </dl>
@@ -94,7 +109,7 @@ function BulkMorePage() {
               </button>
             ) : (
               <div className="mt-4">
-                {nutritionDirty || weeklyDirty ? (
+                {nutritionDirty || weeklyDirty || weightDirty ? (
                   <p className="mb-2 text-sm text-warn">Unsaved target changes will be lost.</p>
                 ) : null}
                 <Note>
@@ -134,6 +149,13 @@ function BulkMorePage() {
               </div>
             )}
           </Card>
+        ) : null}
+        {planMode === "public" ? (
+          <WeightGoalConfigurationEditor
+            key={bulkId}
+            query={savedQuery}
+            onDirtyChange={setWeightDirty}
+          />
         ) : null}
         {planMode === "public" ? <WeeklyWorkoutGoalEditor onDirtyChange={setWeeklyDirty} /> : null}
         {planMode === "public" || planMode === "legacy" ? (
