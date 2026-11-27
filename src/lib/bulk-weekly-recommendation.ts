@@ -23,6 +23,7 @@ export type BulkRecommendationReason =
   | "insufficient_history"
   | "insufficient_nutrition_data"
   | "missing_target"
+  | "calorie_boundary"
   | "goal_reached";
 
 export type BulkWeeklyRecommendation = {
@@ -44,17 +45,34 @@ export type BulkWeeklyRecommendation = {
 export type BulkWeeklyRecommendationInput = {
   goal?: PhysiqueGoal;
   summary: BulkWeeklyProgressSummary;
+  /** Current saved target; summary.targetCalories remains the historical adherence reference. */
+  currentTargetCalories?: number | null;
   previousTrendChangeKg: number | null;
   previousTrendComparable: boolean;
   targetWeightReached: boolean;
 };
+
+/** Shared pace classification for completed-week coaching and calorie recommendations. */
+export function classifyWeeklyWeightChange(
+  goal: PhysiqueGoal,
+  rate: number,
+  change: number,
+): "below" | "on" | "above" {
+  const expected = goal === "cut" ? -rate : goal === "maintain" ? 0 : rate;
+  if (change < expected - RECOMMENDATION_WEIGHT_TOLERANCE_KG) return "below";
+  if (change > expected + RECOMMENDATION_WEIGHT_TOLERANCE_KG) return "above";
+  return "on";
+}
 
 const practicalCalories = (current: number, direction: 1 | -1) => {
   const rounded =
     direction === 1
       ? Math.floor((current + RECOMMENDATION_CALORIE_STEP) / 50) * 50
       : Math.ceil((current - RECOMMENDATION_CALORIE_STEP) / 50) * 50;
-  return Math.min(10_000, Math.max(800, rounded));
+  const proposed = Math.min(10_000, Math.max(1000, rounded));
+  const delta = proposed - current;
+  if (Math.abs(delta) > RECOMMENDATION_CALORIE_STEP || delta * direction <= 0) return null;
+  return proposed;
 };
 
 const copyFor = (reason: BulkRecommendationReason, calories: number | null, goal: PhysiqueGoal) => {
@@ -76,7 +94,7 @@ const copyFor = (reason: BulkRecommendationReason, calories: number | null, goal
     case "below_target_low_adherence":
       return [
         "Keep the target and improve consistency",
-        `Average intake differed from the current target. Aim to hit ${current} more consistently before changing it.`,
+        `Logged intake differed from its recorded targets. Keep ${current} and improve consistency before changing it.`,
       ] as const;
     case "below_target_low_training":
       return [
@@ -112,6 +130,11 @@ const copyFor = (reason: BulkRecommendationReason, calories: number | null, goal
         "Target unavailable",
         "A valid weekly change and calorie target are required before Tempo can evaluate an adjustment.",
       ] as const;
+    case "calorie_boundary":
+      return [
+        "No calorie adjustment available",
+        "No change fits the supported calorie range and adjustment limit. Your target is unchanged.",
+      ] as const;
     case "insufficient_history":
       return [
         "Keep current targets for now",
@@ -130,6 +153,8 @@ export function recommendBulkCalories(
 ): BulkWeeklyRecommendation {
   const s = input.summary;
   const goal = input.goal ?? "gain";
+  const currentCalories =
+    input.currentTargetCalories === undefined ? s.targetCalories : input.currentTargetCalories;
   const weightStrong =
     s.weightEntryCount >= RECOMMENDATION_MIN_CURRENT_WEIGH_INS &&
     s.previousWeightEntryCount >= RECOMMENDATION_MIN_PREVIOUS_WEIGH_INS;
@@ -149,14 +174,25 @@ export function recommendBulkCalories(
     recommended: number | null,
     quality: BulkWeeklyRecommendation["dataQuality"],
   ): BulkWeeklyRecommendation => {
-    const [headline, reasonText] = copyFor(reasonCode, s.targetCalories, goal);
+    if (
+      (decision === "increase_calories" || decision === "decrease_calories") &&
+      recommended == null
+    ) {
+      decision = "maintain";
+      reasonCode = "calorie_boundary";
+      recommended =
+        currentCalories != null && currentCalories >= 1000 && currentCalories <= 10_000
+          ? currentCalories
+          : null;
+    }
+    const [headline, reasonText] = copyFor(reasonCode, currentCalories, goal);
     return {
       decision,
       reasonCode,
       recommendedCalories: recommended,
-      currentTargetCalories: s.targetCalories,
+      currentTargetCalories: currentCalories,
       calorieDelta:
-        recommended != null && s.targetCalories != null ? recommended - s.targetCalories : 0,
+        recommended != null && currentCalories != null ? recommended - currentCalories : 0,
       actualWeeklyChangeKg: s.weightChangeKg,
       targetWeeklyGainKg: s.targetWeeklyGainKg,
       dataQuality: quality,
@@ -171,87 +207,90 @@ export function recommendBulkCalories(
     s.targetWeeklyGainKg == null ||
     (goal !== "maintain" && s.targetWeeklyGainKg <= 0) ||
     (goal === "maintain" && s.targetWeeklyGainKg !== 0) ||
-    s.targetCalories == null ||
-    s.targetCalories <= 0
+    currentCalories == null ||
+    !Number.isFinite(currentCalories) ||
+    currentCalories <= 0
   )
     return base("insufficient_data", "missing_target", null, "insufficient");
   if (s.previousWeightAverageKg == null || s.weightChangeKg == null)
-    return base("insufficient_data", "insufficient_history", s.targetCalories, "insufficient");
+    return base("insufficient_data", "insufficient_history", currentCalories, "insufficient");
   if (!weightStrong)
-    return base("insufficient_data", "insufficient_weight_data", s.targetCalories, "insufficient");
+    return base("insufficient_data", "insufficient_weight_data", currentCalories, "insufficient");
   if (input.targetWeightReached)
     return base(
       "maintain",
       "goal_reached",
-      s.targetCalories,
+      currentCalories,
       nutritionStrong ? "strong" : "limited",
     );
   if (!nutritionStrong)
-    return base("maintain", "insufficient_nutrition_data", s.targetCalories, "limited");
+    return base("maintain", "insufficient_nutrition_data", currentCalories, "limited");
 
-  const expectedChange =
-    goal === "cut" ? -s.targetWeeklyGainKg : goal === "maintain" ? 0 : s.targetWeeklyGainKg;
-  const lower = expectedChange - RECOMMENDATION_WEIGHT_TOLERANCE_KG;
-  const upper = expectedChange + RECOMMENDATION_WEIGHT_TOLERANCE_KG;
+  const pace = classifyWeeklyWeightChange(goal, s.targetWeeklyGainKg, s.weightChangeKg);
+  const previousPace =
+    input.previousTrendChangeKg == null
+      ? null
+      : classifyWeeklyWeightChange(goal, s.targetWeeklyGainKg, input.previousTrendChangeKg);
   const adherenceGood =
     s.averageCalories != null &&
+    s.targetCalories != null &&
     (Math.abs(s.averageCalories - s.targetCalories) <=
       s.targetCalories * (1 - RECOMMENDATION_CALORIE_ADHERENCE_RATIO) ||
       s.calorieAdherentDays >= Math.ceil(s.nutritionLoggedDays / 2));
-  if (s.weightChangeKg < lower) {
+  if (pace === "below") {
     if (goal === "maintain") {
       const confirmed =
         input.previousTrendComparable &&
         input.previousTrendChangeKg != null &&
-        input.previousTrendChangeKg < lower;
+        previousPace === "below";
       return confirmed
         ? base(
             "increase_calories",
             "above_target_confirmed",
-            practicalCalories(s.targetCalories, 1),
+            practicalCalories(currentCalories, 1),
             "strong",
           )
-        : base("maintain", "above_target_single_week", s.targetCalories, "strong");
+        : base("maintain", "above_target_single_week", currentCalories, "strong");
     }
     if (goal === "cut") {
       const confirmed =
         input.previousTrendComparable &&
         input.previousTrendChangeKg != null &&
-        input.previousTrendChangeKg < lower;
+        previousPace === "below";
       return confirmed
         ? base(
             "increase_calories",
             "above_target_confirmed",
-            practicalCalories(s.targetCalories, 1),
+            practicalCalories(currentCalories, 1),
             "strong",
           )
-        : base("maintain", "above_target_single_week", s.targetCalories, "strong");
+        : base("maintain", "above_target_single_week", currentCalories, "strong");
     }
     if (!adherenceGood)
-      return base("maintain", "below_target_low_adherence", s.targetCalories, "strong");
+      return base("maintain", "below_target_low_adherence", currentCalories, "strong");
     if (trainingContext === "low")
-      return base("maintain", "below_target_low_training", s.targetCalories, "strong");
+      return base("maintain", "below_target_low_training", currentCalories, "strong");
     return base(
       "increase_calories",
       "below_target_good_adherence",
-      practicalCalories(s.targetCalories, 1),
+      practicalCalories(currentCalories, 1),
       "strong",
     );
   }
-  if (s.weightChangeKg > upper) {
+  if (pace === "above") {
     const confirmed =
       input.previousTrendComparable &&
       input.previousTrendChangeKg != null &&
-      input.previousTrendChangeKg > upper;
+      previousPace === "above";
     if (goal === "cut") {
       if (!adherenceGood)
-        return base("maintain", "below_target_low_adherence", s.targetCalories, "strong");
+        return base("maintain", "below_target_low_adherence", currentCalories, "strong");
       if (trainingContext === "low")
-        return base("maintain", "below_target_low_training", s.targetCalories, "strong");
+        return base("maintain", "below_target_low_training", currentCalories, "strong");
       return base(
         "decrease_calories",
         "below_target_good_adherence",
-        practicalCalories(s.targetCalories, -1),
+        practicalCalories(currentCalories, -1),
         "strong",
       );
     }
@@ -259,10 +298,10 @@ export function recommendBulkCalories(
       ? base(
           "decrease_calories",
           "above_target_confirmed",
-          practicalCalories(s.targetCalories, -1),
+          practicalCalories(currentCalories, -1),
           "strong",
         )
-      : base("maintain", "above_target_single_week", s.targetCalories, "strong");
+      : base("maintain", "above_target_single_week", currentCalories, "strong");
   }
-  return base("maintain", "on_target", s.targetCalories, "strong");
+  return base("maintain", "on_target", currentCalories, "strong");
 }

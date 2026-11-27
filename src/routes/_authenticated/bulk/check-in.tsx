@@ -66,10 +66,14 @@ function CheckInPage() {
   const [copied, setCopied] = useState(false);
   useOverlayBack(share, setShare);
 
-  const weekStart = useMemo(() => addDays(weekStartOf(new Date()), weekOffset * 7), [weekOffset]);
   const { bulkId } = useBulkMeta();
   const memberships = useMemberships();
   const publicId = bulkPlanModeFor(memberships.data, bulkId) === "public" ? bulkId : null;
+  // Normalized review opens on the completed week, matching its coach. Legacy retains this week.
+  const weekStart = useMemo(
+    () => addDays(weekStartOf(new Date()), (weekOffset - (publicId ? 1 : 0)) * 7),
+    [weekOffset, publicId],
+  );
   const sessions = useCompletedSessionDates(publicId, "2000-01-01", "2999-12-31");
   const activePlan = useActiveTrainingPlan(publicId);
   // Status needs the selected week and the two prior weeks, not lifetime history.
@@ -115,7 +119,7 @@ function CheckInPage() {
   };
   const s = {
     ...buildWeekSummary(data, weekStart),
-    goalStatus: statusAt(addDays(weekStart, 6)),
+    goalStatus: statusAt(addDays(weekStart, publicId ? 7 : 6)),
     gymSessions: countWorkoutsInRange(workoutRecords, iso(weekStart), iso(addDays(weekStart, 6))),
     gymTarget: resolveWeeklyWorkoutTarget({
       weeklyWorkoutGoal: data.targets.weeklyWorkoutGoal ?? null,
@@ -123,6 +127,7 @@ function CheckInPage() {
       targetDaysPerWeek: data.targets.trainingDaysPerWeek ?? null,
     }),
   };
+  const showCoach = !!publicId && weekOffset === 0;
 
   if (share && mode === "monthly") {
     return (
@@ -203,7 +208,9 @@ function CheckInPage() {
             </span>
           </div>
 
-          {calibrating ? (
+          {showCoach && publicId ? (
+            <PublicWeeklyReview bulkProfileId={publicId} targets={data.targets} />
+          ) : calibrating ? (
             <div className="rounded-[20px] bg-primary/10 p-[18px]">
               <div className="text-[13px] font-semibold text-primary">Weekly review</div>
               <div className="mt-1.5 text-[18px] font-semibold">
@@ -221,33 +228,37 @@ function CheckInPage() {
           )}
 
           <div className="mt-3 space-y-3">
-            <ThreeUp
-              title="Body"
-              items={[
-                [fmt(s.currentAvg, 1, " kg"), "Average"],
-                [signed(s.change, 1, " kg"), "Change"],
-                [fmt(s.waist, 0, " cm"), "Waist"],
-              ]}
-            />
-            <ThreeUp
-              title="Food"
-              items={[
-                [fmt0(s.avgCalories), "kcal a day"],
-                [`${s.daysOnTarget} of 7`, "Days on target"],
-                [fmt0(s.avgProtein, " g"), "Protein a day"],
-              ]}
-            />
-            <ThreeUp
-              title="Training"
-              items={[
-                [
-                  formatWorkoutProgress(s.gymSessions, s.gymTarget),
-                  s.gymTarget == null ? "Workouts" : "Workouts · current goal",
-                ],
-                [String(s.prs.length), "New records"],
-                [String(s.regressed), "Went down"],
-              ]}
-            />
+            {!showCoach ? (
+              <>
+                <ThreeUp
+                  title="Body"
+                  items={[
+                    [fmt(s.currentAvg, 1, " kg"), "Average"],
+                    [signed(s.change, 1, " kg"), "Change"],
+                    [fmt(s.waist, 0, " cm"), "Waist"],
+                  ]}
+                />
+                <ThreeUp
+                  title="Food"
+                  items={[
+                    [fmt0(s.avgCalories), "kcal a day"],
+                    [`${s.daysOnTarget} of 7`, "Days on target"],
+                    [fmt0(s.avgProtein, " g"), "Protein a day"],
+                  ]}
+                />
+                <ThreeUp
+                  title="Training"
+                  items={[
+                    [
+                      formatWorkoutProgress(s.gymSessions, s.gymTarget),
+                      s.gymTarget == null ? "Workouts" : "Workouts · current goal",
+                    ],
+                    [String(s.prs.length), "New records"],
+                    [String(s.regressed), "Went down"],
+                  ]}
+                />
+              </>
+            ) : null}
             <ThreeUp
               title="Activity and sleep"
               items={[
@@ -257,12 +268,6 @@ function CheckInPage() {
               ]}
             />
           </div>
-
-          {publicId && weekOffset === 0 ? (
-            <div className="mt-3">
-              <PublicWeeklyReview bulkProfileId={publicId} targets={data.targets} />
-            </div>
-          ) : null}
 
           <div className="mt-3">
             <Card>

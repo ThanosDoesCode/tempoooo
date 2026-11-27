@@ -36,6 +36,7 @@ import {
   useBulkProgressNutrition,
   useBulkProgressPhotos,
   useBulkWeights,
+  useBulkCalorieReviewHistory,
 } from "@/lib/bulk-progress-query";
 import { useCompletedSessionDates } from "@/lib/bulk-training-sessions";
 import { collectCompletedWorkouts, resolveWeeklyWorkoutTarget } from "@/lib/goal-metrics";
@@ -45,6 +46,14 @@ import type { Targets } from "@/lib/types";
 import { refreshBulk, useAppData } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { refreshBulkNutritionTargets } from "@/lib/bulk-nutrition-query";
+import { useBulkToday } from "@/lib/bulk-today-query";
+import { WeeklyProgressCoach } from "@/components/WeeklyProgressCoach";
+import {
+  weeklyProgressCoach,
+  calorieReviewState,
+  type WeeklyCoachAvailability,
+  type WeeklyProgressCoachModel,
+} from "@/lib/weekly-progress-coach";
 import {
   recommendBulkCalories,
   type BulkWeeklyRecommendation,
@@ -53,7 +62,17 @@ import {
 /** Shared weekly analysis so Progress (summary) and Check-In (full review) never diverge. */
 function usePublicGoalWeeklyAnalysis(bulkProfileId: string, targets: Targets) {
   const today = localDay(new Date());
+  const currentTargets = useBulkToday(bulkProfileId, today);
+  const configured = currentTargets.data?.savedTargets;
+  const currentCalories =
+    typeof configured?.calories === "number" &&
+    Number.isFinite(configured.calories) &&
+    configured.calories > 0
+      ? configured.calories
+      : null;
+  const weeklyRate = configured?.goal ? (configured.targetWeeklyGainKg ?? null) : null;
   const currentWeek = bulkWeek(today);
+  const calorieHistory = useBulkCalorieReviewHistory(bulkProfileId, currentWeek.start);
   const from = localDay(addDays(parseISO(currentWeek.start), -84));
   const lastCompletedEnd = localDay(addDays(parseISO(currentWeek.start), -1));
   const previousCompletedEnd = localDay(addDays(parseISO(currentWeek.start), -8));
@@ -73,9 +92,9 @@ function usePublicGoalWeeklyAnalysis(bulkProfileId: string, targets: Targets) {
     [sessions.data, appData?.workouts, appData?.days],
   );
   const plannedWorkouts = resolveWeeklyWorkoutTarget({
-    weeklyWorkoutGoal: targets.weeklyWorkoutGoal ?? null,
+    weeklyWorkoutGoal: configured?.weeklyWorkoutGoal ?? null,
     activePlanDaysPerWeek: plan.data?.trainingDaysPerWeek ?? null,
-    targetDaysPerWeek: targets.trainingDaysPerWeek ?? null,
+    targetDaysPerWeek: configured?.trainingDaysPerWeek ?? null,
   });
   const summary = useMemo(
     () =>
@@ -85,8 +104,8 @@ function usePublicGoalWeeklyAnalysis(bulkProfileId: string, targets: Targets) {
         nutritionDays: nutrition.data ?? [],
         completedWorkoutDates,
         plannedWorkouts,
-        targetWeeklyGainKg: targets.targetWeeklyGainKg ?? null,
-        currentTargetCalories: targets.calories,
+        targetWeeklyGainKg: weeklyRate,
+        currentTargetCalories: currentCalories,
       }),
     [
       today,
@@ -94,8 +113,8 @@ function usePublicGoalWeeklyAnalysis(bulkProfileId: string, targets: Targets) {
       nutrition.data,
       completedWorkoutDates,
       plannedWorkouts,
-      targets.targetWeeklyGainKg,
-      targets.calories,
+      weeklyRate,
+      currentCalories,
     ],
   );
   const completedSummary = useMemo(
@@ -106,8 +125,8 @@ function usePublicGoalWeeklyAnalysis(bulkProfileId: string, targets: Targets) {
         nutritionDays: nutrition.data ?? [],
         completedWorkoutDates,
         plannedWorkouts,
-        targetWeeklyGainKg: targets.targetWeeklyGainKg ?? null,
-        currentTargetCalories: targets.calories,
+        targetWeeklyGainKg: weeklyRate,
+        currentTargetCalories: currentCalories,
       }),
     [
       lastCompletedEnd,
@@ -115,8 +134,8 @@ function usePublicGoalWeeklyAnalysis(bulkProfileId: string, targets: Targets) {
       nutrition.data,
       completedWorkoutDates,
       plannedWorkouts,
-      targets.targetWeeklyGainKg,
-      targets.calories,
+      weeklyRate,
+      currentCalories,
     ],
   );
   const priorSummary = useMemo(
@@ -127,8 +146,8 @@ function usePublicGoalWeeklyAnalysis(bulkProfileId: string, targets: Targets) {
         nutritionDays: nutrition.data ?? [],
         completedWorkoutDates,
         plannedWorkouts,
-        targetWeeklyGainKg: targets.targetWeeklyGainKg ?? null,
-        currentTargetCalories: targets.calories,
+        targetWeeklyGainKg: weeklyRate,
+        currentTargetCalories: currentCalories,
       }),
     [
       previousCompletedEnd,
@@ -136,8 +155,8 @@ function usePublicGoalWeeklyAnalysis(bulkProfileId: string, targets: Targets) {
       nutrition.data,
       completedWorkoutDates,
       plannedWorkouts,
-      targets.targetWeeklyGainKg,
-      targets.calories,
+      weeklyRate,
+      currentCalories,
     ],
   );
   const goal = goalProgress(
@@ -149,22 +168,45 @@ function usePublicGoalWeeklyAnalysis(bulkProfileId: string, targets: Targets) {
   const recommendation = useMemo(
     () =>
       recommendBulkCalories({
-        goal: targets.goal ?? "gain",
+        goal: configured?.goal ?? "gain",
         summary: completedSummary,
+        currentTargetCalories: currentCalories,
         previousTrendChangeKg: priorSummary.weightChangeKg,
         previousTrendComparable:
           priorSummary.weightEntryCount >= 3 && priorSummary.previousWeightEntryCount >= 3,
         targetWeightReached:
-          goal.currentWeightKg != null &&
-          (targets.goal === "cut"
-            ? goal.currentWeightKg <= targets.targetWeight
-            : targets.goal === "maintain"
-              ? Math.abs(goal.currentWeightKg - targets.targetWeight) <= 0.5
-              : goal.currentWeightKg >= targets.targetWeight),
+          completedSummary.weightAverageKg != null &&
+          configured?.targetWeight != null &&
+          (configured.goal === "cut"
+            ? completedSummary.weightAverageKg <= configured.targetWeight
+            : configured.goal === "maintain"
+              ? Math.abs(completedSummary.weightAverageKg - configured.targetWeight) <= 0.5
+              : completedSummary.weightAverageKg >= configured.targetWeight),
       }),
-    [completedSummary, priorSummary, goal.currentWeightKg, targets.goal, targets.targetWeight],
+    [completedSummary, priorSummary, currentCalories, configured?.goal, configured?.targetWeight],
   );
+  const reads = [currentTargets, weights, nutrition, sessions, plan, calorieHistory];
+  const availability: WeeklyCoachAvailability = reads.some((read) => read.error)
+    ? "error"
+    : !appData || reads.some((read) => read.isLoading || read.data === undefined)
+      ? "loading"
+      : "ready";
+  const calorieState = calorieReviewState(calorieHistory.data, currentCalories);
+  const coach =
+    availability === "ready"
+      ? weeklyProgressCoach(completedSummary, configured, recommendation, calorieState)
+      : undefined;
+  const retry = () => Promise.allSettled(reads.map((read) => read.refetch()));
   return {
+    coach,
+    configured,
+    calorieState,
+    verifyCalorieHistory: async () => {
+      const refreshed = await calorieHistory.refetch({ throwOnError: true });
+      return calorieReviewState(refreshed.data, currentCalories) === "eligible";
+    },
+    availability,
+    retry,
     today,
     currentWeek,
     weights,
@@ -186,13 +228,18 @@ export function PublicWeeklyReview({
   bulkProfileId: string;
   targets: Targets;
 }) {
-  const { recommendation, completedSummary } = usePublicGoalWeeklyAnalysis(bulkProfileId, targets);
+  const { recommendation, completedSummary, coach, availability, retry, verifyCalorieHistory } =
+    usePublicGoalWeeklyAnalysis(bulkProfileId, targets);
   return (
     <WeeklyCheckIn
       recommendation={recommendation}
       summary={completedSummary}
       profileId={bulkProfileId}
       goal={targets.goal ?? "gain"}
+      coach={coach}
+      availability={availability}
+      onRetry={retry}
+      beforeApply={verifyCalorieHistory}
     />
   );
 }
@@ -205,8 +252,19 @@ export function PublicBulkProgress({
   targets: Targets;
 }) {
   const queryClient = useQueryClient();
-  const { today, currentWeek, weights, nutrition, sessions, plan, summary, goal, recommendation } =
-    usePublicGoalWeeklyAnalysis(bulkProfileId, targets);
+  const {
+    today,
+    currentWeek,
+    weights,
+    nutrition,
+    sessions,
+    plan,
+    summary,
+    goal,
+    coach,
+    availability,
+    retry,
+  } = usePublicGoalWeeklyAnalysis(bulkProfileId, targets);
   const photos = useBulkProgressPhotos(bulkProfileId);
   const [editingWeightId, setEditingWeightId] = useState<string | null>(null);
   const physiqueGoal = targets.goal ?? "gain";
@@ -366,7 +424,21 @@ export function PublicBulkProgress({
 
       <Card>
         <SectionTitle>Weekly recommendation</SectionTitle>
-        <p className="text-sm font-semibold">{recommendation.headline}</p>
+        {availability === "error" ? (
+          <DataError
+            message="Couldn’t load your weekly recommendation. No assessment is available."
+            onRetry={() => void retry()}
+          />
+        ) : coach ? (
+          <>
+            <p className="text-sm font-semibold">{coach.action.value}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{coach.action.detail}</p>
+          </>
+        ) : (
+          <p role="status" className="text-sm text-muted-foreground">
+            Loading your weekly recommendation…
+          </p>
+        )}
         <p className="mt-1 text-xs text-muted-foreground">
           The full review, calorie changes, coaching notes and ChatGPT export are on Check-In.
         </p>
@@ -497,11 +569,19 @@ export function WeeklyCheckIn({
   summary,
   profileId,
   goal,
+  coach,
+  availability = "ready",
+  onRetry,
+  beforeApply,
 }: {
   recommendation: BulkWeeklyRecommendation;
   summary: BulkWeeklyProgressSummary;
   profileId: string;
   goal: "gain" | "cut" | "maintain";
+  coach?: WeeklyProgressCoachModel | undefined;
+  availability?: WeeklyCoachAvailability;
+  onRetry?: () => Promise<unknown>;
+  beforeApply?: () => Promise<boolean>;
 }) {
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -516,14 +596,14 @@ export function WeeklyCheckIn({
   const [syncing, setSyncing] = useState(false);
   const [syncError, setSyncError] = useState(false);
   const confirmed = saved?.profileId === profileId ? saved : null;
-  const alreadyApplied =
-    !!confirmed &&
-    confirmed.previousCalories === recommendation.currentTargetCalories &&
-    confirmed.calories === recommendation.recommendedCalories;
+  // Refetching the new target must not offer another adjustment from the same weekly evidence.
+  const alreadyApplied = !!confirmed;
   const needsRefresh = !!confirmed && syncError;
   const canApply =
-    recommendation.decision === "increase_calories" ||
-    recommendation.decision === "decrease_calories";
+    availability === "ready" &&
+    (!coach || coach.action.kind === "review_calories") &&
+    (recommendation.decision === "increase_calories" ||
+      recommendation.decision === "decrease_calories");
 
   const refresh = async (day: string) => {
     setSyncing(true);
@@ -565,6 +645,21 @@ export function WeeklyCheckIn({
     setPending(true);
     setError(null);
     setSaved(null);
+    if (beforeApply) {
+      try {
+        if (!(await beforeApply())) {
+          setError(
+            "Your calorie target changed after this review week. Wait for new completed-week evidence.",
+          );
+          setPending(false);
+          return;
+        }
+      } catch {
+        setError("Couldn’t verify calorie target history. No calorie change was sent.");
+        setPending(false);
+        return;
+      }
+    }
     let savedDay: string;
     try {
       savedDay = await applyBulkCalorieRecommendation(
@@ -593,75 +688,105 @@ export function WeeklyCheckIn({
 
   return (
     <Card>
-      <SectionTitle>Weekly Check-in</SectionTitle>
+      <SectionTitle>
+        {coach || availability !== "ready" ? "Weekly progress coach" : "Weekly Check-in"}
+      </SectionTitle>
       <p className="text-xs text-muted-foreground">
         Based on the completed week {format(parseISO(summary.weekStart), "d MMM")}–
         {format(parseISO(summary.weekEnd), "d MMM")}.
       </p>
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        <Metric
-          label={
-            goal === "cut" ? "Target loss" : goal === "maintain" ? "Target change" : "Target gain"
-          }
-          value={
-            goal === "maintain"
-              ? "Stable"
-              : summary.targetWeeklyGainKg == null
-                ? "Unavailable"
-                : `${goal === "cut" ? "−" : "+"}${summary.targetWeeklyGainKg} kg`
-          }
-          hint="per week"
-        />
-        <Metric
-          label="Actual change"
-          value={
-            summary.weightChangeKg == null
-              ? "Unavailable"
-              : `${summary.weightChangeKg >= 0 ? "+" : ""}${summary.weightChangeKg.toFixed(2)} kg`
-          }
-          hint={`${summary.weightEntryCount} + ${summary.previousWeightEntryCount} weigh-ins`}
-        />
-        <Metric
-          label="Calories"
-          value={
-            summary.averageCalories == null
-              ? "Unavailable"
-              : `${Math.round(summary.averageCalories).toLocaleString()} avg`
-          }
-          hint={
-            summary.targetCalories == null
-              ? "No target"
-              : `${Math.round(summary.targetCalories).toLocaleString()} target`
-          }
-        />
-        <Metric
-          label="Training"
-          value={
-            summary.plannedWorkouts == null
-              ? `${summary.completedWorkouts} completed`
-              : `${summary.completedWorkouts} / ${summary.plannedWorkouts}`
-          }
-          hint={
-            summary.plannedWorkouts == null ? "completed week" : "completed week · current goal"
-          }
-        />
-      </div>
-      <div className="mt-3 rounded-xl border border-border bg-elevated p-3" role="status">
-        <p className="text-sm font-semibold">{recommendation.headline}</p>
-        {recommendation.recommendedCalories != null ? (
-          <p className="num mt-1 text-lg font-bold text-primary">
-            {recommendation.recommendedCalories.toLocaleString()} kcal/day
+      {availability !== "ready" ? (
+        <div className="mt-3" role={availability === "error" ? "alert" : "status"}>
+          <p className="text-sm text-muted-foreground">
+            {availability === "error"
+              ? "Couldn’t load your weekly progress. No assessment is available."
+              : "Loading your weekly progress…"}
           </p>
-        ) : null}
-        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-          {recommendation.reasonText}
-        </p>
-        <p className="mt-2 text-[11px] text-muted-foreground">
-          {recommendation.dataQuality === "strong"
-            ? `Based on ${summary.weightEntryCount} recent weigh-ins and ${summary.nutritionLoggedDays} logged nutrition days.`
-            : "Not enough complete data for a normal calorie adjustment yet."}
-        </p>
-      </div>
+          {availability === "error" && onRetry ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="mt-2 min-h-11"
+              onClick={() => void onRetry()}
+            >
+              Retry weekly progress
+            </Button>
+          ) : null}
+        </div>
+      ) : coach ? (
+        <WeeklyProgressCoach model={coach} />
+      ) : (
+        <>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <Metric
+              label={
+                goal === "cut"
+                  ? "Target loss"
+                  : goal === "maintain"
+                    ? "Target change"
+                    : "Target gain"
+              }
+              value={
+                goal === "maintain"
+                  ? "Stable"
+                  : summary.targetWeeklyGainKg == null
+                    ? "Unavailable"
+                    : `${goal === "cut" ? "−" : "+"}${summary.targetWeeklyGainKg} kg`
+              }
+              hint="per week"
+            />
+            <Metric
+              label="Actual change"
+              value={
+                summary.weightChangeKg == null
+                  ? "Unavailable"
+                  : `${summary.weightChangeKg >= 0 ? "+" : ""}${summary.weightChangeKg.toFixed(2)} kg`
+              }
+              hint={`${summary.weightEntryCount} + ${summary.previousWeightEntryCount} weigh-ins`}
+            />
+            <Metric
+              label="Calories"
+              value={
+                summary.averageCalories == null
+                  ? "Unavailable"
+                  : `${Math.round(summary.averageCalories).toLocaleString()} avg`
+              }
+              hint={
+                summary.targetCalories == null
+                  ? "No target"
+                  : `${Math.round(summary.targetCalories).toLocaleString()} target`
+              }
+            />
+            <Metric
+              label="Training"
+              value={
+                summary.plannedWorkouts == null
+                  ? `${summary.completedWorkouts} completed`
+                  : `${summary.completedWorkouts} / ${summary.plannedWorkouts}`
+              }
+              hint={
+                summary.plannedWorkouts == null ? "completed week" : "completed week · current goal"
+              }
+            />
+          </div>
+          <div className="mt-3 rounded-xl border border-border bg-elevated p-3" role="status">
+            <p className="text-sm font-semibold">{recommendation.headline}</p>
+            {recommendation.recommendedCalories != null ? (
+              <p className="num mt-1 text-lg font-bold text-primary">
+                {recommendation.recommendedCalories.toLocaleString()} kcal/day
+              </p>
+            ) : null}
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+              {recommendation.reasonText}
+            </p>
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              {recommendation.dataQuality === "strong"
+                ? `Based on ${summary.weightEntryCount} recent weigh-ins and ${summary.nutritionLoggedDays} logged nutrition days.`
+                : "Not enough complete data for a normal calorie adjustment yet."}
+            </p>
+          </div>
+        </>
+      )}
       {canApply ? (
         <Button
           type="button"

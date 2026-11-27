@@ -55,6 +55,9 @@ function uiFixture({
         },
       },
       "@/lib/bulk-nutrition-query": nutritionQueries,
+      "@/lib/bulk-today-query": {},
+      "@/components/WeeklyProgressCoach": {},
+      "@/lib/weekly-progress-coach": {},
       "@/lib/store": {
         refreshBulk: async () => {
           calls.push("refreshBulk");

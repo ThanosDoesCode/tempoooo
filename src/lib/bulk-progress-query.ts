@@ -11,6 +11,7 @@ import type { BulkNutritionProgressDay, BulkProgressPhoto, BulkWeightEntry } fro
 import { inspectPrivateImage, STANDARD_PRIVATE_IMAGE_MIME_TYPES } from "./private-image-upload";
 import { refreshActiveBulkTrainingBodyweight } from "./bulk-training-sessions";
 import { QUERY_ID_BATCH_SIZE, QUERY_PAGE_SIZE, readAllByKey } from "./query-pagination";
+import { parseISO } from "date-fns";
 
 export const bulkWeightQueryKey = (profileId: string) =>
   ["bulk-weight-entries", profileId] as const;
@@ -18,6 +19,63 @@ export const bulkPhotoQueryKey = (profileId: string) =>
   ["bulk-progress-photos", profileId] as const;
 export const bulkProgressNutritionQueryKey = (profileId: string, from: string | null, to: string) =>
   ["bulk-progress-summary", "nutrition", profileId, from, to] as const;
+
+export type BulkCalorieReviewHistory = {
+  baselineCalories: number | null;
+  changedSinceReview: boolean;
+};
+
+/** Read existing append-only goal events; never infer an application from a mutable daily row. */
+export const bulkCalorieReviewHistoryQueryOptions = (profileId: string, weekStart: string) =>
+  queryOptions({
+    queryKey: ["bulk-weekly-recommendation", profileId, "target-history", weekStart],
+    enabled: !!profileId,
+    queryFn: async (): Promise<BulkCalorieReviewHistory> => {
+      const from = parseISO(weekStart).toISOString();
+      const baseline = await supabase
+        .from("bulk_streak_goal_events")
+        .select("calorie_target_kcal")
+        .eq("bulk_profile_id", profileId)
+        .lt("effective_at", from)
+        .order("effective_at", { ascending: false })
+        .order("recorded_at", { ascending: false })
+        .order("id", { ascending: false })
+        .limit(1);
+      if (baseline.error) throw baseline.error;
+      const baselineCalories = baseline.data?.[0]?.calorie_target_kcal ?? null;
+      const events = await readAllByKey<
+        Pick<Tables<"bulk_streak_goal_events">, "id" | "calorie_target_kcal">
+      >(
+        (cursor) => {
+          let query = supabase
+            .from("bulk_streak_goal_events")
+            .select("id,calorie_target_kcal")
+            .eq("bulk_profile_id", profileId)
+            .gte("effective_at", from)
+            .order("id")
+            .limit(QUERY_PAGE_SIZE);
+          if (cursor) query = query.gt("id", cursor);
+          return query;
+        },
+        (row) => row.id,
+      );
+      return {
+        baselineCalories: baselineCalories == null ? null : Number(baselineCalories),
+        // Goal-only events do not block adjustments; a calorie change or reset does.
+        changedSinceReview: events.some(
+          (event) =>
+            event.calorie_target_kcal == null ||
+            Number(event.calorie_target_kcal) !== Number(baselineCalories),
+        ),
+      };
+    },
+    staleTime: 0,
+    retry: shouldRetryRead,
+    retryDelay: readRetryDelay,
+  });
+
+export const useBulkCalorieReviewHistory = (profileId: string, weekStart: string) =>
+  useQuery(bulkCalorieReviewHistoryQueryOptions(profileId, weekStart));
 
 export const bulkWeightQueryOptions = (
   profileId: string | null,

@@ -3,6 +3,9 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { readFile, readdir } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
+import { queryOptions } from "@tanstack/react-query";
+import { presentationComponent } from "./presentation-component-fixture.mjs";
+import { calorieReviewState } from "../src/lib/weekly-progress-coach.ts";
 
 const db = new PGlite();
 const root = new URL("../supabase/migrations/", import.meta.url);
@@ -56,6 +59,77 @@ before(async () => {
 });
 after(() => db.close());
 
+test("authoritative calorie events block a reopened review, including after a same-day target reset", async () => {
+  const f = await fixture();
+  const week = await seedReviewBaseline(f);
+  const api = historyApi();
+  const read = () =>
+    asUser(f.user, () => api.bulkCalorieReviewHistoryQueryOptions(f.profile, week).queryFn());
+  assert.equal(calorieReviewState(await read(), 2400), "eligible");
+  await apply(f);
+  assert.equal(calorieReviewState(await read(), 2550), "changed");
+  // A fresh query/API instance represents another visit/device; no React or localStorage state.
+  const anotherVisit = await asUser(f.user, () =>
+    historyApi().bulkCalorieReviewHistoryQueryOptions(f.profile, week).queryFn(),
+  );
+  assert.equal(calorieReviewState(anotherVisit, 2550), "changed");
+  const payload = (
+    await db.query("SELECT payload FROM public.bulk_targets WHERE bulk_profile_id=$1", [f.profile])
+  ).rows[0].payload;
+  await asUser(f.user, () =>
+    db.query("SELECT public.save_bulk_targets_for_local_day($1,$2::jsonb,$3)", [
+      f.profile,
+      { ...payload, calories: 2400 },
+      "Europe/Stockholm",
+    ]),
+  );
+  assert.equal(
+    calorieReviewState(await read(), 2400),
+    "changed",
+    "append-only events retain the earlier adjustment even after reset",
+  );
+});
+
+test("goal-only events remain eligible, missing history fails closed, and history reads preserve owner RLS", async () => {
+  const f = await fixture();
+  const week = await seedReviewBaseline(f);
+  const api = historyApi();
+  const payload = (
+    await db.query("SELECT payload FROM public.bulk_targets WHERE bulk_profile_id=$1", [f.profile])
+  ).rows[0].payload;
+  await asUser(f.user, () =>
+    db.query("SELECT public.save_bulk_targets_for_local_day($1,$2::jsonb,$3)", [
+      f.profile,
+      { ...payload, weeklyWorkoutGoal: 5 },
+      "Europe/Stockholm",
+    ]),
+  );
+  const read = () => api.bulkCalorieReviewHistoryQueryOptions(f.profile, week).queryFn();
+  assert.equal(calorieReviewState(await asUser(f.user, read), 2400), "eligible");
+  const other = await fixture();
+  assert.equal(calorieReviewState(await asUser(other.user, read), 2400), "unknown");
+  await assert.rejects(asUser(f.user, read, "anon"), /permission denied/);
+  const missing = await asUser(other.user, () =>
+    api.bulkCalorieReviewHistoryQueryOptions(other.profile, week).queryFn(),
+  );
+  assert.equal(calorieReviewState(missing, 2400), "unknown");
+});
+
+test("history pagination finds a calorie change beyond a simulated server row cap", async () => {
+  const f = await fixture();
+  const week = await seedReviewBaseline(f);
+  await db.query(
+    `INSERT INTO public.bulk_streak_goal_events(id,bulk_profile_id,effective_at,weekly_workout_goal,calorie_target_kcal)
+    SELECT ('00000000-0000-0000-0000-' || lpad(i::text,12,'0'))::uuid,$1,now(),4,
+      CASE WHEN i=1001 THEN 2550 ELSE 2400 END FROM generate_series(1,1001) AS i`,
+    [f.profile],
+  );
+  const result = await asUser(f.user, () =>
+    historyApi(17).bulkCalorieReviewHistoryQueryOptions(f.profile, week).queryFn(),
+  );
+  assert.equal(calorieReviewState(result, 2550), "changed");
+});
+
 async function asUser(user, action, role = "authenticated") {
   await db.query("SELECT set_config('request.jwt.claim.sub',$1,false)", [user]);
   await db.exec(`SET ROLE ${role}`);
@@ -91,6 +165,83 @@ const apply = (f, expected = 2400, next = 2550, zone = "Europe/Stockholm") =>
       zone,
     ]),
   );
+
+// Exercise the actual frontend history query against the migrated database and its real RLS.
+function historyApi(pageCap = 200) {
+  const allowed = new Set([
+    "bulk_profile_id",
+    "effective_at",
+    "recorded_at",
+    "id",
+    "calorie_target_kcal",
+  ]);
+  const supabase = {
+    from(table) {
+      assert.equal(table, "bulk_streak_goal_events");
+      const filters = [];
+      const orders = [];
+      let fields;
+      let limit = pageCap;
+      const filter = (column, op, value) => {
+        assert.ok(allowed.has(column));
+        filters.push([column, op, value]);
+        return query;
+      };
+      const query = {
+        select(value) {
+          fields = value;
+          for (const field of fields.split(",")) assert.ok(allowed.has(field));
+          return this;
+        },
+        eq: (column, value) => filter(column, "=", value),
+        lt: (column, value) => filter(column, "<", value),
+        gte: (column, value) => filter(column, ">=", value),
+        gt: (column, value) => filter(column, ">", value),
+        order(column, options) {
+          assert.ok(allowed.has(column));
+          orders.push(`${column} ${options?.ascending === false ? "DESC" : "ASC"}`);
+          return this;
+        },
+        limit(value) {
+          limit = Math.min(value, pageCap);
+          return this;
+        },
+        then(resolve, reject) {
+          const sql = `SELECT ${fields} FROM public.bulk_streak_goal_events WHERE ${filters.map(([column, op], i) => `${column} ${op} $${i + 1}`).join(" AND ")} ORDER BY ${orders.join(",")} LIMIT ${limit}`;
+          return db
+            .query(
+              sql,
+              filters.map(([, , value]) => value),
+            )
+            .then((result) => ({ data: result.rows, error: null }))
+            .then(resolve, reject);
+        },
+      };
+      return query;
+    },
+  };
+  return presentationComponent("src/lib/bulk-progress-query.ts", {
+    "@tanstack/react-query": { queryOptions },
+    "@/integrations/supabase/client": { supabase },
+    "./network-errors": {},
+    "./private-image-upload": {},
+    "./bulk-training-sessions": {},
+  });
+}
+
+async function seedReviewBaseline(f) {
+  const week = (
+    await db.query(
+      "SELECT date_trunc('week',now() AT TIME ZONE 'Europe/Stockholm')::date::text AS day",
+    )
+  ).rows[0].day;
+  await db.query(
+    `INSERT INTO public.bulk_streak_goal_events(bulk_profile_id,effective_at,weekly_workout_goal,calorie_target_kcal)
+    VALUES ($1,($2::date::timestamp AT TIME ZONE 'Europe/Stockholm') - interval '1 second',4,2400)`,
+    [f.profile, week],
+  );
+  return week;
+}
 const mealQuery = (f, date = f.today) =>
   db.query(
     `SELECT public.create_bulk_nutrition_entry(

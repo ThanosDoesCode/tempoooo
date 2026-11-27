@@ -9,6 +9,8 @@ export const bulkTodayQueryKey = (profileId: string | null, today: string) =>
 
 type TodayData = {
   targets: Targets;
+  /** Saved values without compatibility defaults, for decisions that require explicit goals. */
+  savedTargets: Partial<Targets> | null;
   days: Record<string, DailyLog>;
   workouts: Record<string, Pick<Workout, "date" | "status" | "type">>;
 };
@@ -56,6 +58,7 @@ export const bulkTodayQueryOptions = (profileId: string | null, today: string) =
         days[row.day] = { date: row.day, gym: Boolean(row.gym) };
       if (day.data) days[today] = { ...(day.data.payload as DailyLog), date: today };
       return {
+        savedTargets: (targets.data?.payload as Partial<Targets> | undefined) ?? null,
         targets: {
           ...DEFAULT_DATA.targets,
           ...((targets.data?.payload ?? {}) as Partial<Targets>),

@@ -88,6 +88,18 @@ test("poor adherence and low training keep the existing target", () => {
   assert.equal(training.reasonCode, "below_target_low_training");
 });
 
+test("saved current calories drive mutation amounts while historical targets still assess adherence", () => {
+  const result = recommend(
+    { targetCalories: 2400, averageCalories: 2400, weightChangeKg: 0, calorieAdherentDays: 0 },
+    { currentTargetCalories: 3000 },
+  );
+  assert.equal(result.reasonCode, "below_target_good_adherence");
+  assert.equal(result.currentTargetCalories, 3000);
+  assert.equal(result.recommendedCalories, 3150);
+  assert.equal(result.calorieDelta, 150);
+  assert.equal(recommend({}, { currentTargetCalories: null }).reasonCode, "missing_target");
+});
+
 test("poor nutrition logging blocks adjustment but does not fabricate missing weight", () => {
   const result = recommend({ nutritionLoggedDays: 3 });
   assert.equal(result.decision, "maintain");
@@ -165,13 +177,47 @@ test("weekly adjustments remain inside persisted calorie bounds", () => {
     { targetCalories: 800, averageCalories: 800, weightChangeKg: 0 },
     { goal: "cut", previousTrendChangeKg: 0 },
   );
-  assert.equal(cutFloor.recommendedCalories, 800);
+  assert.equal(cutFloor.recommendedCalories, null);
+  assert.equal(cutFloor.reasonCode, "calorie_boundary");
   const gainCeiling = recommend(
     { targetCalories: 10_000, averageCalories: 10_000, weightChangeKg: 0 },
     { goal: "gain", previousTrendChangeKg: 0 },
   );
   assert.equal(gainCeiling.recommendedCalories, 10_000);
+  assert.equal(gainCeiling.decision, "maintain");
+  assert.equal(gainCeiling.calorieDelta, 0);
 });
+
+for (const [goal, current, proposed] of [
+  ["cut", 1000, 1000],
+  ["cut", 1050, 1000],
+  ["cut", 1100, 1000],
+  ["cut", 1150, 1000],
+  ["gain", 9850, 10_000],
+  ["gain", 9900, 10_000],
+  ["gain", 9950, 10_000],
+  ["gain", 10_000, 10_000],
+  ["gain", 2937, 3050],
+  ["cut", 2937, 2800],
+]) {
+  test(`${goal} adjustment at ${current} respects RPC bounds, step size and nonzero change`, () => {
+    const result = recommend(
+      { targetCalories: current, averageCalories: current, weightChangeKg: 0 },
+      { goal, previousTrendChangeKg: 0 },
+    );
+    assert.equal(result.recommendedCalories, proposed);
+    if (current === proposed) {
+      assert.equal(result.decision, "maintain");
+      assert.equal(result.reasonCode, "calorie_boundary");
+      assert.equal(result.calorieDelta, 0);
+      assert.match(result.reasonText, /unchanged/);
+    } else {
+      assert.ok(proposed >= 1000 && proposed <= 10_000);
+      assert.ok(Math.abs(result.calorieDelta) > 0 && Math.abs(result.calorieDelta) <= 150);
+      assert.equal(proposed % 50, 0);
+    }
+  });
+}
 
 test("recommendation is pure and UI uses completed weeks with explicit application", async () => {
   const source = summary({ weightChangeKg: 0 });
